@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bayes Thinking Lab — Statistische Intuition interaktiv</title>
+<meta name="description" content="Interaktive Tools zum Verstehen, Visualisieren und Formulieren Bayesianischer Modelle. Für Bachelor, Master und professionelle Wissenschaftler.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+/* ─── Design Tokens ───────────────────────────────── */
+:root {
+  --bg:      #f0ead8;
+  --paper:   #f8f3e8;
+  --ink:     #18130e;
+  --ink2:    #5a4f42;
+  --ink3:    #8a7f72;
+  --a1:      #c94a2a;
+  --a2:      #2a6e8a;
+  --a3:      #5a8a2a;
+  --a4:      #7a3a8a;
+  --a5:      #b85c00;
+  --a6:      #0e7c7b;
+  --grid:    #ddd5c5;
+  --panel:   #e8e0ce;
+  --border:  #c8bfaa;
+  --warm:    #c8a96e;
+}
+[data-theme="dark"] {
+  --bg:      #0c0f14;
+  --paper:   #111520;
+  --ink:     #ece6d8;
+  --ink2:    #8a8070;
+  --ink3:    #5a5448;
+  --a1:      #e8614a;
+  --a2:      #4ab0d8;
+  --a3:      #80cb52;
+  --a4:      #c87ad8;
+  --a5:      #e07830;
+  --a6:      #2bc7c4;
+  --grid:    #1e242e;
+  --panel:   #171d28;
+  --border:  #2a3040;
+  --warm:    #c8a96e;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Fraunces', Georgia, serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  transition: background .25s, color .25s;
+  overflow-x: hidden;
+}
+
+/* ─── NAV ─────────────────────────────────────────── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--paper);
+  border-bottom: 1.5px solid var(--border);
+  padding: .7rem 2rem;
+  display: flex; align-items: center; justify-content: space-between;
+  backdrop-filter: blur(8px);
+}
+.nav-brand {
+  display: flex; align-items: baseline; gap: .5rem;
+}
+.nav-brand-name {
+  font-size: 1.05rem; font-weight: 300; letter-spacing: -.01em;
+}
+.nav-brand-name em { font-style: italic; color: var(--a2); }
+.nav-brand-ver {
+  font-family: 'DM Mono', monospace; font-size: .56rem;
+  color: var(--ink3); letter-spacing: .05em;
+}
+.nav-links {
+  display: flex; align-items: center; gap: 1.5rem;
+  font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--ink2);
+}
+.nav-links a {
+  color: var(--ink2); text-decoration: none; transition: color .15s;
+}
+.nav-links a:hover { color: var(--a2); }
+.nav-btns { display: flex; gap: .4rem; }
+.nbtn {
+  font-family: 'DM Mono', monospace; font-size: .66rem;
+  background: var(--panel); border: 1.5px solid var(--border);
+  color: var(--ink2); padding: .24rem .6rem; cursor: pointer; transition: all .15s;
+}
+.nbtn:hover { border-color: var(--a2); color: var(--a2); }
+.nbtn.act { background: var(--a2); color: var(--paper); border-color: var(--a2); }
+
+/* ─── HERO ────────────────────────────────────────── */
+#hero {
+  position: relative;
+  padding: 5rem 2rem 4rem;
+  max-width: 1100px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 3rem; align-items: center;
+}
+.hero-left {}
+.hero-eyebrow {
+  font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--a2); margin-bottom: 1rem;
+  display: flex; align-items: center; gap: .6rem;
+}
+.hero-eyebrow::before {
+  content: ''; display: block; width: 28px; height: 1.5px; background: var(--a2);
+}
+.hero-title {
+  font-size: 3.4rem; font-weight: 200; line-height: 1.1;
+  letter-spacing: -.04em; margin-bottom: 1.2rem;
+}
+.hero-title em { font-style: italic; color: var(--a4); }
+.hero-title strong { font-weight: 600; }
+.hero-sub {
+  font-size: 1.1rem; font-weight: 300; color: var(--ink2);
+  line-height: 1.75; margin-bottom: 1.8rem; max-width: 44ch;
+}
+.hero-cta {
+  display: flex; gap: .8rem; flex-wrap: wrap;
+}
+.btn-primary {
+  font-family: 'DM Mono', monospace; font-size: .72rem;
+  background: var(--a4); color: var(--paper); border: none;
+  padding: .65rem 1.4rem; cursor: pointer; transition: all .18s;
+  letter-spacing: .04em; text-decoration: none; display: inline-block;
+}
+.btn-primary:hover { opacity: .88; transform: translateY(-1px); }
+.btn-ghost {
+  font-family: 'DM Mono', monospace; font-size: .72rem;
+  background: transparent; color: var(--ink2);
+  border: 1.5px solid var(--border);
+  padding: .63rem 1.2rem; cursor: pointer; transition: all .18s;
+  letter-spacing: .04em; text-decoration: none; display: inline-block;
+}
+.btn-ghost:hover { border-color: var(--a2); color: var(--a2); }
+
+/* Hero right — abstract diagram */
+.hero-diagram {
+  display: flex; justify-content: center; align-items: center;
+}
+.hero-svg { width: 340px; height: 320px; opacity: .92; }
+
+/* Audience pills */
+.audience-bar {
+  max-width: 1100px; margin: 0 auto 0;
+  padding: 0 2rem 3rem;
+  display: flex; gap: 1rem; flex-wrap: wrap;
+}
+.aud-pill {
+  display: flex; align-items: center; gap: .5rem;
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  color: var(--ink2); padding: .3rem .7rem;
+  border: 1px solid var(--grid); background: var(--panel);
+}
+.aud-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* Divider */
+.section-divider {
+  max-width: 1100px; margin: 0 auto;
+  padding: 0 2rem .5rem;
+  display: flex; align-items: center; gap: 1rem;
+}
+.section-divider::before, .section-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--grid);
+}
+.section-divider span {
+  font-family: 'DM Mono', monospace; font-size: .58rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink3);
+  white-space: nowrap;
+}
+
+/* ─── TRACK BANNER ────────────────────────────────── */
+.track-banner {
+  max-width: 1100px; margin: 2rem auto .4rem;
+  padding: 0 2rem;
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px; background: var(--grid);
+  border: 1px solid var(--grid);
+}
+.track {
+  background: var(--paper);
+  padding: .8rem 1.1rem;
+  display: flex; flex-direction: column; gap: .2rem;
+}
+.track-num { font-family: 'DM Mono', monospace; font-size: .5rem; color: var(--ink3); }
+.track-name { font-size: .82rem; font-weight: 300; }
+.track-level { font-family: 'DM Mono', monospace; font-size: .55rem; color: var(--ink3); }
+
+/* ─── TOOL SECTIONS ───────────────────────────────── */
+.tool-section {
+  max-width: 1100px; margin: 0 auto 3.5rem;
+  padding: 0 2rem;
+}
+.section-header {
+  display: flex; align-items: flex-end; gap: 1rem;
+  margin-bottom: 1.2rem; padding-bottom: .7rem;
+  border-bottom: 1.5px solid var(--grid);
+}
+.section-badge {
+  font-family: 'DM Mono', monospace; font-size: .5rem;
+  padding: .15rem .4rem; letter-spacing: .08em; text-transform: uppercase;
+  align-self: flex-start; margin-top: .25rem;
+}
+.badge-found { background: rgba(42,110,138,.18); color: var(--a2); }
+.badge-bayes { background: rgba(122,58,138,.18); color: var(--a4); }
+.badge-workflow { background: rgba(90,138,42,.18); color: var(--a3); }
+.section-title {
+  font-size: 1.5rem; font-weight: 200; line-height: 1.2; letter-spacing: -.02em;
+}
+.section-title em { font-style: italic; }
+.section-desc {
+  margin-left: auto; max-width: 38ch;
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  color: var(--ink2); line-height: 1.7; text-align: right;
+}
+
+/* ─── TOOL CARDS ──────────────────────────────────── */
+.tool-grid {
+  display: grid; gap: 1px; background: var(--grid);
+  border: 1px solid var(--grid);
+}
+.tool-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.tool-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.tool-grid.cols-wide { grid-template-columns: 1.55fr 1fr; }
+
+.tool-card {
+  background: var(--paper); padding: 1.5rem 1.8rem;
+  display: flex; flex-direction: column; gap: .9rem;
+  transition: background .18s; position: relative; overflow: hidden;
+  text-decoration: none; color: inherit; cursor: pointer;
+}
+.tool-card::before {
+  content: ''; position: absolute; top: 0; left: 0;
+  width: 3px; height: 0; background: var(--card-accent, var(--a2));
+  transition: height .22s ease;
+}
+.tool-card:hover { background: var(--panel); }
+.tool-card:hover::before { height: 100%; }
+
+.tc-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.tc-icon {
+  width: 42px; height: 42px; border-radius: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; flex-shrink: 0;
+  border: 1.5px solid var(--grid);
+  background: var(--bg);
+}
+.tc-tags { display: flex; flex-wrap: wrap; gap: .28rem; justify-content: flex-end; }
+.tc-tag {
+  font-family: 'DM Mono', monospace; font-size: .5rem;
+  padding: .08rem .28rem; letter-spacing: .05em;
+  border: 1px solid var(--grid); color: var(--ink3);
+}
+.tc-name {
+  font-size: 1.15rem; font-weight: 300; line-height: 1.2;
+  letter-spacing: -.01em;
+}
+.tc-name em { font-style: italic; color: var(--card-accent, var(--a2)); }
+.tc-desc {
+  font-family: 'DM Mono', monospace; font-size: .68rem;
+  color: var(--ink2); line-height: 1.8; flex: 1;
+}
+.tc-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: .65rem; border-top: 1px solid var(--grid);
+}
+.tc-level {
+  font-family: 'DM Mono', monospace; font-size: .58rem;
+  color: var(--ink3); letter-spacing: .04em;
+}
+.tc-launch {
+  font-family: 'DM Mono', monospace; font-size: .65rem;
+  color: var(--card-accent, var(--a2)); display: flex; align-items: center; gap: .25rem;
+  transition: gap .15s;
+}
+.tool-card:hover .tc-launch { gap: .5rem; }
+.tc-launch::after { content: '→'; }
+
+/* Flow connector between sections */
+.flow-connector {
+  max-width: 1100px; margin: 0 auto;
+  padding: 0 2rem 1rem;
+  display: flex; align-items: center; gap: .6rem;
+}
+.flow-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.flow-line { flex: 1; height: 1px; background: var(--grid); }
+.flow-txt {
+  font-family: 'DM Mono', monospace; font-size: .57rem;
+  color: var(--ink3); white-space: nowrap; letter-spacing: .04em;
+}
+
+/* ─── ABOUT / PHILOSOPHY ──────────────────────────── */
+#about {
+  background: var(--paper); border-top: 1.5px solid var(--border);
+  border-bottom: 1.5px solid var(--border); margin: 2rem 0;
+  padding: 3.5rem 2rem;
+}
+.about-inner {
+  max-width: 1100px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1.4fr; gap: 4rem; align-items: start;
+}
+.about-left h2 {
+  font-size: 2rem; font-weight: 200; letter-spacing: -.03em;
+  line-height: 1.2; margin-bottom: .8rem;
+}
+.about-left h2 em { font-style: italic; color: var(--a4); }
+.about-left p {
+  font-size: 1rem; font-weight: 300; color: var(--ink2);
+  line-height: 1.85; max-width: 36ch;
+}
+.about-right { display: flex; flex-direction: column; gap: 1.2rem; }
+.about-point {
+  display: flex; gap: 1rem; align-items: flex-start;
+  padding-bottom: 1.2rem; border-bottom: 1px solid var(--grid);
+}
+.about-point:last-child { border-bottom: none; padding-bottom: 0; }
+.ap-num {
+  font-family: 'DM Mono', monospace; font-size: .65rem;
+  color: var(--a4); min-width: 1.5rem; margin-top: .2rem;
+}
+.ap-title {
+  font-size: 1rem; font-weight: 300; margin-bottom: .28rem;
+}
+.ap-title em { font-style: italic; color: var(--a4); }
+.ap-desc {
+  font-family: 'DM Mono', monospace; font-size: .68rem;
+  color: var(--ink2); line-height: 1.75;
+}
+
+/* Featured card — Thinking Simulator hero */
+.tool-card.featured {
+  background: var(--paper);
+  border-top: 3px solid var(--a4);
+  position: relative;
+}
+.tool-card.featured::after {
+  content: 'EINSTIEG EMPFOHLEN';
+  position: absolute; top: -.1px; right: 1.4rem;
+  font-family: 'DM Mono', monospace; font-size: .48rem;
+  background: var(--a4); color: var(--paper);
+  padding: .12rem .5rem; letter-spacing: .1em;
+}
+.tool-card.featured .tc-name { font-size: 1.3rem; }
+.tool-card.featured .tc-desc { font-size: .72rem; line-height: 1.85; }
+.tc-starter-badges {
+  display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .1rem;
+}
+.tc-starter-badge {
+  font-family: 'DM Mono', monospace; font-size: .56rem;
+  padding: .15rem .45rem;
+  background: rgba(122,58,138,.12); color: var(--a4);
+  border: 1px solid rgba(122,58,138,.25);
+}
+
+/* ─── FOOTER ──────────────────────────────────────── */
+footer {
+  padding: 2rem; text-align: center;
+  font-family: 'DM Mono', monospace; font-size: .58rem;
+  color: var(--ink3); border-top: 1px solid var(--grid);
+  display: flex; flex-direction: column; gap: .5rem; align-items: center;
+}
+footer a { color: var(--a2); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+.footer-links { display: flex; gap: 1.5rem; }
+
+/* ─── RESPONSIVE ──────────────────────────────────── */
+@media (max-width: 900px) {
+  #hero { grid-template-columns: 1fr; gap: 2rem; padding: 3rem 1.2rem 2rem; }
+  .hero-diagram { display: none; }
+  .hero-title { font-size: 2.4rem; }
+  .track-banner { grid-template-columns: 1fr; }
+  .tool-grid.cols-2, .tool-grid.cols-3, .tool-grid.cols-wide { grid-template-columns: 1fr; }
+  .about-inner { grid-template-columns: 1fr; gap: 2rem; }
+  nav { padding: .5rem 1.2rem; }
+  .nav-links { display: none; }
+}
+
+/* ─── ANIMATIONS ──────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { opacity: 0; animation: fadeUp .5s ease forwards; }
+.fade-up:nth-child(1) { animation-delay: .05s; }
+.fade-up:nth-child(2) { animation-delay: .12s; }
+.fade-up:nth-child(3) { animation-delay: .19s; }
+.fade-up:nth-child(4) { animation-delay: .26s; }
+.fade-up:nth-child(5) { animation-delay: .33s; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+  NAV
+════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-brand">
+    <span class="nav-brand-name">Bayes <em>Thinking</em> Lab</span>
+    <span class="nav-brand-ver">v1.0</span>
+  </div>
+  <div class="nav-links">
+    <a href="#foundations">Grundlagen</a>
+    <a href="#bayesian">Bayesianisch</a>
+    <a href="#workflow">Workflow</a>
+    <a href="#about">Über das Projekt</a>
+    <a href="https://github.com/raduesing/Bayes_Thinking_Lab" target="_blank">GitHub ↗</a>
+  </div>
+  <div class="nav-btns">
+    <button class="nbtn" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+  HERO
+════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-left">
+    <div class="hero-eyebrow">Interaktive Statistik · Open Source</div>
+    <h1 class="hero-title">
+      Statistik<br>
+      <em>verstehen,</em><br>
+      <strong>nicht nur rechnen.</strong>
+    </h1>
+    <p class="hero-sub">
+      Eine Sammlung interaktiver Werkzeuge, die statistische Modelle — von GLMs bis zu
+      hierarchischen Bayesianischen Modellen — greifbar, visualisierbar und direkt
+      anwendbar machen. Für alle Wissensstufen.
+    </p>
+    <div class="hero-cta">
+      <a href="#bayesian" class="btn-primary">Mit Bayes starten →</a>
+      <a href="#foundations" class="btn-ghost">Grundlagen entdecken</a>
+    </div>
+  </div>
+  <div class="hero-diagram">
+    <svg class="hero-svg" viewBox="0 0 340 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="h-arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="currentColor" opacity=".5"/>
+        </marker>
+      </defs>
+
+      <!-- Hyperprior row -->
+      <circle cx="120" cy="40" r="26" fill="none" stroke="var(--a4)" stroke-width="2" opacity=".7"/>
+      <text x="120" y="36" text-anchor="middle" fill="var(--a4)" font-family="Fraunces,serif" font-size="13" font-weight="600">μ<tspan font-size="9" dy="4">α</tspan></text>
+      <path d="M80,25 Q110,28 90,28" fill="none" stroke="var(--a4)" opacity=".4" stroke-width="1.2"/>
+      <!-- mini curve μ_α -->
+      <path d="M104,52 C106,52 108,47 120,47 C132,47 134,52 136,52" fill="none" stroke="var(--a4)" stroke-width="1.1" opacity=".6"/>
+
+      <circle cx="220" cy="40" r="26" fill="none" stroke="var(--a4)" stroke-width="2" opacity=".7"/>
+      <text x="220" y="36" text-anchor="middle" fill="var(--a4)" font-family="Fraunces,serif" font-size="13" font-weight="600">σ<tspan font-size="9" dy="4">α</tspan></text>
+      <!-- mini curve σ_α (exp shape) -->
+      <path d="M204,52 L206,48 C208,45 210,48 212,51 C214,53 216,52 220,52 C228,52 234,51 236,52" fill="none" stroke="var(--a4)" stroke-width="1.1" opacity=".6"/>
+
+      <!-- Arrows to alpha_j -->
+      <line x1="132" y1="62" x2="152" y2="108" stroke="var(--a4)" stroke-width="1.5" opacity=".55" marker-end="url(#h-arr)"/>
+      <line x1="208" y1="62" x2="188" y2="108" stroke="var(--a4)" stroke-width="1.5" opacity=".55" marker-end="url(#h-arr)"/>
+
+      <!-- Plate group -->
+      <rect x="120" y="108" width="100" height="100" rx="8" fill="none" stroke="var(--a4)" stroke-width="1.2" stroke-dasharray="5,3" opacity=".35"/>
+      <text x="218" y="204" text-anchor="end" fill="var(--a4)" font-family="'DM Mono',monospace" font-size="9" opacity=".65">j = 1…J</text>
+
+      <!-- α_j -->
+      <circle cx="170" cy="135" r="28" fill="var(--paper)" stroke="var(--a2)" stroke-width="2.5"/>
+      <text x="170" y="130" text-anchor="middle" fill="var(--a2)" font-family="Fraunces,serif" font-size="14" font-weight="600">α<tspan font-size="9" dy="4">j</tspan></text>
+      <path d="M152,147 C154,147 156,143 170,143 C184,143 186,147 188,147" fill="none" stroke="var(--a2)" stroke-width="1.1" opacity=".75"/>
+
+      <!-- β -->
+      <circle cx="290" cy="145" r="26" fill="var(--paper)" stroke="var(--a3)" stroke-width="2.2"/>
+      <text x="290" y="141" text-anchor="middle" fill="var(--a3)" font-family="Fraunces,serif" font-size="14" font-weight="600">β</text>
+      <path d="M274,154 C276,154 278,151 290,151 C302,151 304,154 306,154" fill="none" stroke="var(--a3)" stroke-width="1.1" opacity=".75"/>
+
+      <!-- Obs plate -->
+      <rect x="70" y="230" width="200" height="80" rx="8" fill="none" stroke="var(--a1)" stroke-width="1.2" stroke-dasharray="5,4" opacity=".35"/>
+      <text x="268" y="305" text-anchor="end" fill="var(--a1)" font-family="'DM Mono',monospace" font-size="9" opacity=".65">i = 1…N</text>
+
+      <!-- Det node -->
+      <circle cx="170" cy="235" r="7" fill="var(--ink2)" opacity=".55"/>
+      <text x="170" y="222" text-anchor="middle" fill="var(--ink)" font-family="'DM Mono',monospace" font-size="10" font-weight="500" opacity=".8">μᵢ =</text>
+
+      <!-- σ -->
+      <circle cx="50" cy="235" r="24" fill="var(--paper)" stroke="var(--a5)" stroke-width="2"/>
+      <text x="50" y="231" text-anchor="middle" fill="var(--a5)" font-family="Fraunces,serif" font-size="15" font-weight="600">σ</text>
+      <path d="M36,242 L37,239 C39,235 41,239 44,242 C46,244 50,243 50,243 C54,243 58,242 64,242" fill="none" stroke="var(--a5)" stroke-width="1.1" opacity=".75"/>
+
+      <!-- Data node -->
+      <circle cx="170" cy="278" r="23" fill="var(--a1)" opacity=".12"/>
+      <circle cx="170" cy="278" r="23" fill="none" stroke="var(--a1)" stroke-width="2.5"/>
+      <circle cx="170" cy="278" r="15" fill="none" stroke="var(--a1)" stroke-width="1" opacity=".35"/>
+      <text x="170" y="283" text-anchor="middle" fill="var(--a1)" font-family="Fraunces,serif" font-size="16" font-weight="600">y</text>
+
+      <!-- Edges -->
+      <line x1="170" y1="163" x2="170" y2="228" stroke="var(--a2)" stroke-width="1.5" opacity=".6" marker-end="url(#h-arr)"/>
+      <line x1="275" y1="165" x2="195" y2="228" stroke="var(--a3)" stroke-width="1.5" opacity=".6" marker-end="url(#h-arr)"/>
+      <line x1="170" y1="242" x2="170" y2="255" stroke="var(--ink2)" stroke-width="1.5" opacity=".55" marker-end="url(#h-arr)"/>
+      <path d="M68,248 C90,260 120,272 147,275" fill="none" stroke="var(--a5)" stroke-width="1.5" opacity=".55" marker-end="url(#h-arr)"/>
+    </svg>
+  </div>
+</section>
+
+<!-- Audience bar -->
+<div class="audience-bar">
+  <div class="aud-pill"><span class="aud-dot" style="background:var(--a3)"></span>Bachelor-Studium</div>
+  <div class="aud-pill"><span class="aud-dot" style="background:var(--a2)"></span>Master-Studium</div>
+  <div class="aud-pill"><span class="aud-dot" style="background:var(--a4)"></span>Promotion &amp; Forschung</div>
+  <div class="aud-pill"><span class="aud-dot" style="background:var(--a5)"></span>Angewandte Wissenschaft</div>
+  <div class="aud-pill"><span class="aud-dot" style="background:var(--a1)"></span>Klinische Forschung</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  ABOUT STRIP
+════════════════════════════════════════════ -->
+<section id="about">
+  <div class="about-inner">
+    <div class="about-left">
+      <h2>Warum dieses<br><em>Projekt?</em></h2>
+      <p>
+        Bayesianische Statistik ist mächtig — aber der Einstieg ist steil.
+        Dieses Lab macht die Konzepte greifbar: durch Visualisierung, Interaktion
+        und direkte Anbindung an die Praxis mit R und brms.
+      </p>
+    </div>
+    <div class="about-right">
+      <div class="about-point">
+        <span class="ap-num">01</span>
+        <div>
+          <div class="ap-title">Von <em>Intuition</em> zu Formel</div>
+          <div class="ap-desc">Jedes Tool verbindet grafische Darstellung mit mathematischer Notation (McElreath-Stil). Du siehst immer beide Seiten gleichzeitig — das Modell als Diagramm und als Gleichung.</div>
+        </div>
+      </div>
+      <div class="about-point">
+        <span class="ap-num">02</span>
+        <div>
+          <div class="ap-title">GLM als <em>Brücke</em></div>
+          <div class="ap-desc">Bevor Bayes kommen kann, müssen die Grundlagen sitzen: Linkfunktionen, Residualstruktur, bedingte Verteilungen. Die GLM-Tools helfen dabei — unabhängig vom statistischen Paradigma.</div>
+        </div>
+      </div>
+      <div class="about-point">
+        <span class="ap-num">03</span>
+        <div>
+          <div class="ap-title">Direkt zur <em>Praxis</em></div>
+          <div class="ap-desc">Die Workflow-Tools generieren echten brms-Code für R. Kein Abschreiben, kein Raten — Prior formulieren, Modell aufbauen, Code kopieren und loslegen.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+  SECTION I — FOUNDATIONS (GLM)
+════════════════════════════════════════════ -->
+<div class="section-divider" style="margin-top:2.5rem" id="foundations">
+  <span>I — Statistische Grundlagen</span>
+</div>
+
+<div class="tool-section">
+  <div class="section-header">
+    <span class="section-badge badge-found">Grundlagen</span>
+    <h2 class="section-title">Lineare Modelle <em>verstehen</em></h2>
+    <div class="section-desc">Diese Tools sind modellparadigmenunabhängig — sie helfen zu verstehen, wie GLMs und GLMMs funktionieren. Die nötige Basis für Bayesianisches Denken.</div>
+  </div>
+
+  <div class="tool-grid cols-3 fade-up">
+
+    <a href="GLM_cond_dist.html" class="tool-card" style="--card-accent:var(--a2)">
+      <div class="tc-top">
+        <div class="tc-icon">📊</div>
+        <div class="tc-tags">
+          <span class="tc-tag">GLM</span>
+          <span class="tc-tag">Tutorial</span>
+        </div>
+      </div>
+      <div class="tc-name">Bedingte <em>Verteilungen</em></div>
+      <div class="tc-desc">
+        Was bedeutet es, wenn y|x normalverteilt ist? Dieses Tool visualisiert bedingte Verteilungen entlang eines Prädiktors — der Kern jedes GLMs. Interaktiv verstellbare Parameter zeigen, wie sich Mittelwert und Streuung verschieben.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Bachelor · Master</span>
+        <span class="tc-launch">Öffnen</span>
+      </div>
+    </a>
+
+    <a href="GLM_3D_visual.html" class="tool-card" style="--card-accent:var(--a6)">
+      <div class="tc-top">
+        <div class="tc-icon">🧊</div>
+        <div class="tc-tags">
+          <span class="tc-tag">GLM</span>
+          <span class="tc-tag">3D</span>
+          <span class="tc-tag">Visualisierung</span>
+        </div>
+      </div>
+      <div class="tc-name">GLM in <em>3D</em></div>
+      <div class="tc-desc">
+        Lineare Regression dreidimensional: Regressionsfläche, Residuen und Datenpunkte im Raum. Das räumliche Denken über Regressionsmodelle mit mehreren Prädiktoren wird hier buchstäblich sichtbar.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Bachelor · Master</span>
+        <span class="tc-launch">Öffnen</span>
+      </div>
+    </a>
+
+    <a href="GLMM_interactive.html" class="tool-card" style="--card-accent:var(--a5)">
+      <div class="tc-top">
+        <div class="tc-icon">🔗</div>
+        <div class="tc-tags">
+          <span class="tc-tag">GLMM</span>
+          <span class="tc-tag">Mehrebenen</span>
+          <span class="tc-tag">Tutorial</span>
+        </div>
+      </div>
+      <div class="tc-name">GLMM <em>interaktiv</em></div>
+      <div class="tc-desc">
+        Was ist Partial Pooling? Warum sind gemischte Modelle (Mixed Models) besser als separate Gruppen-Analysen? Dieses Tool zeigt den Unterschied zwischen Complete Pooling, No Pooling und Partial Pooling visuell und interaktiv.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Master · Forschung</span>
+        <span class="tc-launch">Öffnen</span>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<!-- Flow arrow -->
+<div class="flow-connector">
+  <span class="flow-dot" style="background:var(--a2)"></span>
+  <div class="flow-line"></div>
+  <span class="flow-txt">Mit diesem Fundament → Bayesianisches Denken aufbauen</span>
+  <div class="flow-line"></div>
+  <span class="flow-dot" style="background:var(--a4)"></span>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  SECTION II — BAYESIAN INTUITION
+════════════════════════════════════════════ -->
+<div class="section-divider" style="margin-top:1.5rem" id="bayesian">
+  <span>II — Bayesianische Intuition</span>
+</div>
+
+<div class="tool-section">
+  <div class="section-header">
+    <span class="section-badge badge-bayes">Bayes</span>
+    <h2 class="section-title">Denken <em>lernen</em></h2>
+    <div class="section-desc">Conceptual tools — diese Tools bauen Bayesianische Intuition auf, ohne sofort in die technische Implementierung einzusteigen.</div>
+  </div>
+
+  <div class="tool-grid cols-wide fade-up">
+
+    <a href="Bayesian_Thinking_Simulator.html" class="tool-card featured" style="--card-accent:var(--a4)">
+      <div class="tc-top">
+        <div class="tc-icon" style="border-color:var(--a4);font-size:1.5rem">🧠</div>
+        <div class="tc-tags">
+          <span class="tc-tag" style="border-color:var(--a4);color:var(--a4)">Simulator</span>
+          <span class="tc-tag">8 Szenarien</span>
+          <span class="tc-tag">Kein Vorwissen nötig</span>
+        </div>
+      </div>
+      <div class="tc-name">Bayesian Thinking <em>Simulator</em></div>
+      <div class="tc-starter-badges">
+        <span class="tc-starter-badge">✓ Kein Mathe-Vorwissen nötig</span>
+        <span class="tc-starter-badge">✓ Für alle Niveaus</span>
+        <span class="tc-starter-badge">✓ Idealer Einstieg</span>
+      </div>
+      <div class="tc-desc" style="margin-top:.5rem">
+        <strong style="color:var(--ink)">Der beste Startpunkt für jeden.</strong> Acht reale Alltagsszenarien — vom Medizintest über Wettervorhersage bis zur Qualitätskontrolle — zeigen, wie Bayesianisches Denken funktioniert: Wie verändern neue Daten unsere Überzeugungen? Was ist ein Prior? Was ist ein Posterior?
+        <br><br>
+        Keine Formeln, keine Software. Nur Intuition aufbauen — interaktiv, visuell, Schritt für Schritt. Genau das, was vor jedem Kurs oder Buch kommen sollte.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level" style="color:var(--a4);font-size:.62rem">★ Empfohlen als allererster Schritt · Alle Niveaus</span>
+        <span class="tc-launch" style="color:var(--a4)">Simulation starten</span>
+      </div>
+    </a>
+
+    <a href="Bayes_Interactive.html" class="tool-card" style="--card-accent:var(--a2)">
+      <div class="tc-top">
+        <div class="tc-icon">⚡</div>
+        <div class="tc-tags">
+          <span class="tc-tag">Interaktiv</span>
+          <span class="tc-tag">Exploration</span>
+        </div>
+      </div>
+      <div class="tc-name">Bayes <em>interaktiv</em></div>
+      <div class="tc-desc">
+        Interaktive Exploration des Bayesianischen Lernens: Prior wählen, Daten erzeugen, Posterior beobachten. Das Bayes-Theorem als lebendiger Prozess — nicht als Formel, sondern als Erfahrung.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Bachelor · Master</span>
+        <span class="tc-launch">Erkunden</span>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  SECTION III — BAYESIAN WORKFLOW
+════════════════════════════════════════════ -->
+<div class="section-divider" id="workflow">
+  <span>III — Bayesianischer Modell-Workflow</span>
+</div>
+
+<div class="tool-section">
+  <div class="section-header">
+    <span class="section-badge badge-workflow">Workflow</span>
+    <h2 class="section-title">Modelle <em>bauen</em></h2>
+    <div class="section-desc">Diese drei Tools bilden einen vollständigen Workflow ab — von der Modellstruktur über die Prior-Spezifikation bis zum fertigen brms-Code in R.</div>
+  </div>
+
+  <!-- Workflow connector visual -->
+  <div style="display:flex;align-items:center;gap:0;margin-bottom:1px;background:var(--grid)">
+    <div style="flex:1;padding:.45rem .85rem;background:var(--panel);font-family:'DM Mono',monospace;font-size:.55rem;color:var(--a4);letter-spacing:.04em">① MODELL ENTWERFEN</div>
+    <div style="padding:.45rem .6rem;background:var(--panel);color:var(--ink3);font-family:'DM Mono',monospace;font-size:.7rem">→</div>
+    <div style="flex:1;padding:.45rem .85rem;background:var(--panel);font-family:'DM Mono',monospace;font-size:.55rem;color:var(--a2);letter-spacing:.04em">② PRIORS SPEZIFIZIEREN</div>
+    <div style="padding:.45rem .6rem;background:var(--panel);color:var(--ink3);font-family:'DM Mono',monospace;font-size:.7rem">→</div>
+    <div style="flex:1;padding:.45rem .85rem;background:var(--panel);font-family:'DM Mono',monospace;font-size:.55rem;color:var(--a3);letter-spacing:.04em">③ CODE GENERIEREN</div>
+    <div style="padding:.45rem .6rem;background:var(--panel);color:var(--ink3);font-family:'DM Mono',monospace;font-size:.7rem">→</div>
+    <div style="flex:1;padding:.45rem .85rem;background:var(--panel);font-family:'DM Mono',monospace;font-size:.55rem;color:var(--a5);letter-spacing:.04em">④ PRIOR CHECKS</div>
+  </div>
+
+  <div class="tool-grid cols-3 fade-up" style="margin-top:1px">
+
+    <a href="Bayesian_model_architect.html" class="tool-card" style="--card-accent:var(--a4)">
+      <div class="tc-top">
+        <div class="tc-icon">📐</div>
+        <div class="tc-tags">
+          <span class="tc-tag">Kruschke</span>
+          <span class="tc-tag">McElreath</span>
+          <span class="tc-tag">Tutorial + Tool</span>
+        </div>
+      </div>
+      <div class="tc-name">Model <em>Architect</em></div>
+      <div class="tc-desc">
+        Schritt ①: Baue dein Modell visuell auf. Wähle Likelihood, Prädiktoren und Struktur — das Tool zeichnet in Echtzeit das Kruschke-Diagramm und zeigt die McElreath-Notation. Priors werden als Mini-Verteilungskurven im Diagramm angezeigt.
+        <br><br>
+        Mit geführtem Walkthrough für Einsteiger — von der Likelihood-Wahl bis zum vollständigen hierarchischen Modell.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Bachelor · Master · Forschung</span>
+        <span class="tc-launch">Modell entwerfen</span>
+      </div>
+    </a>
+
+    <a href="Brms_model_builder.html" class="tool-card" style="--card-accent:var(--a2)">
+      <div class="tc-top">
+        <div class="tc-icon">⚙️</div>
+        <div class="tc-tags">
+          <span class="tc-tag">brms</span>
+          <span class="tc-tag">R-Code</span>
+          <span class="tc-tag">Tool</span>
+        </div>
+      </div>
+      <div class="tc-name">brms Model <em>Builder</em></div>
+      <div class="tc-desc">
+        Schritte ② + ③: Der vollständige brms-Code-Generator. Prädiktoren konfigurieren, Priors einstellen (mit Live-Slider und Verteilungskurven), Sampling-Parameter setzen — und den fertigen R-Code kopieren. Unterstützt auch distributional models und Mehrebenenstrukturen.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Master · Forschung · Professionell</span>
+        <span class="tc-launch">Code generieren</span>
+      </div>
+    </a>
+
+    <a href="Bayesian_PP_Check.html" class="tool-card" style="--card-accent:var(--a3)">
+      <div class="tc-top">
+        <div class="tc-icon">🔍</div>
+        <div class="tc-tags">
+          <span class="tc-tag">Prior Predictive</span>
+          <span class="tc-tag">Diagnose</span>
+          <span class="tc-tag">Tool</span>
+        </div>
+      </div>
+      <div class="tc-name">Prior Predictive <em>Check</em></div>
+      <div class="tc-desc">
+        Schritt ④: Bevor die Daten fließen — simuliere, was dein Modell a priori vorhersagt. Sinnvolle Priors erzeugen realistische Vorhersagen. Das Tool importiert die Prior-Konfiguration direkt aus dem brms Model Builder und visualisiert Prior Predictive Distributions.
+      </div>
+      <div class="tc-footer">
+        <span class="tc-level">Master · Forschung · Professionell</span>
+        <span class="tc-launch">Priors prüfen</span>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  QUICK REFERENCE — which tool for which level
+════════════════════════════════════════════ -->
+<div class="tool-section" style="margin-top:0">
+  <div style="background:var(--paper);border:1px solid var(--grid);padding:1.5rem 1.8rem">
+    <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:1rem">Welches Tool für welche Zielgruppe?</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--a3);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--a3)"></span>Bachelor-Studium</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);line-height:1.8">
+          → Bayesian Thinking Simulator<br>
+          → Bayes interaktiv<br>
+          → GLM bedingte Verteilungen<br>
+          → GLM 3D Visualisierung<br>
+          → Model Architect (geführt)
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--a2);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--a2)"></span>Master-Studium</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);line-height:1.8">
+          → GLMM interaktiv<br>
+          → Model Architect (vollständig)<br>
+          → brms Model Builder<br>
+          → Prior Predictive Check
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--a4);margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--a4)"></span>Forschung &amp; Praxis</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);line-height:1.8">
+          → brms Model Builder (distributional)<br>
+          → Prior Predictive Check (Export)<br>
+          → Model Architect (Mehrebenen)<br>
+          → Vollständiger Workflow ①→④
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  FOOTER
+════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-links">
+    <a href="https://github.com/raduesing/Bayes_Thinking_Lab" target="_blank">GitHub Repository</a>
+    <a href="#hero">↑ Nach oben</a>
+  </div>
+  <div>Bayes Thinking Lab · Open Source · Inspiriert von John Kruschke &amp; Richard McElreath</div>
+  <div style="opacity:.6">Alle Tools laufen vollständig im Browser · Keine Datenübertragung · Kein Server nötig</div>
+</footer>
+
+<script>
+let DARK = true;
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-th').textContent = DARK ? '☀ Light' : '🌙 Dark';
+}
+
+// Scroll-triggered fade-ins
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.querySelectorAll('.fade-up').forEach(el => el.style.animationPlayState = 'running');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.tool-section').forEach(s => obs.observe(s));
+// Start animations paused, play on scroll
+document.querySelectorAll('.fade-up').forEach(el => {
+  el.style.animationPlayState = 'paused';
+});
+</script>
+</body>
+</html>

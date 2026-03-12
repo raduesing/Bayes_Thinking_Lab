@@ -3625,7 +3625,14 @@ window.exportToBuilder = function() {
   try {
     localStorage.removeItem('ppc2brms');
     localStorage.setItem('ppc2brms', JSON.stringify(payload));
-    _showXferToast('✓ Priors an brms Builder gesendet', 'var(--accent3)');
+    // If opened from the builder window, focus it and trigger auto-import
+    if (window.opener && !window.opener.closed) {
+      try { window.opener.postMessage({ type: 'ppc2brms', ts: payload.ts }, '*'); } catch(ex) {}
+      window.opener.focus();
+      _showXferToast('✓ Priors an brms Builder gesendet — Fenster fokussiert', 'var(--accent3)');
+    } else {
+      _showXferToast('✓ Priors an brms Builder gesendet', 'var(--accent3)');
+    }
   } catch(e) {
     _showXferToast('⚠ localStorage nicht verfügbar — beide Tools im selben Browser öffnen', 'var(--accent)');
     console.error('exportToBuilder:', e);
@@ -3838,6 +3845,16 @@ function _showXferToast(msg, col) {
 }
 
 })(); // end IIFE
+
+// ── Cross-window communication ────────────────────────────
+// Listen for Builder→PPC signal: auto-trigger importFromBuilder
+window.addEventListener('message', function(ev) {
+  if (ev.data && ev.data.type === 'brms2ppc') {
+    if (window.importFromBuilder) {
+      window.importFromBuilder();
+    }
+  }
+});
 </script>
 </body>
 </html>

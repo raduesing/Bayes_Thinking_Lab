@@ -605,7 +605,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
                  f === 'poisson'  ? 'poisson("log")' :
                  f === 'Gamma'    ? 'Gamma("log")' : `${f}()`;
 
-  return `<span class="cm"># brms Model Builder v18 — generierter Code</span>
+  return `<span class="cm"># brms Model Builder v19 — generierter Code</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> ${formCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -1004,7 +1004,17 @@ function exportToPPC() {
     // Always clear stale data first, then write fresh
     localStorage.removeItem('brms2ppc');
     localStorage.setItem('brms2ppc', JSON.stringify(payload));
-    showToast('✓ Modell an PP-Check gesendet', 'var(--accent3)');
+    // Open PPC in a named window — reuses same tab if already open
+    const ppcWin = window.open('Bayesian_PP_Check.html', 'ppc_tool',
+      'width=1400,height=900,left=120,top=60,resizable=yes,scrollbars=yes');
+    if (ppcWin) {
+      ppcWin.focus();
+      // After page loads (or reloads), trigger auto-import via postMessage
+      setTimeout(() => {
+        try { ppcWin.postMessage({ type:'brms2ppc', ts: payload.ts }, '*'); } catch(ex) {}
+      }, 700);
+    }
+    showToast('✓ Modell gesendet — Prior Predictive Check geöffnet', 'var(--accent3)');
   } catch(e) {
     showToast('⚠ localStorage nicht verfügbar — öffne beide Tools im selben Browser', 'var(--accent)');
     console.error('exportToPPC:', e);
@@ -1087,6 +1097,14 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// Listen for PPC→Builder back-signal via postMessage
+window.addEventListener('message', function(ev) {
+  if (ev.data && ev.data.type === 'ppc2brms') {
+    // PPC wrote fresh ppc2brms to localStorage — auto-import
+    importFromPPC();
+  }
+});
 </script>
 </body>
 </html>
