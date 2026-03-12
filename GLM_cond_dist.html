@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLM – Bedingte Verteilungen & Regressionskoeffizienten</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+  :root,[data-theme="light"]{
+    --bg:#f5f0e8;--paper:#fdfaf4;--ink:#1a1410;--ink2:#4a3f35;
+    --accent:#c94a2a;--accent2:#2a6e8a;--grid:#e0d8cc;--panel:#eee8da;
+    --border:#1a1410;--tab-active-bg:#1a1410;--tab-active-fg:#f5f0e8;
+    --slider-track:#e0d8cc;--slider-thumb:#1a1410;
+    --chart-grid:rgba(0,0,0,0.07);--chart-tick:#4a3f35;--shadow:rgba(0,0,0,0.06);
+  }
+  [data-theme="dark"]{
+    --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;
+    --accent:#e8614a;--accent2:#4ab0d8;--grid:#252a36;--panel:#1e2230;
+    --border:#333a4a;--tab-active-bg:#e8e2d8;--tab-active-fg:#0f1117;
+    --slider-track:#252a36;--slider-thumb:#e8e2d8;
+    --chart-grid:rgba(255,255,255,0.055);--chart-tick:#9a9080;--shadow:rgba(0,0,0,0.4);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;padding:1.5rem 2rem 3rem;transition:background .25s,color .25s;}
+
+  /* ── HEADER ── */
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.3rem;gap:1rem;}
+  h1{font-size:1.75rem;font-weight:300;letter-spacing:-.02em;line-height:1.2;}
+  h1 em{font-style:italic;color:var(--accent);}
+  .subtitle{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);margin-top:.3rem;letter-spacing:.03em;line-height:1.6;}
+
+  .header-btns{display:flex;gap:.5rem;flex-shrink:0;align-items:flex-start;}
+  .icon-btn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.4rem .9rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;letter-spacing:.05em;color:var(--ink);display:flex;align-items:center;gap:.4rem;transition:all .15s;white-space:nowrap;}
+  .icon-btn:hover{background:var(--ink);color:var(--bg);}
+  .icon-btn.ghost-on{border-color:var(--accent2);color:var(--accent2);}
+  .icon-btn.ghost-on:hover{background:var(--accent2);color:var(--bg);}
+
+  /* ── TABS ── */
+  .tabs{display:flex;gap:.25rem;margin-bottom:1.1rem;flex-wrap:wrap;}
+  .tab{font-family:'DM Mono',monospace;font-size:.68rem;padding:.38rem .85rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;letter-spacing:.05em;transition:all .15s;color:var(--ink);}
+  .tab:hover{background:var(--ink);color:var(--bg);}
+  .tab.active{background:var(--tab-active-bg);color:var(--tab-active-fg);}
+
+  /* ── LAYOUT ── */
+  .outer-grid{display:grid;grid-template-columns:250px 1fr;gap:1.1rem;align-items:start;}
+
+  /* ── SIDEBAR ── */
+  .sidebar{background:var(--paper);border:1.5px solid var(--border);padding:1.15rem;box-shadow:2px 2px 0 var(--shadow);}
+  .sidebar h3{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.85rem;padding-bottom:.38rem;border-bottom:1px solid var(--grid);}
+
+  .param-group{margin-bottom:.95rem;}
+  .param-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.22rem;}
+  .param-label span:first-child{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--ink);}
+  .param-val{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;color:var(--accent);}
+  input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--slider-track);outline:none;cursor:pointer;border-radius:2px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--slider-thumb);border-radius:50%;cursor:pointer;transition:background .15s;}
+  input[type=range]::-webkit-slider-thumb:hover{background:var(--accent);}
+
+  .formula-box{background:var(--panel);border-left:3px solid var(--accent);padding:.65rem .85rem;margin:.85rem 0;font-family:'DM Mono',monospace;font-size:.71rem;line-height:1.75;color:var(--ink);}
+  .formula-box .computed{color:var(--accent2);font-weight:500;}
+
+  .x-selector{margin-top:.75rem;}
+  .x-selector-label{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.06em;color:var(--ink2);margin-bottom:.28rem;}
+  .x-buttons{display:flex;gap:.22rem;flex-wrap:wrap;}
+  .x-btn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.22rem .5rem;border:1px solid var(--border);background:transparent;cursor:pointer;transition:all .1s;color:var(--ink);}
+  .x-btn:hover:not(.active){background:var(--panel);}
+
+  /* ── PLAY CONTROLS ── */
+  .play-row{display:flex;align-items:center;gap:.6rem;margin-top:1rem;padding-top:.85rem;border-top:1px solid var(--grid);}
+  .play-btn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.35rem .8rem;border:1.5px solid var(--accent2);background:transparent;cursor:pointer;color:var(--accent2);transition:all .15s;letter-spacing:.05em;white-space:nowrap;}
+  .play-btn:hover,.play-btn.playing{background:var(--accent2);color:var(--bg);}
+  .speed-wrap{flex:1;}
+  .speed-label{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);margin-bottom:.18rem;}
+
+  /* ── CHARTS ── */
+  .charts-col{display:flex;flex-direction:column;gap:1.1rem;}
+  .dual-charts{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;}
+  .chart-panel{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.1rem;box-shadow:2px 2px 0 var(--shadow);}
+  .panel-label{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2);margin-bottom:.32rem;display:flex;justify-content:space-between;align-items:center;}
+  .panel-title{font-size:.9rem;font-weight:300;margin-bottom:.26rem;line-height:1.3;}
+  .panel-title em{color:var(--accent);font-style:italic;}
+
+  /* param info strip */
+  .param-info{font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem .6rem;background:var(--panel);border:1px solid var(--grid);display:inline-block;margin-bottom:.45rem;}
+  .param-info .pname{color:var(--ink2);}
+  .param-info .pval{font-weight:600;}
+
+  .legend-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.45rem;}
+  .legend-item{display:flex;align-items:center;gap:.32rem;font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);}
+  .legend-dot{width:15px;height:3px;border-radius:2px;}
+
+  /* ── TABLE ── */
+  .table-panel{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.1rem;box-shadow:2px 2px 0 var(--shadow);}
+  .param-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.69rem;}
+  .param-table th{text-align:left;padding:.32rem .55rem;background:var(--panel);border-bottom:1.5px solid var(--grid);color:var(--ink2);letter-spacing:.04em;}
+  .param-table td{padding:.28rem .55rem;border-bottom:1px dashed var(--grid);color:var(--ink);}
+  .param-table tr.hl td{font-weight:500;background:var(--panel);}
+  .param-table td.emph{color:var(--accent);font-weight:500;}
+  .param-table td.emph2{color:var(--accent2);}
+
+  .info-strip{padding:.75rem .95rem;background:var(--panel);border-left:3px solid var(--accent2);font-size:.78rem;line-height:1.65;color:var(--ink2);}
+  
+  .opt-btn {font-family:'DM Mono',monospace;font-size:.6rem;padding:.25rem .5rem;border:1px solid var(--border);background:var(--panel);cursor:pointer;color:var(--ink);transition:all .15s;}
+  .opt-btn.active {background:var(--accent2); color:white; border-color:var(--accent2);}
+
+  canvas{max-width:100%;display:block;}
+  @media(max-width:900px){.outer-grid{grid-template-columns:1fr}.dual-charts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <div>
+    <h1>Bedingte Verteilungen im <em>GLM</em></h1>
+    <p class="subtitle" id="main-subtitle">Ansicht 1: Dichte/PMF (Single, Ghost oder Ridgeline) &nbsp;·&nbsp; Ansicht 2: E[Y|x] als Funktion von x</p>
+    <p style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);opacity:.55;margin-top:.12rem;letter-spacing:.02em">© Dr. Rainer Düsing</p>
+  </div>
+  <div class="header-btns">
+    <button class="icon-btn" onclick="toggleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">DARK</span></button>
+  </div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="outer-grid">
+  <div class="sidebar">
+    <h3>Koeffizienten</h3>
+    <div class="param-group">
+      <div class="param-label"><span>β₀ (Intercept)</span><span class="param-val" id="b0-val">0.50</span></div>
+      <input type="range" id="b0" min="-3" max="3" step="0.05" value="0.5">
+    </div>
+    <div class="param-group">
+      <div class="param-label"><span>β₁ (Slope)</span><span class="param-val" id="b1-val">0.40</span></div>
+      <input type="range" id="b1" min="-2" max="2" step="0.05" value="0.4">
+    </div>
+    <div id="extra-params"></div>
+    <div class="formula-box" id="formula-box"></div>
+    
+    <div class="x-selector">
+      <div class="x-selector-label">X-WERT WÄHLEN</div>
+      <div class="x-buttons" id="x-buttons"></div>
+    </div>
+    
+    <div class="play-row">
+      <button class="play-btn" id="playBtn" onclick="togglePlay()">▶ PLAY</button>
+      <div class="speed-wrap">
+        <div class="speed-label">Geschwindigkeit</div>
+        <input type="range" id="speedSlider" min="300" max="2000" step="100" value="900">
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-col">
+    <div class="dual-charts">
+      <div class="chart-panel">
+        <div class="panel-label">
+          <span>ANSICHT 1 — VERTEILUNG</span>
+          <div style="display:flex; gap:4px;">
+            <button class="opt-btn active" id="btn-single" onclick="setViewMode('single')">Single</button>
+            <button class="opt-btn" id="btn-ghost" onclick="setViewMode('ghost')">Ghost</button>
+            <button class="opt-btn" id="btn-ridgeline" onclick="setViewMode('ridgeline')">Ridgeline</button>
+          </div>
+        </div>
+        <div class="panel-title">P(Y | x = <em id="hl-x-label">0</em>)</div>
+        <div class="param-info" id="param-info">
+          η = <span id="ps-eta">–</span> &nbsp;→&nbsp;
+          <span class="pname" id="ps-param-name">λ</span> = <span class="pval" id="ps-param-val">–</span>
+        </div>
+        <canvas id="chartLeft" height="230"></canvas>
+      </div>
+      
+      <div class="chart-panel">
+        <div class="panel-label">
+          <span>ANSICHT 2 — REGRESSION</span>
+          <button class="opt-btn" id="btn-ci" onclick="toggleCI()">📊 95%-Prädiktionsintervall</button>
+        </div>
+        <div class="panel-title"><em>E[Y|x]</em> als Funktion von x</div>
+        <div style="height:1.6rem"></div> <div class="legend-row" id="legend-right"></div>
+        <canvas id="chartRight" height="230"></canvas>
+      </div>
+    </div>
+
+    <div class="table-panel">
+      <table class="param-table">
+        <thead><tr><th>x</th><th>η = β₀ + β₁·x</th><th id="th-param">Parameter</th><th>E[Y|x]</th></tr></thead>
+        <tbody id="param-tbody"></tbody>
+      </table>
+    </div>
+    <div class="info-strip" id="info-strip"></div>
+  </div>
+</div>
+
+<script>
+// ── THEME & VIEW STATE ───────────────────────────────────────────────────────
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+  document.getElementById('themeLabel').textContent = isDark ? 'DARK' : 'LIGHT';
+  renderAll();
+}
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+let viewMode = 'single'; // single, ghost, ridgeline
+let showCI = false;
+
+function setViewMode(m) {
+  viewMode = m;
+  ['single', 'ghost', 'ridgeline'].forEach(v => document.getElementById('btn-'+v).classList.toggle('active', v===m));
+  lastLeftAxis = null; // Force chart rebuild
+  renderAll();
+}
+
+function toggleCI() {
+  showCI = !showCI;
+  document.getElementById('btn-ci').classList.toggle('active', showCI);
+  lastRightAxis = null;
+  renderAll();
+}
+
+// ── COLORS ───────────────────────────────────────────────────────────────────
+const COLORS = ['#e05a3a','#4ab0d8','#6aaa30','#b04ac8','#e8a020','#20c8a8','#e04a80'];
+function ghostColor(i) { return COLORS[i % COLORS.length] + (isDark ? '30' : '1a'); }
+function activeColor(i) { return COLORS[i % COLORS.length]; }
+
+// ── MATH ─────────────────────────────────────────────────────────────────────
+function normalPDF(y, mu, s) { return Math.exp(-0.5 * ((y - mu) / s) ** 2) / (s * Math.sqrt(2 * Math.PI)); }
+function logGamma(z) {
+  const c = [76.180091729,-86.505320329,24.01409824,-1.23173957,0.00120865,-0.00000539];
+  let x = z, y = z, t = x + 5.5;
+  t = (x + 0.5) * Math.log(t) - t;
+  let s = 1.00000000019;
+  for (let j = 0; j < 6; j++) s += c[j] / ++y;
+  return t + Math.log(2.506628274631 * s / x);
+}
+function poissonPMF(k, lam) { return (lam <= 0) ? 0 : Math.exp(-lam + k * Math.log(lam) - logGamma(k + 1)); }
+function gammaKPDF(y, k, theta) { return (y <= 0) ? 0 : Math.exp((k-1)*Math.log(y) - y/theta - k*Math.log(theta) - logGamma(k)); }
+function binomPMF(k, n, p) {
+  if (k < 0 || k > n) return 0;
+  return Math.exp(logGamma(n+1) - logGamma(k+1) - logGamma(n-k+1) + k*Math.log(p + 1e-15) + (n-k)*Math.log(1 - p + 1e-15));
+}
+function negBinPMF(k, mu, alpha) {
+  const r = 1/alpha, p = r/(r+mu);
+  return Math.exp(logGamma(k+r) - logGamma(k+1) - logGamma(r) + r*Math.log(p) + k*Math.log(1-p));
+}
+
+// ── MODELS ───────────────────────────────────────────────────────────────────
+const MODELS = {
+  ols: {
+    name: 'OLS (Normal)', paramShort: 'μ', paramLabel: 'μ (Mittelwert)',
+    extraParams: [{id:'sigma', label:'σ (Streuung)', min:.1, max:3, step:.05, default:.8}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Kanonischer Link: <strong>Identität</strong>. Die Streuung σ bleibt konstant (Homoskedastizität). Im Prädiktionsintervall siehst du, dass die Streuung parallel zur Regressionsgeraden verläuft.`,
+    getParam: (eta, e) => eta,
+    getEY:    (mu, e) => mu,
+    getCI:    (mu, e) => [mu - 1.96*e.sigma, mu + 1.96*e.sigma],
+    paramStr: (v) => `μ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>μ = <span class="computed">η</span> (Identitäts-Link)<br>σ = <span class="computed">${(e.sigma||.8).toFixed(2)}</span><br>Y|x ~ N(μ, σ²)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      const sig = e.sigma||.8;
+      if (isLeft) {
+        const mus = xVals.map(x => b0+b1*x);
+        const yMin = Math.min(...mus)-4*sig, yMax = Math.max(...mus)+4*sig;
+        const maxDens = normalPDF(0,0,sig);
+        return xVals.map((x,i) => {
+          const mu = b0+b1*x, isHL = x===hlX, pts = [];
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          for(let y=yMin; y<=yMax; y+=(yMax-yMin)/200) pts.push({x:y, y:normalPDF(y,mu,sig) + offset});
+          if(viewMode==='single' && !isHL) return null;
+          return {label:`x=${x}`, data:pts, type:'line',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'33':'transparent',
+            fill: viewMode==='ridgeline'?{value:offset}:isHL, borderWidth:isHL?2.5:1.5, pointRadius:0, tension:.3};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const sig=e.sigma||.8, mus=xVals.map(x=>b0+b1*x);
+      return {xMin:Math.min(...mus)-4*sig, xMax:Math.max(...mus)+4*sig, xLabel:'y'};
+    }
+  },
+
+  poisson: {
+    name: 'Poisson', paramShort: 'λ', paramLabel: 'λ (Rate)',
+    extraParams: [], xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Kanonischer Link: <strong>Logarithmus</strong>. λ = exp(η). Varianz ist gleich Mittelwert. Aktiviere das Prädiktionsintervall, um zu sehen, wie die Streuung mit größerem x trichterförmig zunimmt.`,
+    getParam: (eta, e) => Math.exp(eta),
+    getEY:    (mu, e) => mu,
+    getCI:    (mu, e) => [Math.max(0, mu - 1.96*Math.sqrt(mu)), mu + 1.96*Math.sqrt(mu)],
+    paramStr: (v) => `λ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>Y|x ~ Poisson(λ)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const lams = xVals.map(x=>Math.exp(b0+b1*x)), maxK = Math.ceil(Math.max(...lams) + 5*Math.sqrt(Math.max(...lams)))+2; // FIX: Hartes Limit entfernt
+        const maxDens = Math.max(...lams.map(l=>poissonPMF(Math.round(l),l)));
+        return xVals.map((x,i) => {
+          const lam = Math.exp(b0+b1*x), isHL = x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.35) : 0;
+          const pts = []; for(let k=0; k<=maxK; k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset, poissonPMF(k,lam)+offset]:poissonPMF(k,lam)});
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const ml = Math.max(...xVals.map(x=>Math.exp(b0+b1*x)));
+      return {xMin:0, xMax:Math.ceil(ml+4*Math.sqrt(ml))+1, xLabel:'k (Zählung)'}; // FIX: Hartes Limit entfernt
+    }
+  },
+
+  negbin: {
+    name: 'Neg. Binomial', paramShort: 'μ', paramLabel: 'μ (Erwartungswert)',
+    extraParams: [{id:'alpha', label:'α (Dispersion)', min:0.01, max:1.5, step:0.05, default:0.5}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Praxis-Standard Link: <strong>Logarithmus</strong>. Überdispersion: Die Varianz ist μ + αμ² (größer als bei Poisson). Der Ridgeline-Plot zeigt eindrucksvoll, wie die Verteilung durch α viel flacher und breiter wird als bei der Poisson-Regression.`,
+    getParam: (eta, e) => Math.exp(eta),
+    getEY:    (mu, e) => mu,
+    getCI:    (mu, e) => { const sd = Math.sqrt(mu + e.alpha*mu*mu); return [Math.max(0, mu - 1.96*sd), mu + 1.96*sd]; },
+    paramStr: (v) => `μ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>log(μ) = η &nbsp;⟹&nbsp; μ = <span class="computed">exp(η)</span><br>α = <span class="computed">${e.alpha.toFixed(2)}</span><br>Y|x ~ NB(μ, α)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const mus = xVals.map(x=>Math.exp(b0+b1*x)), maxK = Math.ceil(Math.max(...mus) + 4*Math.sqrt(Math.max(...mus)+e.alpha*Math.pow(Math.max(...mus),2)))+2; // FIX: Hartes Limit entfernt
+        const maxDens = Math.max(...mus.map(mu=>negBinPMF(Math.round(mu),mu,e.alpha)));
+        return xVals.map((x,i) => {
+          const mu = Math.exp(b0+b1*x), isHL = x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          const pts = []; for(let k=0; k<=maxK; k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset, negBinPMF(k,mu,e.alpha)+offset]:negBinPMF(k,mu,e.alpha)});
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const ml = Math.max(...xVals.map(x=>Math.exp(b0+b1*x)));
+      return {xMin:0, xMax:Math.ceil(ml+3*Math.sqrt(ml+e.alpha*ml*ml))+1, xLabel:'k'}; // FIX: Hartes Limit entfernt
+    }
+  },
+
+  gamma: {
+    name: 'Gamma', paramShort: 'μ', paramLabel: 'μ (Erwartungswert)',
+    extraParams: [{id:'kshape', label:'k (Shape)', min:0.5, max:10, step:0.5, default:2}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3], 
+    description: `Kanonischer Link: <strong>Invers</strong>. η = 1/μ. (Achtung: η muss hier strikt positiv bleiben!). Varianz wächst quadratisch: Var = μ²/k. Die Intervall-Bänder weiten sich stark.`,
+    getParam: (eta, e) => 1 / Math.max(eta, 0.02),
+    getEY:    (mu, e) => mu,
+    getCI:    (mu, e) => [Math.max(0.01, mu - 1.96*(mu/Math.sqrt(e.kshape))), mu + 1.96*(mu/Math.sqrt(e.kshape))],
+    paramStr: (v) => `μ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>1/μ = η &nbsp;⟹&nbsp; μ = <span class="computed">1/η</span><br>k = <span class="computed">${e.kshape.toFixed(1)}</span> (Shape)<br>Y|x ~ Gamma(k, θ=μ/k)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const k = e.kshape, mus = xVals.map(x=>m.getParam(b0+b1*x,e));
+        const yMax = Math.max(...mus) + 4*(Math.max(...mus)/Math.sqrt(k));
+        let maxDens = 0; mus.forEach(mu => { const d=gammaKPDF(mu*(k-1)/k, k, mu/k); if(d>maxDens) maxDens=d; });
+        return xVals.map((x,i) => {
+          const mu = m.getParam(b0+b1*x,e), isHL = x===hlX, pts = [];
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.35) : 0;
+          
+          // FIX: Auflösung drastisch erhöht, glättet das Chart bei großen Parametern
+          const step = yMax / 800; 
+          for(let y=0.05; y<=yMax; y+=step) pts.push({x:y, y:gammaKPDF(y,k,mu/k) + offset});
+          
+          return {label:`x=${x}`, data:pts, type:'line',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'33':'transparent',
+            fill: viewMode==='ridgeline'?{value:offset}:isHL, borderWidth:isHL?2.5:1.5, pointRadius:0, tension:.3};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.05) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const ml = Math.max(...xVals.map(x=>m.getParam(b0+b1*x,e)));
+      return {xMin:0, xMax:ml + 3*(ml/Math.sqrt(e.kshape)), xLabel:'y'};
+    }
+  },
+
+  binomial: {
+    name: 'Binomial', paramShort: 'p', paramLabel: 'p (Wahrsch.)',
+    extraParams: [{id:'ntrials', label:'n (Versuche)', min:1, max:50, step:1, default:10}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Kanonischer Link: <strong>Logit</strong>. logit(p) = η. Im Regressionsplot wird hier der erwartete Count (n·p) dargestellt. Das Prädiktionsintervall schnürt sich an den Rändern (p→0 und p→1) logischerweise wieder zusammen!`,
+    getParam: (eta, e) => 1/(1+Math.exp(-eta)),
+    getEY:    (mu, e) => e.ntrials * mu,
+    getCI:    (mu, e) => { const np = e.ntrials*mu, sd = Math.sqrt(np*(1-mu)); return [Math.max(0, np - 1.96*sd), Math.min(e.ntrials, np + 1.96*sd)]; },
+    paramStr: (v) => `p = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>logit(p) = η &nbsp;⟹&nbsp; p = <span class="computed">σ(η)</span><br>n = <span class="computed">${e.ntrials}</span><br>Y|x ~ Bin(n, p)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const n = e.ntrials;
+        let maxDens = 0; xVals.forEach(x => { const p=m.getParam(b0+b1*x,e), d=binomPMF(Math.round(n*p),n,p); if(d>maxDens) maxDens=d; });
+        return xVals.map((x,i) => {
+          const p = m.getParam(b0+b1*x,e), isHL = x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          const pts = []; for(let k=0; k<=n; k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset, binomPMF(k,n,p)+offset]:binomPMF(k,n,p)});
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => ({xMin:0, xMax:e.ntrials, xLabel:'k (Erfolge)'})
+  }
+};
+
+// Helper for Right Chart
+function _buildRegPlot(m, b0, b1, e, hlX, xs) {
+  const lineData = [], upperCI = [], lowerCI = [];
+  xs.forEach(x => {
+    const eta = b0+b1*x, param = m.getParam(eta, e);
+    lineData.push({x, y: m.getEY(param, e)});
+    if(showCI) {
+      const ci = m.getCI(param, e);
+      lowerCI.push({x, y: ci[0]}); upperCI.push({x, y: ci[1]});
+    }
+  });
+  
+  const ds = [];
+  if (showCI) {
+    ds.push({ label:'PI Lower', data:lowerCI, type:'line', borderColor:css('--accent2')+'66', borderDash:[4,4], borderWidth:1.5, fill:false, pointRadius:0, tension:0.3, zIndex:1});
+    ds.push({ label:'PI Upper', data:upperCI, type:'line', borderColor:css('--accent2')+'66', borderDash:[4,4], borderWidth:1.5, backgroundColor:css('--accent2')+'22', fill:'-1', pointRadius:0, tension:0.3, zIndex:2});
+  }
+  ds.push({ label:'E[Y|x]', data:lineData, type:'line', borderColor:css('--accent'), borderWidth:2.5, pointRadius:0, tension:0.3, zIndex:10});
+  
+  const pHL = m.getParam(b0+b1*hlX, e);
+  ds.push({ label:`Fokus x=${hlX}`, data:[{x:hlX, y:m.getEY(pHL,e)}], type:'scatter', borderColor:css('--accent'), backgroundColor:'#fff', borderWidth:2, pointRadius:6, zIndex:20});
+  return ds;
+}
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let currentModel = 'poisson', b0 = 0.5, b1 = 0.4, extras = {}, highlightX = 0;
+let chartLeft = null, chartRight = null;
+let playInterval = null, playIdx = 0;
+
+// ── PLAY ─────────────────────────────────────────────────────────────────────
+function togglePlay() {
+  const btn = document.getElementById('playBtn');
+  if (playInterval) {
+    clearInterval(playInterval); playInterval = null;
+    btn.textContent = '▶ PLAY'; btn.classList.remove('playing');
+  } else {
+    btn.textContent = '■ STOP'; btn.classList.add('playing');
+    const m = MODELS[currentModel];
+    playIdx = m.xValues.indexOf(highlightX);
+    if(playIdx === -1) playIdx = 0;
+    const speed = parseInt(document.getElementById('speedSlider').value) || 900;
+    playInterval = setInterval(() => {
+      playIdx = (playIdx + 1) % m.xValues.length;
+      highlightX = m.xValues[playIdx];
+      renderAll();
+    }, speed);
+  }
+}
+
+// ── INIT & RENDER ────────────────────────────────────────────────────────────
+function initTabs() {
+  const d = document.getElementById('tabs'); d.innerHTML = '';
+  Object.entries(MODELS).forEach(([k, m]) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (k === currentModel ? ' active' : '');
+    btn.textContent = m.name;
+    btn.onclick = () => {
+      currentModel = k; lastLeftAxis = null; lastRightAxis = null;
+      if (playInterval) togglePlay(); // stop if playing
+      initModel(); renderAll();
+    };
+    d.appendChild(btn);
+  });
+}
+
+function initModel() {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.textContent === MODELS[currentModel].name));
+  const m = MODELS[currentModel]; extras = {};
+  
+  const ep = document.getElementById('extra-params'); ep.innerHTML = '';
+  m.extraParams.forEach(p => {
+    extras[p.id] = p.default;
+    ep.innerHTML += `<div class="param-group"><div class="param-label"><span>${p.label}</span><span class="param-val" id="${p.id}-val">${p.default}</span></div><input type="range" id="${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}"></div>`;
+  });
+  
+  m.extraParams.forEach(p => {
+    document.getElementById(p.id).addEventListener('input', function() {
+      extras[p.id] = parseFloat(this.value);
+      document.getElementById(p.id+'-val').textContent = this.value;
+      lastLeftAxis = null; renderAll();
+    });
+  });
+
+  const xbtns = document.getElementById('x-buttons'); xbtns.innerHTML = '';
+  if (!m.xValues.includes(highlightX)) highlightX = m.xValues[Math.floor(m.xValues.length/2)];
+  m.xValues.forEach((x, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'x-btn'; btn.id = `xbtn-${x}`; btn.textContent = `x=${x}`;
+    btn.onclick = () => { highlightX = x; renderAll(); };
+    xbtns.appendChild(btn);
+  });
+  document.getElementById('th-param').textContent = m.paramLabel;
+}
+
+let lastLeftAxis = null, lastRightAxis = null;
+function axisKey(ax) { return JSON.stringify([ax.xMin, ax.xMax]); }
+
+function renderAll() {
+  const m = MODELS[currentModel];
+  b0 = parseFloat(document.getElementById('b0').value);
+  b1 = parseFloat(document.getElementById('b1').value);
+  document.getElementById('b0-val').textContent = b0.toFixed(2);
+  document.getElementById('b1-val').textContent = b1.toFixed(2);
+  document.getElementById('formula-box').innerHTML = m.formulaHtml(extras);
+
+  // Update x-buttons UI
+  m.xValues.forEach((x, i) => {
+    const btn = document.getElementById(`xbtn-${x}`);
+    if(!btn) return;
+    const isAct = x === highlightX;
+    btn.style.background  = isAct ? COLORS[i%COLORS.length] : 'transparent';
+    btn.style.color       = isAct ? 'white' : COLORS[i%COLORS.length];
+    btn.style.borderColor = COLORS[i%COLORS.length];
+    btn.classList.toggle('active', isAct);
+  });
+
+  const eta = b0 + b1*highlightX, param = m.getParam(eta, extras);
+  
+  // FIX: Fallback Color-Logik für Highlight
+  const xIndex = m.xValues.indexOf(highlightX);
+  const hlColor = xIndex !== -1 ? COLORS[xIndex % COLORS.length] : COLORS[0];
+  
+  document.getElementById('hl-x-label').textContent = highlightX;
+  document.getElementById('hl-x-label').style.color = hlColor;
+  document.getElementById('ps-eta').textContent = eta.toFixed(3);
+  document.getElementById('ps-param-name').textContent = m.paramShort;
+  document.getElementById('ps-param-val').textContent = param.toFixed(3);
+  document.getElementById('param-info').style.borderColor = hlColor + '70';
+
+  // --- Left Chart ---
+  const axL = m.distAxis(m, b0, b1, m.xValues, extras);
+  const dsL = m.buildDatasets(m, b0, b1, m.xValues, extras, highlightX, true);
+  
+  if (!chartLeft || axisKey(axL) !== lastLeftAxis || chartLeft.options.plugins.ridgelineMarker !== viewMode) {
+    if(chartLeft) chartLeft.destroy();
+    chartLeft = new Chart(document.getElementById('chartLeft').getContext('2d'), {
+      type: 'scatter', data: {datasets: dsL},
+      options: {
+        responsive: true, animation: {duration: 200}, plugins: {legend: {display: false}, ridgelineMarker: viewMode},
+        scales: {
+          x: {type:'linear', min:axL.xMin, max:axL.xMax, title:{display:true, text:axL.xLabel}, grid:{color:css('--chart-grid')}, ticks:{color:css('--chart-tick')}},
+          y: {display: viewMode!=='ridgeline', min:0, grid:{color:css('--chart-grid')}, ticks:{color:css('--chart-tick')}}
+        }
+      }
+    });
+    lastLeftAxis = axisKey(axL);
+  } else {
+    chartLeft.data.datasets = dsL;
+    chartLeft.update('none');
+  }
+
+  // --- Right Chart ---
+  const dsR = m.buildDatasets(m, b0, b1, m.xValues, extras, highlightX, false);
+  const axR_key = currentModel + (showCI?"_CI":"");
+  
+  // FIX: Dynamische Y-Achsen Konfiguration für Right Chart
+  const yAxisRight = { title:{display:true, text:'E[Y|x]'}, grid:{color:css('--chart-grid')}, ticks:{color:css('--chart-tick')} };
+  if (currentModel !== 'ols') yAxisRight.min = 0; // Poisson, Gamma, NegBin, Binomial dürfen nicht ins Minus fallen
+  if (currentModel === 'binomial') yAxisRight.max = extras.ntrials; // Binomial ist nach oben beschränkt
+  
+  if (!chartRight || lastRightAxis !== axR_key) {
+    if(chartRight) chartRight.destroy();
+    chartRight = new Chart(document.getElementById('chartRight').getContext('2d'), {
+      type: 'scatter', data: {datasets: dsR},
+      options: {
+        responsive: true, animation: {duration: 200}, plugins: {legend: {display: false}},
+        scales: {
+          x: {type:'linear', title:{display:true, text:'Prädiktor x'}, grid:{color:css('--chart-grid')}, ticks:{color:css('--chart-tick')}},
+          y: yAxisRight
+        }
+      }
+    });
+    lastRightAxis = axR_key;
+  } else {
+    chartRight.data.datasets = dsR;
+    chartRight.options.scales.y = yAxisRight; // Sorgt dafür, dass Limits beim Parameterwechsel (z.B. Trials) updaten
+    chartRight.update('none');
+  }
+
+  // --- Table & Info ---
+  const tbody = document.getElementById('param-tbody'); tbody.innerHTML = '';
+  m.xValues.forEach((x, i) => {
+    const e = b0+b1*x, p = m.getParam(e,extras), ey = m.getEY(p,extras), isHL = x===highlightX;
+    tbody.innerHTML += `<tr class="${isHL?'hl':''}">
+      <td style="color:${COLORS[i%COLORS.length]};font-weight:600">x = ${x}</td>
+      <td class="emph2">${e.toFixed(3)}</td><td class="emph">${m.paramStr(p)}</td><td>${ey.toFixed(3)}</td></tr>`;
+  });
+  document.getElementById('info-strip').innerHTML = m.description;
+}
+
+// ── EVENT LISTENERS ──────────────────────────────────────────────────────────
+document.getElementById('b0').addEventListener('input', renderAll);
+document.getElementById('b1').addEventListener('input', renderAll);
+
+initTabs(); initModel(); renderAll();
+</script>
+</body>
+</html>

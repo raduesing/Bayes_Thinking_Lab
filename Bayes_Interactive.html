@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bayesianische Regression — Interaktiv</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+:root{
+  --bg:#f5f0e8;--paper:#fdfaf4;--ink:#1a1410;--ink2:#4a3f35;
+  --accent:#c94a2a;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#8a3a8a;
+  --grid:#e0d8cc;--panel:#eee8da;--border:#1a1410;--shadow:rgba(0,0,0,.06);
+  --cg:rgba(0,0,0,.07);--ct:#2a2018;
+  --prior:#2a6e8a;--lik:#c94a2a;--post:#5a8a2a;
+  --macc:#5a8a2a;--mrej:#c94a2a;--mwarn:#8a5a00;
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;
+  --accent:#e8614a;--accent2:#4ab0d8;--accent3:#7ec850;--accent4:#c87ad8;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;--shadow:rgba(0,0,0,.4);
+  --cg:rgba(255,255,255,.06);--ct:#c8c0b0;
+  --prior:#4ab0d8;--lik:#e8614a;--post:#7ec850;
+  --macc:#7ec850;--mrej:#e8614a;--mwarn:#e8c040;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;padding:1.2rem 1.8rem 2.5rem;transition:background .25s,color .25s}
+.hrow{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.9rem;gap:1rem}
+h1{font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+h1 em{font-style:italic;color:var(--accent)}
+.sub{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);margin-top:.22rem;letter-spacing:.03em}
+.hbtns{display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start}
+.ibtn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.32rem .75rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;letter-spacing:.05em;color:var(--ink);transition:all .15s;white-space:nowrap}
+.ibtn:hover{background:var(--ink);color:var(--bg)}
+.ibtn.on{border-color:var(--accent2);color:var(--accent2)}
+.outer{display:grid;grid-template-columns:215px 1fr;gap:1rem;align-items:start}
+.sidebar{display:flex;flex-direction:column;gap:.7rem}
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid)}
+.ha{color:var(--accent)}.hb{color:var(--accent2)}.hg{color:var(--accent3)}
+.pg{margin-bottom:.65rem}.pg:last-child{margin-bottom:0}
+.pl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.18rem}
+.pl span:first-child{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink)}
+.pv{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500}
+.pva{color:var(--accent)}.pvb{color:var(--accent2)}.pvg{color:var(--accent3)}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--grid);outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--ink);border-radius:50%;cursor:pointer}
+input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
+.rbtn{font-family:'DM Mono',monospace;font-size:.6rem;padding:.25rem .65rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;margin-top:.35rem}
+.rbtn:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.col{display:flex;flex-direction:column;gap:.9rem}
+.cpanel{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.plbl{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2);margin-bottom:.22rem}
+.ptit{font-size:.85rem;font-weight:300;margin-bottom:.4rem;line-height:1.3}
+.ptit em{color:var(--accent);font-style:italic}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.leg{display:flex;gap:.55rem;flex-wrap:wrap;margin-bottom:.4rem;align-items:center}
+.li{display:flex;align-items:center;gap:.25rem;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2)}
+.ld{display:inline-block;width:18px;height:3px;border-radius:2px}
+.ldd{display:inline-block;width:18px;height:2px;background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 8px)}
+.infobox{padding:.45rem .7rem;background:var(--panel);border-left:3px solid var(--accent2);font-family:'DM Mono',monospace;font-size:.61rem;line-height:1.65;color:var(--ink2);margin-top:.5rem}
+.infobox b{color:var(--ink)}
+.form{color:var(--accent2)}
+/* Marginals */
+.mbox{background:var(--panel);border:1px solid var(--grid);padding:.5rem .65rem;margin-bottom:.5rem}
+.mbox:last-of-type{margin-bottom:0}
+.mhdr{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink);margin-bottom:.15rem;display:flex;justify-content:space-between}
+.msub{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);margin-top:.18rem}
+/* MCMC */
+#mcmc-wrap{position:relative;width:100%;background:var(--panel);border:1px solid var(--grid)}
+#mcmc-canvas{display:block}
+.mctrl{display:flex;gap:.5rem;align-items:center;margin-top:.5rem;flex-wrap:wrap}
+.mbtn{font-family:'DM Mono',monospace;font-size:.62rem;padding:.3rem .8rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s}
+.mbtn:hover,.mbtn.run{background:var(--accent2);color:white;border-color:var(--accent2)}
+.mstat{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2)}
+.mstat b{color:var(--ink)}
+@media(max-width:960px){.outer{grid-template-columns:1fr}.two{grid-template-columns:1fr}}
+/* collapsible explanation */
+details.expl{margin-top:.55rem;border-top:1px solid var(--grid);padding-top:.45rem}
+details.expl summary{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.06em;cursor:pointer;color:var(--accent2);user-select:none;list-style:none;display:flex;align-items:center;gap:.3rem}
+details.expl summary::before{content:'▶';font-size:.5rem;transition:transform .15s}
+details.expl[open] summary::before{transform:rotate(90deg)}
+details.expl summary::-webkit-details-marker{display:none}
+.expl-body{font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);line-height:1.7;margin-top:.45rem}
+.expl-body b{color:var(--ink)}
+.expl-body .expl-sec{margin-bottom:.55rem}
+.expl-body .expl-sec:last-child{margin-bottom:0}
+.expl-body .expl-hd{color:var(--accent2);font-weight:500;display:block;margin-bottom:.15rem}
+/* y-fix button */
+.yfbtn{font-family:'DM Mono',monospace;font-size:.57rem;padding:.18rem .5rem;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;margin-left:auto}
+.yfbtn:hover{background:var(--accent2);color:white;border-color:var(--accent2)}
+.yfbtn.on{border-color:var(--accent2);color:var(--accent2);background:var(--accent2)18}
+</style>
+</head>
+<body>
+<div class="hrow">
+  <div>
+    <h1>Bayesianische <em>Regression</em> — Interaktiv</h1>
+    <p class="sub">Prior · Likelihood · Posterior &nbsp;|&nbsp; Kruschke-Diagramm · Prior Predictive · MCMC</p>
+    <p style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);opacity:.55;margin-top:.12rem;letter-spacing:.02em">© Dr. Rainer Düsing</p>
+  </div>
+  <div class="hbtns">
+    <button class="ibtn on" id="btn-st" onclick="toggleSt()">📊 Gaussian</button>
+    <button class="ibtn" id="btn-out" onclick="toggleOut()">⚡ Ausreißer</button>
+    <button class="ibtn" onclick="toggleTheme()"><span id="ticon">🌙</span> <span id="tlbl">DARK</span></button>
+  </div>
+</div>
+
+<div class="outer">
+  <div class="sidebar">
+    <div class="scard">
+      <h3 class="ha">Wahre Parameter</h3>
+      <div class="pg"><div class="pl"><span>α · Intercept</span><span class="pv pva" id="va">0.00</span></div><input type="range" id="sa" min="-3" max="3" step="0.1" value="0"></div>
+      <div class="pg"><div class="pl"><span>β · Slope</span><span class="pv pva" id="vb">1.00</span></div><input type="range" id="sb" min="-3" max="3" step="0.1" value="1"></div>
+      <div class="pg"><div class="pl"><span>σ · Residual SD</span><span class="pv pva" id="vs">1.00</span></div><input type="range" id="ss" min="0.2" max="4" step="0.1" value="1"></div>
+      <div class="pg" id="nu-g" style="display:none"><div class="pl"><span>ν · Freiheitsgrade (t)</span><span class="pv pva" id="vnu">4</span></div><input type="range" id="snu" min="1" max="30" step="1" value="4"></div>
+      <div class="pg"><div class="pl"><span>n · Beobachtungen</span><span class="pv pva" id="vn">30</span></div><input type="range" id="sn" min="5" max="100" step="5" value="30"></div>
+      <button class="rbtn" onclick="regen()">⟳ Neue Daten</button>
+    </div>
+    <div class="scard">
+      <h3 class="hb">Priors &amp; Hyperparameter</h3>
+      <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);margin-bottom:.5rem;line-height:1.65">α ~ N(μ_α, σ_α)<br>β ~ N(μ_β, σ_β)<br>σ ~ HalfNormal(0, s_σ)</div>
+      <div class="pg"><div class="pl"><span>μ_α · Prior-Mittel α</span><span class="pv pvb" id="vpma">0.00</span></div><input type="range" id="spma" min="-3" max="3" step="0.1" value="0"></div>
+      <div class="pg"><div class="pl"><span>σ_α · Prior-SD α</span><span class="pv pvb" id="vpsa">1.00</span></div><input type="range" id="spsa" min="0.1" max="5" step="0.1" value="1"></div>
+      <div class="pg"><div class="pl"><span>μ_β · Prior-Mittel β</span><span class="pv pvb" id="vpmb">0.00</span></div><input type="range" id="spmb" min="-3" max="3" step="0.1" value="0"></div>
+      <div class="pg"><div class="pl"><span>σ_β · Prior-SD β</span><span class="pv pvb" id="vpsb">1.00</span></div><input type="range" id="spsb" min="0.1" max="5" step="0.1" value="1"></div>
+      <div class="pg"><div class="pl"><span>s_σ · HalfNormal Scale</span><span class="pv pvb" id="vpss">1.00</span></div><input type="range" id="spss" min="0.1" max="5" step="0.1" value="1"></div>
+      <details class="expl">
+        <summary>Erläuterungen &amp; Hintergrund</summary>
+        <div class="expl-body">
+          <div class="expl-sec">
+            <span class="expl-hd">Was sind Priors?</span>
+            Priors kodieren unser Wissen <em>vor</em> dem Betrachten der Daten. Ein Prior N(0, 1) für β bedeutet: wir erwarten einen Slope nahe 0, Werte über ±2 sind unwahrscheinlich. Ein breiter Prior (σ groß) ist schwach-informativ.
+          </div>
+          <div class="expl-sec">
+            <span class="expl-hd">Kruschke-Diagramm</span>
+            Visualisiert die generative Modellstruktur (Kruschke 2014). Pfeile zeigen stochastische Abhängigkeiten: Hyperpriors → Priors → Likelihood → Daten.
+          </div>
+          <div class="expl-sec">
+            <span class="expl-hd">Prior Predictive Check</span>
+            (McElreath 2020, Kap. 4) Stichproben aus dem Prior werden simuliert und als Regressionsgeraden gezeigt. Ein guter Prior erzeugt plausible — nicht beliebige — Vorhersagen.
+          </div>
+          <div class="expl-sec">
+            <span class="expl-hd">Prior → Posterior Update</span>
+            P(θ|y) ∝ P(y|θ) · P(θ). Die Posterior verbindet Prior-Wissen mit Dateninformation. Bei kleinem n dominiert der Prior; bei großem n die Likelihood.
+          </div>
+          <div class="expl-sec">
+            <span class="expl-hd">Marginalverteilungen</span>
+            Zeigen wie sich jeder Parameter α, β, σ vom Prior zum Posterior verändert. Schmale Posterior → hohe Sicherheit durch Daten.
+          </div>
+          <div class="expl-sec">
+            <span class="expl-hd">MCMC Metropolis-Hastings</span>
+            Samplet (β, σ) gemeinsam. σ wird auf Log-Skala vorgeschlagen (garantiert Positivität). Die Heatmap zeigt log P(β,σ|y). Trace-Plots zeigen Konvergenz; Histogramme die marginale Posterior nach Burn-in.
+          </div>
+        </div>
+      </details>
+    </div>
+  </div><!-- /sidebar -->
+
+  <div class="col">
+    <!-- ROW 1 -->
+    <div class="two">
+      <div class="cpanel" style="display:flex;flex-direction:column">
+        <div class="plbl">MODELLSTRUKTUR</div>
+        <div class="ptit">Kruschke-<em>Diagramm</em></div>
+        <div style="position:relative;flex:1;min-height:clamp(200px,28vh,360px)">
+          <svg id="ksvg" style="position:absolute;top:0;left:0;width:100%;height:100%;display:block"></svg>
+        </div>
+        <div class="infobox" style="margin-top:.5rem;flex-shrink:0">Pfeile = stochastische Abhängigkeit ↓ &nbsp;·&nbsp;
+          <span style="color:var(--accent4)">■</span> Hyperpriors &nbsp;
+          <span style="color:var(--accent2)">■</span> Priors &nbsp;
+          <span style="color:var(--lik)">■</span> Likelihood &nbsp;
+          <span style="color:var(--accent3)">■</span> Daten
+        </div>
+      </div>
+      <div class="cpanel">
+        <div class="plbl">PRIOR PREDICTIVE CHECK</div>
+        <div class="ptit">Was sagt das Modell <em>vor</em> den Daten? <span style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);font-style:normal">(McElreath-Ansatz)</span></div>
+        <div class="leg" style="align-items:center">
+          <span class="li"><span class="ld" style="background:var(--prior);opacity:.6"></span>60 Prior-Geraden</span>
+          <button class="yfbtn" id="btn-yfix" onclick="toggleYFix()" title="y-Achse fixieren für Priorvergleiche">🔒 y-Achse fixieren</button>
+        </div>
+        <div style="position:relative;height:clamp(210px,30vh,340px)"><canvas id="cPrior"></canvas></div>
+        <div class="infobox">Jede Linie = α~N(μ_α,σ_α), β~N(μ_β,σ_β).<br><b>σ_α oder σ_β groß</b> → viele plausible Welten.</div>
+      </div>
+    </div>
+
+    <!-- ROW 2: Posterior -->
+    <div class="cpanel">
+      <div class="plbl">PRIOR → POSTERIOR UPDATE</div>
+      <div class="ptit">Wie die Daten den Prior <em>aktualisieren</em></div>
+      <div class="two" style="gap:.8rem">
+        <div>
+          <div class="leg">
+            <span class="li"><span class="ld" style="background:var(--prior);opacity:.35"></span>Prior Pred.</span>
+            <span class="li"><span class="ld" style="background:var(--post);opacity:.6"></span>Post. Pred.</span>
+            <span class="li"><span class="ld" style="background:var(--post);height:3.5px"></span>Post. Median</span>
+            <span class="li"><span class="ldd" style="color:var(--lik)"></span>Wahre Linie</span>
+          </div>
+          <div style="position:relative;height:clamp(230px,32vh,360px)"><canvas id="cPost"></canvas></div>
+        </div>
+        <!-- Marginals — 3 stacked -->
+        <div style="display:flex;flex-direction:column;justify-content:space-between;gap:.4rem">
+          <div class="mbox">
+            <div class="mhdr">
+              <span>Intercept <b>α</b></span>
+              <span style="display:flex;gap:.35rem">
+                <span class="li"><span class="ld" style="background:var(--prior);opacity:.8;height:2px"></span><small>Prior</small></span>
+                <span class="li"><span class="ld" style="background:var(--accent)"></span><small>Post.</small></span>
+              </span>
+            </div>
+            <div style="position:relative;height:90px;width:100%"><canvas id="mA" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div>
+            <div class="msub" id="lblA">—</div>
+          </div>
+          <div class="mbox">
+            <div class="mhdr">
+              <span>Slope <b>β</b></span>
+              <span style="display:flex;gap:.35rem">
+                <span class="li"><span class="ld" style="background:var(--prior);opacity:.8;height:2px"></span><small>Prior</small></span>
+                <span class="li"><span class="ld" style="background:var(--accent3)"></span><small>Post.</small></span>
+              </span>
+            </div>
+            <div style="position:relative;height:90px;width:100%"><canvas id="mB" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div>
+            <div class="msub" id="lblB">—</div>
+          </div>
+          <div class="mbox">
+            <div class="mhdr">
+              <span>Residual SD <b>σ</b></span>
+              <span style="display:flex;gap:.35rem">
+                <span class="li"><span class="ld" style="background:var(--prior);opacity:.8;height:2px"></span><small>Prior</small></span>
+                <span class="li"><span class="ld" style="background:var(--accent2)"></span><small>Post.</small></span>
+              </span>
+            </div>
+            <div style="position:relative;height:90px;width:100%"><canvas id="mS" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div>
+            <div class="msub" id="lblS">—</div>
+          </div>
+          <div class="infobox" style="font-size:.6rem;margin-top:0">
+            <b>P(θ|y) ∝ P(y|θ)·P(θ)</b><br>
+            Schmale Post.-Kurve = mehr Gewissheit.<br>
+            Prior-Kurve verschiebt sich bei engem Prior.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 3: MCMC -->
+    <div class="cpanel">
+      <div class="plbl">MCMC — METROPOLIS-HASTINGS</div>
+      <div class="ptit">Wie der <em>Sampler</em> den Posteriorraum erkundet</div>
+      <div class="two" style="gap:.8rem">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);margin-bottom:.35rem;line-height:1.5">
+            Heatmap = log P(β,σ|y) &nbsp;·&nbsp;
+            <span style="color:var(--macc)">● akzept.</span> &nbsp;
+            <span style="color:var(--mrej)">● abgel.</span> &nbsp;
+            <span style="color:var(--lik)">✕ wahr</span> &nbsp;
+            <span style="color:var(--mwarn)">● aktuell</span>
+          </div>
+          <div id="mcmc-wrap" style="position:relative;height:clamp(250px,33vh,370px);overflow:hidden">
+            <canvas id="mcmc-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          </div>
+          <div class="mctrl">
+            <button class="mbtn" id="mbtn-run" onclick="mcmcToggle()">▶ Start</button>
+            <button class="mbtn" onclick="mcmcReset()">↺ Reset</button>
+            <span class="mstat">Iter: <b id="mn">0</b></span>
+            <span class="mstat">Akzeptanz: <b id="macc">—</b></span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.45rem">
+          <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2)">
+            Trace-Plot <b style="color:var(--accent3)">β</b> &nbsp;<span style="color:var(--lik)">— wahr</span>
+          </div>
+          <div style="position:relative;height:clamp(75px,9vh,120px);width:100%">
+            <canvas id="cTraceB" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2)">
+            Histogramm <b style="color:var(--accent3)">β</b> &nbsp;(nach Burn-in)
+          </div>
+          <div style="position:relative;height:clamp(75px,9vh,120px);width:100%">
+            <canvas id="cHistB" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2)">
+            Trace-Plot <b style="color:var(--accent2)">σ</b> &nbsp;<span style="color:var(--lik)">— wahr</span>
+          </div>
+          <div style="position:relative;height:clamp(75px,9vh,120px);width:100%">
+            <canvas id="cTraceS" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2)">
+            Histogramm <b style="color:var(--accent2)">σ</b> &nbsp;(nach Burn-in)
+          </div>
+          <div style="position:relative;height:clamp(75px,9vh,120px);width:100%">
+            <canvas id="cHistS" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
+          </div>
+          <div class="infobox" style="font-size:.6rem">
+            <b>Metropolis-Schritt:</b><br>
+            1. Schlage β*~N(β,0.15²), log σ*~N(log σ,0.12²)<br>
+            2. r = P(β*,σ*|y) / P(β,σ|y)<br>
+            3. Akzeptiere wenn U(0,1) &lt; min(1,r)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /col -->
+</div><!-- /outer -->
+
+<script>
+'use strict';
+// ── theme ─────────────────────────────────────────────
+let isDark=true;
+function toggleTheme(){
+  isDark=!isDark;
+  document.documentElement.setAttribute('data-theme',isDark?'dark':'light');
+  document.getElementById('ticon').textContent=isDark?'☀️':'🌙';
+  document.getElementById('tlbl').textContent=isDark?'LIGHT':'DARK';
+  rebuildAll();
+}
+function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+
+// ── state ─────────────────────────────────────────────
+let useSt=false, showOut=false, seed=42, data=[];
+let CH={};  // chart handles
+// MCMC
+let chain=[], running=false, rafId=null, accepted=0, alphaFixed=0;
+const STEP_B=0.15, STEP_S=0.12;
+// y-axis lock (PPC + posterior)
+let yFixed=false, yFixedMin=-10, yFixedMax=10;
+
+// ── RNG ───────────────────────────────────────────────
+function mkRng(s){let st=s>>>0;return()=>{st=(Math.imul(st,1664525)+1013904223)>>>0;return st/0x100000000}}
+function rnorm(r){return Math.sqrt(-2*Math.log(Math.max(r(),1e-10)))*Math.cos(2*Math.PI*r())}
+function rSt(r,nu){const z=rnorm(r);let c=0;for(let i=0;i<Math.min(nu,30);i++){const n=rnorm(r);c+=n*n}return z/Math.sqrt(c/Math.min(nu,30))}
+
+// ── params ────────────────────────────────────────────
+function P(){return{
+  a:+document.getElementById('sa').value,
+  b:+document.getElementById('sb').value,
+  s:+document.getElementById('ss').value,
+  nu:+document.getElementById('snu').value,
+  n:+document.getElementById('sn').value|0,
+  pma:+document.getElementById('spma').value,
+  psa:+document.getElementById('spsa').value,
+  pmb:+document.getElementById('spmb').value,
+  psb:+document.getElementById('spsb').value,
+  pss:+document.getElementById('spss').value,
+}}
+
+// ── data generation ───────────────────────────────────
+function genData(){
+  const p=P(),r=mkRng(seed);
+  data=[];
+  for(let i=0;i<p.n;i++){
+    const x=(r()*2-1)*3;
+    const e=useSt?rSt(r,p.nu)*p.s:rnorm(r)*p.s;
+    data.push({x,y:p.a+p.b*x+e});
+  }
+  if(showOut){
+    const r2=mkRng(seed+999);
+    for(let i=0;i<3;i++){
+      const x=(r2()*2-1)*2.5;
+      data.push({x,y:p.a+p.b*x+(i%2?-1:1)*p.s*5.5*(0.8+r2()*0.4)});
+    }
+  }
+}
+function regen(){seed=(Math.random()*99999)|0;genData();mcmcReset();rebuildAll()}
+
+// ── math ──────────────────────────────────────────────
+function ls(lo,hi,n){const o=[];for(let i=0;i<n;i++)o.push(lo+(hi-lo)*i/(n-1));return o}
+function npdf(x,m,s){const z=(x-m)/s;return Math.exp(-.5*z*z)/(s*Math.sqrt(2*Math.PI))}
+function hnpdf(x,s){if(x<=0)return 0;return 2*Math.exp(-.5*(x/s)**2)/(s*Math.sqrt(2*Math.PI))}
+Math.lgamma=function(x){
+  if(x<=0)return Infinity;
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,.1208650973866179e-2,-.5395239384953e-5];
+  let y=x,t=x+5.5;t-=(x+.5)*Math.log(t);let s=1.000000000190015;
+  for(let j=0;j<6;j++)s+=c[j]/++y;
+  return -t+Math.log(2.5066282746310005*s/x);
+};
+function lnpdf(x,m,s){if(s<=0)return-Infinity;const z=(x-m)/s;return-Math.log(s)-.5*Math.log(2*Math.PI)-.5*z*z}
+function lhnpdf(x,s){if(x<=0||s<=0)return-Infinity;return Math.log(2)-Math.log(s)-.5*Math.log(2*Math.PI)-.5*(x/s)**2}
+function lstpdf(x,m,si,nu){if(si<=0)return-Infinity;const z=(x-m)/si;return Math.lgamma((nu+1)/2)-Math.lgamma(nu/2)-.5*Math.log(nu*Math.PI)-Math.log(si)-(nu+1)/2*Math.log(1+z*z/nu)}
+
+function logLik(a,b,si,p){
+  let ll=0;const sg=Math.max(si,.01);
+  for(const d of data){const m=a+b*d.x;ll+=useSt?lstpdf(d.y,m,sg,p.nu):lnpdf(d.y,m,sg)}
+  return ll;
+}
+function logPri(a,b,si,p){return lnpdf(a,p.pma,p.psa)+lnpdf(b,p.pmb,p.psb)+lhnpdf(si,p.pss)}
+function logPost(a,b,si,p){if(si<=0)return-Infinity;return logLik(a,b,si,p)+logPri(a,b,si,p)}
+
+// ── posterior (conjugate + grid) ──────────────────────
+function compPost(p){
+  const n=data.length;if(n<2)return null;
+  const xa=data.map(d=>d.x),ya=data.map(d=>d.y);
+  const xm=xa.reduce((s,v)=>s+v,0)/n,ym=ya.reduce((s,v)=>s+v,0)/n;
+  const sxx=xa.reduce((s,v)=>s+(v-xm)**2,0);
+  const sxy=xa.reduce((s,x,i)=>s+(x-xm)*(ya[i]-ym),0);
+  const bOLS=sxx>1e-9?sxy/sxx:0,aOLS=ym-bOLS*xm;
+  const rss=ya.reduce((s,y,i)=>s+(y-(aOLS+bOLS*xa[i]))**2,0);
+  const se=Math.sqrt(Math.max(rss/(n-2),.01)),s2=se**2;
+
+  const ppB=1/p.psb**2,plB=sxx/s2,pcB=ppB+plB;
+  const mB=(p.pmb*ppB+sxy/s2)/pcB,sB=Math.sqrt(1/pcB);
+  const ppA=1/p.psa**2,plA=n/s2,pcA=ppA+plA;
+  const mA=(p.pma*ppA+ym*plA)/pcA,sA=Math.sqrt(1/pcA);
+
+  // σ grid — 200 pts for smooth marginal
+  const sMax=Math.max(se*3.5,p.pss*3,.5);
+  const nG=200,sg=[],sw=[];
+  let sSum=0,mxLP=-Infinity;
+  for(let k=0;k<nG;k++){
+    const sv=sMax*(k+.5)/nG;
+    const lp=logLik(mA,mB,sv,p)+lhnpdf(sv,p.pss);
+    sg.push(sv);sw.push(lp);
+    if(isFinite(lp)&&lp>mxLP)mxLP=lp;
+  }
+  for(let k=0;k<nG;k++){const w=Math.exp(sw[k]-mxLP);sw[k]=w;sSum+=w}
+  const sn=sw.map(v=>v/sSum);
+  let mS=0,vS=0;
+  for(let k=0;k<nG;k++)mS+=sg[k]*sn[k];
+  for(let k=0;k<nG;k++)vS+=sn[k]*(sg[k]-mS)**2;
+  // median σ
+  let cumS=0,medS=mS;
+  for(let k=0;k<nG;k++){cumS+=sn[k];if(cumS>=.5){medS=sg[k];break}}
+
+  return{mA,sA,mB,sB,mS,sdS:Math.sqrt(Math.max(vS,1e-8)),medS,sMax,sg,sn,se,aOLS,bOLS};
+}
+
+// ── Kruschke SVG ──────────────────────────────────────
+function drawKruschke(p){
+  const svg=document.getElementById('ksvg');
+  // Update viewBox to match actual content
+  svg.setAttribute('viewBox','0 0 390 330');
+  const c4=cv('--accent4'),c2=cv('--accent2'),cL=cv('--lik'),c3=cv('--accent3');
+  const ink=cv('--ink'),ink2=cv('--ink2'),paper=cv('--panel');
+  const R=9;
+  function box(x,y,w,h,r,stroke,dash=''){
+    return`<rect x="${x}" y="${y}" rx="${r}" ry="${r}" width="${w}" height="${h}" fill="${paper}" stroke="${stroke}" stroke-width="2"${dash?` stroke-dasharray="${dash}"`:''}/>`;
+  }
+  function tx(x,y,s,fill,sz=11){
+    return`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-family="DM Mono,monospace" font-size="${sz}px" fill="${fill}">${s}</text>`;
+  }
+  function arr(x1,y1,x2,y2){
+    return`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ink2}" stroke-width="1.6" marker-end="url(#ar)"/>`;
+  }
+  const model=useSt?`Student-t(ν=${p.nu}, α+βx, σ)`:`Normal(α+βx, σ)`;
+  // Layout (viewBox 390×330):
+  // Row 0 — hyperpriors: two boxes at y=6, h=48
+  // Row 1 — priors:      three boxes at y=82, h=50
+  // Row 2 — likelihood:  one wide box at y=162, h=50
+  // Row 3 — data:        one box at y=242, h=46
+  // total bottom: 242+46+8 = 296 → fits in 330
+  const bW=114,bH=48; // prior box dims
+  const hW=114,hH=46; // hyperprior box dims
+  // Three prior column centers: 57, 195, 333
+  const pc=[57,195,333];
+  // hyperprior centers: 57, 195 (no hyper for σ)
+  svg.innerHTML=`<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0L0,6L8,3z" fill="${ink2}"/></marker></defs>
+
+  <!-- Hyperprior boxes (α and β only) -->
+  ${box(pc[0]-hW/2, 6, hW, hH, R, c4,'5,3')}
+  ${tx(pc[0], 22,  'μ_α, σ_α', c4, 11.5)}
+  ${tx(pc[0], 38,  'Hyperparameter', ink2, 9.5)}
+
+  ${box(pc[1]-hW/2, 6, hW, hH, R, c4,'5,3')}
+  ${tx(pc[1], 22,  'μ_β, σ_β', c4, 11.5)}
+  ${tx(pc[1], 38,  'Hyperparameter', ink2, 9.5)}
+
+  <!-- Arrows hyper→prior -->
+  ${arr(pc[0], 52, pc[0], 82)}
+  ${arr(pc[1], 52, pc[1], 82)}
+
+  <!-- Prior nodes -->
+  ${box(pc[0]-bW/2, 82, bW, bH, R, c2)}
+  ${tx(pc[0], 98,  'α ~ N(μ_α, σ_α)', c2, 11)}
+  ${tx(pc[0], 114, `N(${p.pma.toFixed(1)}, ${p.psa.toFixed(1)})`, c2, 11)}
+
+  ${box(pc[1]-bW/2, 82, bW, bH, R, c2)}
+  ${tx(pc[1], 98,  'β ~ N(μ_β, σ_β)', c2, 11)}
+  ${tx(pc[1], 114, `N(${p.pmb.toFixed(1)}, ${p.psb.toFixed(1)})`, c2, 11)}
+
+  ${box(pc[2]-bW/2, 82, bW, bH, R, c2)}
+  ${tx(pc[2], 98,  'σ ~ HalfN(0, s_σ)', c2, 11)}
+  ${tx(pc[2], 114, `s_σ = ${p.pss.toFixed(1)}`, c2, 11)}
+
+  <!-- Arrows prior→likelihood -->
+  ${arr(pc[0], 130, 170, 162)}
+  ${arr(pc[1], 130, 195, 162)}
+  ${arr(pc[2], 130, 218, 162)}
+
+  <!-- Likelihood node -->
+  <rect x="55" y="162" rx="${R}" ry="${R}" width="280" height="50" fill="${paper}" stroke="${cL}" stroke-width="2.2"/>
+  ${tx(195, 181, `y ~ ${model}`, cL, 11)}
+  ${tx(195, 197, 'Likelihood', ink2, 9.5)}
+
+  <!-- Arrow likelihood→data -->
+  ${arr(195, 212, 195, 242)}
+
+  <!-- Data node -->
+  <rect x="115" y="242" rx="${R}" ry="${R}" width="160" height="46" fill="${paper}" stroke="${c3}" stroke-width="2.2"/>
+  ${tx(195, 260, `y_i   (i = 1 … ${data.length})`, c3, 11.5)}
+  ${tx(195, 277, 'Beobachtungen', ink2, 9.5)}`;
+}
+
+// ── prior predictive ──────────────────────────────────
+function buildPriorPred(p){
+  const r=mkRng(12345),xL=ls(-3.5,3.5,50),ds=[];
+  for(let i=0;i<60;i++){
+    const a=p.pma+rnorm(r)*p.psa,b=p.pmb+rnorm(r)*p.psb;
+    ds.push({data:xL.map(x=>({x,y:a+b*x})),type:'line',borderColor:cv('--prior')+'60',borderWidth:1.2,pointRadius:0,tension:0,fill:false});
+  }
+  const t=cv('--ct'),g=cv('--cg');
+  const yOpt=yFixed?{min:yFixedMin,max:yFixedMax}:{};
+  if(CH.pp)CH.pp.destroy();
+  CH.pp=new Chart(document.getElementById('cPrior'),{type:'scatter',data:{datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:180},
+      plugins:{legend:{display:false}},
+      scales:{x:{min:-3.5,max:3.5,grid:{color:g},ticks:{font:{family:'DM Mono',size:10},color:t}},
+              y:{...yOpt,grid:{color:g},ticks:{font:{family:'DM Mono',size:10},color:t}}}}});
+}
+
+// ── posterior chart ───────────────────────────────────
+// dataset ORDER controls layering in Chart.js (lower order = front)
+function buildPostChart(p,post){
+  const xL=ls(-3.5,3.5,50),t=cv('--ct'),g=cv('--cg'),ds=[];
+  // 1. Prior lines — back
+  const r=mkRng(12345);
+  for(let i=0;i<18;i++){
+    const a=p.pma+rnorm(r)*p.psa,b=p.pmb+rnorm(r)*p.psb;
+    ds.push({data:xL.map(x=>({x,y:a+b*x})),type:'line',
+      borderColor:cv('--prior')+'22',borderWidth:1,pointRadius:0,tension:0,fill:false,order:50});
+  }
+  if(post){
+    // 2. Posterior predictive lines
+    const r2=mkRng(77777);
+    for(let i=0;i<50;i++){
+      const a=post.mA+rnorm(r2)*post.sA,b=post.mB+rnorm(r2)*post.sB;
+      ds.push({data:xL.map(x=>({x,y:a+b*x})),type:'line',
+        borderColor:cv('--post')+'44',borderWidth:1.2,pointRadius:0,tension:0,fill:false,order:20});
+    }
+    // 3. Posterior median — thick, order=3
+    ds.push({data:xL.map(x=>({x,y:post.mA+post.mB*x})),type:'line',
+      borderColor:cv('--post'),borderWidth:3.5,pointRadius:0,tension:0,fill:false,order:3});
+  }
+  // 4. Data points — order=4
+  ds.push({data:data.map(d=>({x:d.x,y:d.y})),type:'scatter',
+    backgroundColor:cv('--ink')+'cc',borderColor:'transparent',pointRadius:4.5,order:4});
+  // 5. True line — FRONT order=1
+  ds.push({data:xL.map(x=>({x,y:p.a+p.b*x})),type:'line',
+    borderColor:cv('--lik'),borderWidth:3,pointRadius:0,tension:0,fill:false,
+    borderDash:[8,5],order:1});
+
+  if(CH.po)CH.po.destroy();
+  const yOpt=yFixed?{min:yFixedMin,max:yFixedMax}:{};
+  CH.po=new Chart(document.getElementById('cPost'),{type:'scatter',data:{datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:180},
+      plugins:{legend:{display:false}},
+      scales:{x:{min:-3.5,max:3.5,grid:{color:g},ticks:{font:{family:'DM Mono',size:10},color:t}},
+              y:{...yOpt,grid:{color:g},ticks:{font:{family:'DM Mono',size:10},color:t}}}}});
+}
+
+// ── y-axis lock ───────────────────────────────────────
+function toggleYFix(){
+  yFixed=!yFixed;
+  if(yFixed){
+    // Capture current displayed range from PPC chart (or compute from data)
+    if(CH.pp && CH.pp.scales && CH.pp.scales.y){
+      yFixedMin=CH.pp.scales.y.min;
+      yFixedMax=CH.pp.scales.y.max;
+    } else {
+      // fallback: compute from current prior lines
+      const p=P(),r=mkRng(12345);
+      let lo=Infinity,hi=-Infinity;
+      for(let i=0;i<60;i++){
+        const a=p.pma+rnorm(r)*p.psa,b=p.pmb+rnorm(r)*p.psb;
+        lo=Math.min(lo,a-Math.abs(b)*3.5);hi=Math.max(hi,a+Math.abs(b)*3.5);
+      }
+      yFixedMin=lo;yFixedMax=hi;
+    }
+  }
+  const btn=document.getElementById('btn-yfix');
+  btn.textContent=yFixed?'🔓 y-Achse frei':'🔒 y-Achse fixieren';
+  btn.classList.toggle('on',yFixed);
+  rebuildAll();
+}
+
+// ── marginals ─────────────────────────────────────────
+function buildMarg(id,xA,py,qy,col){
+  const t=cv('--ct'),g=cv('--cg');
+  const mx=Math.max(...py,...qy,.001)*1.2;
+  const priorColor=cv('--prior');
+  const xMin=xA[0],xMax=xA[xA.length-1];
+  const ds=[
+    {data:xA.map((x,i)=>({x,y:py[i]})),borderColor:priorColor+'cc',borderWidth:1.8,
+     pointRadius:0,fill:true,backgroundColor:priorColor+'22',tension:.3,order:2},
+    {data:xA.map((x,i)=>({x,y:qy[i]})),borderColor:col,borderWidth:2.5,
+     pointRadius:0,fill:true,backgroundColor:col+'33',tension:.3,order:1},
+  ];
+  if(CH[id]){
+    CH[id].data.datasets[0].data=ds[0].data;
+    CH[id].data.datasets[0].borderColor=priorColor+'cc';
+    CH[id].data.datasets[0].backgroundColor=priorColor+'22';
+    CH[id].data.datasets[1].data=ds[1].data;
+    CH[id].data.datasets[1].borderColor=col;
+    CH[id].data.datasets[1].backgroundColor=col+'33';
+    CH[id].options.scales.y.max=mx;
+    CH[id].options.scales.x.min=xMin;
+    CH[id].options.scales.x.max=xMax;
+    CH[id].update('none');
+    return;
+  }
+  CH[id]=new Chart(document.getElementById(id),{type:'line',
+    data:{datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{type:'linear',min:xMin,max:xMax,grid:{color:g},
+           ticks:{font:{family:'DM Mono',size:9},color:t,maxTicksLimit:5},
+           border:{display:false}},
+        y:{display:false,min:0,max:mx}
+      }
+    }
+  });
+}
+
+function buildMarginals(p,post){
+  if(!post)return;
+  const nP=120; // evaluation points
+
+  // ── α: ensure both prior and posterior visible ────
+  // Prior spans: pma ± min(psa*2.5, 4.5) — slider range is [-3,3] for mu, [0.1,5] for sd
+  const aPriorHalf=Math.min(p.psa*2.5, 4.5);
+  const aPostHalf =Math.max(post.sA*4.5, 0.3);
+  const aLo=Math.min(p.pma-aPriorHalf, post.mA-aPostHalf);
+  const aHi=Math.max(p.pma+aPriorHalf, post.mA+aPostHalf);
+  const aX=ls(aLo,aHi,nP);
+  buildMarg('mA',aX,aX.map(x=>npdf(x,p.pma,p.psa)),aX.map(x=>npdf(x,post.mA,post.sA)),cv('--accent'));
+  document.getElementById('lblA').innerHTML=
+    `Prior N(${p.pma.toFixed(1)},${p.psa.toFixed(1)}) &nbsp;→&nbsp; <span style="color:var(--accent)">Post N(${post.mA.toFixed(2)}, ${post.sA.toFixed(2)})</span>`;
+
+  // ── β: same approach ─────────────────────────────
+  const bPriorHalf=Math.min(p.psb*2.5, 4.5);
+  const bPostHalf =Math.max(post.sB*4.5, 0.3);
+  const bLo=Math.min(p.pmb-bPriorHalf, post.mB-bPostHalf);
+  const bHi=Math.max(p.pmb+bPriorHalf, post.mB+bPostHalf);
+  const bX=ls(bLo,bHi,nP);
+  buildMarg('mB',bX,bX.map(x=>npdf(x,p.pmb,p.psb)),bX.map(x=>npdf(x,post.mB,post.sB)),cv('--accent3'));
+  document.getElementById('lblB').innerHTML=
+    `Prior N(${p.pmb.toFixed(1)},${p.psb.toFixed(1)}) &nbsp;→&nbsp; <span style="color:var(--accent3)">Post N(${post.mB.toFixed(2)}, ${post.sB.toFixed(2)})</span>`;
+
+  // ── σ: HalfNormal prior, show both ───────────────
+  // Prior: HalfN(0, pss), 95% mass below pss*2.45
+  // Posterior: on grid. Ensure both visible.
+  const priorSigHi = p.pss * 3.5;
+  const postSigHi  = post.medS + post.sdS * 4;
+  const sXmax = Math.min(Math.max(priorSigHi, postSigHi), p.pss * 5 + 2);
+  const sX = ls(0.001, sXmax, nP);
+  // σ posterior: linear interpolation on grid for smooth curve
+  const dsg = post.sg[1] - post.sg[0];
+  const postSig = sX.map(x => {
+    const fk = (x - post.sg[0]) / dsg;
+    if(fk < 0) return 0;
+    const k0 = Math.min(Math.floor(fk), post.sg.length-2);
+    const t  = Math.max(0, Math.min(1, fk - k0));
+    return (post.sn[k0]*(1-t) + post.sn[k0+1]*t) / dsg;
+  });
+  buildMarg('mS',sX,sX.map(x=>hnpdf(x,p.pss)),postSig,cv('--accent2'));
+  document.getElementById('lblS').innerHTML=
+    `Prior HalfN(${p.pss.toFixed(1)}) &nbsp;→&nbsp; <span style="color:var(--accent2)">Post med=${post.medS.toFixed(2)}, SD=${post.sdS.toFixed(2)}</span>`;
+}
+
+// ── MCMC: samples β and σ jointly (α fixed at OLS) ───
+function mcmcReset(){
+  mcmcStop();
+  chain=[];accepted=0;
+  const p=P(),post=compPost(p);
+  alphaFixed=post?post.aOLS:0;
+  const b0=post?post.bOLS:p.b;
+  const s0=post?post.se:p.s;
+  chain=[{b:b0,s:Math.max(s0,.1),acc:true}];
+  document.getElementById('mn').textContent='0';
+  document.getElementById('macc').textContent='—';
+  drawMCMC();
+}
+
+function mcmcStep(){
+  const p=P(),cur=chain[chain.length-1];
+  // Proposal: β + σ jointly, σ on log scale for positivity
+  const nb=cur.b+STEP_B*rnormRaw();
+  const logS=Math.log(cur.s)+STEP_S*rnormRaw();
+  const ns=Math.exp(logS);
+  // log-posterior for (β,σ) with α fixed
+  function lp(b,s){
+    if(s<=0)return -Infinity;
+    return logLik(alphaFixed,b,s,p)+lnpdf(b,p.pmb,p.psb)+lhnpdf(s,p.pss);
+  }
+  // Metropolis ratio includes Jacobian |d log(s)/ds| = 1/s for log-scale proposal
+  const lr=lp(nb,ns)-lp(cur.b,cur.s)+logS-Math.log(cur.s);
+  if(Math.log(Math.random()+1e-300)<lr){
+    chain.push({b:nb,s:ns,acc:true});accepted++;
+  } else {
+    chain.push({b:cur.b,s:cur.s,acc:false});
+  }
+}
+function rnormRaw(){
+  return Math.sqrt(-2*Math.log(Math.random()+1e-10))*Math.cos(2*Math.PI*Math.random());
+}
+
+function mcmcToggle(){running?mcmcStop():mcmcStart()}
+function mcmcStart(){
+  if(data.length<2)return;
+  running=true;
+  document.getElementById('mbtn-run').textContent='⏸ Pause';
+  document.getElementById('mbtn-run').classList.add('run');
+  scheduleMCMC();
+}
+function mcmcStop(){
+  running=false;
+  if(rafId){clearTimeout(rafId);rafId=null}
+  document.getElementById('mbtn-run').textContent='▶ Start';
+  document.getElementById('mbtn-run').classList.remove('run');
+}
+function scheduleMCMC(){
+  if(!running)return;
+  rafId=setTimeout(mcmcFrame,80);
+}
+function mcmcFrame(){
+  if(!running)return;
+  // Only 1 step per tick so the walk is visible
+  mcmcStep();
+  drawMCMC();
+  const tot=chain.length-1;
+  document.getElementById('mn').textContent=tot;
+  if(tot>0)document.getElementById('macc').textContent=(accepted/tot*100).toFixed(0)+'%';
+  scheduleMCMC();
+}
+
+// ── MCMC canvas drawing (β × σ space) ────────────────
+function drawMCMC(){
+  const wrap=document.getElementById('mcmc-wrap');
+  const canvas=document.getElementById('mcmc-canvas');
+  const rect=wrap.getBoundingClientRect();
+  const W=Math.round(rect.width),H=Math.round(rect.height);
+  if(W<10||H<10)return;
+  if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}
+  const ctx=canvas.getContext('2d');
+  const p=P(),post=compPost(p);
+
+  // Fill background
+  ctx.fillStyle=cv('--panel');ctx.fillRect(0,0,W,H);
+
+  if(!post||data.length<2){
+    ctx.fillStyle=cv('--ink2');ctx.font='13px monospace';ctx.textAlign='center';
+    ctx.fillText('Mindestens 2 Datenpunkte erforderlich',W/2,H/2);return;
+  }
+
+  // ── Axis ranges from current posterior ─────────────
+  const bc=post.mB, bs=Math.max(post.sB*5,.5);
+  const sc=post.mS, ss=Math.max(post.sdS*5,.3);
+  const bLo=bc-bs, bHi=bc+bs;
+  const sLo=Math.max(sc-ss,.05), sHi=sc+ss;
+
+  const pad={l:62,r:20,t:22,b:58};
+  const W2=W-pad.l-pad.r, H2=H-pad.t-pad.b;
+  function txMap(b){return pad.l+(b-bLo)/(bHi-bLo)*W2}
+  function tyMap(s){return pad.t+(1-(s-sLo)/(sHi-sLo))*H2}
+
+  // ── Heatmap over (β, σ) ────────────────────────────
+  const nC=60, grid2=new Float32Array(nC*nC);
+  let hxMax=-Infinity, hxMin=Infinity;
+  for(let ib=0;ib<nC;ib++)for(let is=0;is<nC;is++){
+    const bv=bLo+(bHi-bLo)*(ib+.5)/nC;
+    const sv=sLo+(sHi-sLo)*(is+.5)/nC;
+    const lp=logLik(alphaFixed,bv,sv,p)+lnpdf(bv,p.pmb,p.psb)+lhnpdf(sv,p.pss);
+    grid2[is*nC+ib]=lp;
+    if(isFinite(lp)){hxMax=Math.max(hxMax,lp);hxMin=Math.min(hxMin,lp)}
+  }
+  const hRng=Math.max(hxMax-hxMin,.5);
+  const img=ctx.createImageData(W2,H2);
+  for(let py2=0;py2<H2;py2++)for(let px2=0;px2<W2;px2++){
+    const ib=Math.min(Math.floor(px2/W2*nC),nC-1);
+    const is=Math.min(Math.floor((1-py2/H2)*nC),nC-1);
+    const lp=grid2[is*nC+ib];
+    const tv=isFinite(lp)?Math.max(0,Math.min(1,(lp-hxMin)/hRng)):0;
+    const idx=4*(py2*W2+px2);
+    if(isDark){
+      img.data[idx]  =Math.round(8+tv*38);
+      img.data[idx+1]=Math.round(16+tv*90);
+      img.data[idx+2]=Math.round(36+tv*120);
+    } else {
+      img.data[idx]  =Math.round(250-tv*100);
+      img.data[idx+1]=Math.round(245-tv*80);
+      img.data[idx+2]=Math.round(225-tv*60);
+    }
+    img.data[idx+3]=255;
+  }
+  ctx.putImageData(img,pad.l,pad.t);
+
+  // ── Grid lines over heatmap ─────────────────────────
+  const gc=isDark?'rgba(255,255,255,0.10)':'rgba(0,0,0,0.10)';
+  ctx.strokeStyle=gc;ctx.lineWidth=1;
+  // 3 vertical grid lines at bLo, bc, bHi
+  [bLo,bc,bHi].forEach(b=>{
+    const x=txMap(b);
+    ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+H2);ctx.stroke();
+  });
+  // 3 horizontal grid lines at sLo, sc, sHi
+  [sLo,sc,sHi].forEach(s=>{
+    const y=tyMap(s);
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+W2,y);ctx.stroke();
+  });
+
+  // ── Plot frame ─────────────────────────────────────
+  const tc=cv('--ct');
+  ctx.strokeStyle=tc;ctx.lineWidth=1.2;
+  ctx.strokeRect(pad.l,pad.t,W2,H2);
+
+  // ── Axis ticks and labels ──────────────────────────
+  // Use monospace which is always available on all browsers
+  ctx.fillStyle=tc;
+  ctx.font='bold 12px monospace';
+  ctx.textAlign='center';
+  // X axis label
+  ctx.fillText('β  (Slope)',pad.l+W2/2,H-6);
+  // Y axis label (rotated)
+  ctx.save();
+  ctx.translate(12,pad.t+H2/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('σ  (Residual SD)',0,0);
+  ctx.restore();
+
+  // Tick values
+  ctx.font='11px monospace';
+  const bTicks=[bLo,(bLo+bHi)/2,bHi];
+  const sTicks=[sLo,(sLo+sHi)/2,sHi];
+
+  // X ticks — below plot
+  bTicks.forEach(v=>{
+    const x=txMap(v);
+    ctx.strokeStyle=tc;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x,pad.t+H2);ctx.lineTo(x,pad.t+H2+5);ctx.stroke();
+    ctx.fillStyle=tc;ctx.textAlign='center';
+    ctx.fillText(v.toFixed(2),x,pad.t+H2+17);
+  });
+  // Y ticks — left of plot
+  sTicks.forEach(v=>{
+    const y=tyMap(v);
+    ctx.strokeStyle=tc;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(pad.l-5,y);ctx.lineTo(pad.l,y);ctx.stroke();
+    ctx.fillStyle=tc;ctx.textAlign='right';
+    ctx.fillText(v.toFixed(2),pad.l-8,y+4);
+  });
+
+  // ── MCMC chain path ────────────────────────────────
+  const tail=Math.min(chain.length,350), s0=Math.max(0,chain.length-tail);
+  for(let k=s0;k<chain.length-1;k++){
+    const c=chain[k],cn=chain[k+1];
+    const age=(k-s0)/tail;
+    const al=Math.round(age*160+30).toString(16).padStart(2,'0');
+    ctx.strokeStyle=(cn.acc?cv('--macc'):cv('--mrej'))+al;
+    ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(txMap(c.b),tyMap(c.s));ctx.lineTo(txMap(cn.b),tyMap(cn.s));ctx.stroke();
+  }
+
+  // Recent dots
+  chain.slice(-45).forEach((c,i)=>{
+    const big=i>40;
+    ctx.fillStyle=(c.acc?cv('--macc'):cv('--mrej'))+(big?'ee':'66');
+    ctx.beginPath();ctx.arc(txMap(c.b),tyMap(c.s),big?4.5:1.5,0,2*Math.PI);ctx.fill();
+  });
+
+  // True parameter cross
+  const trx=txMap(p.b),try_=tyMap(p.s);
+  // White halo for contrast
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.6)':'rgba(0,0,0,0.3)';
+  ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(trx-8,try_);ctx.lineTo(trx+8,try_);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(trx,try_-8);ctx.lineTo(trx,try_+8);ctx.stroke();
+  ctx.strokeStyle=cv('--lik');ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(trx-8,try_);ctx.lineTo(trx+8,try_);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(trx,try_-8);ctx.lineTo(trx,try_+8);ctx.stroke();
+
+  // Label for true params
+  ctx.fillStyle=cv('--lik');ctx.textAlign='left';ctx.font='bold 11px monospace';
+  ctx.fillText(`wahr (${p.b.toFixed(1)}, ${p.s.toFixed(1)})`,trx+11,try_-4);
+
+  // Current chain position
+  const cur=chain[chain.length-1];
+  ctx.fillStyle=cv('--mwarn');
+  ctx.beginPath();ctx.arc(txMap(cur.b),tyMap(cur.s),5.5,0,2*Math.PI);ctx.fill();
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)';
+  ctx.lineWidth=1.2;ctx.stroke();
+
+  buildTracePlots(p);
+}
+
+// ── Trace + Histogram for β and σ ────────────────────
+function buildTracePlots(p){
+  if(chain.length<2)return;
+  const t=cv('--ct'),g=cv('--cg');
+  const burnN=Math.max(0,Math.floor(chain.length*.25));
+
+  // Helper: build or update a line chart
+  function makeTrace(id,vals,trueVal,col){
+    const pts=vals.map((v,i)=>({x:i,y:v}));
+    const trueLine=[{x:0,y:trueVal},{x:pts.length+1,y:trueVal}];
+    if(CH[id]){
+      CH[id].data.datasets[0].data=pts;
+      CH[id].data.datasets[1].data=trueLine;
+      CH[id].update('none');return;
+    }
+    CH[id]=new Chart(document.getElementById(id),{type:'line',
+      data:{datasets:[
+        {data:pts,borderColor:col,borderWidth:1.2,pointRadius:0,tension:0,fill:false,order:2},
+        {data:trueLine,borderColor:cv('--lik'),borderWidth:1.8,pointRadius:0,borderDash:[5,3],fill:false,order:1}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{type:'linear',min:0,grid:{display:false},
+             ticks:{font:{family:'DM Mono',size:10},color:t,maxTicksLimit:4}},
+          y:{grid:{color:g},ticks:{font:{family:'DM Mono',size:10},color:t,maxTicksLimit:3}}
+        }
+      }
+    });
+  }
+
+  // Helper: build or update a histogram
+  function makeHist(id,samp,col){
+    if(samp.length<5)return;
+    const lo=Math.min(...samp),hi=Math.max(...samp);
+    const bw=Math.max((hi-lo)/22,.001);
+    const nb=Math.ceil((hi-lo)/bw)+1;
+    const bins=new Array(nb).fill(0);
+    samp.forEach(v=>{bins[Math.min(Math.floor((v-lo)/bw),nb-1)]++});
+    const bX=Array.from({length:nb},(_,i)=>lo+bw*(i+.5));
+    const ds=[{data:bX.map((x,i)=>({x,y:bins[i]/samp.length/bw})),
+      backgroundColor:col+'55',borderColor:col,borderWidth:1,barPercentage:1,categoryPercentage:1}];
+    if(CH[id]){
+      CH[id].data.datasets[0].data=ds[0].data;
+      CH[id].data.datasets[0].backgroundColor=col+'55';
+      CH[id].data.datasets[0].borderColor=col;
+      CH[id].update('none');return;
+    }
+    CH[id]=new Chart(document.getElementById(id),{type:'bar',data:{datasets:ds},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,
+        plugins:{legend:{display:false}},
+        scales:{x:{type:'linear',grid:{color:g},ticks:{font:{family:'"DM Mono",monospace',size:10},color:t,maxTicksLimit:5}},
+                y:{grid:{color:g},ticks:{font:{family:'"DM Mono",monospace',size:10},color:t,maxTicksLimit:3}}}}});
+  }
+
+  const allB=chain.map(c=>c.b), allS=chain.map(c=>c.s);
+  const sampB=chain.slice(burnN).filter((c,i,a)=>i===0||c.b!==a[i-1].b).map(c=>c.b);
+  const sampS=chain.slice(burnN).filter((c,i,a)=>i===0||c.s!==a[i-1].s).map(c=>c.s);
+
+  makeTrace('cTraceB', allB, p.b, cv('--accent3'));
+  makeTrace('cTraceS', allS, p.s, cv('--accent2'));
+  makeHist('cHistB', sampB, cv('--accent3'));
+  makeHist('cHistS', sampS, cv('--accent2'));
+}
+
+// ── toggles ───────────────────────────────────────────
+function toggleSt(){
+  useSt=!useSt;
+  document.getElementById('btn-st').textContent=useSt?'📊 Student-t':'📊 Gaussian';
+  document.getElementById('nu-g').style.display=useSt?'':'none';
+  genData();mcmcReset();rebuildAll();
+}
+function toggleOut(){
+  showOut=!showOut;
+  document.getElementById('btn-out').className=showOut?'ibtn on':'ibtn';
+  genData();mcmcReset();rebuildAll();
+}
+
+// ── main rebuild ──────────────────────────────────────
+function rebuildAll(){
+  const p=P();
+  const disp=[['sa','va'],['sb','vb'],['ss','vs'],['spma','vpma'],['spsa','vpsa'],
+               ['spmb','vpmb'],['spsb','vpsb'],['spss','vpss']];
+  disp.forEach(([s,v])=>document.getElementById(v).textContent=(+document.getElementById(s).value).toFixed(2));
+  document.getElementById('vnu').textContent=p.nu;
+  document.getElementById('vn').textContent=p.n;
+  const post=compPost(p);
+  drawKruschke(p);
+  buildPriorPred(p);
+  buildPostChart(p,post);
+  buildMarginals(p,post);
+  drawMCMC();
+}
+
+// ── listeners ─────────────────────────────────────────
+['sa','sb','ss','snu','sn','spma','spsa','spmb','spsb','spss'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{genData();mcmcReset();rebuildAll()});
+});
+window.addEventListener('resize',drawMCMC);
+
+// ── init (after first paint so canvas has size) ───────
+requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  genData();
+  mcmcReset();
+  rebuildAll();
+}));
+</script>
+</body>
+</html>

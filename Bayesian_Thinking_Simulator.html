@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bayesian Thinking Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{
+  --bg:#F8F5EF;--bg2:#F0EDE5;--card:#FFFFFF;--border:#DDD8CE;--border2:#C8C2B6;
+  --ink:#28201A;--ink2:#7A6E60;--ink3:#B0A898;--shadow:rgba(40,32,26,.08);
+  --prior:#2870B2;--prior-f:rgba(40,112,178,.13);
+  --like:#C05018;--like-f:rgba(192,80,24,.13);
+  --post:#6B3A9C;--post-f:rgba(107,58,156,.14);
+  --green:#1B7A44;--green-f:rgba(27,122,68,.12);
+  --gold:#C8820A;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{font-family:'Source Sans 3',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;overflow-x:hidden}
+#app{max-width:880px;margin:0 auto;padding:0 1.5rem}
+
+/* Progress */
+#progress{
+  display:flex;align-items:center;justify-content:center;gap:0;
+  padding:1rem 1.5rem .7rem;position:sticky;top:0;z-index:100;
+  background:var(--bg);border-bottom:1px solid var(--border);margin:0 -1.5rem;
+}
+.st{display:flex;align-items:center;gap:.3rem;font-size:.71rem;letter-spacing:.04em;font-weight:500;color:var(--ink3);white-space:nowrap}
+.st.active{color:var(--ink);font-weight:600}
+.st.done{color:var(--prior)}
+.st.done[onclick]{cursor:pointer}
+.st.done[onclick]:hover{color:#1A5A9A;text-decoration:underline}
+.st-dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--ink3);background:transparent;flex-shrink:0}
+.st.active .st-dot{border-color:var(--prior);background:var(--prior)}
+.st.done .st-dot{border-color:var(--prior);background:var(--prior)}
+.st-line{width:22px;height:1px;background:var(--border2);flex-shrink:0}
+.st-line.done{background:var(--prior)}
+.diff-pill{margin-left:auto;padding:.2rem .65rem;font-size:.68rem;font-family:'JetBrains Mono',monospace;font-weight:500;letter-spacing:.05em;border:1px solid var(--border2);color:var(--ink2)}
+
+/* Phase */
+#phase{padding:2rem 0 4rem;animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* Typography */
+h1{font-family:'Lora',serif;font-weight:400;font-size:2.1rem;line-height:1.22}
+h1 em{font-style:italic;color:var(--prior)}
+h2{font-family:'Lora',serif;font-weight:400;font-size:1.5rem;line-height:1.3}
+h3{font-family:'Lora',serif;font-weight:600;font-size:1.05rem}
+p{font-size:.95rem;line-height:1.65;color:var(--ink2)}
+.mono{font-family:'JetBrains Mono',monospace;font-weight:500}
+.phase-sub{font-size:.92rem;color:var(--ink2);margin:.4rem 0 1.6rem;line-height:1.55}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:.45rem;font-family:'Source Sans 3',sans-serif;font-weight:600;font-size:.91rem;padding:.62rem 1.45rem;border:2px solid;cursor:pointer;transition:all .17s;text-decoration:none;letter-spacing:.01em}
+.btn-primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn-primary:hover{background:var(--prior);border-color:var(--prior)}
+.btn-outline{background:transparent;color:var(--prior);border-color:var(--prior)}
+.btn-outline:hover{background:var(--prior);color:#fff}
+.btn-ghost{background:transparent;color:var(--ink2);border-color:var(--border2);font-size:.85rem}
+.btn-ghost:hover{border-color:var(--ink2);color:var(--ink)}
+.btn-commit{width:100%;padding:.85rem;font-size:.98rem;font-weight:600;background:var(--prior);color:#fff;border:2px solid var(--prior);cursor:pointer;transition:all .2s;font-family:'Lora',serif;font-style:italic}
+.btn-commit:hover{background:#1A5A9A;border-color:#1A5A9A}
+.btn-commit:disabled{background:var(--border2);border-color:var(--border2);cursor:not-allowed;font-style:normal}
+.btn-next{display:flex;align-items:center;gap:.45rem;font-family:'Source Sans 3',sans-serif;font-weight:600;font-size:.92rem;padding:.68rem 1.6rem;background:var(--ink);color:#fff;border:2px solid var(--ink);cursor:pointer;transition:all .17s;margin-top:1.4rem}
+.btn-next:hover{background:var(--prior);border-color:var(--prior)}
+
+/* Intro */
+.intro-hero{padding:2.8rem 0 1.8rem;text-align:center}
+.intro-tagline{font-size:1.05rem;color:var(--ink2);max-width:520px;margin:.8rem auto 0;line-height:1.6}
+.flow-row{display:flex;align-items:flex-start;justify-content:center;gap:0;margin:2.4rem 0 2rem;flex-wrap:wrap}
+.flow-item{text-align:center;padding:0 1rem;max-width:155px;position:relative}
+.flow-item::after{content:'→';position:absolute;top:1.1rem;right:-.5rem;color:var(--ink3)}
+.flow-item:last-child::after{display:none}
+.flow-num{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--prior);margin:0 auto .55rem}
+.flow-title{font-weight:600;font-size:.83rem;color:var(--ink);margin-bottom:.22rem}
+.flow-desc{font-size:.74rem;color:var(--ink2);line-height:1.4}
+
+/* Difficulty cards */
+.diff-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin:1.4rem 0}
+@media(max-width:640px){.diff-cards{grid-template-columns:1fr}}
+.diff-card{background:var(--card);border:2px solid var(--border);padding:1.3rem 1.1rem;cursor:pointer;transition:all .17s}
+.diff-card:hover{border-color:var(--border2);box-shadow:0 3px 14px var(--shadow)}
+.diff-card.selected{border-color:var(--prior);box-shadow:0 0 0 3px var(--prior-f)}
+.dc-emoji{font-size:1.6rem;margin-bottom:.55rem;display:block}
+.dc-label{font-family:'Lora',serif;font-weight:600;font-size:.98rem;margin-bottom:.3rem}
+.dc-desc{font-size:.78rem;color:var(--ink2);line-height:1.45}
+
+/* Scenarios */
+.scenarios{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem;margin:1.4rem 0}
+@media(max-width:600px){.scenarios{grid-template-columns:1fr}}
+.sc-card{background:var(--card);border:2px solid var(--border);padding:1.2rem 1.1rem;cursor:pointer;transition:all .17s;position:relative;display:flex;flex-direction:column}
+.sc-card:hover{border-color:var(--border2);box-shadow:0 3px 14px var(--shadow)}
+.sc-card.selected{border-color:var(--prior);box-shadow:0 0 0 3px var(--prior-f)}
+.sc-card.used{opacity:.4;pointer-events:none}
+.sc-emoji{font-size:1.8rem;margin-bottom:.5rem;display:block}
+.sc-title{font-family:'Lora',serif;font-weight:600;font-size:.95rem;margin-bottom:.22rem}
+.sc-sub{font-size:.73rem;color:var(--ink3);font-family:'JetBrains Mono',monospace;margin-bottom:.45rem}
+.sc-desc{font-size:.78rem;color:var(--ink2);line-height:1.5;flex:1;margin-bottom:.5rem}
+.sc-context{font-size:.74rem;color:var(--ink3);line-height:1.45;padding:.5rem .65rem;background:var(--bg2);border-left:2px solid var(--border2);margin-bottom:.7rem;font-style:italic}
+.used-badge{font-size:.65rem;font-family:'JetBrains Mono',monospace;color:var(--ink3);margin-bottom:.3rem}
+
+/* Prior */
+.study-recap{border-left:3px solid var(--prior);padding:.75rem 1rem;background:var(--prior-f);margin-bottom:1rem;font-size:.86rem;line-height:1.6;color:var(--ink2)}
+.study-recap strong{color:var(--ink)}
+.study-ctx{font-size:.8rem;color:var(--ink2);line-height:1.55;padding:.6rem .9rem;background:var(--bg2);border:1px solid var(--border);margin-bottom:1.2rem}
+.sec-label{font-family:'JetBrains Mono',monospace;font-size:.67rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:.65rem}
+.slider-wrap{padding:1.1rem 1.4rem;background:var(--bg2);border:1px solid var(--border);margin-bottom:1rem}
+.slider-display{font-family:'JetBrains Mono',monospace;font-size:1.45rem;font-weight:500;color:var(--prior);text-align:center;margin-bottom:.45rem}
+.slider-display span{font-size:.88rem;color:var(--ink2);font-weight:400}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--border2);outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--prior);cursor:pointer;border:3px solid #fff;box-shadow:0 2px 7px rgba(40,112,178,.4)}
+.ref-row{display:flex;justify-content:space-between;margin-top:.35rem;padding:0 2px;position:relative;height:20px}
+.ref-m{font-family:'JetBrains Mono',monospace;font-size:.67rem;color:var(--ink3);position:absolute;transform:translateX(-50%);text-align:center;line-height:1.2}
+/* Einsteiger: 4 unc buttons */
+.unc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.55rem;margin-bottom:1rem}
+@media(max-width:540px){.unc-grid{grid-template-columns:repeat(2,1fr)}}
+.unc-btn{padding:.75rem .45rem;border:2px solid var(--border);background:var(--card);cursor:pointer;transition:all .15s;text-align:center}
+.unc-btn:hover{border-color:var(--prior);background:var(--prior-f)}
+.unc-btn.selected{border-color:var(--prior);background:var(--prior-f)}
+.unc-main{font-size:.8rem;font-weight:600;color:var(--ink);display:block;margin-bottom:.12rem}
+.unc-sigma{font-family:'JetBrains Mono',monospace;font-size:.63rem;color:var(--ink3);display:block}
+/* Expert inputs */
+.expert-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.exp-field{background:var(--bg2);border:1px solid var(--border);padding:1rem 1.2rem}
+.exp-label{font-size:.75rem;color:var(--ink2);margin-bottom:.4rem;font-family:'JetBrains Mono',monospace}
+.exp-hint{font-size:.7rem;color:var(--ink3);margin-top:.3rem;font-style:italic}
+input.exp-input{width:100%;font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:500;color:var(--prior);background:transparent;border:none;outline:none;border-bottom:2px solid var(--prior);padding:.2rem 0}
+input.exp-input:focus{border-bottom-color:var(--ink)}
+input.exp-input.error{border-bottom-color:var(--like);color:var(--like)}
+input.exp-input::placeholder{color:var(--border2);font-weight:400;font-size:.95rem}
+/* prior preview panel */
+#prior-preview-wrap{transition:opacity .4s;opacity:0}
+#prior-preview-wrap.vis{opacity:1}
+#prior-preview{background:var(--bg2);border:1px solid var(--border);padding:.7rem .4rem .2rem}
+.ci-note{padding:.65rem .9rem;background:var(--prior-f);border-left:3px solid var(--prior);font-size:.82rem;color:var(--ink2);line-height:1.55;margin-top:.7rem}
+.ci-note strong{color:var(--ink)}
+
+/* PPC */
+#ppc-density-wrap{background:var(--bg2);border:1px solid var(--border);padding:.6rem .4rem .2rem;margin:1rem 0}
+.ppc-sim-row{display:flex;flex-wrap:wrap;gap:.5rem;margin:.6rem 0;align-items:center}
+.ppc-sim-tag{font-family:'JetBrains Mono',monospace;font-size:.73rem;padding:.22rem .55rem;border:1.5px solid;opacity:0;transition:opacity .4s}
+.ppc-sim-tag.vis{opacity:1}
+.ppc-explainer{padding:.85rem 1.1rem;background:var(--bg2);border:1px solid var(--border);font-size:.84rem;line-height:1.65;color:var(--ink2);margin:.9rem 0}
+.ppc-explainer strong{color:var(--ink)}
+.ppc-legend{display:flex;gap:1.1rem;flex-wrap:wrap;margin:.5rem 0}
+.ppc-leg-item{display:flex;align-items:center;gap:.3rem;font-size:.74rem;color:var(--ink2)}
+.ppc-leg-line{width:18px;height:3px;border-radius:2px;flex-shrink:0}
+
+/* Data / Tug */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin:1.1rem 0}
+@media(max-width:540px){.stat-row{grid-template-columns:repeat(2,1fr)}}
+.stat-box{background:var(--card);border:1px solid var(--border);padding:.85rem .9rem;text-align:center}
+.stat-sv{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:500;color:var(--ink)}
+.stat-sl{font-size:.7rem;color:var(--ink3);margin-top:.15rem;letter-spacing:.03em}
+#tug-wrap{background:var(--bg2);border:1px solid var(--border);padding:.5rem .4rem 0;margin:1rem 0;min-height:230px;position:relative}
+.leg-row{display:flex;gap:1.1rem;flex-wrap:wrap;margin:.55rem 0}
+.leg-item{display:flex;align-items:center;gap:.3rem;font-size:.77rem;color:var(--ink2)}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.wbar-wrap{padding:.75rem 1.2rem .85rem;background:var(--card);border:1px solid var(--border)}
+.wbar-label{font-size:.74rem;color:var(--ink2);margin-bottom:.4rem}
+.wbar{height:20px;display:flex;border-radius:2px;overflow:hidden;border:1px solid var(--border)}
+.wb-p{background:var(--prior);height:100%;transition:width 1.2s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:flex-end;padding-right:.4rem;font-family:'JetBrains Mono',monospace;font-size:.67rem;color:rgba(255,255,255,.92);white-space:nowrap}
+.wb-d{background:var(--like);height:100%;transition:width 1.2s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:flex-start;padding-left:.4rem;font-family:'JetBrains Mono',monospace;font-size:.67rem;color:rgba(255,255,255,.92);white-space:nowrap}
+.wbar-hint{font-size:.73rem;color:var(--ink3);margin-top:.38rem;font-style:italic}
+#post-box{opacity:0;transition:opacity .6s;background:var(--post-f);border:1px solid var(--post);padding:.9rem 1.1rem;margin-top:.75rem}
+#post-box.vis{opacity:1}
+.post-title{font-family:'Lora',serif;font-style:italic;font-size:.83rem;color:var(--post);margin-bottom:.5rem}
+.post-vals{display:flex;gap:1.8rem;flex-wrap:wrap}
+.pv-label{font-size:.7rem;color:var(--ink3);margin-bottom:.1rem}
+.pv-val{font-family:'JetBrains Mono',monospace;font-size:.83rem;font-weight:500;color:var(--ink)}
+.tow-tt{position:absolute;background:var(--card);border:1px solid var(--border);padding:.38rem .6rem;font-family:'JetBrains Mono',monospace;font-size:.69rem;pointer-events:none;box-shadow:2px 2px 8px var(--shadow);display:none;z-index:50}
+.tow-explain{padding:.9rem 1.1rem;background:var(--bg2);border-left:3px solid var(--post);font-size:.82rem;line-height:1.65;color:var(--ink2);margin:.8rem 0}
+.tow-explain strong{color:var(--ink)}
+.tow-explain em{color:var(--post);font-style:italic}
+
+/* Reflect */
+#reflect-chart{background:var(--bg2);border:1px solid var(--border);padding:.5rem .4rem 0;margin:1rem 0}
+.study-result-box{text-align:center;padding:1.2rem;background:var(--green-f);border:2px solid var(--green);margin:1rem 0}
+.sr-val{font-family:'JetBrains Mono',monospace;font-size:1.9rem;font-weight:500;color:var(--green)}
+.sr-label{font-size:.82rem;color:var(--ink2);margin-top:.25rem}
+.reflect-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.1rem 0}
+@media(max-width:520px){.reflect-grid{grid-template-columns:1fr}}
+.rp{background:var(--card);border:1px solid var(--border);padding:.9rem 1rem}
+.rp-title{font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;color:var(--ink3);margin-bottom:.45rem}
+.rp-val{font-family:'JetBrains Mono',monospace;font-size:1.15rem;font-weight:500;color:var(--ink);margin-bottom:.18rem}
+.rp-sub{font-size:.78rem;color:var(--ink2);line-height:1.5}
+.hit{color:var(--green);font-weight:600}
+.miss{color:var(--like);font-weight:600}
+.score-box{text-align:center;padding:1.3rem;background:var(--bg2);border:1px solid var(--border);margin:1rem 0}
+.score-emoji{font-size:2.6rem;margin-bottom:.4rem}
+.score-val{font-family:'Lora',serif;font-size:1.18rem;color:var(--ink)}
+.score-breakdown{display:flex;gap:1.5rem;justify-content:center;margin-top:.7rem;flex-wrap:wrap}
+.sc-part{font-size:.78rem;color:var(--ink2)}
+.sc-part strong{color:var(--ink)}
+.insight-box{padding:.95rem 1.1rem;background:var(--bg2);border-left:3px solid var(--gold);font-size:.86rem;line-height:1.65;color:var(--ink);margin:.9rem 0}
+.deep-dive{padding:.85rem 1.1rem;background:var(--card);border:1px solid var(--border);font-size:.81rem;line-height:1.65;color:var(--ink2);margin-top:.6rem}
+.deep-dive strong{color:var(--ink)}
+.cite-box{padding:.55rem .8rem;background:var(--card);border:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--ink3);line-height:1.5;margin-top:.5rem}
+.sigma-explainer{padding:.65rem .95rem;background:#F5F2FF;border-left:3px solid #8B6FC4;font-size:.8rem;line-height:1.6;color:var(--ink2);margin-bottom:1rem}
+.sigma-explainer strong{color:#6B3A9C}
+.prior-verbal{padding:.75rem 1rem;background:var(--card);border:1px solid var(--prior);font-size:.84rem;line-height:1.65;color:var(--ink2);margin:.65rem 0}
+.prior-verbal strong{color:var(--ink)}
+.prior-extreme{display:none;padding:.75rem 1rem;background:#FFF0EE;border-left:3px solid var(--like);border:1px solid rgba(192,80,24,.35);font-size:.82rem;line-height:1.6;color:var(--ink);margin:.55rem 0}
+.prior-extreme strong{color:var(--like)}
+.btn-row{display:flex;gap:.75rem;margin-top:1.6rem;flex-wrap:wrap}
+
+/* Misc */
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.mt1{margin-top:.75rem}.mt2{margin-top:1.3rem}.mt3{margin-top:1.8rem}
+.history-mini{margin-top:.8rem;padding:.75rem .9rem;background:var(--card);border:1px solid var(--border)}
+.hm-title{font-size:.68rem;font-family:'JetBrains Mono',monospace;color:var(--ink3);margin-bottom:.4rem;letter-spacing:.08em;text-transform:uppercase}
+.hm-row{font-size:.79rem;color:var(--ink2);margin:.12rem 0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="progress" style="display:none"></div>
+  <div id="phase"></div>
+</div>
+<script>
+// ═══════════════ MATH ═══════════════
+function normalPDF(x,mu,sig){if(sig<=0)return 0;return Math.exp(-.5*((x-mu)/sig)**2)/(sig*2.506628274631)}
+function normalQ(p){
+  if(p<=0)return-8;if(p>=1)return 8;
+  const c=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.383577518672690e2,-3.066479806614716e1,2.506628277459239];
+  const b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1];
+  const d=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783];
+  const e=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996,3.754408661907416];
+  const plo=0.02425,phi=1-plo;let q,r;
+  if(p<plo){q=Math.sqrt(-2*Math.log(p));return(((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+d[4])*q+d[5])/((((e[0]*q+e[1])*q+e[2])*q+e[3])*q+1)}
+  if(p<=phi){q=p-.5;r=q*q;return(((((c[0]*r+c[1])*r+c[2])*r+c[3])*r+c[4])*r+c[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)}
+  q=Math.sqrt(-2*Math.log(1-p));return-(((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+d[4])*q+d[5])/((((e[0]*q+e[1])*q+e[2])*q+e[3])*q+1)
+}
+function computePosterior(mu0,sig0,xbar,se){
+  const pp=1/(sig0*sig0),dp=1/(se*se),tp=pp+dp;
+  return{mu:(mu0*pp+xbar*dp)/tp,sigma:1/Math.sqrt(tp),priorW:pp/tp,dataW:dp/tp}
+}
+function rNorm(mu=0,sig=1){const u=Math.random(),v=Math.random();return mu+sig*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function fmt(x,dec=2){return Number(x).toFixed(dec)}
+function inCI(v,mu,sig,level){const z=normalQ(.5+level/2);return v>=mu-z*sig&&v<=mu+z*sig}
+function ciStr(mu,sig,level,unit=''){const z=normalQ(.5+level/2);return`${fmt(mu-z*sig,2)} bis ${fmt(mu+z*sig,2)}${unit?' '+unit:''}`}
+
+// ═══════════════ SCENARIOS ═══════════════
+const SCENARIOS=[
+  {
+    id:'nback',emoji:'🧠',
+    title:'N-back Training & Intelligenz',
+    sub:'RCT · 73 Erwachsene · Redick et al. (2013)',
+    question:'Um wie viele IQ-Punkte verbessert n-back-Gedächtnistraining die fluide Intelligenz?',
+    unit:'IQ-Punkte',unitShort:'IQ-P',
+    studyDesc:'73 gesunde Erwachsene wurden randomisiert n-back-Training (20h über 5 Wochen, computerbasiert) oder einer Kontrollbedingung zugeteilt. Danach wurden beide Gruppen mit einem standardisierten IQ-Test auf fluide Intelligenz (Gf) getestet. Fluide Intelligenz = logisches Denken, Problemlösen — losgelöst von Schulwissen.',
+    studyContext:'N-back ist eine Arbeitsgedächtnisaufgabe: du siehst eine Sequenz und musst erkennen, ob das aktuelle Item mit dem n-Positionen zurückliegenden übereinstimmt. Damals populär als "Brain Training" — Millionen-Industrie. Redick testete den zentralen Transferanspruch.',
+    studyCite:'Redick et al. (2013). No evidence of intelligence improvement after working memory training. J Exp Psychol Gen, 142(2), 359–379.',
+    studyXbar:1.0,studyN:73,studySigma:8.5,
+    scaleMin:-6,scaleMax:20,sliderMin:-4,sliderMax:16,sliderDefault:5,sliderStep:0.5,
+    refs:[{v:0,l:'kein\nEffekt'},{v:5,l:'+5 IQ'},{v:10,l:'+10 IQ'}],
+    sigmaLevels:[1.5,3,6.5,14],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:0.5,sigSliderMax:18,sigSliderStep:0.5,
+    expertSigHint:'IQ-SD in RCTs: 7–12 IQ-Punkte',
+    extremeThresh:14, // 80% CI width in IQ-Punkten — darüber unrealistisch breit
+    extremeCtx:'Ein 80%-CrI von über 14 IQ-Punkten würde bedeuten, du hältst Effekte von fast null bis zu starkem Training-Transfer für gleich plausibel. Das übersteigt selbst die optimistischsten Erwartungen an kognitive Trainingsinterventionen.',
+    insight:'Redick et al. (2013): d ≈ 0.03 — kein Effekt. Das n-back-Training verbesserte die n-back-Leistung massiv (wie zu erwarten). Aber kein Transfer auf allgemeine Intelligenz. Eines der stärksten Papers gegen "Brain Training"-Industrie.',
+    studyDeepDive:'Zur Einordnung: IQ-Tests haben eine SD von 15 Punkten (per Definition). +1 IQ-Punkt = praktisch null. Ein echter Trainingseffekt von d=0.5 würde ~7.5 IQ-Punkte bedeuten. Brain-Training-Apps behaupten oft d≥1.0. Die Forschung zeigt seit 2013 konsistent: aufgabenspezifische Verbesserung ja, genereller Transfer nein.',
+    dataDec:1
+  },
+  {
+    id:'sleep',emoji:'😴',
+    title:'Schlafentzug & Reaktionszeit',
+    sub:'Experiment · 26 Erwachsene · Cheng et al. (2025)',
+    question:'Um wie viele ms verlangsamt sich die Reaktionszeit nach einer Nacht Schlafentzug?',
+    unit:'ms',unitShort:'ms',
+    studyDesc:'26 gesunde Erwachsene (18–35 Jahre) wurden unter Laborkontrolle einer vollständigen Nacht Schlafentzug ausgesetzt. Reaktionszeit wurde mit einem auditiven Odd-Ball-Paradigma (P300 ERP) vorher und nachher gemessen — die Zeit zwischen Reiz und Reaktion in Millisekunden.',
+    studyContext:'Schlafentzug ist kein Extremfall: ca. 35% der Erwachsenen schlafen regelmäßig unter 7h. Reaktionszeit ist direkt relevant für Fahrsicherheit: bei 100 km/h = 27,8 m/s. Jede 10ms Verlangsamung kostet ~0,28m Bremsweg.',
+    studyCite:'Cheng et al. (2025). The impact of sleep deprivation on cognitive function in healthy adults. Front Neurosci, 19, 1559969.',
+    studyXbar:84,studyN:26,studySigma:48,
+    scaleMin:-20,scaleMax:250,sliderMin:-10,sliderMax:220,sliderDefault:50,sliderStep:5,
+    refs:[{v:0,l:'0ms'},{v:80,l:'+80ms'},{v:160,l:'+160ms'}],
+    sigmaLevels:[5,18,50,120],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:2,sigSliderMax:150,sigSliderStep:2,
+    expertSigHint:'RT-SD in Schlafstudien: 35–70 ms',
+    extremeThresh:120,
+    extremeCtx:'Ein 80%-CrI von über 120ms würde bedeuten, du hältst alles zwischen kaum messbarer Verlangsamung und extremer Beeinträchtigung für ähnlich wahrscheinlich. Die Literatur zeigt hier deutlich engere Effektbereiche.',
+    insight:'Cheng et al. (2025): +84ms, p < 0.05. Bei 100 km/h = ~2,3 Meter zusätzlicher Bremsweg. Ein Fahrerfahrungs-Effekt von +84ms ist der Unterschied zwischen anhalten und auffahren. Das klingt klein — ist es nicht.',
+    studyDeepDive:'Zum Vergleich: Alkohol (0.8‰) verlängert die RT um etwa 90–100ms. Schlafentzug nach einer Nacht ist damit vergleichbar. Wichtig: Die Variabilität zwischen Personen ist riesig — manche zeigen kaum Effekte, andere massive (SD ≈ 48ms). Die mittlere RT ausgeruhter junger Erwachsener liegt bei ca. 230–280ms.',
+    dataDec:0
+  },
+  {
+    id:'mbsr',emoji:'🧘',
+    title:'MBSR-Achtsamkeitstraining & Stressreduktion',
+    sub:"Meta-Analyse · 29 RCTs · n=2668 · Khoury et al. (2015)",
+    question:"Wie groß ist der Effekt von MBSR auf die Stressreduktion (Cohen's d)?",
+    unit:"Cohen's d",unitShort:'d',
+    studyDesc:"29 randomisierte Studien mit 2.668 Teilnehmer*innen wurden meta-analytisch ausgewertet. MBSR-Gruppe vs. Warteliste oder aktive Kontrollbedingung. Gemessen wurde wahrgenommener Stress (z.B. PSS) und zusammengefasst als Cohen's d.",
+    studyContext:"MBSR (Mindfulness-Based Stress Reduction) = strukturiertes 8-Wochen-Programm mit wöchentl. Gruppensitzungen (2,5h) und täglichen Übungen (45 min). Entwickelt von Jon Kabat-Zinn. Cohen's d = Effektstärke: d=0.2 klein · d=0.5 mittel · d=0.8 groß.",
+    studyCite:'Khoury et al. (2015). Mindfulness-based stress reduction for healthy individuals: A meta-analysis. J Psychosom Res, 78(6), 519–528.',
+    studyXbar:0.53,studyN:148,studySigma:1.46,
+    scaleMin:-0.5,scaleMax:2.0,sliderMin:-0.3,sliderMax:1.7,sliderDefault:0.5,sliderStep:0.05,
+    refs:[{v:0,l:'kein\nEffekt'},{v:0.5,l:'d=0.5\nmittel'},{v:1.0,l:'d=1.0\ngroß'}],
+    sigmaLevels:[0.08,0.18,0.45,0.90],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:0.03,sigSliderMax:1.2,sigSliderStep:0.02,
+    expertSigHint:'Typische SD für d-Schätzungen: 0.1–0.5',
+    extremeThresh:1.0,
+    extremeCtx:"Ein 80%-CrI von über d=1.0 Breite würde bedeuten, du hältst es für ähnlich plausibel, dass MBSR keinen Effekt hat wie dass es sehr starke Effekte (d>1) erzielt. Für eine so gut untersuchte Intervention ist das eine extreme Unsicherheit.",
+    insight:"Khoury et al. (2015): g = 0.53 — ein moderater Effekt. MBSR wirkt zuverlässig, aber nicht spektakulär. Der Effekt ist konsistent über 29 Studien. Sub-Analysen zeigen: je höher der Ausgangsstress, desto größer der Effekt (d > 0.8 bei klinischen Populationen).",
+    studyDeepDive:"d=0.53 auf der PSS-10 (Perceived Stress Scale, 0–40 Punkte, Durchschnittswert ~13) bedeutet ca. 3–4 Punkte Reduktion. Zum Vergleich: Antidepressiva zeigen in RCTs d ≈ 0.3 bei milden Depressionen. MBSR ist damit konkurrenzfähig — bei Stressreduktion sogar überlegen. Meta-Analysen mit Aktiv-Kontrollgruppen zeigen etwas kleinere Effekte (~d=0.3).",
+    dataDec:2
+  },
+  {
+    id:'caffeine',emoji:'☕',
+    title:'Koffein & kognitive Reaktionszeit',
+    sub:'Meta-Analyse · 31 RCTs · n=1455 · Siddiqui et al. (2025)',
+    question:'Um wie viele ms verbessert eine moderate Koffeindosis die Reaktionszeit im Aufmerksamkeitstest?',
+    unit:'ms',unitShort:'ms',
+    studyDesc:'31 randomisierte Doppelblindstudien (n=1.455) zu reinem Koffein (Kapsel) vs. Placebo bei ausgeruhten, gesunden Erwachsenen. Gemessen: Reaktionszeit in standardisierten Aufmerksamkeitstests. Meta-analytische Zusammenfassung.',
+    studyContext:'Koffeindosis in Studien: typisch 200–400mg (= 2–4 Tassen Kaffee). Reaktionszeit wurde mit klassischen Wahlreaktions- und Vigilanztests gemessen, nicht unter Schlafentzug. Alle Probanden waren ausgeruht.',
+    studyCite:'Siddiqui et al. (2025). A systematic review and meta-analysis of the acute effect of caffeine on attention. Psychopharmacology. doi:10.1007/s00213-025-06775-1',
+    studyXbar:11,studyN:47,studySigma:32,
+    scaleMin:-30,scaleMax:80,sliderMin:-20,sliderMax:70,sliderDefault:20,sliderStep:1,
+    refs:[{v:0,l:'kein\nEffekt'},{v:20,l:'+20ms'},{v:40,l:'+40ms'}],
+    sigmaLevels:[4,10,22,50],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:1,sigSliderMax:65,sigSliderStep:1,
+    expertSigHint:'RT-SD bei Koffein-RCTs: 20–40 ms',
+    extremeThresh:50,
+    extremeCtx:'Ein 80%-CrI von über 50ms Breite würde bedeuten, du bist so unsicher, dass du sowohl keinen Effekt als auch massive RT-Verbesserungen für gleich plausibel hältst. Das passt nicht zur dichten Evidenzbasis aus 31 RCTs.',
+    insight:'Siddiqui et al. (2025): g = 0.28 — ~11ms Verbesserung. Real und konsistent über 31 Studien. Aber weit unter dem, was die meisten erwarten. Koffein verbessert vor allem Vigilanz und Wachheit — kein allgemeiner Kognitions-Booster.',
+    studyDeepDive:'Zur Einordnung: 11ms bei einer mittleren RT von ~300ms = ca. 3.7% Verbesserung. Bei Profisport-Reaktionszeiten (Startblock: ~150ms) relevant, im Alltag kaum spürbar. Der Effekt ist größer bei Schlafentzug oder morgens (d ≈ 0.5) als bei ausgeruhten Personen. Die Kaffeeindustrie hat den Effekt erheblich überschätzt in ihrer Kommunikation.',
+    dataDec:0
+  },
+  {
+    id:'placebo',emoji:'💊',
+    title:'Open-Label Placebo & chronischer Schmerz',
+    sub:'RCT · 97 Patient*innen · Carvalho et al. (2016)',
+    question:"Wie groß ist der Effekt eines offen kommunizierten Placebos auf chronischen Rückenschmerz (Cohen's d)?",
+    unit:"Cohen's d",unitShort:'d',
+    studyDesc:"97 Patient*innen mit chronischem Rückenschmerz (>3 Monate) wurden randomisiert: open-label Placebo (+ Standardtherapie) oder nur Standardtherapie. Besonderheit: Die Teilnehmer wussten, dass sie inaktive Zuckerpillen nehmen. Kein Betrug — trotzdem Wirkung.",
+    studyContext:"Cohen's d = Effektstärke: d=0.2 klein · d=0.5 mittel · d=0.8 groß. Schmerz wurde auf einer 0–10 Skala gemessen. Das 'Open-Label' ist das Besondere: Normalerweise glaubt man, Placebo wirke nur durch Täuschung. Diese Studie testete das Gegenteil.",
+    studyCite:'Carvalho et al. (2016). Open-label placebo treatment in chronic low back pain: a randomized controlled trial. PAIN, 157(12), 2766–2772.',
+    studyXbar:0.54,studyN:83,studySigma:1.46,
+    scaleMin:-0.4,scaleMax:1.8,sliderMin:-0.2,sliderMax:1.5,sliderDefault:0.2,sliderStep:0.05,
+    refs:[{v:0,l:'kein\nEffekt'},{v:0.5,l:'d=0.5\nmittel'},{v:1.0,l:'d=1.0\ngroß'}],
+    sigmaLevels:[0.08,0.2,0.5,1.0],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:0.03,sigSliderMax:1.3,sigSliderStep:0.02,
+    expertSigHint:'Typische SD für d-Schätzungen: 0.1–0.5',
+    extremeThresh:1.0,
+    extremeCtx:"Ein 80%-CrI von über d=1.0 Breite für einen Placebo-Effekt ist sehr weit. Das würde bedeuten, du kannst kaum abschätzen, ob Open-Label Placebo überhaupt wirkt oder sehr stark wirkt — eine unrealistisch hohe Unsicherheit für dieses gut untersuchte Phänomen.",
+    insight:'Carvalho et al. (2016): d = 0.46–0.76 (je nach Schmerzmaß), Mittel ≈ d=0.54. Selbst ohne Täuschung: echter, klinisch bedeutsamer Schmerzrückgang. Der Placebo-Effekt braucht keine Lüge — Erwartung, Ritual und Arzt-Patient-Beziehung reichen.',
+    studyDeepDive:'Mechanistisch: Open-Label Placebo aktiviert endogene Opioidsysteme und verändert Schmerzverarbeitung im präfrontalen Cortex. Zum Vergleich: Ibuprofen zeigt in RCTs d ≈ 0.3–0.5 bei chronischem Schmerz. Das Open-Label Placebo ist damit pharmakologischen Analgetika direkt vergleichbar. Eine Bayesianische Interpretation: Erwartungen (Priors über den eigenen Schmerzzustand) modulieren die Wahrnehmung.',
+    dataDec:2
+  },
+  {
+    id:'music',emoji:'🎵',
+    title:'Musikunterricht & IQ-Entwicklung bei Kindern',
+    sub:'RCT · 144 Kinder · Schellenberg (2004)',
+    question:'Um wie viele IQ-Punkte steigt der Gesamt-IQ nach einem Jahr Musikunterricht (vs. Kontrolle)?',
+    unit:'IQ-Punkte',unitShort:'IQ-P',
+    studyDesc:'144 Sechsjährige wurden per Zufall Klavierunterricht, Gesangsunterricht, Theaterunterricht (aktive Kontrolle) oder keinem Unterricht zugeteilt. IQ wurde vor und nach dem Schuljahr (36 Wochen) mit dem standardisierten Wechsler-Intelligenztest gemessen.',
+    studyContext:'Der "Mozart-Effekt" (das Hören von Mozart-Musik steigere IQ) war ab 1993 ein Medienhype. Schellenberg testete: Was passiert, wenn Kinder selbst Musik erlernen? Eine aktive Kontrolle (Theater) wurde bewusst eingebaut, um allgemeine Unterrichtseffekte zu trennen.',
+    studyCite:'Schellenberg, E.G. (2004). Music lessons enhance IQ. Psychological Science, 15(8), 511–514.',
+    studyXbar:2.7,studyN:72,studySigma:6.0,
+    scaleMin:-4,scaleMax:14,sliderMin:-3,sliderMax:12,sliderDefault:5,sliderStep:0.5,
+    refs:[{v:0,l:'kein\nEffekt'},{v:3,l:'+3 IQ'},{v:6,l:'+6 IQ'}],
+    sigmaLevels:[0.9,2,4,8],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:0.3,sigSliderMax:10,sigSliderStep:0.2,
+    expertSigHint:'IQ-SD bei Kindern in RCTs: 4–8 Punkte',
+    extremeThresh:12,
+    extremeCtx:'Ein 80%-CrI von über 12 IQ-Punkten würde bedeuten, du hältst es für ähnlich plausibel, dass Musikunterricht fast nichts als auch sehr viel bewirkt. IQ hat eine SD von 15 — 12 Punkte Breite im 80%-CrI entspricht fast einer halben IQ-Standardabweichung an Unsicherheit.',
+    insight:'Schellenberg (2004): +2.7 IQ-Punkte vs. Kontrollgruppe, d ≈ 0.35. Real, aber klein. Alle Gruppen stiegen im IQ (Schulstart-Effekt!) — der Musikeffekt ist der Zusatzgewinn. Kein "Mozart-Effekt", aber ein echter generaliserter Transfer.',
+    studyDeepDive:'IQ hat per Definition SD=15. +2.7 Punkte = 0.18 SD — statistisch signifikant bei n=72, aber praktisch klein. Neuere Reviews (z.B. Sala & Gobet, 2017) sind skeptischer und finden d ≈ 0.2 in Replikationen. Der Effekt ist real, aber kleiner als der populäre "Mozart-Effekt" suggeriert. Interessant: Schellenberg selbst wurde in späteren Jahren vorsichtiger in seiner Interpretation.',
+    dataDec:1
+  },
+  {
+    id:'therapy',emoji:'🛋️',
+    title:'Gruppen- vs. Einzel-KVT bei Angststörungen',
+    sub:'Meta-Analyse · 41 RCTs · n=2843 · Carpenter et al. (2018)',
+    question:"Um wie viel größer ist der Effekt von Einzeltherapie vs. Gruppentherapie (KVT, Hedges' g)?",
+    unit:"Hedges' g",unitShort:'g',
+    studyDesc:"41 randomisierte Studien (n=2.843) zu KVT (Kognitive Verhaltenstherapie) bei Angststörungen (soziale Angst, PTSD, Panikstörung) wurden meta-analytisch ausgewertet. Direkte Vergleiche: Einzel-KVT vs. Gruppen-KVT auf denselben Outcomes.",
+    studyContext:"KVT ist die am besten evidenzbasierte Psychotherapie für Angststörungen. In der Gruppentherapie therapiert ein Therapeut 6–12 Personen gleichzeitig — deutlich kosteneffizienter. Die Frage: Wird dabei Effektivität geopfert? Hedges' g = 0 bedeutet: beide gleich gut.",
+    studyCite:"Carpenter et al. (2018). Cognitive behavioral therapy for anxiety and related disorders: A meta-analysis. Depress Anxiety, 35(6), 502–514.",
+    studyXbar:0.38,studyN:200,studySigma:0.55,
+    scaleMin:-0.3,scaleMax:1.2,sliderMin:-0.2,sliderMax:1.0,sliderDefault:0.3,sliderStep:0.05,
+    refs:[{v:0,l:'gleich'},{v:0.4,l:'g=0.4'},{v:0.8,l:'g=0.8'}],
+    sigmaLevels:[0.05,0.14,0.30,0.60],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:0.02,sigSliderMax:0.8,sigSliderStep:0.01,
+    expertSigHint:'SD von g-Differenzen in Meta-Analysen: 0.05–0.3',
+    extremeThresh:0.6,
+    extremeCtx:"Ein 80%-CrI von über g=0.6 Breite für den Unterschied zwischen Einzel- und Gruppentherapie ist sehr weit. Das würde bedeuten, du kannst nicht einschätzen, ob die Formate praktisch gleichwertig oder stark verschieden sind — obwohl genau das die zentrale Frage in der Psychotherapieforschung ist.",
+    insight:"Carpenter et al. (2018): Einzel-KVT g=0.54 vs. Gruppen-KVT g=0.16 — rohe Differenz g=0.38, statistisch signifikant (p<.0001). Einzeltherapie ist deutlich effektiver. Dennoch: Gruppentherapie ist 5× kosteneffizienter und bei moderaten Angststörungen eine klinisch sinnvolle Option.",
+    studyDeepDive:"g=0.38 entspricht einem mittleren Effektunterschied. Einzeltherapie (g=0.54) liegt im mittleren Bereich, Gruppentherapie (g=0.16) im kleinen Bereich. Die klinische Bedeutung hängt von der Schwere ab: Bei leichten bis mittleren Angststörungen kann Gruppentherapie erste Wahl sein (Kostenvorteil, ähnliche Wirkung). Bei schwerer PTSD oder komplexen Traumata überwiegt der Einzeltherapie-Vorteil klar. Wichtig: Beide Formate schlagen Kontrollbedingungen deutlich.",
+    dataDec:2
+  },
+  {
+    id:'agert',emoji:'👴',
+    title:'Alter & Reaktionszeit im Erwachsenenalter',
+    sub:'Stichprobenstudie · 7417 Personen · Der & Deary (2006)',
+    question:'Um wie viele ms reagieren Menschen ab 65 langsamer als Menschen mit 20–35?',
+    unit:'ms',unitShort:'ms',
+    studyDesc:'Der & Deary analysierten Reaktionszeitdaten von 7.417 Personen (16–89 Jahre) aus der britischen Health and Lifestyle Survey. Gemessen wurde einfache Reaktionszeit (Taste drücken bei Lichtsignal). Größte bevölkerungsrepräsentative RT-Studie bis dahin.',
+    studyContext:'Einfache Reaktionszeit ist einer der robustesten Alterungsmarker überhaupt — zuverlässiger als viele Gedächtnistests. Sie korreliert negativ mit Alter bereits ab ~25 Jahren. Der & Deary quantifizierten die Größe dieses Alterseffekts systematisch.',
+    studyCite:'Der, G., & Deary, I.J. (2006). Age and sex differences in reaction time in adulthood: Results from the United Kingdom Health and Lifestyle Survey. Psychology and Aging, 21(1), 62–73.',
+    studyXbar:87,studyN:500,studySigma:60,
+    scaleMin:-20,scaleMax:250,sliderMin:-10,sliderMax:200,sliderDefault:60,sliderStep:5,
+    refs:[{v:0,l:'0ms'},{v:60,l:'+60ms'},{v:120,l:'+120ms'}],
+    sigmaLevels:[8,22,55,120],sigmaLabels:['sehr eng','eng','breit','sehr breit'],
+    sigSliderMin:3,sigSliderMax:150,sigSliderStep:2,
+    expertSigHint:'RT-SD in Altersstudien: 50–80 ms',
+    extremeThresh:130,
+    extremeCtx:'Ein 80%-CrI von über 130ms Breite würde bedeuten, du hältst sowohl einen minimalen Alterseffekt als auch extreme Verlangsamungen für gleich plausibel. Bei n=7.417 Personen ist der Alterseffekt auf Reaktionszeit sehr gut dokumentiert.',
+    insight:'Der & Deary (2006): ~87ms Verlangsamung (20–35 vs. 65+), n=7.417. Normales, biologisches Altern — kein Zeichen von Krankheit. Reaktionszeit nimmt linear ab dem ~25. Lebensjahr ab. Fit sein hilft, aber stoppt den Trend nicht.',
+    studyDeepDive:'Hinweis: Der Wert von ~87ms ist für dieses Tutorial aus den altersabhängigen Mittelwertkurven des Artikels interpoliert — er erscheint nicht als einzelne Zahl im Original. Mittlere RT: 20–35 Jahre ≈ 240ms · 65+ Jahre ≈ 327ms (aus Abb. 1 von Der & Deary entnommen). Der Effekt ist graduell, nicht abrupt. Interindividuelle Unterschiede sind riesig — ein fitter 70-Jähriger kann schneller sein als ein sitzender 35-Jähriger. RT ist ein bemerkenswerter Prädiktor für Langlebigkeit und kognitiven Abbau.',
+    dataDec:0
+  }
+];
+
+// ═══════════════ DIFFICULTY ═══════════════
+const DIFFICULTY={
+  'einsteiger':{label:'Einsteiger',emoji:'🌱',color:'#1B7A44',
+    desc:'Slider mit Orientierungsmarken · Vier verbale Unsicherheitsstufen mit σ-Angabe'},
+  'fortgeschritten':{label:'Fortgeschritten',emoji:'🎯',color:'#C07010',
+    desc:'Slider für μ und σ ohne verbale Etikettierung · Nur grober Wertebereich vorgegeben · Prior erst nach Bedienung beider Slider sichtbar'},
+  'experte':{label:'Experte',emoji:'🔬',color:'#A02828',
+    desc:'Direkte Zahleneingabe für μ und σ · Keine Vorgaben · Prior erst nach valider Eingabe sichtbar'}
+};
+
+const PHASES=['scenario','prior','ppc','data','reflect'];
+const PHASE_LABELS=['Szenario','Prior','Vorhersage','Daten','Reflexion'];
+
+// ═══════════════ STATE ═══════════════
+const S={
+  phase:'intro',difficulty:'einsteiger',
+  scenarioId:null,priorMu:null,priorSig:null,uncIdx:1,
+  posterior:null,history:[],
+  _muTouched:false,_sigTouched:false
+};
+
+function sc(){return SCENARIOS.find(s=>s.id===S.scenarioId)||SCENARIOS[0]}
+function se(){return sc().studySigma/Math.sqrt(sc().studyN)}
+
+// ═══════════════ ROUTER ═══════════════
+function goto(phase){
+  S.phase=phase;
+  const prog=document.getElementById('progress');
+  if(phase==='intro'){prog.style.display='none'}
+  else{prog.style.display='flex';renderProgress()}
+  const el=document.getElementById('phase');
+  el.style.animation='none';el.offsetHeight;el.style.animation='';
+  render()
+}
+function renderProgress(){
+  const ci=PHASES.indexOf(S.phase);const d=DIFFICULTY[S.difficulty];
+  let html=`<button onclick="goto('intro')" title="Hauptmenü" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:.15rem .4rem;color:var(--ink3);margin-right:.5rem;flex-shrink:0" title="Hauptmenü">⌂</button>`;
+  html+=PHASES.map((p,i)=>{
+    const cls=i<ci?'st done':i===ci?'st active':'st';
+    const clickable=i<ci; // only allow going back
+    const line=i<PHASES.length-1?`<div class="st-line${i<ci?' done':''}"></div>`:'';
+    const stepHtml=`<div class="${cls}"${clickable?` onclick="goto('${p}')" style="cursor:pointer" title="Zurück zu: ${PHASE_LABELS[i]}"`:''}>
+      <div class="st-dot"></div><span>${PHASE_LABELS[i]}</span></div>${line}`;
+    return stepHtml
+  }).join('');
+  html+=`<div class="diff-pill" style="border-color:${d.color}20;color:${d.color}">${d.emoji} ${d.label}</div>`;
+  document.getElementById('progress').innerHTML=html
+}
+function render(){
+  const el=document.getElementById('phase');
+  if(S.phase==='intro'){el.innerHTML=htmlIntro();return}
+  if(S.phase==='scenario'){el.innerHTML=htmlScenario();return}
+  if(S.phase==='prior'){el.innerHTML=htmlPrior();bindPrior();return}
+  if(S.phase==='ppc'){el.innerHTML=htmlPPC();bindPPC();return}
+  if(S.phase==='data'){el.innerHTML=htmlData();bindData();return}
+  if(S.phase==='reflect'){el.innerHTML=htmlReflect();bindReflect();return}
+}
+
+// ═══════════════ INTRO ═══════════════
+function htmlIntro(){
+  const used=S.history.map(h=>h.scenarioId);
+  const avail=SCENARIOS.filter(s=>!used.includes(s.id));
+  return`
+<div class="intro-hero">
+  <h1>Bayesian Thinking<br><em>Simulator</em></h1>
+  <p class="intro-tagline">Formuliere einen Prior zu echter Forschung — und erlebe live, wie Bayesianisches Updating deine Überzeugung verändert.</p>
+</div>
+<div class="flow-row">
+  <div class="flow-item"><div class="flow-num">1</div><div class="flow-title">Szenario</div><div class="flow-desc">Echte Studie auswählen</div></div>
+  <div class="flow-item"><div class="flow-num">2</div><div class="flow-title">Prior</div><div class="flow-desc">Meinung vor Datensicht</div></div>
+  <div class="flow-item"><div class="flow-num">3</div><div class="flow-title">Vorhersage</div><div class="flow-desc">Was impliziert dein Prior?</div></div>
+  <div class="flow-item"><div class="flow-num">4</div><div class="flow-title">Daten</div><div class="flow-desc">Tauziehen: Prior vs. Studie</div></div>
+  <div class="flow-item"><div class="flow-num">5</div><div class="flow-title">Reflexion</div><div class="flow-desc">Kalibrierung bewerten</div></div>
+</div>
+<div class="sec-label mt2">Schwierigkeitsgrad — bestimmt, wie du deinen Prior angibst</div>
+<div class="diff-cards">
+  ${Object.entries(DIFFICULTY).map(([k,d])=>`
+  <div class="diff-card${S.difficulty===k?' selected':''}" onclick="selDiff('${k}')">
+    <span class="dc-emoji">${d.emoji}</span>
+    <div class="dc-label" style="color:${d.color}">${d.label}</div>
+    <div class="dc-desc">${d.desc}</div>
+  </div>`).join('')}
+</div>
+<div style="text-align:center;margin-top:1.4rem">
+  ${S.history.length>0?`<p style="font-size:.8rem;color:var(--ink2);margin-bottom:.7rem">${S.history.length} Szenario${S.history.length>1?'s':''} gespielt · ${avail.length} verbleibend</p>`:''}
+  <button class="btn btn-primary" style="font-size:.97rem;padding:.78rem 2rem" onclick="goto('scenario')">${S.history.length>0?'Weiter':'Starten'} →</button>
+  ${S.history.length>0?`<button class="btn btn-ghost" onclick="resetAll()" style="margin-left:.75rem">Von vorne</button>`:''}
+</div>
+<div style="padding:1rem 1.3rem;border:1px solid var(--border);background:var(--card);margin-top:1.8rem">
+  <h3 style="margin-bottom:.6rem">Was lernst du hier?</h3>
+  <p style="font-size:.84rem">Ein <strong>Prior</strong> ist deine <em>vorherige</em> Überzeugung über einen Effekt — bevor du die Daten siehst. Der <strong>Posterior</strong> ist deine aktualisierte Überzeugung danach: Daten erweitern, verändern und verbessern deinen Wissensstand. Der Posterior ist der <em>präzisionsgewichtete</em> Kompromiss beider — ein enger Prior zieht stark, viele Daten ziehen stark. Das Tauziehen zeigt, wie Evidenz Überzeugungen verändert. Alle Szenarien basieren auf echten publizierten Studien.</p>
+</div>
+${S.history.length>0?`<div class="history-mini mt2"><div class="hm-title">Bisherige Runden</div>${S.history.map(h=>{const s=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s.emoji} ${s.title} — Score: <strong>${h.score}/100</strong></div>`}).join('')}</div>`:''}
+<details style="margin-top:1.4rem;border:1px solid var(--border);background:var(--card)">
+  <summary style="padding:.75rem 1.1rem;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--ink2);list-style:none;display:flex;justify-content:space-between;align-items:center">
+    <span>📚 Alle verwendeten Studien &amp; Quellen</span><span style="font-size:.75rem;color:var(--ink3)">aufklappen</span>
+  </summary>
+  <div style="padding:.8rem 1.1rem 1rem;border-top:1px solid var(--border)">
+    ${SCENARIOS.map((s,i)=>`<div style="margin-bottom:.65rem"><div style="font-size:.78rem;font-weight:600;color:var(--ink);margin-bottom:.12rem">${s.emoji} ${s.title}</div><div style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--ink3);line-height:1.55">${s.studyCite}</div></div>`).join('')}
+  </div>
+</details>`;
+}
+function selDiff(k){S.difficulty=k;document.querySelectorAll('.diff-card').forEach((el,i)=>el.classList.toggle('selected',Object.keys(DIFFICULTY)[i]===k))}
+function resetAll(){Object.assign(S,{phase:'intro',scenarioId:null,priorMu:null,priorSig:null,uncIdx:1,posterior:null,history:[],_muTouched:false,_sigTouched:false});goto('intro')}
+
+// ═══════════════ SCENARIO ═══════════════
+function htmlScenario(){
+  const used=S.history.map(h=>h.scenarioId);
+  return`
+<h2>Szenario wählen</h2>
+<p class="phase-sub">Alle Szenarien basieren auf echten veröffentlichten Studien. Das Studienergebnis bleibt bis zur Reflexion verborgen.</p>
+<div class="scenarios">
+  ${SCENARIOS.map(s=>{
+    const isUsed=used.includes(s.id);
+    return`<div class="sc-card${isUsed?' used':''}" onclick="${isUsed?'':'selectSc(\''+s.id+'\')'}">
+      ${isUsed?'<div class="used-badge">✓ Gespielt</div>':''}
+      <span class="sc-emoji">${s.emoji}</span>
+      <div class="sc-title">${s.title}</div>
+      <div class="sc-sub">${s.sub}</div>
+      <p class="sc-desc">${s.studyDesc}</p>
+      <div class="sc-context">${s.studyContext}</div>
+      <button class="btn btn-outline" style="font-size:.77rem;padding:.38rem .85rem;align-self:flex-start" onclick="event.stopPropagation();selectSc('${s.id}')">Wählen →</button>
+    </div>`
+  }).join('')}
+</div>`;
+}
+function selectSc(id){
+  S.scenarioId=id;
+  const scenario=sc();
+  S.priorMu=S.difficulty==='experte'?null:scenario.sliderDefault;
+  S.uncIdx=1;
+  S.priorSig=S.difficulty==='experte'?null:scenario.sigmaLevels[1];
+  S._muTouched=false;S._sigTouched=false;
+  goto('prior')
+}
+
+// ═══════════════ PRIOR ═══════════════
+function htmlPrior(){
+  const scenario=sc();
+  const diff=S.difficulty;
+  const mu=S.priorMu!=null?S.priorMu:scenario.sliderDefault;
+
+  let inputHtml='';
+
+  if(diff==='experte'){
+    inputHtml=`
+    <div class="sec-label">Prior direkt eingeben — keine Startwerte vorgegeben</div>
+    <div class="expert-row">
+      <div class="exp-field">
+        <div class="exp-label">μ — Mittelwert (plausibelster Effekt)</div>
+        <input class="exp-input" id="exp-mu" type="number" step="${scenario.sliderStep}"
+          min="${scenario.sliderMin}" max="${scenario.sliderMax}" placeholder="z.B. ${scenario.sliderDefault}"
+          oninput="updateExpert()">
+        <div class="exp-hint">Einheit: ${scenario.unit}</div>
+      </div>
+      <div class="exp-field">
+        <div class="exp-label">σ — Standardabweichung (Unsicherheit)</div>
+        <input class="exp-input" id="exp-sig" type="number" step="${scenario.sigSliderStep}"
+          min="${scenario.sigSliderMin}" max="${scenario.sigSliderMin*30}" placeholder="z.B. ${fmt(scenario.sigmaLevels[1],2)}"
+          oninput="updateExpert()">
+        <div class="exp-hint">${scenario.expertSigHint}</div>
+      </div>
+    </div>`;
+  } else if(diff==='fortgeschritten'){
+    inputHtml=`
+    <div class="sec-label">Schritt 1 — Plausibelster Effektwert</div>
+    <div class="slider-wrap">
+      <div class="slider-display" id="sd-val" style="color:var(--ink3)">${scenario.sliderMin} <span>${scenario.unit}</span></div>
+      <input type="range" id="mu-slider" min="${scenario.sliderMin}" max="${scenario.sliderMax}" step="${scenario.sliderStep}" value="${scenario.sliderMin}">
+      <div style="font-size:.72rem;color:var(--ink3);display:flex;justify-content:space-between;margin-top:.4rem">
+        <span>${scenario.sliderMin} ${scenario.unitShort}</span><span>${scenario.sliderMax} ${scenario.unitShort}</span>
+      </div>
+    </div>
+    <div class="sec-label mt2">Schritt 2 — Unsicherheit (σ)</div>
+    <div class="slider-wrap">
+      <div class="slider-display" id="sig-slider-disp" style="color:var(--ink3)">— <span>${scenario.unit}</span></div>
+      <input type="range" id="sig-slider"
+        min="${scenario.sigSliderMin}" max="${scenario.sigSliderMax}" step="${scenario.sigSliderStep}"
+        value="${scenario.sigSliderMin}"
+        oninput="updateSigSlider()">
+      <div style="font-size:.72rem;color:var(--ink3);display:flex;justify-content:space-between;margin-top:.4rem">
+        <span>${scenario.sigSliderMin} ${scenario.unitShort}</span><span>${scenario.sigSliderMax} ${scenario.unitShort}</span>
+      </div>
+    </div>`;
+  } else {
+    // Einsteiger
+    const refHtml=scenario.refs.map(r=>{
+      const pct=(r.v-scenario.sliderMin)/(scenario.sliderMax-scenario.sliderMin)*100;
+      return`<div class="ref-m" style="left:${pct}%">${r.l.replace('\n','<br>')}</div>`
+    }).join('');
+    inputHtml=`
+    <div class="sec-label">Schritt 1 — Plausibelster Effektwert</div>
+    <div class="slider-wrap">
+      <div class="slider-display" id="sd-val">${fmt(mu,scenario.dataDec)} <span>${scenario.unit}</span></div>
+      <input type="range" id="mu-slider" min="${scenario.sliderMin}" max="${scenario.sliderMax}" step="${scenario.sliderStep}" value="${mu}">
+      <div class="ref-row">${refHtml}</div>
+    </div>
+    <div class="sec-label mt2">Schritt 2 — Wie sicher bist du?</div>
+    <div class="unc-grid">
+      ${['Sehr sicher','Eher sicher','Unsicher','Keine Ahnung'].map((lbl,i)=>`
+      <div class="unc-btn${S.uncIdx===i?' selected':''}" onclick="selUnc(${i})">
+        <span class="unc-main">${lbl}</span>
+        <span class="unc-sigma">σ = ${scenario.sigmaLevels[i]}</span>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  const vizVisible=diff==='einsteiger'||(diff==='fortgeschritten'&&S._muTouched&&S._sigTouched)||(diff==='experte'&&S._muTouched&&S._sigTouched);
+  return`
+<h2>Formuliere deinen Prior</h2>
+<p class="phase-sub">Bevor du die Daten siehst: Was glaubst du, wie groß der Effekt ist?</p>
+<div class="study-recap"><strong>${sc().emoji} ${sc().title}</strong><br><em>${sc().question}</em></div>
+${inputHtml}
+<div class="sigma-explainer">
+  <strong>Was bedeutet σ (Sigma) hier?</strong>
+  σ beschreibt deine <em>Unsicherheit über den mittleren Effekt</em> — also: Wie weit könnte der wahre Durchschnittseffekt von deiner Schätzung entfernt sein?
+  Es ist <em>nicht</em> die Streuung der einzelnen Messwerte zwischen Personen (die ist in echten Daten viel größer).
+  Wir nehmen vereinfachend an, dass die Streuung der Rohdaten bekannt und konstant ist — so können wir uns auf die Frage konzentrieren:
+  <strong>Wie sicher bin ich, wo der Effekt in dieser Studie liegt?</strong>
+</div>
+<div id="prior-preview-wrap"${vizVisible?'':' style="opacity:0;pointer-events:none"'}>
+  <div class="sec-label">Dein Prior</div>
+  <div id="prior-preview"></div>
+  <div class="ci-note" id="ci-note"></div>
+  <div class="prior-verbal" id="prior-verbal-summary"></div>
+  <div class="prior-extreme" id="prior-extreme-warn"></div>
+</div>
+<div class="mt2">
+  <button class="btn-commit" id="commit-btn" onclick="commitPrior()"${vizVisible?'':' disabled'}>
+    Das ist mein Prior — zeig mir was er vorhersagt →
+  </button>
+</div>`;
+}
+
+let _liveSvg=null;
+function bindPrior(){
+  const diff=S.difficulty;
+  const scenario=sc();
+  if(diff==='experte'){
+    // no pre-fill, just bind
+  } else if(diff==='fortgeschritten'){
+    // Reset state to sliderMin so display and slider stay in sync
+    S.priorMu=scenario.sliderMin;
+    S.priorSig=scenario.sigSliderMin;
+    const sl=document.getElementById('mu-slider');
+    if(sl){sl.addEventListener('input',()=>{
+      S.priorMu=parseFloat(sl.value);
+      const d2=document.getElementById('sd-val');
+      if(d2){d2.innerHTML=`${fmt(S.priorMu,scenario.dataDec)} <span>${scenario.unit}</span>`;d2.style.color='var(--prior)';}
+      S._muTouched=true;checkPriorReady();updatePriorViz()
+    })}
+    // sig slider handled by oninput=updateSigSlider
+  } else {
+    // einsteiger
+    const sl=document.getElementById('mu-slider');
+    if(sl){sl.addEventListener('input',()=>{
+      S.priorMu=parseFloat(sl.value);
+      document.getElementById('sd-val').innerHTML=`${fmt(S.priorMu,scenario.dataDec)} <span>${scenario.unit}</span>`;
+      updatePriorViz()
+    })}
+  }
+  initPriorSvg();
+  if(diff==='einsteiger'){S.priorMu=S.priorMu??scenario.sliderDefault;updatePriorViz()}
+}
+function updateSigSlider(){
+  const el=document.getElementById('sig-slider');
+  if(!el)return;
+  S.priorSig=parseFloat(el.value);
+  S._sigTouched=true;
+  const disp=document.getElementById('sig-slider-disp');
+  if(disp){
+    const s=sc();
+    disp.innerHTML=`${fmt(S.priorSig,s.dataDec)} <span>${s.unit}</span>`;
+    disp.style.color='var(--prior)';
+  }
+  checkPriorReady();updatePriorViz()
+}
+function checkPriorReady(){
+  const wrap=document.getElementById('prior-preview-wrap');
+  const btn=document.getElementById('commit-btn');
+  const ready=(S.difficulty==='fortgeschritten'&&S._muTouched&&S._sigTouched)||
+              (S.difficulty==='experte'&&S._muTouched&&S._sigTouched);
+  if(wrap){wrap.style.opacity=ready?'1':'0';wrap.style.pointerEvents=ready?'auto':'none'}
+  if(btn){btn.disabled=!ready}
+  if(ready)initPriorSvg(),updatePriorViz()
+}
+function updateExpert(){
+  const mEl=document.getElementById('exp-mu');const sEl=document.getElementById('exp-sig');
+  if(!mEl||!sEl)return;
+  const mu=parseFloat(mEl.value);const sig=parseFloat(sEl.value);
+  const s=sc();
+  const muV=!isNaN(mu)&&mu>=s.sliderMin&&mu<=s.sliderMax;
+  const sigV=!isNaN(sig)&&sig>0&&sig<=s.sigmaLevels[3]*2;
+  mEl.classList.toggle('error',mEl.value!==''&&!muV);
+  sEl.classList.toggle('error',sEl.value!==''&&!sigV);
+  if(muV){S.priorMu=mu;S._muTouched=true}
+  if(sigV){S.priorSig=sig;S._sigTouched=true}
+  checkPriorReady()
+}
+function selUnc(i){
+  S.uncIdx=i;S.priorSig=sc().sigmaLevels[i];
+  document.querySelectorAll('.unc-btn').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  updatePriorViz()
+}
+function commitPrior(){
+  if(S.priorMu==null||S.priorSig==null)return;
+  S.posterior=computePosterior(S.priorMu,S.priorSig,sc().studyXbar,se());
+  goto('ppc')
+}
+
+function initPriorSvg(){
+  const con=document.getElementById('prior-preview');if(!con)return;
+  const W=con.clientWidth-8,H=130,m={l:34,r:12,t:10,b:26};
+  d3.select(con).selectAll('svg').remove();
+  const s=sc();
+  const xSc=d3.scaleLinear().domain([s.scaleMin,s.scaleMax]).range([0,W-m.l-m.r]);
+  const svg=d3.select(con).append('svg').attr('width',W).attr('height',H)
+    .append('g').attr('transform',`translate(${m.l},${m.t})`);
+  svg.append('g').attr('transform',`translate(0,${H-m.t-m.b})`)
+    .call(d3.axisBottom(xSc).ticks(5).tickSize(3))
+    .call(g=>{g.select('.domain').attr('stroke','var(--border2)');g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace');g.selectAll('.tick line').attr('stroke','var(--border2)')});
+  if(s.scaleMin<0&&s.scaleMax>0)svg.append('line').attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',H-m.t-m.b).attr('stroke','var(--border2)').attr('stroke-dasharray','3,3');
+  svg.append('path').attr('class','pv-fill');
+  svg.append('path').attr('class','pv-ci95');
+  svg.append('path').attr('class','pv-ci');
+  svg.append('path').attr('class','pv-line');
+  svg.append('line').attr('class','pv-mu');
+  _liveSvg={svg,xSc,iW:W-m.l-m.r,iH:H-m.t-m.b}
+}
+function updatePriorViz(){
+  if(!_liveSvg)return;
+  const s=sc();const{svg,xSc,iW,iH}=_liveSvg;
+  const mu=S.priorMu,sig=S.priorSig;
+  if(mu==null||sig==null)return;
+  const xs=d3.range(s.scaleMin,s.scaleMax+.01,(s.scaleMax-s.scaleMin)/240);
+  const pts=xs.map(x=>({x,y:normalPDF(x,mu,sig)}));
+  const yMax=d3.max(pts,d=>d.y)*1.2;
+  const ySc=d3.scaleLinear().domain([0,yMax]).range([iH,0]);
+  const z80=normalQ(.9);
+  const z95=normalQ(.975);
+  const ci80Pts=pts.filter(d=>d.x>=mu-z80*sig&&d.x<=mu+z80*sig);
+  const ci95Pts=pts.filter(d=>d.x>=mu-z95*sig&&d.x<=mu+z95*sig);
+  const areaFn=d3.area().x(d=>xSc(d.x)).y0(iH).y1(d=>ySc(d.y)).curve(d3.curveBasis);
+  const area=areaFn;
+  const line=d3.line().x(d=>xSc(d.x)).y(d=>ySc(d.y)).curve(d3.curveBasis);
+  svg.select('.pv-fill').datum(pts).attr('fill','rgba(40,112,178,.07)').attr('d',area);
+  // 95% CI - light blue (outer band)
+  svg.select('.pv-ci95').datum(ci95Pts).attr('fill','rgba(40,112,178,.13)').attr('d',areaFn);
+  // 80% CI - medium blue (inner band)
+  svg.select('.pv-ci').datum(ci80Pts).attr('fill','rgba(40,112,178,.28)').attr('d',areaFn);
+  svg.select('.pv-line').datum(pts).attr('fill','none').attr('stroke','var(--prior)').attr('stroke-width',2.2).attr('d',line);
+  svg.select('.pv-mu').attr('x1',xSc(mu)).attr('x2',xSc(mu)).attr('y1',0).attr('y2',iH).attr('stroke','var(--prior)').attr('stroke-width',1.5).attr('stroke-dasharray','4,3').attr('opacity',.7);
+  const note=document.getElementById('ci-note');
+  if(note){
+    note.innerHTML=`<strong>Dein Prior:</strong> μ = <strong class="mono">${fmt(mu,s.dataDec)} ${s.unit}</strong> · 
+    <span style="display:inline-block;width:10px;height:10px;background:rgba(40,112,178,.28);vertical-align:middle;border-radius:2px"></span> 80%-CrI: <strong class="mono">[${fmt(mu-z80*sig,s.dataDec)}, ${fmt(mu+z80*sig,s.dataDec)}]</strong> · 
+    <span style="display:inline-block;width:10px;height:10px;background:rgba(40,112,178,.13);vertical-align:middle;border-radius:2px"></span> 95%-CrI: <strong class="mono">[${fmt(mu-z95*sig,s.dataDec)}, ${fmt(mu+z95*sig,s.dataDec)}]</strong>`
+  }
+
+  // ── Verbal prior summary ──────────────────────────────────────────────
+  const verbal=document.getElementById('prior-verbal-summary');
+  if(verbal){
+    const lo95=fmt(mu-z95*sig,s.dataDec), hi95=fmt(mu+z95*sig,s.dataDec);
+    const lo80=fmt(mu-z80*sig,s.dataDec), hi80=fmt(mu+z80*sig,s.dataDec);
+    verbal.innerHTML=`
+      <strong>Das sagt dein Prior in Worten:</strong><br>
+      „Ich schätze, dass der plausibelste Effekt bei <strong>${fmt(mu,s.dataDec)} ${s.unit}</strong> liegt.
+      Mit 80%-iger Sicherheit erwarte ich Effekte zwischen <strong>${lo80}</strong> und <strong>${hi80} ${s.unit}</strong>,
+      mit 95%-iger Sicherheit zwischen <strong>${lo95}</strong> und <strong>${hi95} ${s.unit}</strong>."`;
+  }
+
+  // ── Extreme-prior warning ─────────────────────────────────────────────
+  const warn=document.getElementById('prior-extreme-warn');
+  if(warn&&s.extremeThresh!=null){
+    const ci80width=2*z80*sig;
+    if(ci80width>s.extremeThresh){
+      warn.style.display='block';
+      warn.innerHTML=`<strong>⚠ Sehr breiter Prior — ein Moment zum Nachdenken:</strong><br>
+        Dein 80%-CrI umspannt <strong>${fmt(ci80width,s.dataDec)} ${s.unit}</strong> — das ist sehr weit.
+        ${s.extremeCtx}<br>
+        <span style="font-size:.77rem;color:var(--ink3);margin-top:.3rem;display:block">Das ist keine falsche Antwort — ein breiter Prior bedeutet ehrliche Unsicherheit. Aber lohnt sich ein Blick: Gibt es Vorwissen, das deine Schätzung eingrenzen könnte?</span>`;
+    } else {
+      warn.style.display='none';
+    }
+  }
+}
+
+// ═══════════════ PPC ═══════════════
+const SIM_COLORS=['#C05018','#6B3A9C','#1B7A44','#C8820A','#A0522D'];
+const SIM_LABELS=['A','B','C','D','E'];
+let _ppcSims=[];
+function htmlPPC(){
+  _ppcSims=makePPCSims();
+  const s=sc();
+  const tags=_ppcSims.map((v,i)=>
+    `<div class="ppc-sim-tag" id="ppc-tag-${i}"
+      style="border-color:${SIM_COLORS[i]};color:${SIM_COLORS[i]}">
+      ${SIM_LABELS[i]}: ${fmt(v,s.dataDec)} ${s.unitShort}
+    </div>`).join('');
+  return`
+<h2>Was impliziert dein Prior?</h2>
+<p class="phase-sub"><em>Stell dir vor, dein Prior wäre die Wahrheit.</em> Welche Ergebnisse würden verschiedene Studien dann beobachten?</p>
+<div class="study-recap"><strong>Dein Prior:</strong> N(${fmt(S.priorMu,s.dataDec)}, ${fmt(S.priorSig,2)}) · Einheit: ${s.unit}</div>
+<div class="ppc-explainer">
+  <strong>Wie das zu lesen ist:</strong><br>
+  Die <span style="color:var(--prior);font-weight:600">blaue Prior-Kurve</span> zeigt deine Überzeugung über den wahren Effekt vor den Daten.
+  Wäre dein Prior korrekt, würden trotzdem verschiedene Studien (n=${s.studyN}) durch zufälligen Stichprobenfehler unterschiedliche Mittelwerte liefern.
+  Die <strong>fünf farbigen Kurven</strong> (A–E) sind genau solche simulierten Studienresultate — jeweils verschieden, jeweils plausibel unter deinem Prior.
+  Die <span style="color:var(--ink3);font-weight:600">graue gestrichelte Kurve</span> fasst all diese möglichen Studienresultate zusammen:
+  Sie zeigt den gesamten Streubereich der Ergebnisse, die dein Prior vorhersagt (Prior + Stichprobenfehler).
+  Wenn dein Prior sehr eng ist, ist auch dieser Streubereich eng — und liegt fast deckungsgleich über der Prior-Kurve.
+  SE = σ_Studie / √n = ${fmt(se(),3)} ${s.unitShort}
+</div>
+<div id="ppc-density-wrap"></div>
+<div class="ppc-legend">
+  <div class="ppc-leg-item"><div class="ppc-leg-line" style="background:var(--prior)"></div><span>Dein Prior</span></div>
+  <div class="ppc-leg-item"><div style="display:flex;gap:2px">${SIM_COLORS.map(c=>`<div style="width:10px;height:10px;border-radius:50%;background:${c};opacity:.75"></div>`).join('')}</div><span>Mögliche Studienresultate A–E</span></div>
+  <div class="ppc-leg-item"><div style="width:18px;border-top:2px dashed var(--ink3)"></div><span>Gesamter Vorhersagebereich (Prior + Stichprobenfehler)</span></div>
+</div>
+<div class="sec-label mt2">Die fünf simulierten Studienresultate</div>
+<div class="ppc-sim-row">${tags}</div>
+<div class="flex-between" style="margin-top:.9rem;flex-wrap:wrap;gap:.6rem">
+  <button class="btn btn-ghost" onclick="rerunPPC()" style="font-size:.8rem">↻ Neu simulieren</button>
+</div>
+<div style="text-align:center;margin-top:1.6rem">
+  <p style="font-size:.86rem;color:var(--ink2);margin-bottom:.9rem">Jetzt das <strong>echte Studienergebnis</strong> —</p>
+  <button class="btn btn-primary" style="padding:.76rem 1.9rem" onclick="goto('data')">Studienergebnis anzeigen →</button>
+  <button class="btn btn-ghost" style="margin-left:.7rem" onclick="goto('prior')">← Zurück</button>
+</div>`;
+}
+function makePPCSims(){
+  const ppSig=Math.sqrt(S.priorSig**2+se()**2);
+  return Array.from({length:5},()=>rNorm(S.priorMu,ppSig))
+}
+function bindPPC(){
+  setTimeout(()=>drawPPCDensities(),80);
+  [0,1,2,3,4].forEach(i=>setTimeout(()=>{
+    const t=document.getElementById(`ppc-tag-${i}`);if(t)t.classList.add('vis')
+  },300+i*220))
+}
+function rerunPPC(){
+  _ppcSims=makePPCSims();
+  drawPPCDensities();
+  const s=sc();
+  document.querySelectorAll('.ppc-sim-row').forEach(row=>{
+    row.innerHTML=_ppcSims.map((v,i)=>
+      `<div class="ppc-sim-tag vis" style="border-color:${SIM_COLORS[i]};color:${SIM_COLORS[i]}">
+        ${SIM_LABELS[i]}: ${fmt(v,s.dataDec)} ${s.unitShort}
+      </div>`).join('')
+  })
+}
+function drawPPCDensities(){
+  const el=document.getElementById('ppc-density-wrap');if(!el)return;
+  const s=sc();const SE=se();
+  const ppSig=Math.sqrt(S.priorSig**2+SE**2);
+  const W=el.clientWidth-8,H=210,m={l:42,r:14,t:20,b:42};
+  const iW=W-m.l-m.r,iH=H-m.t-m.b;
+  d3.select(el).selectAll('svg').remove();
+  const svg=d3.select(el).append('svg').attr('width',W).attr('height',H)
+    .append('g').attr('transform',`translate(${m.l},${m.t})`);
+  const xs=d3.range(s.scaleMin,s.scaleMax,(s.scaleMax-s.scaleMin)/300);
+  const xSc=d3.scaleLinear().domain([s.scaleMin,s.scaleMax]).range([0,iW]);
+  const priorPts=xs.map(x=>({x,y:normalPDF(x,S.priorMu,S.priorSig)}));
+  const ppdPts=xs.map(x=>({x,y:normalPDF(x,S.priorMu,ppSig)}));
+  const simCurves=_ppcSims.map(mu=>xs.map(x=>({x,y:normalPDF(x,mu,SE)})));
+  const yMax=Math.max(
+    d3.max(priorPts,d=>d.y)*1.05,
+    d3.max(ppdPts,d=>d.y)*1.05,
+    ...simCurves.map(c=>d3.max(c,d=>d.y))
+  )*1.18;
+  const ySc=d3.scaleLinear().domain([0,yMax]).range([iH,0]);
+  const line=d3.line().x(d=>xSc(d.x)).y(d=>ySc(d.y)).curve(d3.curveBasis);
+  const area=d3.area().x(d=>xSc(d.x)).y0(iH).y1(d=>ySc(d.y)).curve(d3.curveBasis);
+  // X axis
+  svg.append('g').attr('transform',`translate(0,${iH})`)
+    .call(d3.axisBottom(xSc).ticks(7).tickSize(-iH))
+    .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').attr('dy','1em')});
+  svg.append('text').attr('x',iW/2).attr('y',iH+34).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').text(s.unit);
+  if(s.scaleMin<0&&s.scaleMax>0)svg.append('line').attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',iH).attr('stroke','var(--border2)').attr('stroke-dasharray','4,3').attr('opacity',.55);
+  // PPD envelope (gray dashed) — drawn first (behind)
+  svg.append('path').datum(ppdPts).attr('fill','rgba(176,168,152,.12)').attr('d',area);
+  svg.append('path').datum(ppdPts).attr('fill','none').attr('stroke','var(--ink3)').attr('stroke-width',1.4).attr('stroke-dasharray','5,4').attr('d',line);
+  // 5 simulated study curves with distinct colors
+  const simAlphaFill=[0.12,0.12,0.12,0.12,0.12];
+  simCurves.forEach((pts,i)=>{
+    const col=SIM_COLORS[i];
+    const g=svg.append('g').attr('class',`sim-g-${i}`).attr('opacity',0);
+    // Parse hex to rgba fill
+    const r=parseInt(col.slice(1,3),16),gr=parseInt(col.slice(3,5),16),b2=parseInt(col.slice(5,7),16);
+    g.append('path').datum(pts).attr('fill',`rgba(${r},${gr},${b2},0.10)`).attr('d',area);
+    g.append('path').datum(pts).attr('fill','none').attr('stroke',col).attr('stroke-width',1.8).attr('opacity',.82).attr('d',line);
+    const mx=xSc(_ppcSims[i]);
+    g.append('line').attr('x1',mx).attr('x2',mx).attr('y1',0).attr('y2',iH).attr('stroke',col).attr('stroke-width',.7).attr('opacity',.25).attr('stroke-dasharray','2,4');
+    g.append('circle').attr('cx',mx).attr('cy',iH).attr('r',3.5).attr('fill',col);
+    const lx=mx>iW*.82?mx-5:mx+5;const anch=mx>iW*.82?'end':'start';
+    g.append('text').attr('x',lx).attr('y',iH-6).attr('text-anchor',anch).attr('fill',col).attr('font-family','JetBrains Mono,monospace').attr('font-size','8.5px').attr('font-weight','500').text(SIM_LABELS[i])
+  });
+  // Prior (bold blue, on top)
+  svg.append('path').datum(priorPts).attr('fill','rgba(40,112,178,.18)').attr('d',area);
+  svg.append('path').datum(priorPts).attr('fill','none').attr('stroke','var(--prior)').attr('stroke-width',2.6).attr('d',line);
+  svg.append('line').attr('x1',xSc(S.priorMu)).attr('x2',xSc(S.priorMu)).attr('y1',0).attr('y2',iH).attr('stroke','var(--prior)').attr('stroke-width',1.5).attr('stroke-dasharray','5,3').attr('opacity',.7);
+  svg.append('text').attr('x',xSc(S.priorMu)).attr('y',iH-6).attr('text-anchor','middle').attr('fill','var(--prior)').attr('font-family','Lora,serif').attr('font-style','italic').attr('font-size','10.5px').text('Prior');
+  // Animate sim curves
+  [0,1,2,3,4].forEach(i=>setTimeout(()=>d3.select(`.sim-g-${i}`).transition().duration(350).attr('opacity',1),100+i*200))
+}
+
+// ═══════════════ DATA (TUG OF WAR) ═══════════════
+function htmlData(){
+  const s=sc();const SE=se();const p=S.posterior;
+  return`
+<h2>Das sagen die Daten.</h2>
+<p class="phase-sub">Das echte Ergebnis der Studie — und das <em>Tauziehen</em> zwischen deinem Prior und der Likelihood.</p>
+<div class="stat-row">
+  <div class="stat-box"><div class="stat-sv mono">${fmt(s.studyXbar,s.dataDec)} ${s.unitShort}</div><div class="stat-sl">x̄ Studienmittelwert</div></div>
+  <div class="stat-box"><div class="stat-sv mono">n = ${s.studyN}</div><div class="stat-sl">Stichprobengröße</div></div>
+  <div class="stat-box"><div class="stat-sv mono">${fmt(s.studySigma,2)}</div><div class="stat-sl">σ (Streuung Studie)</div></div>
+  <div class="stat-box"><div class="stat-sv mono">${fmt(SE,3)}</div><div class="stat-sl">SE = σ/√n</div></div>
+</div>
+<div class="leg-row">
+  <div class="leg-item"><div class="leg-dot" style="background:var(--prior)"></div><span style="color:var(--prior)">Prior N(${fmt(S.priorMu,s.dataDec)}, ${fmt(S.priorSig,2)})</span></div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--like)"></div><span style="color:var(--like)">Likelihood N(${fmt(s.studyXbar,s.dataDec)}, ${fmt(SE,3)})</span></div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--post)"></div><span style="color:var(--post)">Posterior</span></div>
+</div>
+<div id="tug-wrap"><div class="tow-tt" id="tow-tt"></div></div>
+<div class="wbar-wrap">
+  <div class="wbar-label">Das Tauziehen — Gewichte der beiden Seiten</div>
+  <div class="wbar"><div class="wb-p" id="wbp" style="width:50%">Prior</div><div class="wb-d" id="wbd" style="width:50%">Daten</div></div>
+  <div class="wbar-hint" id="wbar-hint">Animation läuft…</div>
+</div>
+<div id="post-box">
+  <div class="post-title">✦ Posterior — deine aktualisierte Überzeugung</div>
+  <div class="post-vals">
+    <div><div class="pv-label">Mittelwert μ_post</div><div class="pv-val" id="pv-mu">–</div></div>
+    <div><div class="pv-label">Unsicherheit σ_post</div><div class="pv-val" id="pv-sig">–</div></div>
+    <div><div class="pv-label">95% Credible Interval</div><div class="pv-val" id="pv-ci">–</div></div>
+    <div><div class="pv-label">Verschiebung vs. Prior</div><div class="pv-val" id="pv-shift">–</div></div>
+  </div>
+</div>
+<div class="tow-explain">
+  <strong>Woher kommt die Gewichtung?</strong><br>
+  Jede Seite zieht mit einer Kraft = ihrer <em>Präzision</em> (= 1/Varianz = 1/σ²).<br>
+  <em>Prior-Präzision</em> = 1/σ₀² = ${fmt(1/S.priorSig**2,4)} · 
+  <em>Daten-Präzision</em> = 1/SE² = ${fmt(1/se()**2,4)}<br>
+  Posterior-Gewichte: <strong>Prior ${(S.posterior.priorW*100).toFixed(0)}%</strong> vs. <strong>Daten ${(S.posterior.dataW*100).toFixed(0)}%</strong><br>
+  <em>Formel: μ_post = (μ₀/σ₀² + x̄/SE²) / (1/σ₀² + 1/SE²)</em>
+  — der Posterior liegt immer zwischen Prior und Likelihood.
+</div>
+<div id="next-btn-wrap" style="opacity:0;transition:opacity .5s">
+  <button class="btn-next" onclick="goto('reflect')">→ Zur Reflexion</button>
+</div>`;
+}
+function bindData(){setTimeout(()=>drawTug(),80)}
+function drawTug(){
+  const s=sc();const p=S.posterior;const SE=se();
+  const con=document.getElementById('tug-wrap');if(!con)return;
+  const Wt=con.clientWidth-8,Ht=285,m={l:42,r:16,t:38,b:50},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
+  d3.select(con).selectAll('svg').remove();
+  const svg=d3.select(con).append('svg').attr('width',Wt).attr('height',Ht)
+    .append('g').attr('transform',`translate(${m.l},${m.t})`);
+  const xSc=d3.scaleLinear().domain([s.scaleMin,s.scaleMax]).range([0,W]);
+  const N=260;const xs=d3.range(s.scaleMin,s.scaleMax,(s.scaleMax-s.scaleMin)/N);
+  const prPts=xs.map(x=>({x,y:normalPDF(x,S.priorMu,S.priorSig)}));
+  const lkPts=xs.map(x=>({x,y:normalPDF(x,s.studyXbar,SE)}));
+  const poPts=xs.map(x=>({x,y:normalPDF(x,p.mu,p.sigma)}));
+  const yMax=Math.max(d3.max(prPts,d=>d.y),d3.max(lkPts,d=>d.y),d3.max(poPts,d=>d.y))*1.2;
+  const ySc=d3.scaleLinear().domain([0,yMax]).range([H,0]);
+  [.25,.5,.75].forEach(f=>svg.append('line').attr('x1',0).attr('x2',W).attr('y1',ySc(yMax*f*.88)).attr('y2',ySc(yMax*f*.88)).attr('stroke','var(--border)').attr('stroke-width',.35));
+  svg.append('g').attr('transform',`translate(0,${H})`)
+    .call(d3.axisBottom(xSc).ticks(7).tickSize(-H))
+    .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace').attr('dy','1em')});
+  svg.append('text').attr('x',W/2).attr('y',H+40).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').text(s.unit);
+  if(s.scaleMin<0&&s.scaleMax>0){svg.append('line').attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',H).attr('stroke','var(--border2)').attr('stroke-dasharray','5,4').attr('opacity',.55);svg.append('text').attr('x',xSc(0)+3).attr('y',H-3).attr('fill','var(--ink3)').attr('font-size','8px').attr('font-family','JetBrains Mono,monospace').text('null')}
+  const ar=d3.area().x(d=>xSc(d.x)).y0(H).y1(d=>ySc(d.y)).curve(d3.curveBasis);
+  const ln=d3.line().x(d=>xSc(d.x)).y(d=>ySc(d.y)).curve(d3.curveBasis);
+  function addCurve(pts,fill,stroke,gId){
+    const g=svg.append('g').attr('id',gId).attr('opacity',0);
+    g.append('path').datum(pts).attr('fill',fill).attr('d',ar);
+    g.append('path').datum(pts).attr('fill','none').attr('stroke',stroke).attr('stroke-width',2.2).attr('d',ln);
+    return g;
+  }
+  // Posterior clip
+  const clipR=svg.append('clipPath').attr('id','post-clip').append('rect').attr('x',0).attr('y',H).attr('width',W).attr('height',0);
+  addCurve(prPts,'var(--prior-f)','var(--prior)','tug-prior');
+  addCurve(lkPts,'var(--like-f)','var(--like)','tug-like');
+  const postG=svg.append('g').attr('clip-path','url(#post-clip)');
+  postG.append('path').datum(poPts).attr('fill','var(--post-f)').attr('d',ar);
+  postG.append('path').datum(poPts).attr('fill','none').attr('stroke','var(--post)').attr('stroke-width',2.8).attr('d',ln);
+
+  // Smart pill labels — computed after all curves exist, staggered to avoid overlap
+  function peakX(pts){return pts.reduce((a,b)=>b.y>a.y?b:a).x}
+  const labelDefs=[
+    {label:'Prior',      color:'var(--prior)', mu:S.priorMu,   pts:prPts},
+    {label:'Likelihood', color:'var(--like)',  mu:s.studyXbar, pts:lkPts},
+    {label:'Posterior',  color:'var(--post)',  mu:p.mu,        pts:poPts}
+  ];
+  // Assign stagger rows: sort by x, then detect collisions
+  const PILL_W=68,PILL_H=18,PILL_PAD=4;
+  const placed=labelDefs.map(d=>({...d,px:xSc(d.mu)}));
+  // Sort by x to assign rows left→right
+  placed.sort((a,b)=>a.px-b.px);
+  placed.forEach((d,i)=>{
+    // Check if this label overlaps any already-placed label at same y=row0
+    const overlap=placed.slice(0,i).filter(p2=>Math.abs(p2.px-d.px)<PILL_W+4&&p2.row===0);
+    d.row=overlap.length>0?1:0;
+  });
+  const labG=svg.append('g').attr('id','label-group').attr('opacity',0);
+  placed.forEach(d=>{
+    const ly=d.row===0?-2:PILL_H+6; // row 0 = just above axis-0, row 1 = one pill lower
+    const lx=Math.max(PILL_W/2+2,Math.min(d.px,W-PILL_W/2-2));
+    // Connector line from label to curve peak
+    const pkX=xSc(peakX(d.pts));
+    const pkY=ySc(d3.max(d.pts,pt=>pt.y));
+    labG.append('line')
+      .attr('x1',d.px).attr('y1',ly+PILL_H)
+      .attr('x2',d.px).attr('y2',pkY)
+      .attr('stroke',d.color).attr('stroke-width',1).attr('stroke-dasharray','3,3').attr('opacity',.5);
+    // Pill background
+    labG.append('rect')
+      .attr('x',lx-PILL_W/2).attr('y',ly)
+      .attr('width',PILL_W).attr('height',PILL_H).attr('rx',4)
+      .attr('fill','var(--card)').attr('stroke',d.color).attr('stroke-width',1.4);
+    // Label text
+    labG.append('text')
+      .attr('x',lx).attr('y',ly+PILL_H*.68)
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('fill',d.color).attr('font-family','Lora,serif')
+      .attr('font-size','10px').attr('font-style','italic').attr('font-weight','600')
+      .text(d.label);
+    // μ value below
+    labG.append('text')
+      .attr('x',d.px).attr('y',H+17)
+      .attr('text-anchor','middle').attr('fill',d.color)
+      .attr('font-family','JetBrains Mono,monospace').attr('font-size','8.5px')
+      .text(fmt(d.mu,s.dataDec));
+  });
+  // Hover
+  const hLine=svg.append('line').attr('y1',0).attr('y2',H).attr('stroke','var(--ink3)').attr('stroke-width',.7).attr('stroke-dasharray','2,2').attr('opacity',0);
+  svg.append('rect').attr('width',W).attr('height',H).attr('fill','transparent').attr('cursor','crosshair')
+    .on('mousemove',function(ev){const[mx]=d3.pointer(ev);const xv=xSc.invert(mx);hLine.attr('x1',mx).attr('x2',mx).attr('opacity',.5);const tt=document.getElementById('tow-tt');if(tt){tt.style.display='block';tt.style.left=(mx+m.l+6)+'px';tt.style.top='10px';tt.innerHTML=`<span style="color:var(--prior)">Prior: ${fmt(normalPDF(xv,S.priorMu,S.priorSig),4)}</span><br><span style="color:var(--like)">Like: ${fmt(normalPDF(xv,s.studyXbar,SE),4)}</span><br><span style="color:var(--post)">Post: ${fmt(normalPDF(xv,p.mu,p.sigma),4)}</span>`}})
+    .on('mouseleave',function(){hLine.attr('opacity',0);const tt=document.getElementById('tow-tt');if(tt)tt.style.display='none'});
+  d3.select('#tug-prior').transition().duration(600).attr('opacity',1);
+  setTimeout(()=>d3.select('#tug-like').transition().duration(600).attr('opacity',1),1100);
+  setTimeout(()=>clipR.transition().duration(900).ease(d3.easeCubicOut).attr('y',0).attr('height',H),2100);
+  setTimeout(()=>d3.select('#label-group').transition().duration(500).attr('opacity',1),3000);
+  setTimeout(()=>{
+    const wp=document.getElementById('wbp'),wd=document.getElementById('wbd'),wh=document.getElementById('wbar-hint');
+    if(wp){wp.style.width=(p.priorW*100).toFixed(1)+'%';wp.textContent=`Prior ${(p.priorW*100).toFixed(0)}%`}
+    if(wd){wd.style.width=(p.dataW*100).toFixed(1)+'%';wd.textContent=`Daten ${(p.dataW*100).toFixed(0)}%`}
+    if(wh)wh.innerHTML=`<strong>${(p.priorW*100).toFixed(0)}% Prior-Präzision</strong> + <strong>${(p.dataW*100).toFixed(0)}% Daten-Präzision</strong> → Posterior bei μ = ${fmt(p.mu,s.dataDec)}`
+  },3050);
+  setTimeout(()=>{
+    const pb=document.getElementById('post-box');if(pb)pb.classList.add('vis');
+    const shift=p.mu-S.priorMu;
+    document.getElementById('pv-mu').textContent=fmt(p.mu,s.dataDec)+' '+s.unitShort;
+    document.getElementById('pv-sig').textContent=fmt(p.sigma,3);
+    document.getElementById('pv-ci').textContent=ciStr(p.mu,p.sigma,.95,s.unitShort);
+    document.getElementById('pv-shift').textContent=(shift>=0?'+':'')+fmt(shift,s.dataDec)+' '+s.unitShort
+  },3600);
+  setTimeout(()=>{const nb=document.getElementById('next-btn-wrap');if(nb)nb.style.opacity='1'},4200)
+}
+
+// ═══════════════ REFLECT ═══════════════
+function genVerbalFeedback(s,priorMu,priorSig,xbar,posterior){
+  const diff=xbar-priorMu;          // positive = study > prior
+  const sigmas=Math.abs(diff)/priorSig; // distance in prior-SDs
+  const sigRed=(1-posterior.sigma/priorSig)*100;
+  const dataWins=posterior.dataW>posterior.priorW;
+  let lines=[];
+  // Direction & magnitude
+  if(sigmas<0.5){
+    lines.push('Dein Prior-Mittelwert lag sehr nah am Studienergebnis — du warst gut kalibriert.');
+  } else if(diff>0){
+    if(sigmas<1.5) lines.push(`Dein Prior war etwas zu konservativ: Du hast den Effekt leicht unterschätzt. Der Posterior verschiebt sich moderat in Richtung der Daten.`);
+    else lines.push(`Du hast den Effekt deutlich unterschätzt. Der Posterior zeigt, dass du deine Überzeugung in Richtung eines stärkeren Effekts anpassen solltest.`);
+  } else {
+    if(sigmas<1.5) lines.push(`Dein Prior war etwas zu optimistisch: Du hast den Effekt leicht überschätzt. Der Posterior korrigiert das moderat.`);
+    else lines.push(`Du hast den Effekt deutlich überschätzt. Der Posterior zieht deine Überzeugung klar in Richtung eines schwächeren Effekts.`);
+  }
+  // Uncertainty
+  if(priorSig<s.sigmaLevels[1]*0.6){
+    lines.push(`Dein Prior war sehr eng — du warst sehr sicher. ${dataWins?'Die Daten zeigen, dass diese Sicherheit nicht vollständig gerechtfertigt war.':'Deine Sicherheit hat sich in diesem Fall bewährt.'}`);
+  } else if(priorSig>s.sigmaLevels[2]*1.4){
+    if(sigRed>30) lines.push(`Du warst sehr unsicher. Die Studie hat deinen Wissensstand erheblich präzisiert — die Unsicherheit sank um ${sigRed.toFixed(0)}%.`);
+    else lines.push(`Du warst sehr unsicher. Die relativ kleine Studie konnte deine Unsicherheit nur begrenzt reduzieren.`);
+  }
+  // Tug-of-war
+  if(posterior.priorW>0.65) lines.push(`Dein enger Prior dominiert das Tauziehen (${(posterior.priorW*100).toFixed(0)}%) — die Daten haben wenig Gewicht.`);
+  else if(posterior.dataW>0.65) lines.push(`Die Daten dominieren das Tauziehen (${(posterior.dataW*100).toFixed(0)}%) — dein Prior hat wenig Gewicht. Eine größere Stichprobe oder ein breiterer Prior hätten diesen Effekt verstärkt.`);
+  return lines.map(l=>`<p style="margin:.35rem 0;font-size:.85rem;line-height:1.6;color:var(--ink2)">${l}</p>`).join('');
+}
+function calcScore(){
+  const xbar=sc().studyXbar;
+  const in80=inCI(xbar,S.priorMu,S.priorSig,.80);
+  const in95=inCI(xbar,S.priorMu,S.priorSig,.95);
+  const calib=in80?50:in95?25:0;
+  const dist=Math.abs(S.priorMu-xbar);
+  const acc=Math.round(50*Math.max(0,1-dist/(2*S.priorSig)));
+  return{calib,acc,total:calib+acc,in80,in95}
+}
+function htmlReflect(){
+  const s=sc();const{calib,acc,total,in80,in95}=calcScore();
+  const p=S.posterior;
+  const emoji=total>=80?'🎯':total>=55?'🧠':total>=30?'📖':'🌱';
+  if(!S.history.find(h=>h.scenarioId===S.scenarioId))S.history.push({scenarioId:S.scenarioId,score:total});
+  const used=S.history.map(h=>h.scenarioId);
+  const avail=SCENARIOS.filter(sc2=>!used.includes(sc2.id));
+  return`
+<h2>Reflexion</h2>
+<p class="phase-sub">Das Studienergebnis — und wie gut war dein Prior kalibriert?</p>
+<div class="study-result-box">
+  <div class="sr-val">${fmt(s.studyXbar,s.dataDec)} ${s.unit}</div>
+  <div class="sr-label">📄 Studienergebnis (x̄) · ${s.studyCite.split('(')[0].trim()}</div>
+</div>
+<div id="reflect-chart"></div>
+<div class="leg-row">
+  <div class="leg-item"><div class="leg-dot" style="background:var(--prior)"></div><span>Prior</span></div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--like)"></div><span>Likelihood (Studie)</span></div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--post)"></div><span>Posterior</span></div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--green);border-radius:2px"></div><span style="color:var(--green)">Studienergebnis x̄</span></div>
+</div>
+<div class="reflect-grid">
+  <div class="rp">
+    <div class="rp-title">Prior-Kalibrierung (80% CI)</div>
+    <div class="rp-val">${in80?'<span class="hit">✓ Getroffen</span>':in95?'<span style="color:var(--gold);font-weight:600">~ Knapp (95%)</span>':'<span class="miss">✗ Verfehlt</span>'}</div>
+    <div class="rp-sub">Studienergebnis ${in80?'lag im':'lag außerhalb des'} Prior-80%-CI:<br><span class="mono">[${fmt(S.priorMu-normalQ(.9)*S.priorSig,s.dataDec)}, ${fmt(S.priorMu+normalQ(.9)*S.priorSig,s.dataDec)}]</span></div>
+  </div>
+  <div class="rp">
+    <div class="rp-title">Genauigkeit des Prior-Mittelwerts</div>
+    <div class="rp-val"><span class="mono">${fmt(Math.abs(S.priorMu-s.studyXbar),s.dataDec)} ${s.unitShort}</span> Abstand</div>
+    <div class="rp-sub">Dein Prior-Mittelwert: <span class="mono">${fmt(S.priorMu,s.dataDec)}</span><br>Studienergebnis: <span class="mono">${fmt(s.studyXbar,s.dataDec)}</span><br>= ${fmt(Math.abs(S.priorMu-s.studyXbar)/S.priorSig,2)}× deines σ_Prior</div>
+  </div>
+  <div class="rp">
+    <div class="rp-title">Dominanz im Tauziehen</div>
+    <div class="rp-val"><span class="mono">${p.dataW>p.priorW?'Daten dominieren':'Prior dominiert'}</span></div>
+    <div class="rp-sub">Prior-Gewicht: ${(p.priorW*100).toFixed(0)}%<br>Daten-Gewicht: ${(p.dataW*100).toFixed(0)}%<br>μ_Posterior = ${fmt(p.mu,s.dataDec)} ${s.unitShort}</div>
+  </div>
+  <div class="rp">
+    <div class="rp-title">Unsicherheitsreduktion</div>
+    <div class="rp-val"><span class="mono">${((1-p.sigma/S.priorSig)*100).toFixed(0)}%</span></div>
+    <div class="rp-sub">σ_Prior = ${fmt(S.priorSig,3)} → σ_Post = ${fmt(p.sigma,3)}<br>Studie reduzierte deine Unsicherheit um ${((1-p.sigma/S.priorSig)*100).toFixed(0)}%</div>
+  </div>
+</div>
+<div class="score-box">
+  <div class="score-emoji">${emoji}</div>
+  <div class="score-val">Kalibrierungs-Score: <strong>${total}/100</strong></div>
+  <div class="score-breakdown">
+    <div class="sc-part"><strong>${calib}/50</strong> Kalibrierung<br><span style="font-size:.7rem">Lag x̄ im 80%-CI des Priors?<br>80%-CI: 50P · 95%-CI: 25P · nein: 0P</span></div>
+    <div class="sc-part"><strong>${acc}/50</strong> Genauigkeit<br><span style="font-size:.7rem">Abstand μ_Prior zu x̄,<br>normiert auf ± 2σ_Prior</span></div>
+  </div>
+</div>
+<div class="insight-box">${s.insight}</div>
+<div style="padding:.85rem 1.1rem;background:var(--bg2);border-left:3px solid var(--prior);font-size:.85rem;line-height:1.5;margin:.6rem 0">
+  <strong style="font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;color:var(--prior)">Einordnung deines Priors</strong>
+  ${genVerbalFeedback(s,S.priorMu,S.priorSig,s.studyXbar,p)}
+</div>
+<div class="deep-dive"><strong>Mehr zum Studienergebnis:</strong> ${s.studyDeepDive}</div>
+<div class="cite-box">Quelle: ${s.studyCite}</div>
+<div style="margin-top:.9rem;padding:.8rem 1rem;background:#FFF8EE;border:1px solid var(--gold);font-size:.8rem;line-height:1.6;color:var(--ink2)">
+  <strong style="color:var(--gold)">⚠ Wichtiger Hinweis zu Priors:</strong>
+  Priors, die nicht einem Null-Effekt entsprechen, müssen immer <strong>transparent, plausibel und nachvollziehbar begründet sein</strong> — sie stellen dar, was du tatsächlich <em>weißt</em>, nicht was du dir <em>wünschst</em>. Ein Prior, der gezielt gewählt wird, um ein gewünschtes Ergebnis zu erzielen, grenzt an wissenschaftliche Täuschung.
+</div>
+<div class="btn-row">
+  ${avail.length>0?`<button class="btn btn-primary" onclick="nextSc()">Nächste Studie → (${avail.length} verbleibend)</button>`:''}
+  <button class="btn btn-outline" onclick="replaySc()">Wiederholen</button>
+  <button class="btn btn-ghost" onclick="goto('intro')">Hauptmenü</button>
+</div>
+${S.history.length>1?`<div class="history-mini mt2"><div class="hm-title">Alle Runden</div>${S.history.map(h=>{const s2=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s2.emoji} ${s2.title}: <strong>${h.score}/100</strong></div>`}).join('')}</div>`:''}`;
+}
+function bindReflect(){setTimeout(()=>drawReflectChart(),80)}
+function drawReflectChart(){
+  const con=document.getElementById('reflect-chart');if(!con)return;
+  const s=sc();const p=S.posterior;const SE=se();
+  const Wt=con.clientWidth-8,Ht=240,m={l:42,r:16,t:20,b:46},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
+  d3.select(con).selectAll('svg').remove();
+  const svg=d3.select(con).append('svg').attr('width',Wt).attr('height',Ht)
+    .append('g').attr('transform',`translate(${m.l},${m.t})`);
+  const xSc=d3.scaleLinear().domain([s.scaleMin,s.scaleMax]).range([0,W]);
+  const xs=d3.range(s.scaleMin,s.scaleMax,(s.scaleMax-s.scaleMin)/260);
+  const pp=xs.map(x=>({x,y:normalPDF(x,S.priorMu,S.priorSig)}));
+  const lp=xs.map(x=>({x,y:normalPDF(x,s.studyXbar,SE)}));
+  const poP=xs.map(x=>({x,y:normalPDF(x,p.mu,p.sigma)}));
+  const yM=Math.max(d3.max(pp,d=>d.y),d3.max(lp,d=>d.y),d3.max(poP,d=>d.y))*1.2;
+  const ySc=d3.scaleLinear().domain([0,yM]).range([H,0]);
+  svg.append('g').attr('transform',`translate(0,${H})`).call(d3.axisBottom(xSc).ticks(7).tickSize(-H)).call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').attr('dy','1em')});
+  svg.append('text').attr('x',W/2).attr('y',H+38).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').text(s.unit);
+  const ar=d3.area().x(d=>xSc(d.x)).y0(H).y1(d=>ySc(d.y)).curve(d3.curveBasis);
+  const ln=d3.line().x(d=>xSc(d.x)).y(d=>ySc(d.y)).curve(d3.curveBasis);
+  svg.append('path').datum(pp).attr('fill','var(--prior-f)').attr('d',ar);
+  svg.append('path').datum(pp).attr('fill','none').attr('stroke','var(--prior)').attr('stroke-width',1.7).attr('opacity',.7).attr('d',ln);
+  svg.append('path').datum(lp).attr('fill','var(--like-f)').attr('d',ar);
+  svg.append('path').datum(lp).attr('fill','none').attr('stroke','var(--like)').attr('stroke-width',1.7).attr('opacity',.7).attr('d',ln);
+  svg.append('path').datum(poP).attr('fill','var(--post-f)').attr('d',ar);
+  svg.append('path').datum(poP).attr('fill','none').attr('stroke','var(--post)').attr('stroke-width',2.5).attr('d',ln);
+  svg.append('line').attr('x1',xSc(s.studyXbar)).attr('x2',xSc(s.studyXbar)).attr('y1',0).attr('y2',H).attr('stroke','var(--green)').attr('stroke-width',2.4);
+  svg.append('text').attr('x',xSc(s.studyXbar)+4).attr('y',13).attr('fill','var(--green)').attr('font-family','Lora,serif').attr('font-size','10.5px').attr('font-style','italic').text(`x̄ = ${fmt(s.studyXbar,s.dataDec)}`);
+  if(s.scaleMin<0&&s.scaleMax>0)svg.append('line').attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',H).attr('stroke','var(--border2)').attr('stroke-dasharray','4,4').attr('opacity',.5)
+}
+function nextSc(){S.scenarioId=null;S.priorMu=null;S.priorSig=null;S.uncIdx=1;S.posterior=null;S._muTouched=false;S._sigTouched=false;goto('scenario')}
+function replaySc(){const id=S.scenarioId;S.history=S.history.filter(h=>h.scenarioId!==id);const s=sc();S.priorMu=s.sliderDefault;S.uncIdx=1;S.priorSig=s.sigmaLevels[1];S.posterior=null;S._muTouched=false;S._sigTouched=false;goto('prior')}
+
+document.addEventListener('DOMContentLoaded',()=>{render()})
+</script>
+</body>
+</html>

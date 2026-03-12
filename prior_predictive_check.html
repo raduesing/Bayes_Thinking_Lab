@@ -1,0 +1,3843 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prior Predictive Check v17</title>
+<!-- CRITICAL FIX: jStat library for statistical distributions -->
+<script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+:root {
+  --bg:#f5f0e8;--paper:#fdfaf4;--ink:#1a1410;--ink2:#4a3f35;
+  --accent:#c94a2a;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#8a3a8a;
+  --accent5:#b85c00;--accent6:#0e7c7b;
+  --grid:#e0d8cc;--panel:#eee8da;--border:#c0b8a8;--shadow:rgba(0,0,0,.06);
+}
+[data-theme="dark"] {
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;
+  --accent:#e8614a;--accent2:#4ab0d8;--accent3:#7ec850;--accent4:#c87ad8;
+  --accent5:#e07830;--accent6:#2bc7c4;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;--shadow:rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     height:100vh;overflow:hidden;display:flex;flex-direction:column;transition:background .25s,color .25s}
+.hrow{display:flex;justify-content:space-between;align-items:flex-start;
+      padding:1rem 1.8rem .7rem;gap:1rem;flex-wrap:wrap;flex-shrink:0;border-bottom:1px solid var(--border)}
+h1{font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+h1 em{font-style:italic;color:var(--accent)}
+.sub{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
+.auth{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);opacity:.5;margin-top:.1rem}
+.hbtns{display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start}
+.ibtn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.3rem .75rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      letter-spacing:.05em;color:var(--ink);transition:all .15s;white-space:nowrap}
+.ibtn:hover{background:var(--ink);color:var(--bg)}
+.ibtn.active{border-color:var(--accent2);color:var(--accent2)}
+.outer{display:grid;grid-template-columns:226px 1fr;gap:0;flex:1;min-height:0;overflow:hidden}
+.sidebar{display:flex;flex-direction:column;gap:.7rem;overflow-y:auto;
+         padding:.85rem .95rem 2rem;border-right:1.5px solid var(--border)}
+#main-col{overflow-y:auto;padding:1.2rem 1.8rem 3rem;display:flex;flex-direction:column;gap:.9rem}
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.69rem;letter-spacing:.11em;text-transform:uppercase;
+           margin-bottom:.55rem;padding-bottom:.25rem;border-bottom:1px solid var(--grid)}
+.ha{color:var(--accent)}.hb{color:var(--accent2)}.hg{color:var(--accent3)}.hp{color:var(--accent4)}.hs{color:var(--accent5)}.hn{color:var(--accent6)}
+.cpanel{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.pg{margin-bottom:.58rem}
+.pl{display:flex;justify-content:space-between;align-items:center;margin-bottom:.14rem;gap:.3rem}
+.lbl{font-family:'DM Mono',monospace;font-size:.69rem;color:var(--ink);display:inline-flex;align-items:center;gap:.28rem}
+.pv{font-family:'DM Mono',monospace;font-size:.76rem;font-weight:500;white-space:nowrap;flex-shrink:0}
+.pvb{color:var(--accent2)}.pvg{color:var(--accent3)}.pvp{color:var(--accent4)}
+.pva{color:var(--accent5)}.pvt{color:var(--accent6)}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--grid);
+                  outline:none;cursor:pointer;border-radius:2px;display:block;margin:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--ink);border-radius:50%;cursor:pointer;transition:background .12s}
+input[type=range]::-webkit-slider-thumb:hover{background:var(--accent2)}
+select{width:100%;font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);
+       border:1px solid var(--grid);color:var(--ink);padding:.28rem .4rem;
+       cursor:pointer;outline:none;margin-top:.15rem;display:block}
+select:focus{border-color:var(--accent2)}
+.rbtn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.28rem .7rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .15s}
+.rbtn:hover,.rbtn.sel{background:var(--accent2);color:white;border-color:var(--accent2)}
+.run-btn{font-family:'DM Mono',monospace;font-size:.71rem;padding:.42rem 1rem;
+         border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;
+         color:white;transition:all .15s;width:100%;margin-top:.25rem;letter-spacing:.05em}
+.run-btn:hover{filter:brightness(1.12)}
+.preset-row{display:flex;gap:.3rem;margin-bottom:.5rem}
+.pbtn{font-family:'DM Mono',monospace;font-size:.64rem;padding:.22rem .45rem;
+      border:1px solid var(--grid);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .12s;flex:1;text-align:center}
+.pbtn:hover,.pbtn.active{background:var(--accent2);color:white;border-color:var(--accent2)}
+/* Tooltip */
+.tip-wrap{position:relative;display:inline-flex;vertical-align:middle}
+.tip-icon{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;
+          border-radius:50%;background:var(--grid);color:var(--ink2);font-family:'DM Mono',monospace;
+          font-size:.69rem;cursor:help;user-select:none;flex-shrink:0}
+.tip-box{display:none;position:absolute;left:17px;top:-2px;z-index:400;width:200px;
+         background:var(--paper);border:1.5px solid var(--border);padding:.45rem .6rem;
+         box-shadow:3px 3px 0 var(--shadow);font-family:'DM Mono',monospace;font-size:.69rem;
+         color:var(--ink2);line-height:1.65;pointer-events:none;white-space:normal}
+.tip-box b{color:var(--ink)}
+.tip-wrap:hover .tip-box{display:block}
+/* Traffic light */
+.tl-row{display:flex;align-items:center;gap:.6rem;padding:.4rem .65rem;
+        background:var(--panel);border:1px solid var(--grid);margin-bottom:.45rem}
+.tl-dots{display:flex;gap:.22rem;flex-shrink:0}
+.tl-dot{width:10px;height:10px;border-radius:50%;background:var(--grid);transition:background .3s}
+.tl-dot.g{background:#5a8a2a}.tl-dot.y{background:#c8a020}.tl-dot.r{background:#c94a2a}
+[data-theme="dark"] .tl-dot.g{background:#7ec850}[data-theme="dark"] .tl-dot.y{background:#e8c040}[data-theme="dark"] .tl-dot.r{background:#e8614a}
+.tl-msg{font-family:'DM Mono',monospace;font-size:.69rem;color:var(--ink2);line-height:1.4}
+.tl-msg b{color:var(--ink)}
+.infobox{padding:.38rem .6rem;background:var(--panel);border-left:3px solid var(--accent2);
+         font-family:'DM Mono',monospace;font-size:.64rem;line-height:1.65;color:var(--ink2);margin-top:.4rem}
+.infobox b{color:var(--ink)}
+details.expl{margin-top:.45rem;border-top:1px solid var(--grid);padding-top:.38rem}
+details.expl summary{font-family:'DM Mono',monospace;font-size:.64rem;cursor:pointer;
+                      color:var(--accent2);user-select:none;list-style:none;display:flex;align-items:center;gap:.3rem}
+details.expl summary::before{content:'▶';font-size:.48rem;transition:transform .15s}
+details.expl[open] summary::before{transform:rotate(90deg)}
+details.expl summary::-webkit-details-marker{display:none}
+.expl-body{font-family:'DM Mono',monospace;font-size:.69rem;color:var(--ink2);line-height:1.7;margin-top:.38rem}
+.expl-body b{color:var(--ink)}
+.plbl{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+      color:var(--accent2);margin-bottom:.18rem}
+.ptit{font-size:.88rem;font-weight:300;margin-bottom:.3rem;line-height:1.3}
+.ptit em{color:var(--accent);font-style:italic}
+.col{display:flex;flex-direction:column;gap:.9rem}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.9rem}
+.ab-wrap{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.ab-col{border:1.5px solid var(--grid);padding:.65rem}
+.ab-col h4{font-family:'DM Mono',monospace;font-size:.67rem;letter-spacing:.08em;
+           text-transform:uppercase;padding-bottom:.28rem;border-bottom:1px solid var(--grid);margin-bottom:.5rem}
+.ab-col.ca h4{color:var(--accent2)}.ab-col.cb h4{color:var(--accent4)}
+.stats-row{display:flex;gap:.45rem;flex-wrap:wrap;margin-bottom:.45rem}
+.sstat{background:var(--panel);border:1px solid var(--grid);padding:.38rem .65rem;font-family:'DM Mono',monospace}
+.sstat .sv{font-size:.88rem;font-weight:500;color:var(--ink);display:block;font-variant-numeric:tabular-nums}
+.sstat .sl{font-size:.67rem;color:var(--ink2)}
+svg text{font-family:'DM Mono',monospace}
+.codewrap{background:#090c12;border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow);overflow:hidden}
+[data-theme="light"] .codewrap{background:#1a1410}
+.codeblk{padding:.7rem 1rem;font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.85;
+          color:#9eabc2;white-space:pre;overflow-x:auto}
+[data-theme="light"] .codeblk{color:#b0a890}
+.kw{color:#e07b6a}.fn{color:#7ab8d4}.str{color:#8ecfa0}.cm{color:#556080}.nm{color:#e8d49a}
+.copy-btn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.18rem .55rem;border:1px solid var(--grid);
+          background:transparent;cursor:pointer;color:var(--ink2);transition:all .12s}
+.copy-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.pred-block{border:1px solid var(--grid);padding:.48rem;margin-top:.28rem}
+.pred-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem}
+.pred-hdr .pred-name{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--accent3)}
+.pred-rm{font-family:'DM Mono',monospace;font-size:.67rem;border:1px solid var(--grid);
+         background:transparent;cursor:pointer;color:var(--ink2);padding:.08rem .35rem}
+.pred-rm:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.add-pred{font-family:'DM Mono',monospace;font-size:.71rem;border:1px dashed var(--grid);
+          background:transparent;cursor:pointer;color:var(--ink2);padding:.28rem;
+          width:100%;margin-top:.28rem;transition:all .12s}
+.add-pred:hover{border-color:var(--accent3);color:var(--accent3)}
+/* Slider-Bereich controls */
+.skala-row{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;
+           margin-top:.32rem;padding-top:.28rem;border-top:1px solid var(--grid)}
+.skala-lbl{font-family:'DM Mono',monospace;font-size:.71rem;color:var(--ink2);white-space:nowrap}
+.skala-num{font-family:'DM Mono',monospace;font-size:.67rem;width:56px;
+           background:var(--panel);border:1px solid var(--grid);color:var(--ink);
+           padding:.12rem .28rem;outline:none;text-align:right}
+.skala-num:focus{border-color:var(--accent2)}
+.upload-zone{border:1.5px dashed var(--grid);padding:.8rem;text-align:center;cursor:pointer;
+             font-family:'DM Mono',monospace;font-size:.71rem;color:var(--ink2);
+             transition:border-color .15s;margin-top:.35rem}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent2);color:var(--accent2)}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;
+             height:220px;color:var(--ink2);gap:.6rem;font-family:'DM Mono',monospace;font-size:.67rem}
+.empty-state .eg{font-family:'Fraunces',serif;font-size:3rem;font-style:italic;color:var(--grid);line-height:1}
+/* KDE hover tooltip */
+#kde-tip{position:fixed;pointer-events:none;display:none;z-index:900;
+  background:var(--paper);border:1.5px solid var(--border);padding:.38rem .6rem;
+  box-shadow:3px 3px 0 var(--shadow);font-family:'DM Mono',monospace;font-size:.63rem;
+  color:var(--ink);line-height:1.7;white-space:nowrap;min-width:130px}
+#kde-tip b{color:var(--accent2)}
+#kde-tip .ktt-row{display:flex;justify-content:space-between;gap:.7rem}
+#kde-tip .ktt-lbl{color:var(--ink2)}
+/* Calibration plot */
+.cal-wrap{margin-top:.45rem}
+@media(max-width:900px){.outer{grid-template-columns:1fr;height:auto;overflow:visible}.sidebar{overflow-y:visible}.two,.three,.ab-wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="kde-tip">
+  <div class="ktt-row"><span class="ktt-lbl">x</span><span id="ktt-x">–</span></div>
+  <div class="ktt-row"><span class="ktt-lbl">Dichte</span><span id="ktt-d">–</span></div>
+  <div class="ktt-row"><span class="ktt-lbl">≤ x %</span><span id="ktt-p">–</span></div>
+  <div class="ktt-row"><span class="ktt-lbl">Median</span><span id="ktt-m">–</span></div>
+</div>
+
+<div class="hrow">
+  <div>
+    <h1>Prior <em>Predictive</em> Check</h1>
+    <p class="sub">Bayesianischer Workflow · brms · LMM · v20 · Builder-Integration</p>
+    <p class="auth">© Dr. Rainer Düsing · Bugfixes & Features by Claude</p>
+  </div>
+  <div class="hbtns">
+    <button class="ibtn" id="btn-priorlab" onclick="openPriorLab()" style="border-color:var(--accent2);color:var(--accent2)">⬡ Prior Lab</button>
+    <button class="ibtn" id="btn-ab"    onclick="toggleAB()">⊞ A/B Vergleich</button>
+    <button class="ibtn" id="btn-lmm"   onclick="toggleLMM()">⊕ Mixed Model</button>
+    <button class="ibtn" onclick="exportR()">↓ R-Code</button>
+    <button class="ibtn" onclick="exportSVG()">↓ SVG</button>
+    <button class="ibtn" onclick="exportPNG()">↓ PNG</button>
+    <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+    <button class="ibtn" id="btn-from-builder" onclick="importFromBuilder()" style="border-color:var(--accent4);color:var(--accent4)" title="Modellstruktur &amp; Priors aus brms Builder importieren">⬡ ← Builder</button>
+    <button class="ibtn" id="btn-to-builder"   onclick="exportToBuilder()"   style="border-color:var(--accent3);color:var(--accent3)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
+  </div>
+</div>
+<div class="outer">
+<div class="sidebar">
+
+  <!-- Modell -->
+  <div class="scard">
+    <h3 class="ha">Modell</h3>
+    <div style="display:flex;flex-direction:column;gap:.22rem" id="model-tabs">
+      <button class="rbtn sel" data-model="linear"   onclick="setModel(this)">Lineare Regression <span style="float:right;opacity:.5;font-size:.56rem">gaussian()</span></button>
+      <button class="rbtn"     data-model="student"  onclick="setModel(this)">Student-t Regression <span style="float:right;opacity:.5;font-size:.56rem">student()</span></button>
+      <button class="rbtn"     data-model="logistic" onclick="setModel(this)">Logistische Regression <span style="float:right;opacity:.5;font-size:.56rem">bernoulli()</span></button>
+      <button class="rbtn"     data-model="poisson"  onclick="setModel(this)">Poisson Regression <span style="float:right;opacity:.5;font-size:.56rem">poisson()</span></button>
+      <button class="rbtn"     data-model="gamma"    onclick="setModel(this)">Gamma Regression <span style="float:right;opacity:.5;font-size:.56rem">Gamma()</span></button>
+    </div>
+  </div>
+
+  <!-- Presets -->
+  <div class="scard">
+    <h3 class="hb">Prior Presets</h3>
+    <div class="preset-row">
+      <button class="pbtn" onclick="applyPreset('vague',this)">Vage</button>
+      <button class="pbtn" onclick="applyPreset('weakly',this)">Weakly inf.</button>
+      <button class="pbtn" onclick="applyPreset('strong',this)">Stark inf.</button>
+    </div>
+    <div class="infobox" style="margin-bottom:.35rem"><b>Gelman-Presets</b> — für z-standardisierte Variablen</div>
+    <details class="expl" style="border-top:none;padding-top:0;margin-top:0">
+      <summary>ℹ Wann gelten diese Presets?</summary>
+      <div class="expl-body">
+        Gelmans Empfehlung Normal(0,2.5) für α und Normal(0,1) für β gilt <b>nur bei z-standardisierten Prädiktoren UND z-standardisierter AV</b>. Für <b>zentrierte</b> (aber nicht durch SD geteilte) Prädiktoren gilt: 0 ist der Mittelwert, aber die Skalierung der Koeffizienten hängt von der Rohskala ab — die Prior-σ müssen dann entsprechend angepasst werden (grob: Normal(0, 1) × SD_x × SD_y).<br><br>
+        Warum? Bei z-standardisierten Variablen haben alle Prädiktoren SD=1, die AV hat SD=1, und Koeffizienten sind in SD-Einheiten — da ist Normal(0,1) für β ein sinnvoll breiter, aber nicht grenzenloser Prior.<br><br>
+        <b>Bei Rohskalen</b> (z.B. Einkommen in €, Reaktionszeit in ms, Blutdruck mmHg) müssen sowohl die σ-Parameter als auch der μ des Intercepts der tatsächlichen Metrik angepasst werden. Beispiel: AV = Reaktionszeit (MW ≈ 400ms, SD ≈ 80ms) → Prior für α: Normal(400, 100), Prior für β pro SD-Einheit des Prädiktors entsprechend skaliert.<br><br>
+        <b>Faustregel:</b> Die Priors sollten implizieren, dass Effekte auf der AV-Skala plausibel sind — der pp_check zeigt dir, ob das der Fall ist.
+      </div>
+    </details>
+  </div>
+
+  <!-- Intercept -->
+  <div class="scard">
+    <h3 class="hb">Intercept α</h3>
+    <div class="pg">
+      <div class="pl"><span class="lbl">Familie</span></div>
+      <select id="int-fam" onchange="onFamChange()">
+        <option value="normal">Normal(μ, σ)</option>
+        <option value="student_t">Student-t(ν, μ, σ)</option>
+        <option value="cauchy">Cauchy(μ, σ)</option>
+      </select>
+    </div>
+    <div class="pg">
+      <div class="pl">
+        <span class="lbl">μ (Lage) <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>Prior-Mittelwert für α</b><br>Erwarteter Outcome wenn x=0 (bei z-std.: Gesamtmittelwert).<br>Hängt direkt von der Metrik der AV ab!<br>Blutdruck: ~120, RT in ms: ~400.</span></span></span>
+        <span class="pv pvb" id="d-imu">0.0</span>
+      </div>
+      <input type="range" id="int-mu" min="-10" max="10" step="0.1" value="0" oninput="updDisp('int-mu','d-imu',1)">
+    </div>
+    <div class="pg">
+      <div class="pl">
+        <span class="lbl">σ (Skala) <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>Prior-Streuung für α</b><br>σ=2.5: weakly informative (z-std).<br>Rohskala: ca. 2–3× die erwartete SD der AV.</span></span></span>
+        <span class="pv pvb" id="d-isg">2.5</span>
+      </div>
+      <input type="range" id="int-sig" min="0.1" max="10" step="0.1" value="2.5" oninput="updDisp('int-sig','d-isg',1)">
+    </div>
+    <div class="pg" id="int-nu-row" style="display:none">
+      <div class="pl">
+        <span class="lbl">ν (Freiheitsgrade) <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>Freiheitsgrade ν</b><br>ν=1: Cauchy-ähnlich, sehr schwere Ränder.<br>ν=3–7: robuste Wahl.<br>ν→∞: nähert sich Normal an.</span></span></span>
+        <span class="pv pvb" id="d-inu">3.0</span>
+      </div>
+      <input type="range" id="int-nu" min="1" max="30" step="0.5" value="3" oninput="updDisp('int-nu','d-inu',1)">
+    </div>
+    <div class="skala-row">
+      <span class="skala-lbl">Skala μ ±</span>
+      <input type="number" class="skala-num" id="int-mu-rng" value="10" min="1" step="1"
+             onchange="setIntMuRange(+this.value)" title="Slider-Bereich für μ: ±Wert">
+      <span class="skala-lbl">σ max</span>
+      <input type="number" class="skala-num" id="int-sig-max" value="10" min="0.1" step="1"
+             onchange="setIntSigMax(+this.value)" title="Maximaler σ-Wert auf dem Slider">
+    </div>
+  </div>
+
+  <!-- Prädiktoren -->
+  <div class="scard">
+    <h3 class="hg">Prädiktoren β</h3>
+    <div id="pred-container"></div>
+    <button class="add-pred" onclick="addPredictor()">+ Prädiktor hinzufügen</button>
+  </div>
+
+  <!-- Interaktionsterme — directly below predictors -->
+  <div class="scard" id="inter-card">
+    <h3 class="hg">Interaktionsterme β</h3>
+    <div class="infobox" style="margin-bottom:.4rem;font-size:.58rem">
+      Interaktion eingeben (z.B. <b>x1:x2</b>) + Enter. Jeder Term bekommt einen eigenen β-Prior (Normal).
+    </div>
+    <div class="pg">
+      <input type="text" id="inter-inp" placeholder="x1:x2 + Enter" style="font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);border:1px solid var(--grid);color:var(--ink);padding:.26rem .4rem;outline:none;width:100%"
+             onkeydown="if(event.key==='Enter')addInterTerm()">
+    </div>
+    <div id="inter-tags" style="min-height:.5rem;margin-bottom:.35rem"></div>
+    <div id="inter-priors"></div>
+  </div>
+
+  <!-- Sigma — unified card (standard ↔ distributional) -->
+  <div class="scard" id="sigma-card">
+    <h3 class="hs" id="sigma-card-title">Residualstreuung σ</h3>
+    <div class="infobox" id="sigma-card-note" style="margin-bottom:.4rem;font-size:.56rem;display:none">
+      <b>Gamma-Modell: σ = Variationskoeffizient (CV)</b><br>
+      σ ist der CV = SD/μ. Var(y) = μ²·σ². σ ≈ 0.5 → SD ≈ 50% des Mittels.
+    </div>
+    <!-- mode toggle (hidden for Gamma) -->
+    <label id="dist-sig-toggle-row" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.65rem;margin-bottom:.55rem;color:var(--ink2)">
+      <input type="checkbox" id="dist-sig-ck" onchange="onDistSigChange()">
+      σ ~ Prädiktoren (distributional)
+    </label>
+
+    <!-- ── Standard-Prior-Modus ── -->
+    <div id="sig-standard-ui">
+      <div class="pg">
+        <div class="pl"><span class="lbl">Prior-Familie <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>Prior für σ</b><br>Muss positiv sein → positive Verteilungen.<br>Exponential(1): E[σ]=1.<br>Half-Normal(1): etwas breiter.</span></span></span></div>
+        <select id="sig-fam" onchange="onSigFamChange()">
+          <option value="exponential">Exponential(λ)</option>
+          <option value="half_normal">Half-Normal(σ)</option>
+          <option value="half_student">Half-Student-t(ν, σ)</option>
+          <option value="half_cauchy">Half-Cauchy(σ)</option>
+          <option value="gamma">Gamma(α, β)</option>
+        </select>
+      </div>
+      <div class="pg">
+        <div class="pl">
+          <span class="lbl" id="sig-lbl"><span id="sig-lbl-txt">λ (Rate)</span> <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box" id="sig-tip"><b>Rate λ (Exponential)</b><br>Exponential(1): E[σ]=1.<br>Exponential(0.5): E[σ]=2.<br>Kleines λ = flacherer Prior.</span></span></span>
+          <span class="pv pva" id="d-sp">1.0</span>
+        </div>
+        <input type="range" id="sig-p1" min="0.01" max="10" step="0.01" value="1" oninput="updDisp('sig-p1','d-sp',2)">
+      </div>
+      <div class="skala-row">
+        <span class="skala-lbl">Min</span>
+        <input type="number" class="skala-num" id="sig-p1-min" value="0.01" min="0.001" step="0.01" onchange="setSigRange()">
+        <span class="skala-lbl">Max</span>
+        <input type="number" class="skala-num" id="sig-p1-max" value="10" min="0.1" step="1" onchange="setSigRange()">
+      </div>
+      <div class="pg" id="sig-p2-row" style="display:none">
+        <div class="pl">
+          <span class="lbl"><span id="sig-lbl2-txt">β (Rate)</span> <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box" id="sig-tip2"><b>Rate β (Gamma)</b><br>Gamma(α,β): E[σ]=α/β.<br>Gamma(2,2): E[σ]=1.</span></span></span>
+          <span class="pv pva" id="d-sp2">1.0</span>
+        </div>
+        <input type="range" id="sig-p2" min="0.01" max="10" step="0.01" value="1" oninput="updDisp('sig-p2','d-sp2',2)">
+        <div class="skala-row" style="margin-top:.2rem">
+          <span class="skala-lbl">Min</span>
+          <input type="number" class="skala-num" id="sig-p2-min" value="0.01" min="0.001" step="0.01" onchange="setSigRange()">
+          <span class="skala-lbl">Max</span>
+          <input type="number" class="skala-num" id="sig-p2-max" value="10" min="0.1" step="1" onchange="setSigRange()">
+        </div>
+      </div>
+      <div class="pg" id="sig-nu-row" style="display:none">
+        <div class="pl"><span class="lbl">ν (Freiheitsgrade)</span><span class="pv pva" id="d-snu">3.0</span></div>
+        <input type="range" id="sig-nu" min="1" max="30" step="0.5" value="3" oninput="updDisp('sig-nu','d-snu',1)">
+      </div>
+    </div>
+
+    <!-- ── Distributional-Modus ── -->
+    <div id="dist-sig-ui" style="display:none">
+      <div class="infobox" style="margin-bottom:.45rem;font-size:.56rem">
+        <b>log(σ_i) = α_σ + Σ β_{σ,k}·x_{ik}</b><br>
+        Priors auf Log-Skala: α_σ = Normal(μ, σ) → E[σ_i] = exp(μ). β_{σ,k} auf Log-Skala: β=0.5 → σ ändert sich um Faktor ≈1.65 pro SD von x. brms: <code>bf(y~x, sigma~x2)</code>
+      </div>
+      <div class="pg" style="border-left:2px solid var(--accent5);padding-left:.6rem">
+        <div class="pl"><span class="lbl">α_σ  Prior: μ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box">Intercept-Prior auf Log-Skala. μ=0 → E[σ]=1. μ=−0.7 → E[σ]≈0.5. μ=0.7 → E[σ]≈2.</span></span></span><span class="pv pva" id="d-dsmu">0.0</span></div>
+        <input type="range" id="ds-mu" min="-4" max="4" step="0.1" value="0" oninput="updDisp('ds-mu','d-dsmu',1)">
+        <div class="pl"><span class="lbl">α_σ  Prior: σ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box">Streuung des Intercept-Priors. σ=1 → σ_i im Bereich exp(μ±1)≈×e. Wähle kleiner für engere Plausibilitätsbereiche.</span></span></span><span class="pv pva" id="d-dssig">1.0</span></div>
+        <input type="range" id="ds-sig" min="0.1" max="3" step="0.1" value="1" oninput="updDisp('ds-sig','d-dssig',1)">
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);margin:.42rem 0 .22rem">Welche Prädiktoren sagen σ vorher?</div>
+      <div id="dist-sig-betas"></div>
+    </div>
+  </div>
+
+  <!-- ν — unified card (standard ↔ distributional), Student-t only -->
+  <div class="scard" id="nu-card" style="display:none">
+    <h3 class="hn" id="nu-card-title">ν Freiheitsgrade (Student-t)</h3>
+    <!-- mode toggle -->
+    <label id="dist-nu-toggle-row" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.65rem;margin-bottom:.55rem;color:var(--ink2)">
+      <input type="checkbox" id="dist-nu-ck" onchange="onDistNuChange()">
+      ν ~ Prädiktoren (distributional)
+    </label>
+
+    <!-- ── Standard-Prior-Modus ── -->
+    <div id="nu-standard-ui">
+      <div class="infobox" style="margin-bottom:.4rem;font-size:.56rem">
+        <b>ν</b> steuert Schwere der Ränder. ν=1 ≈ Cauchy, ν=30+ ≈ Normal. brms-Default: gamma(2, 0.1).
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">Prior-Familie</span></div>
+        <select id="nu-fam" onchange="onNuFamChange()">
+          <option value="gamma">Gamma(α, β) — brms-Standard</option>
+          <option value="exponential">Exponential(λ)</option>
+          <option value="fixed">Fester Wert</option>
+        </select>
+      </div>
+      <div class="pg" id="nu-p1-row">
+        <div class="pl"><span class="lbl" id="nu-lbl1">α (Form)</span><span class="pv pvt" id="d-nup1">2.0</span></div>
+        <input type="range" id="nu-p1" min="0.1" max="10" step="0.1" value="2" oninput="updDisp('nu-p1','d-nup1',1)">
+      </div>
+      <div class="pg" id="nu-p2-row">
+        <div class="pl"><span class="lbl" id="nu-lbl2">β (Rate)</span><span class="pv pvt" id="d-nup2">0.1</span></div>
+        <input type="range" id="nu-p2" min="0.01" max="2" step="0.01" value="0.1" oninput="updDisp('nu-p2','d-nup2',2)">
+      </div>
+      <div class="pg" id="nu-fixed-row" style="display:none">
+        <div class="pl"><span class="lbl">ν (fest)</span><span class="pv pvt" id="d-nufix">5.0</span></div>
+        <input type="range" id="nu-fixed" min="1" max="50" step="0.5" value="5" oninput="updDisp('nu-fixed','d-nufix',1)">
+      </div>
+    </div>
+
+    <!-- ── Distributional-Modus ── -->
+    <div id="dist-nu-ui" style="display:none">
+      <div class="infobox" style="margin-bottom:.45rem;font-size:.56rem">
+        <b>log(ν_i) = α_ν + Σ β_{ν,k}·x_{ik}</b><br>
+        Priors auf Log-Skala: α_ν = Normal(μ, σ) → E[ν_i] = exp(μ). μ=1.6 → E[ν]≈5 (moderates Student-t). μ=3 → E[ν]≈20 (fast Normal). β_{ν,k} auf Log-Skala. brms: <code>bf(y~x, nu~x2)</code>
+      </div>
+      <div class="pg" style="border-left:2px solid var(--accent6);padding-left:.6rem">
+        <div class="pl"><span class="lbl">α_ν  Prior: μ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box">Intercept-Prior auf Log-Skala. μ=1.6 → E[ν]≈5. μ=2.3 → E[ν]≈10. μ=3 → E[ν]≈20.</span></span></span><span class="pv pvt" id="d-dnmu">1.6</span></div>
+        <input type="range" id="dn-mu" min="-1" max="5" step="0.1" value="1.6" oninput="updDisp('dn-mu','d-dnmu',1)">
+        <div class="pl"><span class="lbl">α_ν  Prior: σ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box">Streuung des Intercept-Priors auf Log-Skala. σ=0.5 → ν im Bereich exp(μ±0.5). σ=1 → ν im Bereich exp(μ±1).</span></span></span><span class="pv pvt" id="d-dnsig">0.5</span></div>
+        <input type="range" id="dn-sig" min="0.1" max="3" step="0.1" value="0.5" oninput="updDisp('dn-sig','d-dnsig',1)">
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);margin:.42rem 0 .22rem">Welche Prädiktoren sagen ν vorher?</div>
+      <div id="dist-nu-betas"></div>
+    </div>
+  </div>
+
+  <div class="scard" id="lmm-card" style="display:none">
+    <h3 class="hp">Random Effects (LMM)</h3>
+    <div class="infobox" style="margin-bottom:.5rem">Nur lineare Regression. Modelliert Gruppenstruktur (z.B. Schüler in Schulen).</div>
+    <div class="pg">
+      <div class="pl"><span class="lbl">Struktur</span></div>
+      <select id="re-struct" onchange="onReStructChange()">
+        <option value="intercept">Random Intercept  (1 | g)</option>
+        <option value="slope">Intercept + Slope(s)</option>
+      </select>
+    </div>
+    <div id="re-slope-vars" style="display:none;margin:.2rem 0 .1rem;padding:.28rem .45rem;background:var(--surf2);border-radius:4px;font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2)">
+      <div style="margin-bottom:.3rem;color:var(--ink);font-weight:600;font-size:.58rem">Welche x erhalten Random Slope?</div>
+      <div id="re-slope-chks"></div>
+    </div>
+    <div class="pg">
+      <div class="pl">
+        <span class="lbl">τ₀ Familie</span>
+      </div>
+      <select id="re-int-fam">
+        <option value="exponential">Exponential(λ)</option>
+        <option value="half_normal">Half-Normal(σ)</option>
+        <option value="half_student">Half-Student-t(ν, σ)</option>
+        <option value="half_cauchy">Half-Cauchy(σ)</option>
+      </select>
+      <div class="pl" style="margin-top:.28rem">
+        <span class="lbl">λ / σ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>SD der Random Intercepts τ₀</b><br>Wie stark unterscheiden sich Gruppen? Exponential(1): τ₀ meist &lt;2.</span></span></span>
+        <span class="pv pvp" id="d-reip">1.0</span>
+      </div>
+      <input type="range" id="re-int-p1" min="0.1" max="5" step="0.1" value="1" oninput="updDisp('re-int-p1','d-reip',1)">
+    </div>
+    <div id="re-slope-block" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">τ₁ Familie</span></div>
+        <select id="re-slp-fam">
+          <option value="exponential">Exponential(λ)</option>
+          <option value="half_normal">Half-Normal(σ)</option>
+          <option value="half_student">Half-Student-t(ν, σ)</option>
+          <option value="half_cauchy">Half-Cauchy(σ)</option>
+        </select>
+        <div class="pl" style="margin-top:.28rem"><span class="lbl">λ / σ</span><span class="pv pvp" id="d-resp">1.0</span></div>
+        <input type="range" id="re-slp-p1" min="0.1" max="5" step="0.1" value="1" oninput="updDisp('re-slp-p1','d-resp',1)">
+      </div>
+      <div class="pg">
+        <div class="pl">
+          <span class="lbl">LKJ η <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>LKJ-Prior η</b><br>η=1: alle Korrelationen gleichwahrscheinlich.<br>η=2: brms-Standard, nahe 0 bevorzugt.</span></span></span>
+          <span class="pv pvp" id="d-lkj">2.0</span>
+        </div>
+        <input type="range" id="re-lkj" min="0.5" max="10" step="0.5" value="2" oninput="updDisp('re-lkj','d-lkj',1)">
+      </div>
+    </div>
+    <div class="pg">
+      <div class="pl"><span class="lbl">Gruppen</span><span class="pv pvp" id="d-ngrp">20</span></div>
+      <input type="range" id="re-ngrp" min="5" max="80" step="5" value="20" oninput="updDisp('re-ngrp','d-ngrp',0)">
+    </div>
+  </div>
+
+  <!-- Simulation -->
+  <div class="scard">
+    <h3>Simulation</h3>
+    <div class="pg">
+      <div class="pl"><span class="lbl">Prior Draws</span><span class="pv" id="d-ns">200</span></div>
+      <input type="range" id="sim-n" min="50" max="500" step="50" value="200" oninput="updDisp('sim-n','d-ns',0)">
+    </div>
+    <div class="pg">
+      <div class="pl"><span class="lbl">pp_check Linien</span><span class="pv" id="d-nd">60</span></div>
+      <input type="range" id="sim-nd" min="20" max="150" step="10" value="60" oninput="updDisp('sim-nd','d-nd',0)">
+    </div>
+    <button class="run-btn" onclick="render()">▶ Simulation starten</button>
+  </div>
+
+  <!-- Upload -->
+  <div class="scard">
+    <h3 class="ha">Daten-Upload (optional)</h3>
+    <div class="upload-zone" id="drop-zone"
+         onclick="document.getElementById('file-inp').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="handleDrop(event)">
+      <input type="file" id="file-inp" accept=".csv,.txt" style="display:none" onchange="handleFile(this.files[0])">
+      📂 CSV ablegen oder klicken<br>
+      <span style="opacity:.5;font-size:.54rem">Spalten: y, x (oder x1, x2 …)</span>
+    </div>
+    <div id="upload-msg" style="font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);margin-top:.32rem"></div>
+    <button id="del-data-btn" onclick="clearData()" style="display:none;font-family:'DM Mono',monospace;font-size:.58rem;border:1px solid var(--accent);background:transparent;cursor:pointer;color:var(--accent);padding:.22rem .6rem;width:100%;margin-top:.35rem;transition:all .12s" onmouseover="this.style.background=cv('--accent');this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color=cv('--accent')">✕ Daten löschen</button>
+  </div>
+
+  <details class="expl">
+    <summary>ℹ Workflow &amp; Hilfe</summary>
+    <div class="expl-body">
+      <b>Workflow:</b><br>
+      1. Modell wählen<br>
+      2. ⬡ <b>Prior Lab</b> öffnen — Verteilung explorieren, Credible Interval-Solver nutzen, passende μ/σ finden<br>
+      3. Priors einstellen (Preset als Ausgangspunkt)<br>
+      4. Simulation starten → Ampel grün?<br>
+      5. Daten hochladen → pp_check mit echten x-Werten<br>
+      6. brms-Code kopieren<br><br>
+      <b>KDE</b> = Kernel Density Estimation: geglättete Dichteabschätzung via Gauss-Kernel. Alle Plots in dieser App zeigen KDEs statt Histogramme — sie sind glatter, aber es kann bei positiv-definierten Parametern (σ, τ) leicht Masse unter 0 entstehen (Randeffekt des Kernels). Die Priors selbst sampeln immer >0.<br><br>
+      <b>ICC</b> (Random-Intercept-Modell) = Intraklassen-Korrelation: ICC = τ₀²/(τ₀²+σ²) — Anteil der Gesamtvarianz durch Gruppenunterschiede.<br>
+      <b>ρ</b> (Random-Slope-Modell) = Korrelation zwischen Random Intercept und Random Slope, abgeleitet aus dem LKJ-Prior.<br><br>
+      <b>Marginale Prior-KDEs (α, β, σ):</b><br>
+      Zeigen direkt, welche Parameterwerte der Prior erlaubt — unabhängig von den Daten. β₁-KDE = alle gesampelten β₁-Werte; σ-KDE = alle gesampelten σ-Werte.<br><br>
+      <b>Warum steht bei Regressionskurven „xⱼ = 0"?</b><br>
+      Bei mehreren Prädiktoren kann nur einer auf der x-Achse variiert werden. Alle anderen werden auf einen Referenzwert gesetzt — hier: 0. Das ist die Konvention für marginale Effektplots.<br><br>
+      <b>Problem:</b> Wenn x=0 kein sinnvoller Wert ist (z.B. Einkommen in €/Monat — niemand verdient 0€/Monat), zeigt die Regressionskurve den Prior für ein unrealistisches Szenario.<br><br>
+      <b>Lösung 1 (empfohlen):</b> Prädiktoren <b>z-standardisieren</b> — dann ist 0 = Mittelwert, immer sinnvoll, und Gelman-Presets gelten direkt.<br>
+      <b>Lösung 2 (gut genug):</b> Prädiktoren <b>zentrieren</b> (nur Mittelwert abziehen, nicht durch SD teilen) — dann ist 0 = Mittelwert, die Skala bleibt erhalten. Prior-Skala muss dann der Rohskala entsprechen.<br>
+      <b>Lösung 3 (Rohskala):</b> μ und σ-Slider über die Skala-Felder (μ ±, σ max) auf die tatsächlichen Wertebereiche der Variablen setzen. x-Achse passt sich automatisch an (μ ± 3σ).<br><br>
+      <b>pp_check ist immer valide</b> (x~N(0,1)), Regressionslinie bei Rohskalen eher qualitativ.
+    </div>
+  </details>
+</div>
+
+<!-- MAIN -->
+<div id="main-col">
+  <div class="empty-state" id="empty-st">
+    <div class="eg">∫</div>
+    <div>Priors konfigurieren und Simulation starten</div>
+  </div>
+</div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  GLOBALS
+// ─────────────────────────────────────────────────────────
+let MODEL      = 'linear';
+let USE_LMM    = false;
+let USE_AB     = false;
+let DARK       = true;
+let predictors = [{ id:0, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3 }];
+let nextPredId = 1;
+let uploadedData = null;
+let lastSimA = null, lastSimB = null;
+let lazyTimer = null, abTimer = null;
+
+// ── New state for v17 ─────────────────────────────────────
+// Interaction terms: [{name:'x1:x2', mu:0, sig:1}]
+let interTerms = [];
+let nextInterId = 0;
+// Distributional sigma betas: [{id, predIdx, mu, sig}]
+let distSigBetas = [];
+let distNuBetas  = [];
+
+// Dynamic x-grid: μ ± 3σ of the predictor's prior (auto-updates with scale changes)
+function getXS(pred) {
+  const p = pred || predictors[0];
+  const mu  = (p && p.mu  != null) ? p.mu  : 0;
+  const sig = (p && p.sig != null) ? p.sig : 1;
+  // xMin/xMax set by setPredVal or explicit scale controls; fallback to μ±3σ
+  const xmin = (p && p.xMin != null) ? p.xMin : mu - 3*sig;
+  const xmax = (p && p.xMax != null) ? p.xMax : mu + 3*sig;
+  const lo = Math.min(xmin, xmax - 0.01);
+  const hi = Math.max(xmax, xmin + 0.01);
+  return Array.from({length:25}, (_,i) => lo + i*(hi-lo)/24);
+}
+
+// ─────────────────────────────────────────────────────────
+//  THEME
+// ─────────────────────────────────────────────────────────
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  if (lastSimA) requestAnimationFrame(()=>requestAnimationFrame(drawAllPlots));
+}
+function cv(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+// Bug 10 fix: safe hex→rgb, handles '#abc', '#aabbcc', bare 'aabbcc'
+function hexRgb(hex) {
+  hex = String(hex).replace(/^#/, '').trim();
+  if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  if (hex.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(hex)) return '100,100,100';
+  const n = parseInt(hex, 16);
+  return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
+}
+function cvRgb(varName) { return hexRgb(cv(varName)); }
+
+// ─────────────────────────────────────────────────────────
+//  UI HELPERS
+// ─────────────────────────────────────────────────────────
+function gn(id) { const el=document.getElementById(id); return el ? parseFloat(el.value)||0 : 0; }
+function gv(id) { const el=document.getElementById(id); return el ? el.value : ''; }
+
+function setSigRange() {
+  const p1 = document.getElementById('sig-p1');
+  const p2 = document.getElementById('sig-p2');
+  const p1min = parseFloat(document.getElementById('sig-p1-min')?.value) || 0.01;
+  const p1max = parseFloat(document.getElementById('sig-p1-max')?.value) || 10;
+  const p2min = parseFloat(document.getElementById('sig-p2-min')?.value) || 0.01;
+  const p2max = parseFloat(document.getElementById('sig-p2-max')?.value) || 10;
+  if (p1) {
+    // Adaptive step: fine for small ranges, coarser for large
+    const p1range = p1max - p1min;
+    const p1step = p1range <= 1 ? 0.01 : p1range <= 5 ? 0.05 : p1range <= 20 ? 0.1 : 0.5;
+    p1.min  = p1min;
+    p1.max  = p1max;
+    p1.step = p1step;
+    // Clamp current value to new range
+    p1.value = Math.min(Math.max(parseFloat(p1.value), p1min), p1max);
+    document.getElementById('d-sp').textContent = parseFloat(p1.value).toFixed(2);
+  }
+  if (p2) {
+    const p2range = p2max - p2min;
+    const p2step = p2range <= 1 ? 0.01 : p2range <= 5 ? 0.05 : p2range <= 20 ? 0.1 : 0.5;
+    p2.min  = p2min;
+    p2.max  = p2max;
+    p2.step = p2step;
+    p2.value = Math.min(Math.max(parseFloat(p2.value), p2min), p2max);
+    document.getElementById('d-sp2').textContent = parseFloat(p2.value).toFixed(2);
+  }
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+
+function updDisp(sliderId, dispId, dec) {
+  const el = document.getElementById(sliderId);
+  if (!el) return;
+  const dp = document.getElementById(dispId);
+  if (dp) dp.textContent = parseFloat(el.value).toFixed(dec);
+  // Only re-render if we already have a simulation (lazy)
+  if (lastSimA) {
+    clearTimeout(lazyTimer);
+    lazyTimer = setTimeout(render, 300);
+  }
+}
+
+function setSlider(id, val, dispId, dec) {
+  const el = document.getElementById(id); if (!el) return;
+  el.value = val;
+  const dp = document.getElementById(dispId); if (dp) dp.textContent = val.toFixed(dec);
+}
+
+// ── Slider-Bereich-Helfer ────────────────────────────────
+function resizeSlider(id, min, max, step) {
+  const el = document.getElementById(id); if (!el) return;
+  const cur = parseFloat(el.value);
+  el.min = min; el.max = max; if(step) el.step = step;
+  // Clamp current value to new range
+  el.value = Math.min(Math.max(cur, min), max);
+}
+function setIntMuRange(halfRange) {
+  const r = Math.max(1, halfRange);
+  const step = r >= 100 ? 1 : r >= 10 ? 0.5 : 0.1;
+  resizeSlider('int-mu', -r, r, step);
+  const cur = parseFloat(document.getElementById('int-mu').value||0);
+  const dp = document.getElementById('d-imu'); if(dp) dp.textContent = cur.toFixed(1);
+  if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
+}
+function setIntSigMax(maxVal) {
+  const m = Math.max(0.1, maxVal);
+  const step = m >= 100 ? 1 : m >= 10 ? 0.5 : 0.1;
+  resizeSlider('int-sig', 0.1, m, step);
+  const cur = parseFloat(document.getElementById('int-sig').value||1);
+  const dp = document.getElementById('d-isg'); if(dp) dp.textContent = cur.toFixed(1);
+  if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
+}
+function setPredMuRange(id, halfRange) {
+  const r = Math.max(1, halfRange);
+  const step = r >= 1000 ? 10 : r >= 100 ? 1 : r >= 10 ? 0.5 : 0.1;
+  resizeSlider(`pm-${id}`, -r, r, step);
+  const p = predictors.find(x=>x.id===id); if(!p) return;
+  const cur = Math.min(Math.max(p.mu, -r), r);
+  p.mu = cur;
+  const el = document.getElementById(`pm-${id}`); if(el) el.value = cur;
+  const dp = document.getElementById(`pdm-${id}`); if(dp) dp.textContent = cur.toFixed(1);
+  // Auto-update xMin/xMax
+  p.xMin = p.mu - 3*p.sig; p.xMax = p.mu + 3*p.sig;
+  if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
+}
+function setPredSigMax(id, maxVal) {
+  const m = Math.max(0.1, maxVal);
+  const step = m >= 1000 ? 10 : m >= 100 ? 1 : m >= 10 ? 0.5 : 0.1;
+  resizeSlider(`ps-${id}`, 0.1, m, step);
+  const p = predictors.find(x=>x.id===id); if(!p) return;
+  const cur = Math.min(p.sig, m);
+  p.sig = cur;
+  const el = document.getElementById(`ps-${id}`); if(el) el.value = cur;
+  const dp = document.getElementById(`pds-${id}`); if(dp) dp.textContent = cur.toFixed(1);
+  p.xMin = p.mu - 3*p.sig; p.xMax = p.mu + 3*p.sig;
+  if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
+}
+
+// ─────────────────────────────────────────────────────────
+//  MODEL
+// ─────────────────────────────────────────────────────────
+function setModel(btn) {
+  MODEL = btn.dataset.model;
+  document.querySelectorAll('#model-tabs .rbtn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  const hasSig    = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const distSigOk = hasSig && MODEL !== 'gamma';
+  document.getElementById('sigma-card').style.display = hasSig ? '' : 'none';
+  document.getElementById('nu-card').style.display    = MODEL==='student' ? '' : 'none';
+
+  // Show/hide distributional toggle inside sigma-card
+  const dstRow = document.getElementById('dist-sig-toggle-row');
+  if (dstRow) dstRow.style.display = distSigOk ? '' : 'none';
+  if (!distSigOk) {
+    const ck = document.getElementById('dist-sig-ck');
+    if (ck && ck.checked) { ck.checked = false; onDistSigChange(); }
+  }
+  // Hide distributional ν mode when switching away from student
+  if (MODEL !== 'student') {
+    const dnck = document.getElementById('dist-nu-ck');
+    if (dnck && dnck.checked) { dnck.checked = false; onDistNuChange(); }
+  }
+  // Update sigma card title and note
+  const sigTitle = document.getElementById('sigma-card-title');
+  const sigNote  = document.getElementById('sigma-card-note');
+  if (MODEL==='gamma') {
+    if(sigTitle) sigTitle.textContent = 'Streuung σ (Variationskoeff.)';
+    if(sigNote)  sigNote.style.display = '';
+  } else {
+    if(sigTitle) sigTitle.textContent = MODEL==='student' ? 'Skalenparameter σ (Student-t)' : 'Residualstreuung σ';
+    if(sigNote)  sigNote.style.display = 'none';
+  }
+  if (MODEL !== 'linear' && MODEL !== 'student' && USE_LMM) {
+    USE_LMM = false;
+    document.getElementById('lmm-card').style.display = 'none';
+    document.getElementById('btn-lmm').classList.remove('active');
+  }
+  const lmmOk = MODEL==='linear'||MODEL==='student';
+  document.getElementById('btn-lmm').style.opacity = lmmOk ? '1' : '.35';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+
+// ─────────────────────────────────────────────────────────
+//  TOGGLES
+// ─────────────────────────────────────────────────────────
+function toggleAB() {
+  USE_AB = !USE_AB;
+  document.getElementById('btn-ab').classList.toggle('active', USE_AB);
+  if (lastSimA) render();
+}
+function toggleLMM() {
+  if (MODEL !== 'linear' && MODEL !== 'student') return;
+  USE_LMM = !USE_LMM;
+  document.getElementById('lmm-card').style.display = USE_LMM ? '' : 'none';
+  document.getElementById('btn-lmm').classList.toggle('active', USE_LMM);
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function onFamChange() {
+  const fam = gv('int-fam');
+  document.getElementById('int-nu-row').style.display = fam==='student_t' ? '' : 'none';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+// Bug 1 fix: use a dedicated <span id="sig-lbl-txt"> for the changeable text
+function onSigFamChange() {
+  const fam = gv('sig-fam');
+  const txt=document.getElementById('sig-lbl-txt');
+  const p2row=document.getElementById('sig-p2-row');
+  const nurow=document.getElementById('sig-nu-row');
+  const tip=document.getElementById('sig-tip');
+  if (fam==='exponential') {
+    if(txt) txt.textContent = 'λ (Rate)';
+    if(tip) tip.innerHTML = '<b>Rate λ (Exponential)</b><br>Exponential(1): E[σ]=1.<br>Exponential(0.5): E[σ]=2.';
+    if(p2row) p2row.style.display='none';
+    if(nurow) nurow.style.display='none';
+  } else if (fam==='half_normal') {
+    if(txt) txt.textContent = 'σ (Skala)';
+    if(tip) tip.innerHTML = '<b>Skala σ (Half-Normal)</b><br>Half-Normal(1): E[σ]≈0.8.<br>Größeres σ = flacherer Prior.';
+    if(p2row) p2row.style.display='none';
+    if(nurow) nurow.style.display='none';
+  } else if (fam==='half_student') {
+    if(txt) txt.textContent = 'σ (Skala)';
+    if(tip) tip.innerHTML = '<b>Skala σ (Half-Student-t)</b><br>half_student_t(ν, 0, σ).<br>ν klein = schwerere Ränder.';
+    if(p2row) p2row.style.display='none';
+    if(nurow) { nurow.style.display=''; document.getElementById('d-snu').textContent=parseFloat(document.getElementById('sig-nu')?.value||3).toFixed(1); }
+  } else if (fam==='half_cauchy') {
+    if(txt) txt.textContent = 'σ (Skala)';
+    if(tip) tip.innerHTML = '<b>Skala σ (Half-Cauchy)</b><br>cauchy(0, σ), x≥0.<br>Sehr schwere Ränder.';
+    if(p2row) p2row.style.display='none';
+    if(nurow) nurow.style.display='none';
+  } else if (fam==='gamma') {
+    if(txt) txt.textContent = 'α (Form)';
+    if(tip) tip.innerHTML = '<b>Form α (Gamma)</b><br>Gamma(α,β): E[σ]=α/β.<br>α=2, β=2: E[σ]=1, kompakt.';
+    if(p2row) p2row.style.display='';
+    if(nurow) nurow.style.display='none';
+  }
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+  // Update sensible default slider ranges per family
+  const p1min = document.getElementById('sig-p1-min');
+  const p1max = document.getElementById('sig-p1-max');
+  if (p1min && p1max) {
+    if      (fam === 'exponential')  { p1min.value = '0.01'; p1max.value = '5'; }
+    else if (fam === 'half_normal')  { p1min.value = '0.1';  p1max.value = '50'; }
+    else if (fam === 'half_student' || fam === 'half_cauchy') { p1min.value = '0.1'; p1max.value = '20'; }
+    else if (fam === 'gamma')        { p1min.value = '0.1';  p1max.value = '10'; }
+    setSigRange();
+  }
+}
+function onReStructChange() {
+  const isSlope = gv('re-struct')==='slope';
+  document.getElementById('re-slope-block').style.display = isSlope ? '' : 'none';
+  document.getElementById('re-slope-vars').style.display  = isSlope ? '' : 'none';
+  if (isSlope) updateSlopeChks();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+
+function updateSlopeChks() {
+  const c = document.getElementById('re-slope-chks'); if (!c) return;
+  c.innerHTML = '';
+  predictors.forEach((p, idx) => {
+    const id = `slpchk-${idx}`;
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:.35rem;cursor:pointer;margin-bottom:.18rem';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.id = id; cb.value = idx; cb.checked = true;
+    cb.onchange = () => { if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); } };
+    const span = document.createElement('span');
+    span.textContent = p.name || `x${idx+1}`;
+    row.appendChild(cb); row.appendChild(span);
+    c.appendChild(row);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  PREDICTORS
+// ─────────────────────────────────────────────────────────
+function renderPredictors() {
+  const c = document.getElementById('pred-container');
+  c.innerHTML = '';
+  predictors.forEach((p, idx) => {
+    const label = `x${idx+1}`;
+    // Auto-derive xMin/xMax from prior if not explicitly set by range controls
+    if (p.xMin == null) p.xMin = p.mu - 3*p.sig;
+    if (p.xMax == null) p.xMax = p.mu + 3*p.sig;
+    const muHalf  = Math.max(Math.abs(p.mu) + 3*p.sig, 5);
+    const sigMax  = Math.max(p.sig * 4, 5);
+    const muStep  = muHalf >= 1000 ? 10 : muHalf >= 100 ? 1 : muHalf >= 10 ? 0.5 : 0.1;
+    const sigStep = sigMax >= 100  ? 1  : sigMax >= 10  ? 0.5 : 0.1;
+    const div = document.createElement('div');
+    div.className = 'pred-block';
+    div.innerHTML = `
+      <div class="pred-hdr">
+        <span class="pred-name">β · ${label}</span>
+        ${predictors.length>1 ? `<button class="pred-rm" onclick="removePredictor(${p.id})">✕</button>` : ''}
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">Familie</span></div>
+        <select id="pf-${p.id}" onchange="setPredFam(${p.id},this.value)">
+          <option value="normal"    ${p.fam==='normal'?'selected':''}>Normal(μ, σ)</option>
+          <option value="student_t" ${p.fam==='student_t'?'selected':''}>Student-t(ν, μ, σ)</option>
+          <option value="cauchy"    ${p.fam==='cauchy'?'selected':''}>Cauchy(μ, σ)</option>
+        </select>
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">μ (Prior)</span><span class="pv pvg" id="pdm-${p.id}">${p.mu.toFixed(1)}</span></div>
+        <input type="range" id="pm-${p.id}" min="${-muHalf}" max="${muHalf}" step="${muStep}" value="${p.mu}"
+               oninput="setPredVal(${p.id},'mu',+this.value,'pdm-${p.id}',1)">
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">σ (Prior)</span><span class="pv pvg" id="pds-${p.id}">${p.sig.toFixed(1)}</span></div>
+        <input type="range" id="ps-${p.id}" min="0.1" max="${sigMax}" step="${sigStep}" value="${p.sig}"
+               oninput="setPredVal(${p.id},'sig',+this.value,'pds-${p.id}',1)">
+      </div>
+      <div class="pg" id="pnr-${p.id}" style="display:${p.fam==='student_t'?'':'none'}">
+        <div class="pl"><span class="lbl">ν</span><span class="pv pvg" id="pdn-${p.id}">${p.nu.toFixed(1)}</span></div>
+        <input type="range" id="pn-${p.id}" min="1" max="30" step="0.5" value="${p.nu}"
+               oninput="setPredVal(${p.id},'nu',+this.value,'pdn-${p.id}',1)">
+      </div>
+      <div class="skala-row">
+        <span class="skala-lbl" title="Slider-Bereich für μ: ±Wert">μ ±</span>
+        <input type="number" class="skala-num" value="${muHalf.toFixed(0)}" min="0.1" step="1"
+               onchange="setPredMuRange(${p.id},+this.value)">
+        <span class="skala-lbl" title="Maximaler σ-Wert auf dem Slider">σ max</span>
+        <input type="number" class="skala-num" value="${sigMax.toFixed(0)}" min="0.1" step="1"
+               onchange="setPredSigMax(${p.id},+this.value)">
+        <span class="skala-lbl" style="opacity:.5;font-size:.5rem" title="x-Achse = μ±3σ des Priors">x±3σ</span>
+      </div>`;
+    c.appendChild(div);
+  });
+  // Keep slope checkboxes in sync with predictor count
+  if (gv('re-struct')==='slope') updateSlopeChks();
+}
+function addPredictor() {
+  predictors.push({ id:nextPredId++, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3 });
+  renderPredictors();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function removePredictor(id) {
+  if (predictors.length<=1) return;
+  predictors = predictors.filter(p => p.id!==id);
+  renderPredictors();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setPredFam(id, fam) {
+  const p = predictors.find(x=>x.id===id); if (!p) return;
+  p.fam = fam;
+  const row = document.getElementById(`pnr-${id}`);
+  if (row) row.style.display = fam==='student_t' ? '' : 'none';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setPredVal(id, key, val, dispId, dec) {
+  const p = predictors.find(x=>x.id===id); if (!p) return;
+  p[key] = val;
+  const dp = document.getElementById(dispId); if (dp) dp.textContent = val.toFixed(dec);
+  // Auto-update x-axis range from prior: μ ± 3σ
+  if (key === 'mu' || key === 'sig') {
+    p.xMin = p.mu - 3 * Math.max(p.sig, 0.01);
+    p.xMax = p.mu + 3 * Math.max(p.sig, 0.01);
+  }
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+
+// ─────────────────────────────────────────────────────────
+//  PRESETS
+// ─────────────────────────────────────────────────────────
+const PRESETS = {
+  vague:  { ifam:'normal', imu:0, isig:10,  bmu:0, bsig:5,   sfam:'exponential', sp:0.1 },
+  weakly: { ifam:'normal', imu:0, isig:2.5, bmu:0, bsig:1,   sfam:'exponential', sp:1   },
+  strong: { ifam:'normal', imu:0, isig:0.5, bmu:0, bsig:0.3, sfam:'exponential', sp:2   }
+};
+function applyPreset(name, btn) {
+  const pr = PRESETS[name];
+  document.getElementById('int-fam').value = pr.ifam;
+  document.getElementById('int-nu-row').style.display = 'none';
+  setSlider('int-mu',  pr.imu,  'd-imu', 1);
+  setSlider('int-sig', pr.isig, 'd-isg', 1);
+  predictors.forEach(p => { p.fam='normal'; p.mu=pr.bmu; p.sig=pr.bsig; p.nu=3; });
+  renderPredictors();
+  document.getElementById('sig-fam').value = pr.sfam;
+  setSlider('sig-p1', pr.sp, 'd-sp', 1);
+  document.querySelectorAll('.pbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+// ─────────────────────────────────────────────────────────
+//  RNG
+// ─────────────────────────────────────────────────────────
+function randn() {
+  let u, v;
+  do { u = Math.random(); } while (u===0);
+  do { v = Math.random(); } while (v===0);
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function rNorm(mu, s) { return mu + s*randn(); }
+
+// Bug 4 fix: use Gamma-based χ² for t-distribution (fast for large ν)
+function rStudT(mu, s, nu) {
+  const df = Math.max(1, nu);
+  const z = randn();
+  const chi2 = Math.max(1e-10, rGammaShape(df/2) * 2);
+  return mu + s * z / Math.sqrt(chi2/df);
+}
+function rCauchy(mu, s) { return mu + s*Math.tan(Math.PI*(Math.random()-0.5)); }
+function rExp(lam)       { return -Math.log(1-Math.random()) / Math.max(1e-9, lam); }
+// Bug 3 fix: Half-Normal(sigma) → |Normal(0, sigma)|  — parameter is the SD, not inverted
+function rHN(sigma)      { return Math.abs(rNorm(0, sigma)); }
+
+// Gamma sampler (shape, rate) — Marsaglia-Tsang
+function rGammaShape(shape) {
+  // Returns Gamma(shape, rate=1)
+  const sh = Math.max(0.01, shape);  // clamp: avoid 1/sh overflow for tiny shapes
+  if (sh < 1) return rGammaShape(1 + sh) * Math.pow(Math.max(1e-300, Math.random()), 1 / sh);
+  const d = sh - 1/3, c = 1/Math.sqrt(9*d);
+  for (let i=0; i<2000; i++) {
+    let x, v;
+    do { x=randn(); v=1+c*x; } while (v<=0);
+    v = v*v*v;
+    const u = Math.random();
+    if (u < 1-0.0331*x*x*x*x) return d*v;
+    if (Math.log(u) < 0.5*x*x + d*(1-v+Math.log(v))) return d*v;
+  }
+  return d; // safety
+}
+function rGamma(shape, rate) {
+  return rGammaShape(Math.max(1e-9, shape)) / Math.max(1e-9, rate);
+}
+function rPoisson(lam) {
+  const l = Math.min(Math.max(0,lam), 1e5);
+  if (l > 50) return Math.max(0, Math.round(l + Math.sqrt(l)*randn()));
+  let L=Math.exp(-l), k=0, p=1;
+  do { k++; p*=Math.random(); } while (p>L);
+  return k-1;
+}
+
+function drawLoc(fam, mu, sig, nu) {
+  // IMPROVED: Error handling for robustness
+  try {
+    if (fam==='student_t') return rStudT(mu, sig, nu);
+    if (fam==='cauchy')    return rCauchy(mu, sig);
+    return rNorm(mu, sig);
+  } catch(e) {
+    console.warn('drawLoc error:', e);
+    return rNorm(mu || 0, sig || 1);
+  }
+}
+// Bug 3 fix: drawScale correctly interprets the parameter
+// Exponential(λ): rate parameter λ  →  rExp(λ)
+// Half-Normal(σ): scale parameter σ →  rHN(σ)
+// Half-Student-t(ν, σ): rHN * scale + heavy tails
+// Half-Cauchy(σ): heavy-tailed via |Cauchy(0,σ)|
+// Gamma(α,β): shape α, rate β       →  rGamma(α,β)
+function drawScale(fam, p1, p2) {
+  try {
+    let val;
+    if      (fam==='half_normal')  val = rHN(p1);
+    else if (fam==='half_student') val = Math.abs(rStudT(0, p1, p2||3));
+    else if (fam==='half_cauchy')  val = Math.abs(rCauchy(0, p1));
+    else if (fam==='gamma')        val = rGamma(Math.max(0.01,p1), Math.max(0.01,p2||1));
+    else                           val = rExp(p1);  // exponential
+    return Math.max(1e-9, val);
+  } catch(e) {
+    console.warn('drawScale error:', e);
+    return 1;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  LINK & SAMPLE
+// ─────────────────────────────────────────────────────────
+function applyLink(eta, model) {
+  if (model==='linear'||model==='student') return eta;
+  if (model==='logistic') return 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
+  return Math.min(Math.exp(Math.min(eta,11.5)), 1e5); // poisson + gamma
+}
+function sampleY(mu, sigma, model, nu) {
+  if (model==='student')  return rStudT(mu, sigma, Math.max(1, nu||3));
+  if (model==='linear')   return rNorm(mu, sigma);
+  if (model==='logistic') return Math.random() < mu ? 1 : 0;
+  if (model==='poisson')  return rPoisson(mu);
+  if (model==='gamma') {
+    const safeMu = Math.max(1e-6, mu);
+    const safeSig = Math.max(1e-6, sigma);
+    const sh = 1/(safeSig*safeSig);  // shape = 1/CV²
+    return rGamma(sh, sh/safeMu);
+  }
+  return mu;
+}
+
+// ─────────────────────────────────────────────────────────
+//  ν PRIOR (Student-t outcome)
+// ─────────────────────────────────────────────────────────
+function onNuFamChange() {
+  const fam = gv('nu-fam');
+  const isFixed = fam === 'fixed';
+  const isExp   = fam === 'exponential';
+  document.getElementById('nu-p1-row').style.display   = isFixed ? 'none' : '';
+  document.getElementById('nu-p2-row').style.display   = (fam==='gamma') ? '' : 'none';
+  document.getElementById('nu-fixed-row').style.display = isFixed ? '' : 'none';
+  const lbl1 = document.getElementById('nu-lbl1');
+  if (lbl1) lbl1.textContent = isExp ? 'λ (Rate)' : 'α (Form)';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function drawNu() {
+  const fam = gv('nu-fam');
+  if (fam === 'fixed')  return Math.max(1, gn('nu-fixed'));
+  if (fam === 'exponential') return Math.max(1, rExp(gn('nu-p1')));
+  // gamma(alpha, rate)
+  return Math.max(1, rGamma(Math.max(0.01, gn('nu-p1')), Math.max(0.01, gn('nu-p2'))));
+}
+
+// ─────────────────────────────────────────────────────────
+//  INTERACTIONS
+// ─────────────────────────────────────────────────────────
+function addInterTerm() {
+  const inp = document.getElementById('inter-inp');
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!v.includes(':')) { inp.style.borderColor='var(--accent)'; setTimeout(()=>inp.style.borderColor='',1200); return; }
+  if (!interTerms.find(t=>t.name===v)) {
+    interTerms.push({ id: nextInterId++, name: v, mu: 0, sig: 1, xMin: -3, xMax: 3 });
+    renderInterTerms();
+  }
+  inp.value = '';
+}
+function removeInterTerm(id) {
+  interTerms = interTerms.filter(t => t.id !== id);
+  renderInterTerms();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setInterVal(id, key, val, dispId, dec) {
+  const t = interTerms.find(t => t.id === id); if (!t) return;
+  t[key] = val;
+  if (dispId) { const dp = document.getElementById(dispId); if (dp) dp.textContent = parseFloat(val).toFixed(dec); }
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function renderInterTerms() {
+  // Tags
+  document.getElementById('inter-tags').innerHTML =
+    interTerms.map(t => `<span class="tag" onclick="removeInterTerm(${t.id})">${t.name} ✕</span>`).join('');
+  // Prior sliders
+  const c = document.getElementById('inter-priors'); if (!c) return;
+  c.innerHTML = '';
+  interTerms.forEach(t => {
+    const xmin = t.xMin ?? -3, xmax = t.xMax ?? 3;
+    const d = document.createElement('div');
+    d.style.cssText = 'border:1px solid var(--grid);padding:.38rem .48rem;margin-bottom:.25rem';
+    d.innerHTML = `
+      <div style="font-family:'DM Mono',monospace;font-size:.67rem;color:var(--accent3);margin-bottom:.25rem">β · ${t.name}</div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">μ</span><span class="pv pvg" id="itm-${t.id}">${t.mu.toFixed(1)}</span></div>
+        <input type="range" min="-5" max="5" step="0.1" value="${t.mu}"
+               oninput="setInterVal(${t.id},'mu',+this.value,'itm-${t.id}',1)">
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">σ</span><span class="pv pvg" id="its-${t.id}">${t.sig.toFixed(1)}</span></div>
+        <input type="range" min="0.1" max="5" step="0.1" value="${t.sig}"
+               oninput="setInterVal(${t.id},'sig',+this.value,'its-${t.id}',1)">
+      </div>
+      <div class="skala-row">
+        <span class="skala-lbl">x₁ Min</span>
+        <input type="number" class="skala-num" value="${xmin}" step="1"
+               onchange="setInterVal(${t.id},'xMin',+this.value,null,0)">
+        <span class="skala-lbl">x₁ Max</span>
+        <input type="number" class="skala-num" value="${xmax}" step="1"
+               onchange="setInterVal(${t.id},'xMax',+this.value,null,0)">
+      </div>`;
+    c.appendChild(d);
+  });
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+
+// ─────────────────────────────────────────────────────────
+//  DISTRIBUTIONAL σ
+// ─────────────────────────────────────────────────────────
+function onDistSigChange() {
+  const on = document.getElementById('dist-sig-ck').checked;
+  document.getElementById('sig-standard-ui').style.display = on ? 'none' : '';
+  document.getElementById('dist-sig-ui').style.display     = on ? '' : 'none';
+  if (on) renderDistSigBetas();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function renderDistSigBetas() {
+  const c = document.getElementById('dist-sig-betas'); if (!c) return;
+  // Ensure distSigBetas has an entry per predictor (never auto-removes, preserves checked state)
+  predictors.forEach((p, i) => {
+    if (!distSigBetas[i]) distSigBetas[i] = { id: i, predIdx: i, active: false, mu: 0, sig: 0.5, xMin: -3, xMax: 3 };  });
+  // Trim excess entries
+  distSigBetas = distSigBetas.slice(0, predictors.length);
+
+  c.innerHTML = '';
+  distSigBetas.forEach((b, i) => {
+    const pname = predictors[i]?.name || `x${i+1}`;
+    const d = document.createElement('div');
+    d.style.cssText = 'margin-bottom:.42rem;border:1px solid var(--grid);padding:.32rem .46rem';
+    d.innerHTML = `
+      <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.67rem;margin-bottom:.28rem">
+        <input type="checkbox" id="dsck-${i}" ${b.active?'checked':''} onchange="distSigBetas[${i}].active=this.checked;if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        β_{σ, ${pname}}
+      </label>
+      <div id="dsb-detail-${i}" style="display:${b.active?'':'none'}">
+        <div class="pg">
+          <div class="pl"><span class="lbl">Prior μ</span><span class="pv pva" id="dsb-m-${i}">${b.mu.toFixed(1)}</span></div>
+          <input type="range" min="-3" max="3" step="0.1" value="${b.mu}"
+                 oninput="distSigBetas[${i}].mu=+this.value;document.getElementById('dsb-m-${i}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        </div>
+        <div class="pg">
+          <div class="pl"><span class="lbl">Prior σ</span><span class="pv pva" id="dsb-s-${i}">${b.sig.toFixed(1)}</span></div>
+          <input type="range" min="0.1" max="3" step="0.1" value="${b.sig}"
+                 oninput="distSigBetas[${i}].sig=+this.value;document.getElementById('dsb-s-${i}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        </div>
+        <div class="skala-row">
+          <span class="skala-lbl">x Min</span>
+          <input type="number" class="skala-num" value="${b.xMin}" step="1"
+                 onchange="distSigBetas[${i}].xMin=+this.value;if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+          <span class="skala-lbl">x Max</span>
+          <input type="number" class="skala-num" value="${b.xMax}" step="1"
+                 onchange="distSigBetas[${i}].xMax=+this.value;if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        </div>
+      </div>`;
+    // toggle detail visibility on checkbox change
+    d.querySelector(`#dsck-${i}`).addEventListener('change', function() {
+      document.getElementById(`dsb-detail-${i}`).style.display = this.checked ? '' : 'none';
+    });
+    c.appendChild(d);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  DISTRIBUTIONAL ν (Student-t only)
+// ─────────────────────────────────────────────────────────
+function onDistNuChange() {
+  const on = document.getElementById('dist-nu-ck').checked;
+  document.getElementById('nu-standard-ui').style.display = on ? 'none' : '';
+  document.getElementById('dist-nu-ui').style.display     = on ? '' : 'none';
+  if (on) renderDistNuBetas();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function renderDistNuBetas() {
+  const c = document.getElementById('dist-nu-betas'); if (!c) return;
+  predictors.forEach((p, i) => {
+    if (!distNuBetas[i]) distNuBetas[i] = { id: i, predIdx: i, active: false, mu: 0, sig: 0.5 };
+  });
+  distNuBetas = distNuBetas.slice(0, predictors.length);
+  c.innerHTML = '';
+  distNuBetas.forEach((b, i) => {
+    const pname = predictors[i]?.name || `x${i+1}`;
+    const d = document.createElement('div');
+    d.style.cssText = 'margin-bottom:.42rem;border:1px solid var(--grid);padding:.32rem .46rem';
+    d.innerHTML = `
+      <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.67rem;margin-bottom:.28rem">
+        <input type="checkbox" id="dnck-${i}" ${b.active?'checked':''} onchange="distNuBetas[${i}].active=this.checked;document.getElementById('dnb-detail-${i}').style.display=this.checked?'':'none';if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        β_{ν, ${pname}}
+      </label>
+      <div id="dnb-detail-${i}" style="display:${b.active?'':'none'}">
+        <div class="pg">
+          <div class="pl"><span class="lbl">Prior μ</span><span class="pv pvt" id="dnb-m-${i}">${b.mu.toFixed(1)}</span></div>
+          <input type="range" min="-3" max="3" step="0.1" value="${b.mu}"
+                 oninput="distNuBetas[${i}].mu=+this.value;document.getElementById('dnb-m-${i}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        </div>
+        <div class="pg">
+          <div class="pl"><span class="lbl">Prior σ</span><span class="pv pvt" id="dnb-s-${i}">${b.sig.toFixed(1)}</span></div>
+          <input type="range" min="0.1" max="3" step="0.1" value="${b.sig}"
+                 oninput="distNuBetas[${i}].sig=+this.value;document.getElementById('dnb-s-${i}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        </div>
+      </div>`;
+    c.appendChild(d);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────
+function buildConfigA() {
+  // Read which predictors have slope checkboxes checked
+  const slopeVars = [];
+  if (gv('re-struct')==='slope') {
+    document.querySelectorAll('#re-slope-chks input[type=checkbox]').forEach(cb => {
+      if (cb.checked) slopeVars.push(parseInt(cb.value));
+    });
+  }
+  const lmmOk = MODEL==='linear' || MODEL==='student';
+  const distSigOn = (MODEL==='linear'||MODEL==='student') &&
+                    document.getElementById('dist-sig-ck')?.checked;
+  const distNuOn  = MODEL==='student' &&
+                    document.getElementById('dist-nu-ck')?.checked;
+  // Only include predictors that are checked
+  const activeDistSigBetas = distSigOn
+    ? distSigBetas.filter(b => b.active).map(b => ({...b}))
+    : [];
+  const activeDistNuBetas = distNuOn
+    ? distNuBetas.filter(b => b.active).map(b => ({...b}))
+    : [];
+  return {
+    ifam:      gv('int-fam'),
+    imu:       gn('int-mu'),
+    isig:      gn('int-sig'),
+    inu:       gn('int-nu'),
+    preds:     predictors.map(p => ({...p})),
+    // Interaction terms [{name, mu, sig}]
+    interTerms: interTerms.map(t => ({...t})),
+    // Distributional sigma — only active (checked) predictors
+    distSigOn,
+    distSigIntMu:  gn('ds-mu')  || 0,
+    distSigIntSig: gn('ds-sig') || 1,
+    distSigBetas:  activeDistSigBetas,
+    // Distributional ν (Student-t only)
+    distNuOn,
+    distNuIntMu:  gn('dn-mu')  || 1,
+    distNuIntSig: gn('dn-sig') || 1,
+    distNuBetas:  activeDistNuBetas,
+    // Sigma
+    sfam:      gv('sig-fam'),
+    sp1:       gn('sig-p1'),
+    sp2:       gn('sig-p2') || 1,
+    snu:       gn('sig-nu') || 3,
+    // ν for Student-t outcome
+    nuFam:     gv('nu-fam') || 'gamma',
+    nuP1:      gn('nu-p1') || 2,
+    nuP2:      gn('nu-p2') || 0.1,
+    nuFixed:   gn('nu-fixed') || 5,
+    // LMM
+    lmm:       USE_LMM && lmmOk,
+    reStruct:  gv('re-struct')  || 'intercept',
+    slopeVars: slopeVars,
+    reIntFam:  gv('re-int-fam') || 'exponential',
+    reIntP1:   gn('re-int-p1')  || 1,
+    reSlpFam:  gv('re-slp-fam') || 'exponential',
+    reSlpP1:   gn('re-slp-p1')  || 1,
+    lkjEta:    gn('re-lkj')     || 2,
+    nGrp:      Math.round(gn('re-ngrp')) || 20
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+//  SIMULATE
+// ─────────────────────────────────────────────────────────
+function simulate(cfg, model) {
+  const N  = Math.max(10, Math.round(gn('sim-n')));
+  const draws = [];
+
+  // Pre-compute interaction predictor indices from names
+  const interIdxPairs = (cfg.interTerms||[]).map(t => {
+    const parts = t.name.split(':');
+    return {
+      t,
+      k1: predictors.findIndex(p => p.name === parts[0]),
+      k2: predictors.findIndex(p => p.name === parts[1])
+    };
+  });
+
+  for (let i=0; i<N; i++) {
+    const alpha = drawLoc(cfg.ifam, cfg.imu, cfg.isig, cfg.inu);
+    const betas = cfg.preds.map(p => drawLoc(p.fam, p.mu, p.sig, p.nu));
+    const sigma = drawScale(cfg.sfam, cfg.sp1, cfg.sfam==='half_student' ? cfg.snu : cfg.sp2);
+
+    // ν for Student-t outcome
+    const nu = (model==='student') ? (() => {
+      if (cfg.distNuOn && (cfg.distNuBetas||[]).length > 0) {
+        // Distributional ν: log(ν) = α_ν + Σ β_{ν,k}·x_k; at x=0 → exp(α_ν)
+        const nuAlpha = drawLoc('normal', cfg.distNuIntMu||1, cfg.distNuIntSig||1, 3);
+        return Math.max(1, Math.exp(nuAlpha));
+      }
+      const f = cfg.nuFam||'gamma';
+      if (f==='fixed')       return Math.max(1, cfg.nuFixed||5);
+      if (f==='exponential') return Math.max(1, rExp(cfg.nuP1||0.1));
+      return Math.max(1, rGamma(Math.max(0.01, cfg.nuP1||2), Math.max(0.01, cfg.nuP2||0.1)));
+    })() : undefined;
+
+    // Interaction betas (one β per interaction term)
+    const interBetas = (cfg.interTerms||[]).map(t =>
+      drawLoc('normal', t.mu||0, t.sig||1, 3));
+
+    // Distributional sigma intercept + slopes
+    let sigAlpha = 0, sigBetas = [];
+    if (cfg.distSigOn) {
+      sigAlpha = drawLoc('normal', cfg.distSigIntMu||0, cfg.distSigIntSig||1, 3);
+      sigBetas = (cfg.distSigBetas||[]).map(b => drawLoc('normal', b.mu||0, b.sig||0.5, 3));
+    }
+
+    // yhats: per predictor — vary xk, hold all others at 0
+    const yhats = cfg.preds.map((pred, k) => {
+      const XS = getXS(pred);
+      return XS.map(x => {
+        let eta = alpha;
+        for (let j=0; j<betas.length; j++) eta += betas[j] * (j===k ? x : 0);
+        // Interaction terms: only active if one of the parts is the current predictor
+        interIdxPairs.forEach((pair, qi) => {
+          const x1 = (pair.k1===k) ? x : 0;
+          const x2 = (pair.k2===k) ? x : 0;
+          eta += interBetas[qi] * x1 * x2;
+        });
+        return applyLink(eta, model);
+      });
+    });
+
+    // y0: sample at x=0 (no interaction effect since all x=0)
+    let sigAtX0 = sigma;
+    if (cfg.distSigOn) {
+      // At x=0, sigma_i = exp(sigAlpha + sigBetas·0) = exp(sigAlpha)
+      sigAtX0 = Math.exp(sigAlpha) * sigma;  // combine fixed σ with distributional component
+    }
+    const mu0 = applyLink(alpha, model);
+    const y0  = sampleY(mu0, sigAtX0, model, nu);
+
+    // LMM
+    let tau0=0, tau1=0, groupOffsets=null;
+    if (cfg.lmm) {
+      tau0 = drawScale(cfg.reIntFam, cfg.reIntP1);
+      const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
+      if (sv.length > 0) {
+        tau1 = drawScale(cfg.reSlpFam, cfg.reSlpP1);
+        if (sv.length === 1) {
+          const eta  = Math.max(0.5, cfg.lkjEta);
+          const betaS = Math.sqrt(0.25/(2*eta+1));
+          const rho  = Math.max(-0.99, Math.min(0.99, 2*Math.min(0.9999,Math.max(0.0001,rNorm(0.5,betaS)))-1));
+          groupOffsets = Array.from({length:cfg.nGrp}, () => {
+            const z0=randn(), z1=randn();
+            const bs = {}; bs[sv[0]] = tau1*(rho*z0 + Math.sqrt(1-rho*rho)*z1);
+            return { b0: tau0*z0, bs };
+          });
+        } else {
+          groupOffsets = Array.from({length:cfg.nGrp}, () => {
+            const bs = {};
+            sv.forEach(k => { bs[k] = rNorm(0, tau1); });
+            return { b0: rNorm(0, tau0), bs };
+          });
+        }
+      } else {
+        groupOffsets = Array.from({length:cfg.nGrp}, () => ({ b0:rNorm(0,tau0), bs:{} }));
+      }
+    }
+    draws.push({ alpha, betas, interBetas, sigma, sigAlpha, sigBetas, nu, tau0, tau1,
+                 yhat: yhats[0], yhats, y0, groupOffsets });
+  }
+  return { draws, cfg, N };
+}
+
+// ─────────────────────────────────────────────────────────
+//  KDE  (fixed grid → fast & consistent)
+// ─────────────────────────────────────────────────────────
+function kde(vals, nPts, clampPos) {
+  // clampPos=true: zero out density below 0 (for σ, τ etc. that are strictly positive)
+  nPts = nPts || 180;
+  const clean = vals.filter(v => isFinite(v) && !isNaN(v));
+  if (clean.length < 5) return null;
+  const s   = clean.slice().sort((a,b)=>a-b);
+  const q01 = s[Math.floor(s.length*0.01)];
+  const q99 = s[Math.ceil(s.length*0.99)-1];
+  const f   = s.filter(v => v>=q01 && v<=q99);
+  if (f.length < 3) return null;
+  const bw  = Math.max(1e-9, 1.06 * (d3.deviation(f) || 0.1) * Math.pow(f.length, -0.2));
+  const lo  = clampPos ? 0 : f[0] - 2.5*bw;
+  const hi  = f[f.length-1] + 2.5*bw;
+  if (!isFinite(lo)||!isFinite(hi)||hi<=lo) return null;
+  const step = (hi-lo)/nPts;
+  const pts  = [];
+  for (let j=0; j<=nPts; j++) {
+    const x = lo + j*step;
+    let dens = 0;
+    for (let k=0; k<f.length; k++) dens += Math.exp(-0.5*((x-f[k])/bw)**2);
+    pts.push([x, Math.max(0, dens/(f.length*bw*Math.sqrt(2*Math.PI)))]);
+  }
+  return pts;
+}
+
+// ─────────────────────────────────────────────────────────
+//  TRAFFIC LIGHT
+// ─────────────────────────────────────────────────────────
+function assess(draws, model) {
+  const ys = draws.map(d=>d.y0).filter(isFinite);
+  if (!ys.length) return { lvl:'', msg:'Keine Daten.' };
+  const s    = ys.slice().sort((a,b)=>a-b);
+  const n    = s.length;
+  const med  = s[Math.floor(n/2)];
+  const p1   = s[Math.max(0, Math.floor(n*0.01))];
+  const p99  = s[Math.min(n-1, Math.ceil(n*0.99)-1)];
+  const pNeg = ys.filter(v=>v<0).length/n;
+  const pExt = ys.filter(v=>Math.abs(v)>1e4).length/n;
+  const rng  = p99-p1;
+
+  if ((model==='gamma'||model==='poisson') && pNeg>0.02)
+    return {lvl:'r', msg:`<b>${(pNeg*100).toFixed(0)}% negative Vorhersagen</b> — ${model} erwartet y>0. α-Prior zu niedrig?`};
+  if (model==='poisson' && med>1e3)
+    return {lvl:'r', msg:`<b>Median y=${med.toFixed(0)}</b> — log-Link explodiert. α-Prior zu groß?`};
+  if (pExt>0.05)
+    return {lvl:'r', msg:`<b>${(pExt*100).toFixed(0)}% extreme Werte (|y|>10.000)</b> — Priors viel zu vage.`};
+  if (model==='linear' && rng>200)
+    return {lvl:'y', msg:`<b>99%-PI: [${p1.toFixed(1)}, ${p99.toFixed(1)}]</b> — sehr breit. Plausibel für deine Skala?`};
+  if (rng<0.005)
+    return {lvl:'y', msg:`<b>Priors sehr eng</b> (99%-PI Breite: ${rng.toFixed(4)}). Nur wenn starkes Vorwissen!`};
+  const p10=s[Math.floor(n*0.1)], p90=s[Math.floor(n*0.9)];
+  return {lvl:'g', msg:`<b>Priors plausibel</b> — 80%-PI: [${p10.toFixed(2)}, ${p90.toFixed(2)}], Median: ${med.toFixed(2)}`};
+}
+
+// ─────────────────────────────────────────────────────────
+//  SVG HELPERS
+// ─────────────────────────────────────────────────────────
+function mkSvg(el, W, H, m) {
+  d3.select(el).selectAll('svg').remove();
+  return d3.select(el).append('svg')
+    .attr('width', W+m.l+m.r).attr('height', H+m.t+m.b)
+    .append('g').attr('transform',`translate(${m.l},${m.t})`);
+}
+function mkAxes(svg, xSc, ySc, W, H) {
+  const gc=cv('--grid'), tc=cv('--ink2');
+  svg.append('g').attr('transform',`translate(0,${H})`)
+    .call(d3.axisBottom(xSc).ticks(5).tickSize(-H))
+    .call(g=>{g.select('.domain').remove();
+      g.selectAll('.tick line').attr('stroke',gc).attr('stroke-dasharray','2,3');
+      g.selectAll('.tick text').attr('fill',tc).attr('font-size','9px').attr('font-family','DM Mono,monospace');});
+  svg.append('g')
+    .call(d3.axisLeft(ySc).ticks(4).tickSize(-W))
+    .call(g=>{g.select('.domain').remove();
+      g.selectAll('.tick line').attr('stroke',gc).attr('stroke-dasharray','2,3');
+      g.selectAll('.tick text').attr('fill',tc).attr('font-size','9px').attr('font-family','DM Mono,monospace');});
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLOT: pp_check density lines
+//  Bug 9 fix: compute median KDE on a shared x-grid
+// ─────────────────────────────────────────────────────────
+function plotPP(el, draws, nLines, colVar) {
+  const m={l:42,r:14,t:8,b:30}, W=el.clientWidth-m.l-m.r, H=200-m.t-m.b;
+  if (W<=0||H<=0) return;
+  const nD=Math.min(nLines, draws.length);
+  const nObs=50; // samples per draw
+
+  // Collect all y-values first to get global domain
+  // When data is uploaded: use real x-values (like brms does) — one row per observation, repeat across draws
+  // When no data: sample x ~ N(0,1) as synthetic stand-in
+  const hasRealX = uploadedData && Array.isArray(uploadedData.y) && uploadedData.y.length >= 4;
+  const nPreds = draws[0]?.betas?.length || 1;
+
+  const allSamples=[];
+  for (let i=0;i<nD;i++) {
+    const d=draws[i], ys=[];
+    if (hasRealX) {
+      // brms-style: for each observed row, compute yrep using real x-values
+      const n = uploadedData.y.length;
+      for (let j=0;j<n;j++) {
+        let eta = d.alpha;
+        for (let k=0;k<d.betas.length;k++) {
+          const xcol = nPreds===1 ? uploadedData.x : uploadedData[`x${k+1}`];
+          const xval = xcol ? (xcol[j] ?? 0) : (uploadedData.x ? (uploadedData.x[j] ?? 0) : 0);
+          eta += d.betas[k] * xval;
+        }
+        // For logistic: use P(y=1) probability (smooth [0,1]) instead of 0/1 draws
+        const mu = applyLink(eta, MODEL);
+        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL);
+        if (isFinite(y)&&Math.abs(y)<1e6) ys.push(y);
+      }
+    } else {
+      // No data: synthetic x ~ N(0,1) per predictor
+      for (let j=0;j<nObs;j++) {
+        let eta=d.alpha;
+        for (let k=0;k<d.betas.length;k++) eta+=d.betas[k]*rNorm(0,1);
+        const mu = applyLink(eta, MODEL);
+        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL);
+        if (isFinite(y)&&Math.abs(y)<1e6) ys.push(y);
+      }
+    }
+    allSamples.push(ys);
+  }
+
+  const flat=allSamples.flat();
+  if (flat.length<10) return;
+  const sf=flat.slice().sort((a,b)=>a-b);
+  // For logistic: y values are already in [0,1] (Bernoulli 0/1 draws or probabilities).
+  // Clamp the KDE domain strictly to [0,1] to avoid misleading tails.
+  let xlo, xhi;
+  if (MODEL==='logistic') {
+    xlo = 0; xhi = 1;
+  } else {
+    xlo = sf[Math.floor(sf.length*0.005)];
+    xhi = sf[Math.ceil(sf.length*0.995)-1];
+  }
+  if (!isFinite(xlo)||!isFinite(xhi)||xhi<=xlo) return;
+
+  // Shared grid (smaller = faster)
+  const nG=100;
+  const step=(xhi-xlo)/nG;
+  const grid=Array.from({length:nG+1},(_,j)=>xlo+j*step);
+
+  // KDE each draw on shared grid
+  const kdePts=[];
+  for (let i=0;i<nD;i++) {
+    const f=allSamples[i].filter(v=>v>=xlo&&v<=xhi);
+    if (f.length<4) continue;
+    const bw=Math.max(1e-9, 1.06*(d3.deviation(f)||0.1)*Math.pow(f.length,-0.2));
+    const inv=1/(bw*Math.sqrt(2*Math.PI));
+    const pts=grid.map(x=>{
+      let s=0; for (let k=0;k<f.length;k++) s+=Math.exp(-0.5*((x-f[k])/bw)**2);
+      return [x, Math.max(0, s*inv/f.length)];
+    });
+    kdePts.push(pts);
+  }
+  if (!kdePts.length) return;
+
+  const yMax=d3.max(kdePts.flat(),p=>p[1]);
+  if (!yMax||yMax<=0) return;
+
+  const xSc=d3.scaleLinear().domain([xlo,xhi]).range([0,W]);
+  const ySc=d3.scaleLinear().domain([0,yMax*1.12]).range([H,0]);
+  const svg=mkSvg(el,W,H,m);
+  mkAxes(svg,xSc,ySc,W,H);
+
+  const col=cv(colVar||'--accent2'), red=cv('--accent'), ink2=cv('--ink2');
+  const lg=d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis).defined(p=>isFinite(p[0])&&p[1]>=0);
+
+  kdePts.forEach(k=>{
+    svg.append('path').datum(k).attr('fill','none').attr('stroke',col).attr('stroke-width',.8).attr('opacity',.2).attr('d',lg);
+  });
+
+  // Median on shared grid (element-wise)
+  const medPts=grid.map((x,gi)=>{
+    const dens=kdePts.map(k=>k[gi][1]).sort((a,b)=>a-b);
+    return [x, dens[Math.floor(dens.length/2)]||0];
+  });
+  svg.append('path').datum(medPts).attr('fill','none').attr('stroke',red).attr('stroke-width',2.2).attr('d',lg);
+
+  // Uploaded data overlay – use SAME x/y scales as prior predictive (clip to plot range)
+  if (uploadedData?.y?.length) {
+    const dk=kde(uploadedData.y,100);
+    if (dk) {
+      const grn=cv('--accent3');
+      // Normalize data KDE to match prior KDE y-scale (area-preserving rescale)
+      const dMax=d3.max(dk,p=>p[1])||1;
+      const pMaxInRange=d3.max(kdePts.flat(),p=>p[1])||1;
+      const scale=pMaxInRange/dMax;
+      const normDk=dk.map(p=>[p[0],p[1]*scale]);
+      svg.append('path').datum(normDk).attr('fill','none').attr('stroke',grn).attr('stroke-width',2)
+         .attr('stroke-dasharray','5,3')
+         .attr('d',d3.line().x(p=>xSc(p[0])).y(p=>ySc(Math.min(p[1],yMax*1.12))).curve(d3.curveBasis)
+           .defined(p=>isFinite(p[0])&&p[1]>=0&&p[0]>=xlo&&p[0]<=xhi));
+    }
+  }
+
+  // Legend
+  const lx=Math.max(0,W-130), ly=5;
+  const legendItems=[[col,`yrep (${kdePts.length})`,0],[red,'Median yrep',13]];
+  if(uploadedData?.y?.length) legendItems.push([cv('--accent3'),'y beob.',26]);
+  legendItems.forEach(([c,lbl,dy])=>{
+    const isDashed = lbl==='y beob.';
+    const sw = (c===red)?2.2:1.5;
+    if(isDashed){
+      svg.append('line').attr('x1',lx).attr('x2',lx+13).attr('y1',ly+dy+4).attr('y2',ly+dy+4)
+         .attr('stroke',c).attr('stroke-width',sw).attr('stroke-dasharray','4,2');
+    } else {
+      svg.append('line').attr('x1',lx).attr('x2',lx+13).attr('y1',ly+dy+4).attr('y2',ly+dy+4)
+         .attr('stroke',c).attr('stroke-width',sw).attr('opacity',c===red?1:.6);
+    }
+    svg.append('text').attr('x',lx+16).attr('y',ly+dy+8).attr('fill',ink2)
+       .attr('font-size','9px').attr('font-family','DM Mono,monospace').text(lbl);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLOT: regression lines + CI
+//  Bug 5 fix: area uses correct datum structure
+// ─────────────────────────────────────────────────────────
+function plotLines(el, draws, lmm, nGrp, colVar, predIdx, XS_arg) {
+  predIdx = predIdx || 0;
+  const m={l:48,r:14,t:8,b:30}, W=el.clientWidth-m.l-m.r, H=200-m.t-m.b;
+  if (W<=0||H<=0) return;
+  const XS = XS_arg || getXS();
+  const yhats_i = draws.map(d => d.yhats ? (d.yhats[predIdx] || d.yhat) : d.yhat);
+
+  const allY = yhats_i.flat().filter(isFinite);
+  if (!allY.length) return;
+  const sy=allY.slice().sort((a,b)=>a-b);
+  const n99=sy.length;
+  const p2=sy[Math.max(0,Math.floor(n99*0.02))];
+  const p98=sy[Math.min(n99-1,Math.ceil(n99*0.98)-1)];
+  if (!isFinite(p2)||!isFinite(p98)||Math.abs(p98-p2)<1e-10) return;
+
+  const xSc=d3.scaleLinear().domain([XS[0],XS[XS.length-1]]).range([0,W]);
+  const ySc=d3.scaleLinear().domain([p2,p98]).range([H,0]).nice();
+  const [ylo,yhi]=ySc.domain();
+  const cl=y=>Math.min(Math.max(y,ylo),yhi);
+  const svg=mkSvg(el,W,H,m);
+  mkAxes(svg,xSc,ySc,W,H);
+
+  const col=cv(colVar||'--accent2'), ink2=cv('--ink2'), rgb=cvRgb(colVar||'--accent2');
+
+  // CI area
+  const ciData = XS.map((x,i)=>{
+    const col_i = yhats_i.map(yh=>yh[i]).filter(isFinite).sort((a,b)=>a-b);
+    const n=col_i.length;
+    return { x, lo: cl(col_i[Math.floor(n*0.1)]||ylo), hi: cl(col_i[Math.ceil(n*0.9)-1]||yhi) };
+  }).filter(d=>isFinite(d.lo)&&isFinite(d.hi));
+
+  svg.append('path')
+     .datum(ciData)
+     .attr('fill',`rgba(${rgb},.13)`)
+     .attr('d', d3.area().x(d=>xSc(d.x)).y0(d=>ySc(d.lo)).y1(d=>ySc(d.hi)));
+
+  const lineG=d3.line().x((_,i)=>xSc(XS[i])).y(d=>ySc(cl(d))).defined(d=>isFinite(d));
+
+  if (lmm && draws[0]?.groupOffsets && draws[0].groupOffsets[0]?.bs?.[predIdx] !== undefined) {
+    const pal=['#e8614a','#4ab0d8','#7ec850','#c87ad8','#e8c040','#6ab0a0','#d08050','#a090e0'];
+    const nSh=Math.min(3,draws.length), nGs=Math.min(nGrp,16);
+    for (let i=0;i<nSh;i++) {
+      const d=draws[i];
+      for (let g=0;g<nGs;g++) {
+        const off=d.groupOffsets[g]||{b0:0,bs:{}};
+        const bSlope = (off.bs && off.bs[predIdx] != null) ? off.bs[predIdx] : 0;
+        const yg=XS.map(x=>applyLink((d.alpha+off.b0)+(d.betas[predIdx]+bSlope)*x, MODEL));
+        svg.append('path').datum(yg).attr('fill','none').attr('stroke',pal[g%8])
+           .attr('stroke-width',.7).attr('opacity',.28).attr('d',lineG);
+      }
+    }
+  } else {
+    yhats_i.slice(0,80).forEach(yh=>{
+      svg.append('path').datum(yh).attr('fill','none')
+         .attr('stroke',`rgba(${rgb},.12)`).attr('stroke-width',.8).attr('d',lineG);
+    });
+  }
+
+  // Median line
+  const med=XS.map((_,i)=>{
+    const c=yhats_i.map(yh=>yh[i]).filter(isFinite).sort((a,b)=>a-b);
+    return c[Math.floor(c.length/2)]??0;
+  });
+  svg.append('path').datum(med).attr('fill','none').attr('stroke',col)
+     .attr('stroke-width',2).attr('stroke-dasharray','6,3').attr('d',lineG);
+
+  svg.append('text').attr('x',W/2).attr('y',H+26).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
+     .text(`x${predIdx+1}  (xₖ≠${predIdx+1} = 0)`);
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLOT: parameter KDE
+// ─────────────────────────────────────────────────────────
+function plotKDE(el, vals, colVar, clampPos) {
+  const m={l:10,r:10,t:8,b:24}, W=el.clientWidth-m.l-m.r, H=130-m.t-m.b;
+  if (W<=0||H<=0) return;
+  const pts=kde(vals,160,clampPos); if (!pts) return;
+
+  const xSc=d3.scaleLinear().domain([pts[0][0],pts[pts.length-1][0]]).range([0,W]);
+  const ySc=d3.scaleLinear().domain([0,d3.max(pts,p=>p[1])*1.15]).range([H,0]);
+  const svg=mkSvg(el,W,H,m);
+  const col=cv(colVar), rgb=cvRgb(colVar), ink2=cv('--ink2');
+
+  svg.append('g').attr('transform',`translate(0,${H})`)
+    .call(d3.axisBottom(xSc).ticks(5).tickSize(0))
+    .call(g=>{g.select('.domain').attr('stroke',cv('--grid'));
+      g.selectAll('.tick text').attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace');});
+
+  const lg=d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis);
+  const ar=d3.area().x(p=>xSc(p[0])).y0(H).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+  svg.append('path').datum(pts).attr('fill',`rgba(${rgb},.15)`).attr('d',ar);
+  svg.append('path').datum(pts).attr('fill','none').attr('stroke',col).attr('stroke-width',1.8).attr('d',lg);
+
+  const clean=vals.filter(isFinite);
+  const mn=clean.reduce((a,v)=>a+v,0)/clean.length;
+  const sd=Math.sqrt(clean.reduce((a,v)=>a+(v-mn)**2,0)/clean.length);
+  const sorted=clean.slice().sort((a,b)=>a-b);
+  if (isFinite(mn)&&mn>=xSc.domain()[0]&&mn<=xSc.domain()[1]) {
+    svg.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',2).attr('y2',H)
+       .attr('stroke',col).attr('stroke-width',1.2).attr('stroke-dasharray','3,3').attr('opacity',.7);
+    svg.append('text').attr('x',xSc(mn)+3).attr('y',13).attr('fill',col)
+       .attr('font-size','8px').attr('font-family','DM Mono,monospace')
+       .text(`μ=${mn.toFixed(2)} σ=${sd.toFixed(2)}`);
+  }
+
+  // ── Hover overlay for tooltip ──────────────────────────
+  const tip = document.getElementById('kde-tip');
+  // Linear interpolation on KDE pts for density at arbitrary x
+  function densAt(xv) {
+    for (let i=1;i<pts.length;i++) {
+      if (pts[i][0]>=xv) {
+        const t=(xv-pts[i-1][0])/(pts[i][0]-pts[i-1][0]||1e-9);
+        return pts[i-1][1]*(1-t)+pts[i][1]*t;
+      }
+    }
+    return 0;
+  }
+  function pctBelow(xv) {
+    let cnt=0; for(let i=0;i<sorted.length;i++) if(sorted[i]<=xv) cnt++;
+    return (cnt/sorted.length*100);
+  }
+  // Crosshair elements (hidden initially)
+  const crossV = svg.append('line').attr('y1',0).attr('y2',H)
+    .attr('stroke',col).attr('stroke-width',1).attr('stroke-dasharray','2,2').attr('opacity',0).attr('pointer-events','none');
+  const crossDot = svg.append('circle').attr('r',3).attr('fill',col).attr('opacity',0).attr('pointer-events','none');
+
+  // Transparent overlay rect captures mouse events
+  const svgEl = el.querySelector('svg');
+  svg.append('rect').attr('width',W).attr('height',H).attr('fill','transparent').attr('cursor','crosshair')
+    .on('mousemove', function(event) {
+      const [mx] = d3.pointer(event);
+      const xv = xSc.invert(mx);
+      const dv = densAt(xv);
+      const yv = ySc(dv);
+      crossV.attr('x1',mx).attr('x2',mx).attr('opacity',.6);
+      crossDot.attr('cx',mx).attr('cy',yv).attr('opacity',1);
+      // Tooltip position (fixed coords from event)
+      const bnd = svgEl ? svgEl.getBoundingClientRect() : {left:0,top:0};
+      const tipX = bnd.left + mx + m.l + 14;
+      const tipY = bnd.top  + yv + m.t - 10;
+      tip.style.display='block';
+      tip.style.left = Math.min(tipX, window.innerWidth-180)+'px';
+      tip.style.top  = Math.max(8, tipY)+'px';
+      document.getElementById('ktt-x').textContent = xv.toFixed(3);
+      document.getElementById('ktt-d').textContent = dv.toFixed(4);
+      document.getElementById('ktt-p').textContent = pctBelow(xv).toFixed(1)+'%';
+      document.getElementById('ktt-m').textContent = sorted[Math.floor(sorted.length/2)]?.toFixed(3) ?? '–';
+    })
+    .on('mouseleave', function() {
+      crossV.attr('opacity',0); crossDot.attr('opacity',0);
+      tip.style.display='none';
+    });
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLOT: bar chart for binary outcomes (logistic)
+// ─────────────────────────────────────────────────────────
+function plotBar(el, draws, nLines, colVar) {
+  const m={l:42,r:14,t:8,b:30}, W=el.clientWidth-m.l-m.r, H=200-m.t-m.b;
+  if (W<=0||H<=0) return;
+  const hasRealX = uploadedData && Array.isArray(uploadedData.y) && uploadedData.y.length >= 4;
+  const nD = Math.min(nLines, draws.length);
+  const col = cv(colVar||'--accent2'), ink2 = cv('--ink2');
+  const rgb = cvRgb(colVar||'--accent2');
+
+  // Compute P(y=1) for each draw
+  const probs = [];
+  for (let i=0; i<nD; i++) {
+    const d = draws[i];
+    if (hasRealX) {
+      const n = uploadedData.y.length;
+      let sum = 0;
+      for (let j=0;j<n;j++) {
+        let eta = d.alpha;
+        const nP = d.betas.length;
+        for (let k=0;k<nP;k++) {
+          const xcol = nP===1 ? uploadedData.x : uploadedData[`x${k+1}`];
+          const xval = xcol ? (xcol[j]??0) : 0;
+          eta += d.betas[k]*xval;
+        }
+        sum += 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
+      }
+      probs.push(sum/n);
+    } else {
+      // synthetic x~N(0,1)
+      const nObs=50; let sum=0;
+      for (let j=0;j<nObs;j++) {
+        let eta=d.alpha;
+        d.betas.forEach(b=>eta+=b*rNorm(0,1));
+        sum += 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
+      }
+      probs.push(sum/nObs);
+    }
+  }
+
+  const svg = mkSvg(el,W,H,m);
+  // X axis: 0 and 1 (two bars)
+  const barW = W*0.28;
+  const xSc = d3.scaleLinear().domain([0,1]).range([barW*0.5+2, W-barW*0.5-2]);
+
+  // For each draw, draw a thin bar split: P(y=0) left, P(y=1) right
+  // Overlay as semi-transparent vertical lines at x=prob
+  const xSc2 = d3.scaleLinear().domain([0,1]).range([0,W]);
+  const probHist = Array(20).fill(0);
+  probs.forEach(p=>{ const bin=Math.min(19,Math.floor(p*20)); probHist[bin]++; });
+  const maxH = Math.max(...probHist);
+  const ySc2 = d3.scaleLinear().domain([0,maxH]).range([H,0]);
+
+  // Draw mini-histogram of P(y=1) across draws
+  probHist.forEach((cnt,i)=>{
+    const x0 = xSc2(i/20), x1 = xSc2((i+1)/20);
+    const bw = Math.max(1, x1-x0-1);
+    svg.append('rect').attr('x',x0).attr('y',ySc2(cnt)).attr('width',bw).attr('height',H-ySc2(cnt))
+       .attr('fill',`rgba(${rgb},.25)`).attr('stroke',col).attr('stroke-width',.5);
+  });
+
+  // Overlay observed data if available
+  if (uploadedData?.y?.length) {
+    const obs = uploadedData.y;
+    const obsP = obs.filter(v=>v===1||v===true).length / obs.length;
+    const grn=cv('--accent3');
+    svg.append('line').attr('x1',xSc2(obsP)).attr('x2',xSc2(obsP)).attr('y1',0).attr('y2',H)
+       .attr('stroke',grn).attr('stroke-width',2).attr('stroke-dasharray','4,3');
+    svg.append('text').attr('x',xSc2(obsP)+3).attr('y',12).attr('fill',grn)
+       .attr('font-size','8px').attr('font-family','DM Mono,monospace').text(`beob. P̂=${obsP.toFixed(2)}`);
+  }
+
+  // X axis
+  svg.append('g').attr('transform',`translate(0,${H})`).call(
+    d3.axisBottom(xSc2).ticks(5).tickSize(3).tickFormat(d=>`${Math.round(d*100)}%`))
+    .call(g=>{g.select('.domain').attr('stroke',cv('--grid'));
+      g.selectAll('.tick text').attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace');});
+
+  svg.append('text').attr('x',W/2).attr('y',H+26).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
+     .text(`Prior P(y=1) je Draw — Histogramm über ${nD} Draws`);
+}
+// ─────────────────────────────────────────────────────────
+//  PLOT: Calibration curve + ECE + Brier (logistic only)
+// ─────────────────────────────────────────────────────────
+function plotCalibration(el, draws) {
+  if (!uploadedData?.y?.length) return;
+  const obs = uploadedData.y;
+  const N   = obs.length;
+  if (N < 8) return;
+
+  const m={l:48,r:16,t:18,b:46}, W=el.clientWidth-m.l-m.r, H=200-m.t-m.b;
+  if (W<=0||H<=0) return;
+
+  const nPreds = draws[0]?.betas?.length || 1;
+
+  // Per-observation mean predicted probability across all draws
+  const meanPred = new Array(N).fill(0);
+  const nD = draws.length;
+  for (let di=0; di<nD; di++) {
+    const d = draws[di];
+    for (let i=0; i<N; i++) {
+      let eta = d.alpha;
+      for (let k=0; k<d.betas.length; k++) {
+        const xcol = nPreds===1 ? uploadedData.x : uploadedData[`x${k+1}`];
+        const xval = xcol ? (xcol[i]??0) : 0;
+        eta += d.betas[k] * xval;
+      }
+      meanPred[i] += 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
+    }
+  }
+  for (let i=0; i<N; i++) meanPred[i] /= nD;
+
+  // Brier score
+  const brier = meanPred.reduce((s,p,i)=>s+(p-(obs[i]||0))**2,0)/N;
+
+  // Reliability diagram: 10 equal-width bins
+  const nBins = 10;
+  const binSumP = new Array(nBins).fill(0);
+  const binSumY = new Array(nBins).fill(0);
+  const binCnt  = new Array(nBins).fill(0);
+  for (let i=0; i<N; i++) {
+    const b = Math.min(nBins-1, Math.floor(meanPred[i]*nBins));
+    binSumP[b] += meanPred[i];
+    binSumY[b] += (obs[i]||0);
+    binCnt[b]++;
+  }
+  let ece = 0;
+  const binPts = [];
+  for (let b=0; b<nBins; b++) {
+    if (binCnt[b] === 0) continue;
+    const pMean = binSumP[b]/binCnt[b];
+    const oMean = binSumY[b]/binCnt[b];
+    ece += (binCnt[b]/N) * Math.abs(pMean - oMean);
+    binPts.push({p:pMean, o:oMean, n:binCnt[b]});
+  }
+
+  const col  = cv('--accent2'), ink2 = cv('--ink2');
+  const grn  = cv('--accent3'), red  = cv('--accent');
+  const rgb  = cvRgb('--accent2');
+
+  const xSc = d3.scaleLinear().domain([0,1]).range([0,W]);
+  const ySc = d3.scaleLinear().domain([0,1]).range([H,0]);
+  const svg = mkSvg(el,W,H,m);
+
+  // Perfect calibration diagonal
+  svg.append('line').attr('x1',xSc(0)).attr('y1',ySc(0)).attr('x2',xSc(1)).attr('y2',ySc(1))
+     .attr('stroke',cv('--grid')).attr('stroke-width',1.2).attr('stroke-dasharray','4,3');
+  svg.append('text').attr('x',xSc(.54)).attr('y',ySc(.58))
+     .attr('fill',cv('--grid')).attr('font-size','8px').attr('font-family','DM Mono,monospace')
+     .attr('transform','rotate(-42,'+xSc(.54)+','+ySc(.58)+')').text('ideal');
+
+  // Subtle grid
+  [0.2,0.4,0.6,0.8].forEach(v=>{
+    svg.append('line').attr('x1',xSc(v)).attr('x2',xSc(v)).attr('y1',0).attr('y2',H)
+       .attr('stroke',cv('--grid')).attr('stroke-width',.5).attr('opacity',.4);
+    svg.append('line').attr('x1',0).attr('x2',W).attr('y1',ySc(v)).attr('y2',ySc(v))
+       .attr('stroke',cv('--grid')).attr('stroke-width',.5).attr('opacity',.4);
+  });
+
+  // Gap shading between diagonal and observed
+  binPts.forEach(bp=>{
+    const x=xSc(bp.p);
+    const y1=Math.min(ySc(bp.p),ySc(bp.o)), y2=Math.max(ySc(bp.p),ySc(bp.o));
+    svg.append('rect').attr('x',x-4).attr('y',y1).attr('width',8).attr('height',y2-y1)
+       .attr('fill',`rgba(${rgb},.2)`);
+  });
+
+  // Line connecting calibration points
+  if (binPts.length>1) {
+    const ln=d3.line().x(bp=>xSc(bp.p)).y(bp=>ySc(bp.o)).curve(d3.curveMonotoneX);
+    svg.append('path').datum(binPts).attr('fill','none').attr('stroke',col)
+       .attr('stroke-width',2).attr('d',ln);
+  }
+
+  // Dots sized by bin count
+  const maxN = d3.max(binPts,bp=>bp.n)||1;
+  const tip = document.getElementById('kde-tip');
+  binPts.forEach(bp=>{
+    const r = Math.max(4, 3+6*(bp.n/maxN));
+    const cx=xSc(bp.p), cy=ySc(bp.o);
+    svg.append('circle').attr('cx',cx).attr('cy',cy).attr('r',r)
+       .attr('fill',col).attr('opacity',.9)
+       .attr('cursor','default')
+       .on('mouseenter', function(event) {
+          tip.style.display='block';
+          tip.style.left=(event.clientX+12)+'px';
+          tip.style.top=(event.clientY-10)+'px';
+          document.getElementById('ktt-x').textContent='P̂='+bp.p.toFixed(3);
+          document.getElementById('ktt-d').textContent='beob. '+( bp.o*100).toFixed(1)+'%';
+          document.getElementById('ktt-p').textContent='n='+bp.n;
+          document.getElementById('ktt-m').textContent='|err|='+(Math.abs(bp.p-bp.o)*100).toFixed(1)+'%';
+       })
+       .on('mouseleave', ()=>{ tip.style.display='none'; });
+    if (bp.n>=2) {
+      svg.append('text').attr('x',cx+r+2).attr('y',cy+4)
+         .attr('fill',ink2).attr('font-size','8px').attr('font-family','DM Mono,monospace')
+         .text((bp.o*100).toFixed(0)+'%');
+    }
+  });
+
+  // Axes
+  svg.append('g').attr('transform',`translate(0,${H})`)
+     .call(d3.axisBottom(xSc).ticks(5).tickFormat(d=>`${Math.round(d*100)}%`))
+     .call(g=>{g.select('.domain').attr('stroke',cv('--grid'));
+       g.selectAll('.tick text').attr('fill',ink2).attr('font-size','8.5px').attr('font-family','DM Mono,monospace');});
+  svg.append('g')
+     .call(d3.axisLeft(ySc).ticks(5).tickFormat(d=>`${Math.round(d*100)}%`))
+     .call(g=>{g.select('.domain').attr('stroke',cv('--grid'));
+       g.selectAll('.tick text').attr('fill',ink2).attr('font-size','8.5px').attr('font-family','DM Mono,monospace');});
+
+  // Axis labels
+  svg.append('text').attr('x',W/2).attr('y',H+38).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace').text('Ø Prior-Predictive P(y=1) — gemittelt über alle Draws');
+  svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',-37)
+     .attr('text-anchor','middle').attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace').text('Beobachtete Ereignisrate');
+
+  // ECE + Brier badge
+  const ecePct=(ece*100).toFixed(1);
+  const brierFmt=brier.toFixed(3);
+  const qual=ece<0.05?grn:ece<0.15?cv('--accent'):red;
+  svg.append('rect').attr('x',W-136).attr('y',2).attr('width',136).attr('height',34)
+     .attr('fill',cv('--paper')).attr('rx',2).attr('stroke',cv('--grid'));
+  svg.append('text').attr('x',W-68).attr('y',15).attr('text-anchor','middle')
+     .attr('fill',qual).attr('font-size','9.5px').attr('font-weight','600').attr('font-family','DM Mono,monospace')
+     .text(`ECE = ${ecePct}%`);
+  svg.append('text').attr('x',W-68).attr('y',29).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
+     .text(`Brier Score = ${brierFmt}`);
+}
+
+function plotOverlap(el, draws) {
+  const m={l:42,r:14,t:8,b:30}, W=el.clientWidth-m.l-m.r, H=170-m.t-m.b;
+  if (W<=0||H<=0) return;
+
+  const pK=kde(draws.map(d=>d.y0).filter(isFinite),150);
+  const dK=kde(uploadedData.y.filter(isFinite),150);
+  if (!pK||!dK) return;
+
+  const allX=[...pK.map(p=>p[0]),...dK.map(p=>p[0])];
+  const xSc=d3.scaleLinear().domain(d3.extent(allX)).range([0,W]).nice();
+  const yMx=Math.max(d3.max(pK,p=>p[1]),d3.max(dK,p=>p[1]))||1;
+  const ySc=d3.scaleLinear().domain([0,yMx*1.12]).range([H,0]);
+  const svg=mkSvg(el,W,H,m); mkAxes(svg,xSc,ySc,W,H);
+
+  const blue=cv('--accent2'), grn=cv('--accent3'), ink2=cv('--ink2');
+  const bRgb=cvRgb('--accent2'), gRgb=cvRgb('--accent3');
+  const lg=d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis).defined(p=>isFinite(p[0])&&p[1]>=0);
+  const ar=d3.area().x(p=>xSc(p[0])).y0(H).y1(p=>ySc(p[1])).curve(d3.curveBasis).defined(p=>isFinite(p[0])&&p[1]>=0);
+
+  svg.append('path').datum(pK).attr('fill',`rgba(${bRgb},.15)`).attr('d',ar);
+  svg.append('path').datum(dK).attr('fill',`rgba(${gRgb},.15)`).attr('d',ar);
+  svg.append('path').datum(pK).attr('fill','none').attr('stroke',blue).attr('stroke-width',2).attr('d',lg);
+  svg.append('path').datum(dK).attr('fill','none').attr('stroke',grn).attr('stroke-width',2).attr('stroke-dasharray','5,3').attr('d',lg);
+
+  // Bhattacharyya coefficient
+  const xVals=d3.range(xSc.domain()[0],xSc.domain()[1],(xSc.domain()[1]-xSc.domain()[0])/200);
+  const iP=d3.scaleLinear().domain(pK.map(p=>p[0])).range(pK.map(p=>p[1]));
+  const iD=d3.scaleLinear().domain(dK.map(p=>p[0])).range(dK.map(p=>p[1]));
+  const dx2=xVals.length>1?xVals[1]-xVals[0]:1;
+  const bc=xVals.reduce((s,x)=>s+Math.sqrt(Math.max(0,iP(x))*Math.max(0,iD(x)))*dx2,0);
+
+  const lx=Math.max(0,W-135), ly=5;
+  [[blue,'Prior Predictive',0],[grn,'Daten (beob.)',13]].forEach(([c,lbl,dy])=>{
+    svg.append('line').attr('x1',lx).attr('x2',lx+13).attr('y1',ly+dy+4).attr('y2',ly+dy+4).attr('stroke',c).attr('stroke-width',2);
+    svg.append('text').attr('x',lx+16).attr('y',ly+dy+8).attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace').text(lbl);
+  });
+  svg.append('text').attr('x',W/2).attr('y',H+26).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
+     .text(`Bhattacharyya-Koeff.: ${bc.toFixed(3)}  (0 = keine Überlappung · 1 = identisch)`);
+}
+
+// ─────────────────────────────────────────────────────────
+//  PLOT: conditional interaction effect
+//  Shows E[y|x_j, x_k=low/mid/high] — classic interaction plot
+// ─────────────────────────────────────────────────────────
+function plotInterLines(el, draws, interIdx, interTerm, colVar) {
+  const t = interTerm;
+  // Parse predictor indices from name (e.g. "x1:x2" → indices 0,1)
+  const parts = t.name.split(':');
+  // find predictor indices by name (fallback: parse number from x1, x2...)
+  const findIdx = name => {
+    let i = predictors.findIndex(p => p.name === name);
+    if (i < 0) { const m = name.match(/\d+$/); i = m ? parseInt(m[0]) - 1 : 0; }
+    return Math.max(0, i);
+  };
+  const k1 = findIdx(parts[0]);
+  const k2 = findIdx(parts[1] || parts[0]);
+
+  const xMin = t.xMin ?? -3, xMax = t.xMax ?? 3;
+  const XS = Array.from({length: 25}, (_, i) => xMin + i * (xMax - xMin) / 24);
+
+  // For each draw, compute yhats at x2 = {-1, 0, +1} * sd(x2)
+  const modVals = [-1, 0, 1]; // moderator levels (standardized)
+  const colPal = ['--accent','--accent2','--accent3'];
+
+  const m = {l:48, r:14, t:8, b:30};
+  const W = el.clientWidth - m.l - m.r;
+  const H = 200 - m.t - m.b;
+  if (W <= 0 || H <= 0) return;
+
+  // Compute yhats per moderator level
+  const yhatsByLevel = modVals.map(x2val =>
+    draws.map(d => {
+      const ib = d.interBetas ? d.interBetas[interIdx] : 0;
+      return XS.map(x1 => {
+        let eta = d.alpha;
+        if (d.betas[k1] !== undefined) eta += d.betas[k1] * x1;
+        if (d.betas[k2] !== undefined) eta += d.betas[k2] * x2val;
+        eta += ib * x1 * x2val;
+        return applyLink(eta, MODEL);
+      });
+    })
+  );
+
+  const allY = yhatsByLevel.flat(2).filter(isFinite);
+  if (!allY.length) return;
+  const sy = allY.slice().sort((a,b)=>a-b), n = sy.length;
+  const p2 = sy[Math.max(0, Math.floor(n*0.02))];
+  const p98 = sy[Math.min(n-1, Math.ceil(n*0.98)-1)];
+  if (!isFinite(p2) || !isFinite(p98) || Math.abs(p98-p2) < 1e-10) return;
+
+  const xSc = d3.scaleLinear().domain([xMin, xMax]).range([0, W]);
+  const ySc = d3.scaleLinear().domain([p2, p98]).range([H, 0]).nice();
+  const [ylo, yhi] = ySc.domain();
+  const cl = y => Math.min(Math.max(y, ylo), yhi);
+  const svg = mkSvg(el, W, H, m);
+  mkAxes(svg, xSc, ySc, W, H);
+  const lineG = d3.line().x((_, i) => xSc(XS[i])).y(d => ySc(cl(d))).defined(d => isFinite(d));
+  const ink2 = cv('--ink2');
+
+  modVals.forEach((x2val, li) => {
+    const col = cv(colPal[li]);
+    const rgb = cvRgb(colPal[li]);
+    // faint lines
+    yhatsByLevel[li].slice(0, 40).forEach(yh => {
+      svg.append('path').datum(yh).attr('fill', 'none')
+         .attr('stroke', `rgba(${rgb},.1)`).attr('stroke-width', .8).attr('d', lineG);
+    });
+    // median line
+    const med = XS.map((_, i) => {
+      const c = yhatsByLevel[li].map(yh => yh[i]).filter(isFinite).sort((a,b)=>a-b);
+      return c[Math.floor(c.length/2)] ?? 0;
+    });
+    svg.append('path').datum(med).attr('fill','none').attr('stroke', col)
+       .attr('stroke-width', 2).attr('stroke-dasharray', li===1?'6,3':'none').attr('d', lineG);
+  });
+
+  // Legend: x2 = -1SD / 0 / +1SD
+  const lx = Math.max(0, W - 120), ly = 4;
+  modVals.forEach((x2val, li) => {
+    const col = cv(colPal[li]);
+    svg.append('line').attr('x1',lx).attr('x2',lx+13).attr('y1',ly+li*13+5).attr('y2',ly+li*13+5)
+       .attr('stroke',col).attr('stroke-width',2);
+    svg.append('text').attr('x',lx+16).attr('y',ly+li*13+9).attr('fill',ink2)
+       .attr('font-size','9px').attr('font-family','DM Mono,monospace')
+       .text(`${parts[1]||parts[0]}=${x2val===0?'0':x2val>0?'+1SD':'-1SD'}`);
+  });
+  svg.append('text').attr('x',W/2).attr('y',H+26).attr('text-anchor','middle')
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
+     .text(`${parts[0]}`);
+}
+// ─────────────────────────────────────────────────────────
+function brmsCode(cfg) {
+  const fmMap={
+    linear:'gaussian()', student:'student()', logistic:'bernoulli("logit")',
+    poisson:'poisson("log")', gamma:'Gamma("log")'
+  };
+  const fm=fmMap[MODEL]||'gaussian()';
+  const hasSig=MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const nP=cfg.preds.length;
+  const pNames = nP===1 ? ['x'] : Array.from({length:nP},(_,i)=>`x${i+1}`);
+  const xTerms = pNames.join(' + ');
+  const interNames = (cfg.interTerms||[]).map(t=>t.name);
+  const interTermsStr = interNames.length ? ' + ' + interNames.join(' + ') : '';
+
+  const slopeTerms = (() => {
+    const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
+    if (sv.length === 0) return '';
+    return sv.map(k => pNames[k] || `x${k+1}`).join(' + ');
+  })();
+  const lmmPart = cfg.lmm ? (slopeTerms ? ` + (1 + ${slopeTerms} | group)` : ` + (1 | group)`) : '';
+
+  // Build formula — always use bf()
+  let formulaRHS;
+  const distSigActive = cfg.distSigOn && (cfg.distSigBetas||[]).length > 0;
+  const distNuActive  = cfg.distNuOn  && (cfg.distNuBetas||[]).length > 0;
+  if (distSigActive || distNuActive) {
+    let bfLines = `  y ~ ${xTerms}${interTermsStr}${lmmPart}`;
+    if (distSigActive) {
+      const dsPreds = (cfg.distSigBetas||[]).map(b => pNames[b.predIdx] || `x${b.predIdx+1}`);
+      bfLines += `,\n  sigma ~ ${dsPreds.join(' + ')}`;
+    }
+    if (distNuActive) {
+      const dnPreds = (cfg.distNuBetas||[]).map(b => pNames[b.predIdx] || `x${b.predIdx+1}`);
+      bfLines += `,\n  nu ~ ${dnPreds.join(' + ')}`;
+    }
+    formulaRHS = `bf(\n${bfLines}\n)`;
+  } else {
+    formulaRHS = `bf(y ~ ${xTerms}${interTermsStr}${lmmPart})`;
+  }
+
+  // Build prior lines — class without quotes, coef always with quotes (brms convention)
+  const iFam=cfg.ifam==='student_t'?`student_t(${Math.round(cfg.inu)}, ${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
+    :cfg.ifam==='cauchy'?`cauchy(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
+    :`normal(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`;
+  const priorLines=[`  <span class="str">prior(${iFam}, class = Intercept)</span>`];
+
+  // β priors — coef quoted, class = b without quotes
+  cfg.preds.forEach((p,i)=>{
+    const coefStr = nP>1 ? `, coef = "${pNames[i]}"` : '';
+    const dist=p.fam==='student_t'?`student_t(${Math.round(p.nu)}, ${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
+      :p.fam==='cauchy'?`cauchy(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
+      :`normal(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`;
+    priorLines.push(`  <span class="str">prior(${dist}, class = b${coefStr})</span>`);
+  });
+
+  // Interaction β priors — coef uses : notation (Issue 4), quoted
+  (cfg.interTerms||[]).forEach(t=>{
+    const mu=t.mu||0, sig=t.sig||1;
+    priorLines.push(`  <span class="str">prior(normal(${mu.toFixed(1)}, ${sig.toFixed(1)}), class = b, coef = "${t.name}")</span>`);
+  });
+
+  // Sigma prior — only when NOT distributional (if distributional, sigma has no global class=sigma prior)
+  if (hasSig && !distSigActive) {
+    let sd;
+    if      (cfg.sfam==='exponential')  sd = `exponential(${cfg.sp1.toFixed(2)})`;
+    else if (cfg.sfam==='gamma')        sd = `gamma(${cfg.sp1.toFixed(2)}, ${(cfg.sp2||1).toFixed(2)})`;
+    else if (cfg.sfam==='half_student') sd = `student_t(${(cfg.snu||3).toFixed(1)}, 0, ${cfg.sp1.toFixed(2)})`;
+    else if (cfg.sfam==='half_cauchy')  sd = `cauchy(0, ${cfg.sp1.toFixed(2)})`;
+    else                                sd = `normal(0, ${cfg.sp1.toFixed(2)})`;
+    priorLines.push(`  <span class="str">prior(${sd}, class = sigma)</span>`);
+  }
+
+  // ν prior for Student-t — only when NOT distributional
+  if (MODEL==='student' && !distNuActive) {
+    const nuf = cfg.nuFam||'gamma';
+    let nuStr;
+    if (nuf==='exponential') nuStr = `exponential(${(cfg.nuP1||1).toFixed(2)})`;
+    else if (nuf==='fixed')  nuStr = `// ν fest = ${(cfg.nuFixed||5).toFixed(1)} — in brms: set_prior("", class = nu); fix ν via stanvars`;
+    else                     nuStr = `gamma(${(cfg.nuP1||2).toFixed(2)}, ${(cfg.nuP2||0.1).toFixed(2)})`;
+    priorLines.push(`  <span class="str">prior(${nuStr}, class = nu)</span>`);
+  }
+
+  // Distributional sigma priors
+  if (distSigActive) {
+    const dsmu = cfg.distSigIntMu||0, dssig = cfg.distSigIntSig||1;
+    priorLines.push(`  <span class="str">prior(normal(${dsmu.toFixed(1)}, ${dssig.toFixed(1)}), class = Intercept, dpar = sigma)</span>`);
+    (cfg.distSigBetas||[]).forEach((b,i)=>{
+      const pn = pNames[b.predIdx] || `x${b.predIdx+1}`;
+      priorLines.push(`  <span class="str">prior(normal(${(b.mu||0).toFixed(1)}, ${(b.sig||0.5).toFixed(1)}), class = b, dpar = sigma, coef = "${pn}")</span>`);
+    });
+  }
+
+  // Distributional ν priors (Student-t only)
+  if (distNuActive) {
+    const dnmu = cfg.distNuIntMu||1.6, dnsig = cfg.distNuIntSig||0.5;
+    priorLines.push(`  <span class="str">prior(normal(${dnmu.toFixed(1)}, ${dnsig.toFixed(1)}), class = Intercept, dpar = nu)</span>`);
+    (cfg.distNuBetas||[]).forEach((b,i)=>{
+      const pn = pNames[b.predIdx] || `x${b.predIdx+1}`;
+      priorLines.push(`  <span class="str">prior(normal(${(b.mu||0).toFixed(1)}, ${(b.sig||0.5).toFixed(1)}), class = b, dpar = nu, coef = "${pn}")</span>`);
+    });
+  }
+
+  // LMM priors
+  if (cfg.lmm) {
+    // brms adds lb=0 automatically for class = sd; use normal(0,x)/student_t/cauchy (Stan truncates)
+    const reSD = cfg.reIntFam==='exponential' ? `exponential(${cfg.reIntP1.toFixed(2)})`
+               : cfg.reIntFam==='half_cauchy'  ? `cauchy(0, ${cfg.reIntP1.toFixed(2)})`
+               : cfg.reIntFam==='half_student' ? `student_t(3, 0, ${cfg.reIntP1.toFixed(2)})`
+               : `normal(0, ${cfg.reIntP1.toFixed(2)})`;
+    priorLines.push(`  <span class="str">prior(${reSD}, class = sd)</span>`);
+    if (cfg.slopeVars && cfg.slopeVars.length > 0)
+      priorLines.push(`  <span class="str">prior(lkj(${cfg.lkjEta.toFixed(1)}), class = cor)</span>`);
+  }
+
+  // Output — separate model_formula + priors + brm() objects, parallel to builder
+  return `<span class="cm"># Prior Predictive Check in brms</span>
+
+<span class="nm">model_formula</span> <span class="kw">&lt;-</span> <span class="nm">${formulaRHS.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+
+<span class="nm">priors</span> <span class="kw">&lt;-</span> <span class="fn">c</span>(
+${priorLines.join(',\n')}
+)
+
+<span class="nm">fit_prior</span> <span class="kw">&lt;-</span> <span class="fn">brm</span>(
+  <span class="nm">formula</span>       = model_formula,
+  <span class="nm">data</span>          = your_data,
+  <span class="nm">family</span>        = <span class="fn">${fm}</span>,
+  <span class="nm">prior</span>         = priors,
+  <span class="nm">sample_prior</span>  = <span class="str">"only"</span>,
+  <span class="nm">chains</span>        = 4,
+  <span class="nm">cores</span>         = 4,
+  <span class="nm">seed</span>          = 42
+)
+
+<span class="cm"># pp_check wie in dieser App</span>
+<span class="fn">pp_check</span>(fit_prior, <span class="nm">ndraws</span> = <span class="str">${Math.round(gn('sim-nd'))}</span>)`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  RENDER  (builds DOM + triggers plots)
+// ─────────────────────────────────────────────────────────
+function render() {
+  const emptyEl=document.getElementById('empty-st'); if(emptyEl) emptyEl.style.display='none';
+  const cfg  = buildConfigA();
+  const simA = simulate(cfg, MODEL);
+  lastSimA   = simA;
+  // Only invalidate B if pred-count changed (structural change)
+  if (lastSimB && lastSimB.cfg && lastSimB.cfg.preds.length !== cfg.preds.length) lastSimB = null;
+
+  const hasSig  = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const lmm     = cfg.lmm;
+  const reSlope = cfg.slopeVars && cfg.slopeVars.length > 0;
+  const tl      = assess(simA.draws, MODEL);
+
+  const ys=simA.draws.map(d=>d.y0).filter(isFinite).sort((a,b)=>a-b);
+  const N=ys.length;
+  const fmt=x=>isFinite(x)?x.toFixed(2):'—';
+  const mn  = N?ys.reduce((a,v)=>a+v,0)/N:0;
+  const sd2 = N?Math.sqrt(ys.reduce((a,v)=>a+(v-mn)**2,0)/N):0;
+  const p10 = N?ys[Math.floor(N*0.1)]:0;
+  const p90 = N?ys[Math.floor(N*0.9)]:0;
+  const icc = lmm ? simA.draws.map(d=>{const t=d.tau0**2;return t/(t+(d.sigma||1)**2);}).filter(isFinite).reduce((a,v,_,arr)=>a+v/arr.length,0) : null;
+
+  let h='';
+
+  // brms code
+  h+=`<div class="cpanel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+      <div class="plbl">R · brms</div>
+      <button class="copy-btn" onclick="copyCode(this)">📋 kopieren</button>
+    </div>
+    <div class="codewrap"><div class="codeblk" id="brms-code">${brmsCode(cfg)}</div></div>
+  </div>`;
+
+  // Traffic light + stats
+  h+=`<div>
+    <div class="tl-row">
+      <div class="tl-dots">
+        <div class="tl-dot${tl.lvl==='g'?' g':''}"></div>
+        <div class="tl-dot${tl.lvl==='y'?' y':''}"></div>
+        <div class="tl-dot${tl.lvl==='r'?' r':''}"></div>
+      </div>
+      <div class="tl-msg">${tl.msg}</div>
+    </div>
+    <div class="stats-row">
+      <div class="sstat"><span class="sv">${simA.N}</span><span class="sl">Prior Draws</span></div>
+      <div class="sstat"><span class="sv">${fmt(mn)}</span><span class="sl">E[y] @ x=0</span></div>
+      <div class="sstat"><span class="sv">${fmt(sd2)}</span><span class="sl">SD[y]</span></div>
+      <div class="sstat"><span class="sv">[${fmt(p10)},${fmt(p90)}]</span><span class="sl">80%-PI</span></div>
+      ${icc!==null?`<div class="sstat"><span class="sv">${fmt(icc)}</span><span class="sl">E[ICC]</span></div>`:''}
+    </div>
+    <details class="expl" style="border-top:1px solid var(--grid);margin-top:.45rem;padding-top:.38rem">
+      <summary style="font-family:'DM Mono',monospace;font-size:.58rem;cursor:pointer;color:var(--accent2);user-select:none;list-style:none;display:flex;align-items:center;gap:.3rem">
+        <span style="font-size:.48rem">▶</span> ℹ Wie kommt die Ampel-Bewertung zustande?
+      </summary>
+      <div class="expl-body" style="margin-top:.42rem">
+        <b>Prinzip:</b> Aus jedem Prior-Draw (α, β, σ) wird y bei x=0 berechnet und gesampelt.<br>
+        Diese ${simA.N} Werte bilden die Prior Predictive Distribution.<br><br>
+        <b>🔴 Rot — unmögliche Werte:</b><br>
+        · Gamma/Poisson aber &gt;2% negative y → Link-Funktion passt nicht zum α-Prior<br>
+        · Mehr als 5% der Werte außerhalb |y|&gt;10.000 → Priors viel zu vage<br>
+        · Poisson-Median &gt;1.000 → log-Link explodiert (α zu groß)<br><br>
+        <b>🟡 Gelb — plausibel, aber prüfen:</b><br>
+        · Linear: 99%-PI-Breite &gt;200 → sehr breite implizierte Skala<br>
+        · PI-Breite &lt;0.005 → Prior extrem eng, kaum Lernraum für Daten<br><br>
+        <b>🟢 Grün — plausibel:</b><br>
+        · Keins der obigen Kriterien trifft zu<br>
+        · 80%-PI wird angezeigt: so breit ist die Prior-Unsicherheit für y bei x=0<br><br>
+        <b>Wichtig:</b> Die Ampel prüft <em>Plausibilität</em>, nicht Richtigkeit. Ein grüner Prior kann trotzdem falsch sein — er sagt nur, dass die implizierten y-Werte grundsätzlich sinnvoll sind. Die Regressionskurven und pp_check unten geben ein vollständigeres Bild.
+      </div>
+    </details>
+  </div>`;
+
+  if (USE_AB) {
+    h+=`<div class="cpanel">
+      <div class="plbl" style="margin-bottom:.35rem">Konfiguration B — Vergleichspriors</div>
+      <div class="infobox" style="margin-bottom:.55rem"><b>A</b> = Sidebar · <b>B</b> = folgende Einstellungen</div>
+      <div class="two">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);margin-bottom:.3rem">Intercept α — B</div>
+          <div class="pg"><div class="pl"><span class="lbl">μ</span><span class="pv pvp" id="d-bmu">0.0</span></div>
+            <input type="range" id="b-imu" min="-5" max="5" step="0.1" value="0" oninput="updBDisp('b-imu','d-bmu',1);scheduleAB()"></div>
+          <div class="pg"><div class="pl"><span class="lbl">σ</span><span class="pv pvp" id="d-bsg">5.0</span></div>
+            <input type="range" id="b-isg" min="0.1" max="10" step="0.1" value="5" oninput="updBDisp('b-isg','d-bsg',1);scheduleAB()"></div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);margin-bottom:.3rem">Steigung β₁ — B</div>
+          <div class="pg"><div class="pl"><span class="lbl">μ</span><span class="pv pvp" id="d-bbm">0.0</span></div>
+            <input type="range" id="b-bmu" min="-3" max="3" step="0.1" value="0" oninput="updBDisp('b-bmu','d-bbm',1);scheduleAB()"></div>
+          <div class="pg"><div class="pl"><span class="lbl">σ</span><span class="pv pvp" id="d-bbs">2.5</span></div>
+            <input type="range" id="b-bsg" min="0.1" max="5" step="0.1" value="2.5" oninput="updBDisp('b-bsg','d-bbs',1);scheduleAB()"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ab-wrap">
+      <div class="ab-col ca"><h4>Konfiguration A</h4>
+        <div class="plbl">pp_check</div><div id="pp-a" style="min-height:60px"></div>
+        <div class="plbl" style="margin-top:.6rem">Regressionskurven x₁</div><div id="ln0-a" style="min-height:60px"></div>
+        <div class="plbl" style="margin-top:.6rem">Prior α</div><div id="al-a" style="min-height:40px"></div>
+        ${cfg.preds.map((_,i)=>`<div class="plbl" style="margin-top:.4rem">Prior β${i+1}</div><div id="bt${i}-a" style="min-height:40px"></div>`).join('')}
+      </div>
+      <div class="ab-col cb"><h4>Konfiguration B</h4>
+        <div class="plbl">pp_check</div><div id="pp-b" style="min-height:60px"></div>
+        <div class="plbl" style="margin-top:.6rem">Regressionskurven x₁</div><div id="ln-b" style="min-height:60px"></div>
+        <div class="plbl" style="margin-top:.6rem">Prior α</div><div id="al-b" style="min-height:40px"></div>
+        ${cfg.preds.map((_,i)=>`<div class="plbl" style="margin-top:.4rem">Prior β${i+1}</div><div id="bt${i}-b" style="min-height:40px"></div>`).join('')}
+      </div>
+    </div>`;
+  } else {
+    const nExtra = (hasSig?1:0)+(lmm?2:0)+(lmm&&reSlope?1:0);
+    const nKde   = cfg.preds.length + 1 + nExtra; // +1 for alpha
+    const gridCls = nKde>3 ? 'three' : 'two';
+    h+=`<div class="cpanel">
+      <div class="plbl" style="margin-bottom:.28rem">pp_check — Prior Predictive Densities</div>
+      <div class="ptit" style="margin-bottom:.18rem">${MODEL==='logistic'?'KDE der simulierten P(y=1)-Werte je Draw · Skala [0,1] · Rot = Median':'<em>Jede</em> blaue Kurve = KDE der simulierten y-Werte aus einem Prior Draw · Rot = Median der KDEs'}</div>
+      <div class="infobox" style="margin-bottom:.3rem;font-size:.56rem">
+        ${uploadedData?.y?.length >= 4
+          ? `<b>📊 Modus: echte x-Daten</b> — x-Werte aus CSV-Datei (${uploadedData.y.length} Beobachtungen), genau wie brms <code>pp_check()</code>`
+          : `<b>🔢 Modus: synthetisches x</b> — da keine CSV-Daten hochgeladen, werden xⱼ ~ N(0,1) gesampelt (entspricht z-standardisierten Prädiktoren). Lade Daten hoch für echte x-Werte.`}
+      </div>
+      <details class="expl" style="margin-bottom:.35rem">
+        <summary>ℹ Wie entsteht der pp_check?</summary>
+        <div class="expl-body">
+          <b>KDE</b> = Kernel Density Estimation: geglättete Dichteabschätzung via Gauss-Kernel. Jede blaue Kurve ist eine solche KDE.<br><br>
+          Für jeden der ${simA.N} Prior Draws:<br>
+          1. α, β₁…βₖ, σ aus den Priors sampeln<br>
+          2. <b>x-Werte bestimmen (hängt vom Modus ab):</b><br>
+          &nbsp;&nbsp;• <b>Ohne CSV-Daten:</b> xⱼ ~ N(0,1) synthetisch — 50 Pseudo-Beobachtungen pro Draw. Sinnvoll wenn Prädiktoren z-standardisiert sind. Die Kurven zeigen die <em>implizierte</em> Outcome-Verteilung unter dem Prior.<br>
+          &nbsp;&nbsp;• <b>Mit CSV-Daten:</b> die echten Prädiktorwerte aus der hochgeladenen Datei werden verwendet — genau wie brms: für jede Beobachtung ŷ = α + Σ βⱼ·xⱼ, dann y ~ Likelihood(ŷ, σ). Die Kurven sind damit direkt mit den beobachteten y vergleichbar.<br>
+          3. η = α + Σ βⱼ·xⱼ, Link-Funktion anwenden<br>
+          4. y sampeln → KDE = eine blaue Linie<br>
+          5. Rote Kurve = elementweiser Median aller KDEs<br><br>
+          <b>Grüne gestrichelte Linie</b> (nach Daten-Upload): KDE der beobachteten y — direkter Vergleich mit den Prior Predictive Draws.
+        </div>
+      </details>
+      <div id="pp-a"></div>
+    </div>
+    ${uploadedData?.y?.length ? `<div class="cpanel">
+      <div class="plbl" style="margin-bottom:.28rem">Prior Predictive vs. Beobachtete Daten</div>
+      <details class="expl" style="margin-bottom:.35rem;border-top:none;padding-top:0;margin-top:0">
+        <summary>ℹ Wie entstehen diese Kurven?</summary>
+        <div class="expl-body">
+          <b>Blaue Kurve (Prior Predictive):</b><br>
+          KDE der y-Werte aus allen Prior Draws (y₀ bei x=0). Zeigt die marginale Prior Predictive Distribution.<br><br>
+          <b>Grüne gestrichelte Kurve (Beobachtete Daten):</b><br>
+          KDE der tatsächlich gemessenen y-Werte aus deiner CSV-Datei.<br><br>
+          <b>Bhattacharyya-Koeffizient (BC):</b><br>
+          BC = ∫ √(p(y)·q(y)) dy — misst Überlappung. BC=1 = identisch, BC=0 = keine Überlappung.<br><br>
+          <b>Hinweis:</b> Es gibt keine festen Schwellenwerte. Nutze den BC als diagnostisches Hilfsmittel.
+        </div>
+      </details>
+      <div id="ovl-a"></div>
+    </div>` : ''}
+    <div class="two">
+      ${cfg.preds.map((_,i)=>`<div class="cpanel">
+        <div class="plbl" style="margin-bottom:.18rem">Regressionskurven x${i+1} + 80%-CI</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">
+          E[y|x${i+1}], alle anderen xⱼ = 0${cfg.preds.length>1?' (Referenzwert, idealer Weise Mittelwert)':''}
+        </div>
+        <div id="ln${i}-a"></div>
+      </div>`).join('')}
+      <div class="cpanel"><div class="plbl" style="margin-bottom:.28rem;color:var(--accent2)">Prior: Intercept α${MODEL==='logistic'?' (Log-Odds Skala)':MODEL==='poisson'?' (Log-Skala)':MODEL==='gamma'?' (Log-Skala)':''}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">KDE der ${simA.N} gesampelten α-Werte${MODEL==='logistic'?' · logit(P) = α + Xβ, nicht direkt P(y=1)':MODEL==='poisson'||MODEL==='gamma'?' · log(μ) = α + Xβ':''}</div>
+        <div id="al-a"></div>
+      </div>
+    </div>
+    <div class="${gridCls}">
+      ${cfg.preds.map((_,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β${i+1}</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten β${i+1}-Werte</div><div id="bt${i}-a"></div></div>`).join('')}
+      ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β (${t.name})</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten Interaktionskoeff.</div><div id="ix${i}-a"></div></div>`).join('')}
+      ${hasSig?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent5)">Prior: σ${MODEL==='gamma'?' (CV = SD/μ)':''}</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten σ-Werte${MODEL==='gamma'?' · σ hier = Variationskoeffizient, nicht SD':''}</div><div id="sg-a"></div></div>`:''}
+      ${lmm?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)" id="lbl-icc-a">${(cfg.slopeVars&&cfg.slopeVars.length>0)?'Prior: ρ (RE-Korrelation)':'Prior: ICC'}</div><div id="icc-a"></div></div>`:''}
+      ${lmm?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: τ₀</div><div id="t0-a"></div></div>`:''}
+      ${lmm&&reSlope?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: τ₁</div><div id="t1-a"></div></div>`:''}
+    </div>
+    ${(cfg.interTerms||[]).length > 0 ? `
+    <div class="two">
+      ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel">
+        <div class="plbl" style="margin-bottom:.18rem">Interaktionseffekt: ${t.name}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">
+          E[y | ${t.name.split(':')[0]}, ${t.name.split(':')[1]||''} = −1SD / 0 / +1SD]
+        </div>
+        <div id="il${i}-a"></div>
+      </div>`).join('')}
+    </div>` : ''}`;
+
+  } // close else (non-A/B layout)
+
+  document.getElementById('main-col').innerHTML = h;
+
+  // Double rAF: first frame commits layout, second reads correct clientWidth
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    drawAllPlots();
+    if (USE_AB) scheduleAB();
+  }));
+}
+
+// ─────────────────────────────────────────────────────────
+//  DRAW ALL PLOTS
+// ─────────────────────────────────────────────────────────
+function drawAllPlots() {
+  if (!lastSimA) return;
+  const {draws,cfg}=lastSimA;
+  const hasSig = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const lmm    = cfg.lmm;
+  const nd     = Math.round(gn('sim-nd'));
+  const nGrp   = cfg.nGrp;
+
+  const T=(id,fn)=>{const el=document.getElementById(id);if(el)fn(el);};
+
+  if (MODEL==='logistic') {
+    T('pp-a', el=>plotPP(el,draws,nd,'--accent2'));
+  } else {
+    T('pp-a', el=>plotPP(el,draws,nd,'--accent2'));
+  }
+  // Per-predictor regression line plots — LMM applied to each predictor's plot
+  cfg.preds.forEach((pred,i)=>{
+    T(`ln${i}-a`, el=>plotLines(el,draws,lmm,nGrp,'--accent2',i,getXS(pred)));
+  });
+  T('al-a', el=>plotKDE(el,draws.map(d=>d.alpha),'--accent2'));
+  cfg.preds.forEach((_,i)=>T(`bt${i}-a`,el=>plotKDE(el,draws.map(d=>d.betas[i]).filter(isFinite),'--accent3')));
+  // Interaction KDEs + conditional effect plots (green — same family as betas)
+  (cfg.interTerms||[]).forEach((t, i) => {
+    T(`ix${i}-a`, el => plotKDE(el, draws.map(d => d.interBetas && d.interBetas[i]).filter(isFinite), '--accent3'));
+    T(`il${i}-a`, el => plotInterLines(el, draws, i, t, '--accent3'));
+  });
+  // σ = orange (accent5)
+  if (hasSig) T('sg-a',el=>plotKDE(el,draws.map(d=>d.sigma).filter(v=>isFinite(v)&&v>0),'--accent5',true));
+  if (lmm) {
+    const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
+    if (sv.length > 0) {
+      // ρ: correlation between b0 and the first slope var's offset
+      const firstSv = sv[0];
+      const rhoVals = draws.map(d=>{
+        if (!d.groupOffsets || d.groupOffsets.length < 2) return NaN;
+        const b0 = d.groupOffsets.map(g=>g.b0);
+        const b1 = d.groupOffsets.map(g=>(g.bs && g.bs[firstSv] != null) ? g.bs[firstSv] : NaN);
+        if (b1.some(isNaN)) return NaN;
+        const n = b0.length;
+        const m0=b0.reduce((s,v)=>s+v,0)/n, m1=b1.reduce((s,v)=>s+v,0)/n;
+        const cov=b0.reduce((s,v,i)=>s+(v-m0)*(b1[i]-m1),0)/n;
+        const sd0=Math.sqrt(b0.reduce((s,v)=>s+(v-m0)**2,0)/n)||1e-9;
+        const sd1=Math.sqrt(b1.reduce((s,v)=>s+(v-m1)**2,0)/n)||1e-9;
+        return Math.max(-1, Math.min(1, cov/(sd0*sd1)));
+      }).filter(isFinite);
+      T('icc-a',el=>plotKDE(el,rhoVals,'--accent4'));
+    } else {
+      // ICC = τ₀²/(τ₀²+σ²)
+      const iccVals = draws.map(d=>{const t=d.tau0**2;return t/(t+(d.sigma||1)**2);}).filter(v=>isFinite(v)&&v>=0&&v<=1);
+      T('icc-a',el=>plotKDE(el,iccVals,'--accent4'));
+    }
+    T('t0-a', el=>plotKDE(el,draws.map(d=>d.tau0).filter(v=>isFinite(v)&&v>0),'--accent4',true));
+    if (sv && sv.length > 0) T('t1-a',el=>plotKDE(el,draws.map(d=>d.tau1).filter(v=>isFinite(v)&&v>0),'--accent4',true));
+  }
+  if (uploadedData?.y?.length) T('ovl-a',el=>plotOverlap(el,draws));
+
+  if (lastSimB && USE_AB) {
+    const db=lastSimB.draws;
+    T('pp-b', el=>plotPP(el,db,nd,'--accent4'));
+    T('ln0-a', el=>plotLines(el,draws,lmm,nGrp,'--accent2',0,getXS(cfg.preds[0])));
+    T('ln-b',  el=>plotLines(el,db,false,0,'--accent4',0,getXS(cfg.preds[0])));
+    T('al-b', el=>plotKDE(el,db.map(d=>d.alpha),'--accent4'));
+    cfg.preds.forEach((_,i)=>T(`bt${i}-b`,el=>plotKDE(el,db.map(d=>d.betas[i]).filter(isFinite),'--accent')));
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  A/B
+// ─────────────────────────────────────────────────────────
+// Bug 7 fix: separate display updater for B sliders (no lazyRender trigger)
+function updBDisp(id, dispId, dec) {
+  const el=document.getElementById(id); if(!el)return;
+  const dp=document.getElementById(dispId); if(dp) dp.textContent=parseFloat(el.value).toFixed(dec);
+}
+function scheduleAB() {
+  clearTimeout(abTimer);
+  abTimer=setTimeout(runAB,300);
+}
+function runAB() {
+  if (!USE_AB||!lastSimA) return;
+  const bImu=gn('b-imu'), bIsg=gn('b-isg'), bBmu=gn('b-bmu'), bBsg=gn('b-bsg');
+  // If elements don't exist yet (e.g., called before DOM ready), skip
+  if (!document.getElementById('b-imu')) return;
+  const cfgB={
+    ifam:'normal', imu:bImu, isig:Math.max(0.01,bIsg), inu:3,
+    preds:predictors.map((p,i)=>i===0?{...p,mu:bBmu,sig:Math.max(0.01,bBsg)}:{...p}),
+    sfam:gv('sig-fam'), sp1:gn('sig-p1'), sp2:gn('sig-p2')||1,
+    lmm:false, reStruct:'intercept', reIntFam:'exponential', reIntP1:1,
+    reSlpFam:'exponential', reSlpP1:1, lkjEta:2, nGrp:20
+  };
+  lastSimB=simulate(cfgB, MODEL);
+  requestAnimationFrame(drawAllPlots);
+}
+
+// ─────────────────────────────────────────────────────────
+//  DATA UPLOAD
+// ─────────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const f=e.dataTransfer?.files?.[0]; if(f) handleFile(f);
+}
+function handleFile(f) {
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>parseCSV(ev.target.result,f.name);
+  r.readAsText(f);
+}
+function parseCSV(text,name) {
+  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2){uploadMsg('Fehler: Zu wenige Zeilen',true);return;}
+  const sep=lines[0].includes(';')?';':lines[0].includes('\t')?'\t':',';
+  const hdrs=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/"/g,''));
+  if(!hdrs.includes('y')){uploadMsg(`Fehler: Spalte "y" fehlt. Gefunden: ${hdrs.join(', ')}`,true);return;}
+  const cols={}; hdrs.forEach(h=>cols[h]=[]);
+  lines.slice(1).forEach(row=>{
+    const vs=row.split(sep);
+    hdrs.forEach((h,i)=>{const v=parseFloat(vs[i]);if(isFinite(v))cols[h].push(v);});
+  });
+  uploadedData=cols;
+  uploadMsg(`✓ ${name}: ${cols.y.length} Zeilen · Spalten: ${hdrs.join(', ')}`);
+  const btn=document.getElementById('del-data-btn'); if(btn) btn.style.display='block';
+  // Full re-render so the ovl panel appears immediately after pp-a
+  if(lastSimA) render(); else requestAnimationFrame(drawAllPlots);
+}
+function uploadMsg(msg,err=false) {
+  const el=document.getElementById('upload-msg');
+  if(!el)return; el.textContent=msg; el.style.color=err?cv('--accent'):cv('--accent3');
+}
+function clearData() {
+  uploadedData = null;
+  const msg=document.getElementById('upload-msg'); if(msg){msg.textContent='';} 
+  const btn=document.getElementById('del-data-btn'); if(btn) btn.style.display='none';
+  const fi=document.getElementById('file-inp'); if(fi) fi.value='';
+  if(lastSimA) render(); else requestAnimationFrame(drawAllPlots);
+}
+
+// ─────────────────────────────────────────────────────────
+//  EXPORT
+// ─────────────────────────────────────────────────────────
+function exportR() {
+  const el=document.getElementById('brms-code');
+  // innerText strips HTML tags but keeps HTML-entities as text; decode them
+  let code = el ? el.innerText : '# Simulation zuerst starten';
+  // Decode HTML entities that appear in the rendered code (&lt; etc.)
+  const tmp=document.createElement('textarea'); tmp.innerHTML=code; code=tmp.value;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([code],{type:'text/plain'}));
+  a.download='prior_predictive_check.R'; a.click();
+}
+function exportSVG() {
+  const svgs=document.getElementById('main-col').querySelectorAll('svg');
+  if(!svgs.length){alert('Bitte zuerst Simulation starten.');return;}
+  const totalH=svgs.length*250;
+  let out=`<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${totalH}">\n`;
+  svgs.forEach((s,i)=>{out+=`<g transform="translate(0,${i*250})">${s.innerHTML}</g>\n`;});
+  out+='</svg>';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out],{type:'image/svg+xml'}));
+  a.download='prior_predictive_check.svg'; a.click();
+}
+function exportPNG() {
+  const svgs=document.getElementById('main-col').querySelectorAll('svg');
+  if(!svgs.length){alert('Bitte zuerst Simulation starten.');return;}
+  const sc=2;
+  const canvas=document.createElement('canvas');
+  canvas.width=1200*sc; canvas.height=svgs.length*250*sc;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=cv('--bg'); ctx.fillRect(0,0,canvas.width,canvas.height);
+  let done=0;
+  svgs.forEach((s,i)=>{
+    const data=new XMLSerializer().serializeToString(s);
+    const img=new Image();
+    img.onload=()=>{
+      ctx.drawImage(img,0,i*250*sc,s.clientWidth*sc,250*sc);
+      if(++done===svgs.length){
+        const a=document.createElement('a'); a.href=canvas.toDataURL('image/png');
+        a.download='prior_predictive_check.png'; a.click();
+      }
+    };
+    img.src=URL.createObjectURL(new Blob([data],{type:'image/svg+xml;charset=utf-8'}));
+  });
+}
+function copyCode(btn) {
+  const el=document.getElementById('brms-code'); if(!el)return;
+  // Decode HTML entities (e.g. &lt;- → <-)
+  const tmp=document.createElement('textarea'); tmp.innerHTML=el.innerText; const text=tmp.value;
+  navigator.clipboard?.writeText(text).then(()=>{
+    const orig=btn.textContent; btn.textContent='✓ kopiert';
+    setTimeout(()=>btn.textContent=orig,1800);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────
+renderPredictors();
+// Init display labels from slider default values
+[['int-mu','d-imu',1],['int-sig','d-isg',1],['int-nu','d-inu',1],
+ ['sig-p1','d-sp',1],['sig-p2','d-sp2',1],['sig-nu','d-snu',1],['sim-n','d-ns',0],['sim-nd','d-nd',0],
+ ['re-int-p1','d-reip',1],['re-slp-p1','d-resp',1],['re-lkj','d-lkj',1],['re-ngrp','d-ngrp',0]
+].forEach(([id,did,dec])=>{
+  const el=document.getElementById(id); if(!el)return;
+  const dp=document.getElementById(did); if(dp) dp.textContent=parseFloat(el.value).toFixed(dec);
+});
+// Fix hover for delete button after page CSS loads
+const dbtn=document.getElementById('del-data-btn');
+if(dbtn){dbtn.onmouseover=()=>{dbtn.style.background=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();dbtn.style.color='white';};dbtn.onmouseout=()=>{dbtn.style.background='transparent';dbtn.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();};}
+// Auto-run on load
+requestAnimationFrame(()=>requestAnimationFrame(render));
+</script>
+<!-- ════════════════════════════════════════════════════════
+     PRIOR LAB  — standalone distribution explorer
+     ════════════════════════════════════════════════════════ -->
+<style>
+/* ── Overlay & modal shell ── */
+#prior-lab-overlay{
+  position:fixed;inset:0;z-index:9000;
+  background:rgba(0,0,0,.72);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;padding:1rem;
+}
+#prior-lab-overlay.open{display:flex}
+#prior-lab-modal{
+  width:min(1340px,98%);max-height:96vh;
+  background:#0d1117;border:1.5px solid #2a3550;
+  box-shadow:0 0 80px rgba(74,176,216,.12),0 32px 80px rgba(0,0,0,.7);
+  display:grid;grid-template-rows:auto 1fr;overflow:hidden;
+  position:relative;
+}
+/* ── Modal header ── */
+#pl-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.9rem 1.6rem .8rem;border-bottom:1px solid #1e2a40;
+  background:#0a0e16;
+}
+#pl-header h2{
+  font-family:'Fraunces',Georgia,serif;font-size:1.45rem;font-weight:300;
+  letter-spacing:-.02em;color:#e8e2d8;
+}
+#pl-header h2 em{color:#4ab0d8;font-style:italic}
+#pl-header .pl-sub{
+  font-family:'DM Mono',monospace;font-size:.67rem;color:#556080;
+  margin-top:.08rem;letter-spacing:.05em;
+}
+#pl-close{
+  font-family:'DM Mono',monospace;font-size:.82rem;
+  border:1.5px solid #2a3550;background:transparent;cursor:pointer;
+  color:#9a9080;padding:.32rem .85rem;transition:all .15s;
+}
+#pl-close:hover{border-color:#e8614a;color:#e8614a}
+/* ── Body: sidebar + canvas ── */
+#pl-body{
+  display:grid;grid-template-columns:276px 1fr;overflow:hidden;
+}
+/* ── Sidebar ── */
+#pl-sidebar{
+  border-right:1px solid #1e2a40;padding:1rem .95rem;
+  overflow-y:auto;display:flex;flex-direction:column;gap:.75rem;
+  background:#0a0e16;
+}
+#pl-sidebar::-webkit-scrollbar{width:4px}
+#pl-sidebar::-webkit-scrollbar-track{background:transparent}
+#pl-sidebar::-webkit-scrollbar-thumb{background:#1e2a40;border-radius:2px}
+/* distribution picker */
+.pl-dists{display:flex;flex-direction:column;gap:.25rem}
+.pl-dist-btn{
+  font-family:'DM Mono',monospace;font-size:.74rem;padding:.42rem .8rem;
+  border:1px solid #1e2a40;background:transparent;cursor:pointer;
+  color:#556080;text-align:left;transition:all .12s;letter-spacing:.03em;
+}
+.pl-dist-btn:hover{border-color:#4ab0d8;color:#9ae4f8}
+.pl-dist-btn.active{
+  border-color:#4ab0d8;color:#0d1117;background:#4ab0d8;
+}
+/* param rows */
+.pl-params{display:flex;flex-direction:column;gap:.55rem}
+.pl-pg{margin-bottom:.12rem}
+.pl-pl{display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem}
+.pl-lbl{font-family:'DM Mono',monospace;font-size:.74rem;color:#9a9080}
+.pl-val{font-family:'DM Mono',monospace;font-size:.84rem;font-weight:500;color:#4ab0d8;white-space:nowrap}
+input.pl-range{width:100%;-webkit-appearance:none;height:3px;background:#1e2a40;
+  outline:none;cursor:pointer;border-radius:2px;display:block;margin:0}
+input.pl-range::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:#4ab0d8;border-radius:50%;cursor:pointer;transition:background .12s;
+  box-shadow:0 0 8px rgba(74,176,216,.5)}
+input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
+.pl-section-title{
+  font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.12em;
+  text-transform:uppercase;color:#2a3550;padding-bottom:.24rem;
+  border-bottom:1px solid #1e2a40;margin-bottom:.14rem;
+}
+/* stats strip */
+.pl-stats{display:flex;flex-wrap:wrap;gap:.38rem;margin-top:.4rem}
+.pl-stat{
+  flex:1;min-width:72px;background:#0f1520;border:1px solid #1e2a40;
+  padding:.4rem .55rem;
+}
+.pl-stat .sv{font-family:'DM Mono',monospace;font-size:.84rem;font-weight:500;color:#e8e2d8;display:block}
+.pl-stat .sl{font-family:'DM Mono',monospace;font-size:.56rem;color:#556080}
+/* x-range controls */
+.pl-xrange{display:flex;gap:.4rem;align-items:center;margin-top:.4rem}
+.pl-xrange label{font-family:'DM Mono',monospace;font-size:.63rem;color:#556080}
+.pl-xrange input[type=number]{
+  font-family:'DM Mono',monospace;font-size:.66rem;width:66px;
+  background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;
+  padding:.2rem .35rem;outline:none;text-align:center;
+}
+.pl-xrange input[type=number]:focus{border-color:#4ab0d8}
+/* ── Canvas area ── */
+#pl-canvas{
+  padding:1.4rem 1.8rem 1.2rem;display:flex;flex-direction:column;gap:.95rem;
+  overflow-y:auto;background:#0d1117;
+}
+#pl-canvas::-webkit-scrollbar{width:4px}
+#pl-canvas::-webkit-scrollbar-thumb{background:#1e2a40}
+/* main plot */
+#pl-plot-wrap{
+  flex:1;min-height:300px;position:relative;
+}
+#pl-plot-title{
+  font-family:'Fraunces',Georgia,serif;font-size:1.12rem;font-weight:300;
+  color:#e8e2d8;margin-bottom:.1rem;
+}
+#pl-plot-title em{color:#4ab0d8;font-style:italic}
+#pl-plot-desc{
+  font-family:'DM Mono',monospace;font-size:.64rem;color:#556080;
+  margin-bottom:.7rem;line-height:1.75;
+}
+#pl-svg-wrap{width:100%}
+/* coverage table */
+#pl-coverage{
+  font-family:'DM Mono',monospace;font-size:.64rem;color:#556080;
+  display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem;
+}
+.pl-cov-item{
+  background:#0a0e16;border:1px solid #1e2a40;padding:.3rem .6rem;
+  white-space:nowrap;
+}
+.pl-cov-item b{color:#9ae4f8}
+</style>
+
+<div id="prior-lab-overlay" onclick="closePriorLabIfBg(event)">
+<div id="prior-lab-modal">
+  <div id="pl-header">
+    <div>
+      <h2>Prior <em>Lab</em></h2>
+      <div class="pl-sub">Distribution Explorer · Prior Visualizer · brms-ready</div>
+    </div>
+    <button id="pl-close" onclick="closePriorLab()">✕ Schließen</button>
+  </div>
+  <div id="pl-body">
+    <!-- sidebar -->
+    <div id="pl-sidebar">
+      <div>
+        <div class="pl-section-title">Verteilung</div>
+        <div class="pl-dists" id="pl-dist-list"></div>
+      </div>
+      <div>
+        <div class="pl-section-title">Parameter</div>
+        <div class="pl-params" id="pl-params"></div>
+      </div>
+      <div class="pl-stats" id="pl-stats"></div>
+    </div>
+    <!-- main canvas -->
+    <div id="pl-canvas">
+      <div id="pl-plot-wrap">
+        <div id="pl-plot-title"></div>
+        <div id="pl-plot-desc"></div>
+        <!-- x-range controls in canvas, above plot — always visible -->
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.55rem;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:.67rem;color:#556080">x-Achse:</span>
+          <label style="font-family:'DM Mono',monospace;font-size:.67rem;color:#556080">von</label>
+          <input type="number" id="pl-xlo" value="-4" step="0.5" onchange="plUpdatePlot()"
+            style="font-family:'DM Mono',monospace;font-size:.72rem;width:72px;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.2rem .3rem;outline:none;text-align:center">
+          <label style="font-family:'DM Mono',monospace;font-size:.67rem;color:#556080">bis</label>
+          <input type="number" id="pl-xhi" value="4"  step="0.5" onchange="plUpdatePlot()"
+            style="font-family:'DM Mono',monospace;font-size:.65rem;width:68px;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.2rem .3rem;outline:none;text-align:center">
+          <button onclick="plAutoRange()" style="font-family:'DM Mono',monospace;font-size:.68rem;border:1px solid #2a3550;background:transparent;cursor:pointer;color:#4ab0d8;padding:.25rem .7rem;white-space:nowrap;transition:all .12s" onmouseover="this.style.background='#4ab0d8';this.style.color='#0d1117'" onmouseout="this.style.background='transparent';this.style.color='#4ab0d8'">↔ Auto</button>
+        </div>
+        <div id="pl-svg-wrap"></div>
+      </div>
+      <div id="pl-coverage"></div>
+      <!-- ── Reverse CI solver ── -->
+      <div id="pl-reverse" style="margin-top:.8rem;background:#0a0e16;border:1.5px solid #1e2a40;padding:.9rem 1.1rem">
+        <div style="font-family:'DM Mono',monospace;font-size:.67rem;letter-spacing:.1em;text-transform:uppercase;color:#2a3550;padding-bottom:.35rem;border-bottom:1px solid #1e2a40;margin-bottom:.65rem">⟳ Credible-Interval → Parameter</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:#556080;margin-bottom:.6rem;line-height:1.65">Gib das gewünschte Credible Interval an — der Solver findet automatisch die passenden Parameter.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;align-items:end;margin-bottom:.55rem">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:#556080;margin-bottom:.2rem">Untere Grenze</div>
+            <input type="number" id="pl-ci-lo" value="-2" step="0.1"
+              style="font-family:'DM Mono',monospace;font-size:.74rem;width:100%;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.3rem .45rem;outline:none;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:#556080;margin-bottom:.2rem">Obere Grenze</div>
+            <input type="number" id="pl-ci-hi" value="5" step="0.1"
+              style="font-family:'DM Mono',monospace;font-size:.68rem;width:100%;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.28rem .4rem;outline:none;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:#556080;margin-bottom:.2rem">Masse (%)</div>
+            <input type="number" id="pl-ci-pct" value="95" min="1" max="99" step="1"
+              style="font-family:'DM Mono',monospace;font-size:.74rem;width:78px;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.28rem .4rem;outline:none;text-align:center">
+          </div>
+        </div>
+        <button onclick="plSolvCI()" style="font-family:'DM Mono',monospace;font-size:.73rem;border:1.5px solid #4ab0d8;background:transparent;cursor:pointer;color:#4ab0d8;padding:.35rem 1.1rem;width:100%;transition:all .12s;letter-spacing:.04em" onmouseover="this.style.background='#4ab0d8';this.style.color='#0d1117'" onmouseout="this.style.background='transparent';this.style.color='#4ab0d8'">▶ Parameter berechnen</button>
+        <div id="pl-ci-result" style="margin-top:.55rem;font-family:'DM Mono',monospace;font-size:.70rem;color:#9ae4f8;line-height:1.75"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  PRIOR LAB  – self-contained distribution explorer
+// ══════════════════════════════════════════════════════════
+(function(){
+'use strict';
+
+// ── Distribution definitions ─────────────────────────────
+const DISTS = [
+  {
+    id:'normal', name:'Normal', brms:'normal(μ, σ)',
+    desc:'Symmetrische Glockenkurve. Standardwahl für Intercept und Koeffizienten bei z-standardisierten Variablen. Leichte Ränder → gelegentlich extreme Werte möglich.',
+    params:[
+      {id:'mu',  label:'μ (Lage)',   min:-20, max:20,  step:0.1,  val:0},
+      {id:'sig', label:'σ (Skala)',  min:0.01,max:20,  step:0.1,  val:1},
+    ],
+    pdf:(x,p)=>{const z=(x-p.mu)/p.sig;return Math.exp(-.5*z*z)/(p.sig*Math.sqrt(2*Math.PI));},
+    cdf:(x,p)=>jStat.normal.cdf(x,p.mu,p.sig),
+    mean:p=>p.mu, variance:p=>p.sig**2,
+    support:p=>[-Infinity,Infinity],
+  },
+  {
+    id:'student_t', name:'Student-t', brms:'student_t(ν, μ, σ)',
+    desc:'Wie Normal, aber mit schwereren Rändern — robuster gegenüber Ausreißern. ν=1 ist Cauchy (extrem heavy-tailed), ν>30 ≈ Normal. Empfohlen: ν=3–7.',
+    params:[
+      {id:'nu',  label:'ν (Freiheitsgrade)', min:1,   max:50,   step:0.5, val:3},
+      {id:'mu',  label:'μ (Lage)',            min:-20, max:20,   step:0.1, val:0},
+      {id:'sig', label:'σ (Skala)',           min:0.01,max:20,   step:0.1, val:1},
+    ],
+    pdf:(x,p)=>jStat.studentt.pdf((x-p.mu)/p.sig,p.nu)/p.sig,
+    cdf:(x,p)=>jStat.studentt.cdf((x-p.mu)/p.sig,p.nu),
+    mean:p=>(p.nu>1?p.mu:NaN), variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2):Infinity),
+    support:p=>[-Infinity,Infinity],
+  },
+  {
+    id:'cauchy', name:'Cauchy', brms:'cauchy(μ, σ)',
+    desc:'Extrem heavy-tailed. Kein endlicher Mittelwert oder Varianz. Nützlich als sehr vager Prior, der seltenen extremen Werten viel Gewicht gibt. Entspricht Student-t mit ν=1.',
+    params:[
+      {id:'mu',  label:'μ (Lage)',  min:-20, max:20, step:0.1, val:0},
+      {id:'sig', label:'σ (Skala)',min:0.01,max:20, step:0.1, val:1},
+    ],
+    pdf:(x,p)=>1/(Math.PI*p.sig*(1+((x-p.mu)/p.sig)**2)),
+    cdf:(x,p)=>.5+Math.atan((x-p.mu)/p.sig)/Math.PI,
+    mean:p=>'—', variance:p=>'—',
+    support:p=>[-Infinity,Infinity],
+  },
+  {
+    id:'half_normal', name:'Half-Normal', brms:'half_normal(0, σ)',
+    desc:'Normal(0,σ) mit x≥0. Klassischer weakly-informative Prior für Standardabweichungen σ und Random-Effect-SDs τ. E[x] = σ√(2/π) ≈ 0.8σ.',
+    params:[
+      {id:'sig', label:'σ (Skala)', min:0.01,max:20, step:0.1, val:1},
+    ],
+    pdf:(x,p)=>(x<0?0:Math.sqrt(2/Math.PI)/p.sig*Math.exp(-.5*(x/p.sig)**2)),
+    cdf:(x,p)=>(x<0?0:jStat.normal.cdf(x,0,p.sig)*2-1),
+    mean:p=>p.sig*Math.sqrt(2/Math.PI),
+    variance:p=>p.sig**2*(1-2/Math.PI),
+    support:p=>[0,Infinity],
+  },
+  {
+    id:'half_student', name:'Half-Student-t', brms:'half_student_t(ν, 0, σ)',
+    desc:'Student-t mit x≥0. Schwerere Ränder als Half-Normal — erlaubt gelegentlich große SDs. Guter Kompromiss zwischen Half-Normal und Half-Cauchy.',
+    params:[
+      {id:'nu',  label:'ν (Freiheitsgrade)', min:1,   max:50,  step:0.5, val:3},
+      {id:'sig', label:'σ (Skala)',          min:0.01,max:20,  step:0.1, val:1},
+    ],
+    pdf:(x,p)=>(x<0?0:2*jStat.studentt.pdf(x/p.sig,p.nu)/p.sig),
+    cdf:(x,p)=>(x<0?0:2*jStat.studentt.cdf(x/p.sig,p.nu)-1),
+    mean:p=>(p.nu>1?p.sig*Math.sqrt(p.nu/Math.PI)*jStat.gammafn((p.nu-1)/2)/jStat.gammafn(p.nu/2):NaN),
+    variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2)*(1-2/Math.PI):Infinity),
+    support:p=>[0,Infinity],
+  },
+  {
+    id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
+    desc:'Cauchy mit x≥0. Sehr schwere Ränder — lässt große SDs zu. Früher beliebt für σ-Priors, mittlerweile oft durch Half-Normal oder Exponential ersetzt.',
+    params:[
+      {id:'sig', label:'σ (Skala)', min:0.01,max:20, step:0.1, val:1},
+    ],
+    pdf:(x,p)=>(x<0?0:2/(Math.PI*p.sig*(1+(x/p.sig)**2))),
+    cdf:(x,p)=>(x<0?0:2*Math.atan(x/p.sig)/Math.PI),
+    mean:p=>'—', variance:p=>'—',
+    support:p=>[0,Infinity],
+  },
+  {
+    id:'gamma', name:'Gamma', brms:'gamma(α, β)',
+    desc:'Flexibler Prior für positive Größen (σ, Rate, Konzentration). E[x]=α/β, Var=α/β². α=1 entspricht Exponential(β). Gut geeignet wenn Werte nicht zu nahe an 0.',
+    params:[
+      {id:'alpha', label:'α (Shape)',  min:0.1, max:20, step:0.1, val:2},
+      {id:'beta',  label:'β (Rate)',   min:0.1, max:20, step:0.1, val:1},
+    ],
+    pdf:(x,p)=>(x<=0?0:jStat.gamma.pdf(x,p.alpha,1/p.beta)),
+    cdf:(x,p)=>(x<=0?0:jStat.gamma.cdf(x,p.alpha,1/p.beta)),
+    mean:p=>p.alpha/p.beta,
+    variance:p=>p.alpha/(p.beta**2),
+    support:p=>[0,Infinity],
+  },
+  {
+    id:'exponential', name:'Exponential', brms:'exponential(λ)',
+    desc:'Gamma(1,λ). Monoton fallend — gibt 0 das höchste Gewicht. Standard-Prior für σ in brms. E[x]=1/λ. λ=1: E[σ]=1, λ=0.5: E[σ]=2, λ=0.1: E[σ]=10.',
+    params:[
+      {id:'lambda', label:'λ (Rate)', min:0.01, max:5, step:0.01, val:1},
+    ],
+    pdf:(x,p)=>(x<0?0:p.lambda*Math.exp(-p.lambda*x)),
+    cdf:(x,p)=>(x<0?0:1-Math.exp(-p.lambda*x)),
+    mean:p=>1/p.lambda,
+    variance:p=>1/p.lambda**2,
+    support:p=>[0,Infinity],
+  },
+  {
+    id:'skew_normal', name:'Skewed Normal', brms:'skew_normal(μ, σ, α)',
+    desc:'Normal mit Schiefe. α>0: Rechtsschiefe, α<0: Linksschiefe, α=0: Normal. Nützlich wenn Prior asymmetrisch sein soll.',
+    params:[
+      {id:'mu',    label:'μ (Lage)',    min:-20, max:20, step:0.1, val:0},
+      {id:'sig',   label:'σ (Skala)',  min:0.01,max:20, step:0.1, val:1},
+      {id:'skew',  label:'α (Schiefe)',min:-10, max:10, step:0.2, val:3},
+    ],
+    pdf:(x,p)=>{
+      const z=(x-p.mu)/p.sig;
+      const phi=Math.exp(-.5*z*z)/Math.sqrt(2*Math.PI);
+      const Phi=.5*(1+plErf(p.skew*z/Math.sqrt(2)));
+      return 2/p.sig*phi*Phi;
+    },
+    cdf:(x,p)=>{
+      // Owen's T function approximation for skew-normal CDF
+      const z=(x-p.mu)/p.sig;
+      const normCdf = v=>.5*(1+plErf(v/Math.sqrt(2)));
+      // CDF(x) = Φ(z) - 2·T(z, α) using numerical Owen's T approximation
+      // Simple: integrate pdf numerically from support lo
+      // Fast approximation: Φ(z) - 2·Φ(-|α|·|z|/√(1+α²))·Φ(z)  (not exact but fast)
+      const a=p.skew;
+      return normCdf(z) - 2*owenT(z, a);
+    },
+    mean:p=>{const d=p.skew/Math.sqrt(1+p.skew**2);return p.mu+p.sig*d*Math.sqrt(2/Math.PI);},
+    variance:p=>{const d=p.skew/Math.sqrt(1+p.skew**2);return p.sig**2*(1-2*d**2/Math.PI);},
+    support:p=>[-Infinity,Infinity],
+  },
+  {
+    id:'beta', name:'Beta', brms:'beta(α, β)',
+    desc:'Definiert auf [0,1]. Perfekt für Wahrscheinlichkeiten und Proportionen. α=β=1: Uniform. α>β: Linksschiefe. α=β>1: konzentriert um 0.5. In brms für phi-Parameter.',
+    params:[
+      {id:'alpha', label:'α (Shape 1)', min:0.1, max:20, step:0.1, val:2},
+      {id:'beta',  label:'β (Shape 2)', min:0.1, max:20, step:0.1, val:2},
+    ],
+    pdf:(x,p)=>(x<0||x>1?0:jStat.beta.pdf(x,p.alpha,p.beta)),
+    cdf:(x,p)=>(x<0?0:x>1?1:jStat.beta.cdf(x,p.alpha,p.beta)),
+    mean:p=>p.alpha/(p.alpha+p.beta),
+    variance:p=>p.alpha*p.beta/((p.alpha+p.beta)**2*(p.alpha+p.beta+1)),
+    support:p=>[0,1],
+  },
+  {
+    id:'lkj', name:'LKJ', brms:'lkj(η)',
+    desc:'Prior für Korrelationsmatrizen in Random-Slope-Modellen. Visualisiert hier als Verteilung eines einzelnen Korrelationskoeffizienten ρ ∈ [-1,1]. η=1: Uniform über alle Korrelationen. η>1: konzentriert um 0. η<1: bimodal (extreme Korrelationen bevorzugt).',
+    params:[
+      {id:'eta', label:'η (Konzentration)', min:0.5, max:20, step:0.25, val:2},
+    ],
+    // For a single correlation from LKJ(η) with d=2: pdf ∝ (1-ρ²)^(η-1)
+    pdf:(x,p)=>{
+      if(x<=-1||x>=1)return 0;
+      // normalising constant for d=2 LKJ
+      const B=jStat.betafn(p.eta,p.eta);
+      return Math.pow(1-x*x,p.eta-1)/(2*(2*p.eta-1)*B||1);
+    },
+    cdf:(x,p)=>null,
+    mean:p=>0,
+    variance:p=>(p.eta>1?1/(2*p.eta-1):null),
+    support:p=>[-1,1],
+  },
+];
+
+// helper functions (defined before DISTS for hoisting safety)
+function plErf(x){
+  const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;
+  const sign=x<0?-1:1; const ax=Math.abs(x);
+  const t=1/(1+p*ax);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-ax*ax);
+  return sign*y;
+}
+function owenT(h, a) {
+  // Numerical Owen's T via 5-point Gauss-Legendre (fast, accurate for |a|<1e4)
+  const normPdf=x=>Math.exp(-.5*x*x)/Math.sqrt(2*Math.PI);
+  const normCdf=x=>.5*(1+plErf(x/Math.sqrt(2)));
+  // T(h,a) = (1/2π) ∫_0^a exp(-h²(1+x²)/2)/(1+x²) dx
+  // For large |a|: T(h,a) ≈ sign(a)*[Φ(h)-0.5] * Φ(-|a|*|h|/√(1+a²))  (approx)
+  // Use 5-point GL on [0,a]:
+  const wts=[0.5688888889,0.4786286705,0.4786286705,0.2369268851,0.2369268851];
+  const pts=[0.0000000000,0.5384693101,-0.5384693101,0.9061798459,-0.9061798459];
+  const half_a=a/2;
+  let s=0;
+  for(let i=0;i<5;i++){
+    const x=half_a*(1+pts[i]);
+    s+=wts[i]*Math.exp(-.5*h*h*(1+x*x))/(1+x*x);
+  }
+  return half_a*s/(2*Math.PI);
+}
+
+// ── State ────────────────────────────────────────────────
+let plDist  = DISTS[0];
+let plParams = {};
+
+// ── Init ─────────────────────────────────────────────────
+function initPriorLab(){
+  // build dist buttons
+  const dl = document.getElementById('pl-dist-list');
+  dl.innerHTML='';
+  DISTS.forEach(d=>{
+    const b=document.createElement('button');
+    b.className='pl-dist-btn'+(d===DISTS[0]?' active':'');
+    b.textContent=d.name;
+    b.dataset.id=d.id;
+    b.onclick=()=>plSelectDist(d.id);
+    dl.appendChild(b);
+  });
+  plSelectDist(DISTS[0].id);
+}
+
+function plSelectDist(id){
+  plDist = DISTS.find(d=>d.id===id);
+  // reset params
+  plParams={};
+  plDist.params.forEach(p=>{ plParams[p.id]=p.val; });
+  // active button
+  document.querySelectorAll('.pl-dist-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.id===id);
+  });
+  // render param sliders
+  renderPlParams();
+  // auto x-range
+  plAutoRange();
+}
+
+function renderPlParams(){
+  const c=document.getElementById('pl-params');
+  c.innerHTML='';
+  plDist.params.forEach(p=>{
+    const div=document.createElement('div');
+    div.className='pl-pg';
+    div.innerHTML=`
+      <div class="pl-pl">
+        <span class="pl-lbl">${p.label}</span>
+        <span class="pl-val" id="plv-${p.id}">${plParams[p.id].toFixed(2)}</span>
+      </div>
+      <input class="pl-range" type="range" id="plr-${p.id}"
+             min="${p.min}" max="${p.max}" step="${p.step}" value="${plParams[p.id]}"
+             oninput="plSetParam('${p.id}',+this.value)">`;
+    c.appendChild(div);
+  });
+}
+
+window.plSetParam=function(pid,val){
+  plParams[pid]=val;
+  const vd=document.getElementById('plv-'+pid); if(vd) vd.textContent=val.toFixed(2);
+  plUpdatePlot();
+};
+
+window.plAutoRange=function(){
+  const supp=plDist.support(plParams);
+  let lo,hi;
+  if(plDist.id==='beta'){lo=0;hi=1;}
+  else if(plDist.id==='lkj'){lo=-1;hi=1;}
+  else{
+    // use quantile-based auto-range
+    try{
+      if(plDist.cdf){
+        // find 0.001 and 0.999 quantile by bisection
+        lo=findQuantile(0.005); hi=findQuantile(0.995);
+      } else {
+        const mu=typeof plDist.mean(plParams)==='number'?plDist.mean(plParams):0;
+        const v=typeof plDist.variance(plParams)==='number'?Math.sqrt(plDist.variance(plParams)):3;
+        lo=supp[0]===-Infinity?mu-4*Math.max(v,1):supp[0];
+        hi=supp[1]===Infinity ?mu+4*Math.max(v,1):mu+4*Math.max(v,1);
+      }
+    } catch(e){ lo=-5;hi=5; }
+  }
+  lo=Math.max(lo, supp[0]===-Infinity?lo:supp[0]);
+  hi=Math.min(hi, supp[1]=== Infinity?hi:supp[1]);
+  // nice round
+  const rnd=v=>Math.round(v*100)/100;
+  document.getElementById('pl-xlo').value=rnd(lo- (hi-lo)*0.05);
+  document.getElementById('pl-xhi').value=rnd(hi+ (hi-lo)*0.05);
+  plUpdatePlot();
+};
+
+function findQuantile(q){
+  const lo0=-1e6,hi0=1e6;
+  let a=lo0,b=hi0;
+  for(let i=0;i<80;i++){
+    const m=(a+b)/2;
+    const c=plDist.cdf(m,plParams);
+    if(c<q) a=m; else b=m;
+    if(b-a<1e-6) break;
+  }
+  return (a+b)/2;
+}
+
+window.plUpdatePlot=function(){
+  const lo=parseFloat(document.getElementById('pl-xlo').value)||(-5);
+  const hi=parseFloat(document.getElementById('pl-xhi').value)||(5);
+  if(lo>=hi) return;
+  const N=400;
+  const xs=Array.from({length:N},(_,i)=>lo+i*(hi-lo)/(N-1));
+  const ys=xs.map(x=>{
+    try{ const v=plDist.pdf(x,plParams); return (isFinite(v)&&v>=0)?v:0; }
+    catch(e){return 0;}
+  });
+  const yMax=Math.max(...ys)*1.15||1;
+
+  // ── SVG via D3 ──
+  const wrap=document.getElementById('pl-svg-wrap');
+  if(!wrap) return;
+  const W=wrap.clientWidth||600;
+  const H=300;
+  const m={l:52,r:20,t:18,b:36};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+
+  d3.select(wrap).selectAll('*').remove();
+  const svg=d3.select(wrap).append('svg')
+    .attr('width',W).attr('height',H)
+    .style('overflow','visible');
+  const g=svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xSc=d3.scaleLinear().domain([lo,hi]).range([0,Wp]);
+  const ySc=d3.scaleLinear().domain([0,yMax]).range([Hp,0]);
+
+  // grid
+  g.append('g').call(d3.axisLeft(ySc).ticks(4).tickSize(-Wp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke','#1a2235').attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill','#3a4a60').attr('font-size','11px').attr('font-family','DM Mono,monospace');});
+  g.append('g').attr('transform',`translate(0,${Hp})`)
+   .call(d3.axisBottom(xSc).ticks(6).tickSize(-Hp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke','#1a2235').attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill','#3a4a60').attr('font-size','11px').attr('font-family','DM Mono,monospace');});
+
+  // zero line
+  if(lo<0&&hi>0){
+    const x0=xSc(0);
+    g.append('line').attr('x1',x0).attr('x2',x0).attr('y1',0).attr('y2',Hp)
+     .attr('stroke','#2a3550').attr('stroke-dasharray','3,4');
+  }
+
+  // gradient fill
+  const gradId='pl-grad-'+Date.now();
+  const defs=svg.append('defs');
+  const lg=defs.append('linearGradient').attr('id',gradId).attr('x1',0).attr('x2',0).attr('y1',0).attr('y2',1);
+  lg.append('stop').attr('offset','0%').attr('stop-color','#4ab0d8').attr('stop-opacity',.3);
+  lg.append('stop').attr('offset','100%').attr('stop-color','#4ab0d8').attr('stop-opacity',.01);
+
+  const pts=xs.map((x,i)=>[x,ys[i]]);
+  const area=d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+  const line=d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis);
+
+  g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
+  g.append('path').datum(pts).attr('fill','none')
+   .attr('stroke','#4ab0d8').attr('stroke-width',2.5).attr('d',line);
+
+  // mean line (if finite)
+  const mn=plDist.mean(plParams);
+  if(typeof mn==='number'&&isFinite(mn)&&mn>=lo&&mn<=hi){
+    const xm=xSc(mn);
+    g.append('line').attr('x1',xm).attr('x2',xm).attr('y1',0).attr('y2',Hp)
+     .attr('stroke','#7ec850').attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+    g.append('text').attr('x',xm+4).attr('y',12)
+     .attr('fill','#7ec850').attr('font-size','10px').attr('font-family','DM Mono,monospace')
+     .text('μ');
+  }
+
+  // title
+  document.getElementById('pl-plot-title').innerHTML=`<em>${plDist.name}</em> — ${plDist.brms}`;
+  document.getElementById('pl-plot-desc').textContent=plDist.desc;
+
+  // stats
+  const mean=plDist.mean(plParams);
+  const vari=plDist.variance(plParams);
+  const sd=typeof vari==='number'&&isFinite(vari)?Math.sqrt(vari):'—';
+  document.getElementById('pl-stats').innerHTML=`
+    <div class="pl-stat"><span class="sv">${typeof mean==='number'&&isFinite(mean)?mean.toFixed(3):'—'}</span><span class="sl">E[x]</span></div>
+    <div class="pl-stat"><span class="sv">${typeof sd==='number'?sd.toFixed(3):sd}</span><span class="sl">SD</span></div>
+    <div class="pl-stat"><span class="sv">${typeof vari==='number'&&isFinite(vari)?vari.toFixed(3):(vari===Infinity?'∞':'—')}</span><span class="sl">Var</span></div>`;
+
+  // coverage intervals
+  let covHTML='';
+  if(plDist.cdf){
+    [[50,'50%'],[80,'80%'],[95,'95%'],[99,'99%']].forEach(([p,lbl])=>{
+      try{
+        const lo2=findQuantileWith(q=>(1-p/100)/2);
+        const hi2=findQuantileWith(q=>1-(1-p/100)/2);
+        covHTML+=`<div class="pl-cov-item"><b>${lbl}</b>: [${lo2.toFixed(2)}, ${hi2.toFixed(2)}]</div>`;
+      }catch(e){}
+    });
+  }
+  document.getElementById('pl-coverage').innerHTML=covHTML
+    ? '<span style="font-family:\'DM Mono\',monospace;font-size:.53rem;color:#2a3550;display:block;width:100%;margin-bottom:.3rem;letter-spacing:.1em;text-transform:uppercase">Credible Intervals</span>'+covHTML
+    : '';
+};
+
+function findQuantileWith(qFn){
+  // dynamic wrapper
+  return findQuantileVal(qFn());
+}
+function findQuantileVal(q){
+  let a=-1e6,b=1e6;
+  const supp=plDist.support(plParams);
+  if(isFinite(supp[0])) a=supp[0]-0.001;
+  if(isFinite(supp[1])) b=supp[1]+0.001;
+  for(let i=0;i<100;i++){
+    const m=(a+b)/2;
+    const c=plDist.cdf(m,plParams)||0;
+    if(c<q) a=m; else b=m;
+    if(b-a<1e-7) break;
+  }
+  return (a+b)/2;
+}
+
+// ── Reverse CI solver ─────────────────────────────────────
+window.plSolvCI=function(){
+  const lo=parseFloat(document.getElementById('pl-ci-lo').value);
+  const hi=parseFloat(document.getElementById('pl-ci-hi').value);
+  const pct=parseFloat(document.getElementById('pl-ci-pct').value)||95;
+  const res=document.getElementById('pl-ci-result');
+  if(!isFinite(lo)||!isFinite(hi)||lo>=hi){res.textContent='Fehler: Untere Grenze muss < obere Grenze sein.';return;}
+  if(pct<=0||pct>=100){res.textContent='Fehler: Masse muss zwischen 1% und 99% liegen.';return;}
+  const q_lo=(1-pct/100)/2, q_hi=1-q_lo;
+  const dist=plDist;
+  const setP=(id,v)=>{const r=document.getElementById('plr-'+id),dv=document.getElementById('plv-'+id);if(r){r.value=v;}if(dv){dv.textContent=(+v).toFixed(2);}if(plParams[id]!==undefined)plParams[id]=+v;};
+  try {
+    if(dist.id==='normal'){
+      const z_lo=plInvNorm(q_lo), z_hi=plInvNorm(q_hi);
+      const sigma=(hi-lo)/(z_hi-z_lo);
+      const mu=(lo+hi)/2;
+      res.innerHTML=`<b>Normal:</b> μ = ${mu.toFixed(4)}, σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${(mu+sigma*z_lo).toFixed(3)}, ${(mu+sigma*z_hi).toFixed(3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='student_t'){
+      const nu=plParams.nu||3;
+      const t_lo=jStat.studentt.inv(q_lo,nu), t_hi=jStat.studentt.inv(q_hi,nu);
+      const sigma=(hi-lo)/(t_hi-t_lo);
+      const mu=(lo+hi)/2;
+      res.innerHTML=`<b>Student-t(ν=${nu.toFixed(1)}):</b> μ = ${mu.toFixed(4)}, σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${(mu+sigma*t_lo).toFixed(3)}, ${(mu+sigma*t_hi).toFixed(3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='cauchy'){
+      // CDF of Cauchy: F(x)=0.5+atan((x-mu)/sig)/pi → inv: mu+sig*tan(pi*(p-0.5))
+      const t_lo=Math.tan(Math.PI*(q_lo-.5)), t_hi=Math.tan(Math.PI*(q_hi-.5));
+      const sigma=(hi-lo)/(t_hi-t_lo);
+      const mu=(lo+hi)/2;
+      res.innerHTML=`<b>Cauchy:</b> μ = ${mu.toFixed(4)}, σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${(mu+sigma*t_lo).toFixed(3)}, ${(mu+sigma*t_hi).toFixed(3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='exponential'){
+      const lambda=-Math.log(1-q_hi)/hi;
+      res.innerHTML=`<b>Exponential:</b> λ = ${lambda.toFixed(4)}&nbsp;&nbsp;E[x]=${(1/lambda).toFixed(3)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [0, ${(-Math.log(1-q_hi)/lambda).toFixed(3)}]</span>`;
+      setP('lambda',lambda); plAutoRange();
+    } else if(dist.id==='half_normal'){
+      const sigma=hi/plInvNorm((q_hi+1)/2);
+      res.innerHTML=`<b>Half-Normal:</b> σ = ${sigma.toFixed(4)}&nbsp;&nbsp;E[x]=${(sigma*Math.sqrt(2/Math.PI)).toFixed(3)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [0, ${hi.toFixed(3)}]</span>`;
+      setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='half_cauchy'){
+      const sigma=hi/Math.tan(Math.PI*q_hi/2);
+      res.innerHTML=`<b>Half-Cauchy:</b> σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [0, ${hi.toFixed(3)}]</span>`;
+      setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='gamma'){
+      if(lo<=0){res.textContent='Fehler: Gamma ist auf x>0 definiert (untere Grenze > 0 setzen).';return;}
+      // Robust nested solver using the chi-squared relationship:
+      //   X ~ Gamma(α,β)  ↔  2βX ~ χ²(2α)
+      // Inner: for fixed α, β is CLOSED FORM: β = χ²-inv(q_hi, 2α) / (2·hi)
+      // Outer: bisect α so that χ²-cdf(2·β(α)·lo, 2α) = q_lo
+      //   f(α) = cdf(lo) is monotone DECREASING in α → if f>q_lo: α too small → aLo=am
+      function _getBeta(a){return _plChi2inv(q_hi,2*a)/(2*hi);}
+      let aLo=0.01,aHi=500;
+      for(let i=0;i<200;i++){
+        const am=(aLo+aHi)/2;
+        const beta=_getBeta(am);
+        const cdf=_plChi2cdf(2*beta*lo,2*am);
+        if(cdf>q_lo)aLo=am;else aHi=am;   // f decreasing: f>q_lo → α too small
+        if(aHi-aLo<1e-9)break;
+      }
+      const alpha=(aLo+aHi)/2,beta=_getBeta(alpha);
+      const ciLo=_plChi2inv(q_lo,2*alpha)/(2*beta),ciHi=_plChi2inv(q_hi,2*alpha)/(2*beta);
+      res.innerHTML=`<b>Gamma:</b> α = ${alpha.toFixed(4)}, β = ${beta.toFixed(4)}&nbsp;&nbsp;E[x] = ${(alpha/beta).toFixed(3)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${ciLo.toFixed(3)}, ${ciHi.toFixed(3)}]</span>`;
+      setP('alpha',alpha);setP('beta',beta);plAutoRange();
+    } else if(dist.id==='beta'){
+      if(lo<0||hi>1){res.textContent='Fehler: Beta-Verteilung ist auf [0,1] definiert.';return;}
+      // Nested bisection on (alpha, beta):
+      // Inner: fix alpha, find beta s.t. CDF(hi, alpha, beta) = q_hi
+      //   Larger beta → more mass near 0 → higher CDF at hi → if CDF too low, need larger beta → bLo=bm
+      // Outer: find alpha s.t. CDF(lo, alpha, betaInner(alpha)) = q_lo
+      //   Larger alpha → less mass near 0 → lower CDF at lo → if CDF too low, need smaller alpha → aHi=am
+      function betaInner(a){
+        let bLo=1e-4, bHi=2000;
+        for(let i=0;i<120;i++){
+          const bm=(bLo+bHi)/2;
+          if(jStat.beta.cdf(hi,a,bm)<q_hi) bLo=bm; else bHi=bm;  // larger beta → higher CDF
+          if(bHi-bLo<1e-9)break;
+        }
+        return (bLo+bHi)/2;
+      }
+      let aLo=1e-4, aHi=500;
+      for(let i=0;i<120;i++){
+        const am=(aLo+aHi)/2;
+        const bm=betaInner(am);
+        if(jStat.beta.cdf(lo,am,bm)<q_lo) aHi=am; else aLo=am;  // larger alpha → lower CDF at lo
+        if(aHi-aLo<1e-7)break;
+      }
+      const a=(aLo+aHi)/2, b_=betaInner(a);
+      const ciLo=jStat.beta.inv(q_lo,a,b_), ciHi=jStat.beta.inv(q_hi,a,b_);
+      res.innerHTML=`<b>Beta:</b> α = ${a.toFixed(4)}, β = ${b_.toFixed(4)}&nbsp;&nbsp;E[x]=${(a/(a+b_)).toFixed(3)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${ciLo.toFixed(3)}, ${ciHi.toFixed(3)}]</span>`;
+      setP('alpha',a); setP('beta',b_); plAutoRange();
+    } else if(dist.id==='skew_normal'){
+      // Strategy: fix skew at current value, find μ and σ analytically via standardized quantiles.
+      // For SN(μ, σ, skew): x_p = μ + σ * z_p  where z_p is the p-quantile of SN(0,1,skew).
+      // So: σ = (hi - lo) / (z_hi_std - z_lo_std),  μ = lo - σ * z_lo_std
+      const skew = plParams.skew || 0;
+      // Numerically invert SN(0,1,skew) CDF using bisection
+      function snCdf01(x) {
+        const z = x; // mu=0, sig=1
+        const normCdf = v => .5*(1+plErf(v/Math.sqrt(2)));
+        const a = skew;
+        return normCdf(z) - 2*owenT(z, a);
+      }
+      function snInv01(p) {
+        let lo2=-30, hi2=30;
+        for(let i=0;i<120;i++){
+          const m=(lo2+hi2)/2;
+          if(snCdf01(m)<p) lo2=m; else hi2=m;
+          if(hi2-lo2<1e-8)break;
+        }
+        return (lo2+hi2)/2;
+      }
+      const z_lo2 = snInv01(q_lo), z_hi2 = snInv01(q_hi);
+      if(!isFinite(z_lo2)||!isFinite(z_hi2)||Math.abs(z_hi2-z_lo2)<1e-9){
+        res.textContent='Solver konnte keine Lösung finden — bitte Grenzen anpassen.'; return;
+      }
+      const sigma = (hi-lo)/(z_hi2-z_lo2);
+      const mu = lo - sigma*z_lo2;
+      const ciLo = mu + sigma*z_lo2, ciHi = mu + sigma*z_hi2;
+      res.innerHTML=`<b>Skewed Normal(skew=${skew.toFixed(1)}):</b> μ = ${mu.toFixed(4)}, σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.57rem">${pct}%-CI ≈ [${ciLo.toFixed(3)}, ${ciHi.toFixed(3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma); plAutoRange();
+    } else {
+      if(!plDist.cdf){res.innerHTML='<span style="color:#556080">Kein CDF verfügbar — bitte Parameter manuell anpassen.</span>';return;}
+      const clo=plDist.cdf(lo,plParams)||0, chi=plDist.cdf(hi,plParams)||0;
+      res.innerHTML=`<span style="color:#556080">Mit aktuellen Parametern: P(x&lt;${lo})=${(clo*100).toFixed(1)}%, P(x&lt;${hi})=${(chi*100).toFixed(1)}%.<br>Ziel: ${(q_lo*100).toFixed(1)}% / ${(q_hi*100).toFixed(1)}%. Parameter manuell anpassen.</span>`;
+    }
+    plUpdatePlot();
+  } catch(e){ res.textContent='Solver-Fehler: '+e.message; }
+};
+
+function plInvNorm(p){
+  if(p<=0)return -Infinity;if(p>=1)return Infinity;
+  const a=[2.515517,0.802853,0.010328],b=[1.432788,0.189269,0.001308];
+  const t=p<.5?Math.sqrt(-2*Math.log(p)):Math.sqrt(-2*Math.log(1-p));
+  const num=a[0]+t*(a[1]+t*a[2]),den=1+t*(b[0]+t*(b[1]+t*b[2]));
+  const z=t-num/den;return p<.5?-z:z;
+}
+// ── Chi-squared helpers for Gamma CI solver ──────────────
+// Regularised lower incomplete gamma P(a,x) via series/CF (Numerical Recipes §6.2)
+function _plGammaInc(a,x){
+  if(x<=0)return 0;
+  function lgam(z){
+    const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,1.208650973866179e-3,-5.395239384953e-6];
+    let y=z,t=z+5.5;t-=(z+0.5)*Math.log(t);let s=1.000000000190015;
+    for(let j=0;j<6;j++)s+=c[j]/++y;return -t+Math.log(2.5066282746310005*s/z);
+  }
+  if(x<a+1){  // series
+    let ap=a,del=1/a,sum=del;
+    for(let n=0;n<600;n++){ap++;del*=x/ap;sum+=del;if(Math.abs(del)<1e-14*Math.abs(sum))break;}
+    return Math.min(1,Math.exp(-x+a*Math.log(x)-lgam(a))*sum);
+  }else{      // Lentz continued fraction for upper tail, then 1-result
+    let b=x+1-a,c=1e300,d=1/b,h=d;
+    for(let i=1;i<=600;i++){const an=-i*(i-a);b+=2;d=an*d+b;if(Math.abs(d)<1e-300)d=1e-300;c=b+an/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<1e-14)break;}
+    return Math.max(0,1-Math.exp(-x+a*Math.log(x)-lgam(a))*h);
+  }
+}
+function _plChi2cdf(x,df){return x<=0?0:_plGammaInc(df/2,x/2);}
+function _plChi2inv(p,df){
+  if(p<=0)return 0;if(p>=1)return 1e15;
+  // Wilson–Hilferty starting guess, then bisection
+  const z=plInvNorm(p);
+  const h=2/(9*df);
+  let x0=Math.max(1e-9,df*Math.pow(Math.max(1e-9,1-h+z*Math.sqrt(h)),3));
+  let lo=0,hi=x0*4+200;
+  while(_plChi2cdf(hi,df)<p)hi*=4;
+  for(let i=0;i<200;i++){const m=(lo+hi)/2;if(_plChi2cdf(m,df)<p){lo=m;}else{hi=m;}if(hi-lo<1e-10*(1+m))break;}
+  return (lo+hi)/2;
+}
+
+
+// ── Open / Close ─────────────────────────────────────────
+window.openPriorLab=function(){
+  initPriorLab();
+  document.getElementById('prior-lab-overlay').classList.add('open');
+  // wait for layout then plot
+  requestAnimationFrame(()=>requestAnimationFrame(plUpdatePlot));
+};
+window.closePriorLab=function(){
+  document.getElementById('prior-lab-overlay').classList.remove('open');
+};
+window.closePriorLabIfBg=function(e){
+  if(e.target===document.getElementById('prior-lab-overlay')) closePriorLab();
+};
+
+// keyboard close
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closePriorLab();
+});
+
+// ─────────────────────────────────────────────────────────
+//  TRANSFER: brms Builder ↔ PPC  (localStorage bridge)
+// ─────────────────────────────────────────────────────────
+
+// ── PPC prior config → brms-builder string ────────────────
+function _ppcLocToStr(fam, mu, sig, nu) {
+  nu = nu || 3;
+  switch(fam) {
+    case 'student_t': return `student_t(${_fmt(nu)}, ${_fmt(mu)}, ${_fmt(sig)})`;
+    case 'cauchy':    return `cauchy(${_fmt(mu)}, ${_fmt(sig)})`;
+    default:          return `normal(${_fmt(mu)}, ${_fmt(sig)})`;
+  }
+}
+function _ppcSigToStr(fam, p1, p2, nu) {
+  switch(fam) {
+    case 'half_normal':  return `normal(0, ${_fmt(p1)})`;
+    case 'half_student': return `student_t(${_fmt(nu||3)}, 0, ${_fmt(p1)})`;
+    case 'half_cauchy':  return `cauchy(0, ${_fmt(p1)})`;
+    case 'gamma':        return `gamma(${_fmt(p1)}, ${_fmt(p2||1)})`;
+    default:             return `exponential(${_fmt(p1)})`;
+  }
+}
+function _fmt(n) {
+  const v = parseFloat(n);
+  if (!isFinite(v)) return '1';
+  return (v === Math.floor(v)) ? String(v) : v.toFixed(3).replace(/\.?0+$/, '');
+}
+
+// ── Builder prior string → PPC slider config ─────────────
+function _parsePriorStr(str) {
+  if (!str) return null;
+  const m = str.trim().match(/^([a-zA-Z_]+)\(([^)]+)\)$/);
+  if (!m) return null;
+  const fam  = m[1].toLowerCase();
+  const args = m[2].split(',').map(s => parseFloat(s.trim())).filter(isFinite);
+  switch(fam) {
+    case 'normal':      return { fam:'normal',      mu:args[0]??0,   sig:args[1]??1,   nu:3 };
+    case 'student_t':   return { fam:'student_t',   nu:args[0]??3,   mu:args[1]??0,   sig:args[2]??1 };
+    case 'cauchy':      return { fam:'cauchy',       mu:args[0]??0,   sig:args[1]??1,   nu:3 };
+    case 'exponential': return { fam:'exponential',  p1:args[0]??1,   p2:1,             nu:3 };
+    case 'gamma':       return { fam:'gamma',        p1:args[0]??2,   p2:args[1]??1,    nu:3 };
+    default:            return null;
+  }
+}
+// brms parsed → PPC sigma config
+function _brmsSigToPPC(p) {
+  if (!p) return { fam:'exponential', p1:1, p2:1, nu:3 };
+  switch(p.fam) {
+    case 'exponential': return { fam:'exponential',  p1:p.p1??1,   p2:1,       nu:3 };
+    case 'normal':      return { fam:'half_normal',  p1:Math.abs(p.sig||p.mu||1), p2:1, nu:3 };
+    case 'student_t':   return { fam:'half_student', p1:p.sig??1,  p2:p.nu??3, nu:p.nu??3 };
+    case 'cauchy':      return { fam:'half_cauchy',  p1:p.sig??1,  p2:1,       nu:3 };
+    case 'gamma':       return { fam:'gamma',        p1:p.p1??2,   p2:p.p2??1, nu:3 };
+    default:            return { fam:'exponential',  p1:1,         p2:1,       nu:3 };
+  }
+}
+
+// ── EXPORT: PPC → Builder ─────────────────────────────────
+window.exportToBuilder = function() {
+  const cfg = buildConfigA();
+  const hasSig = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+
+  const intPrior = {
+    fam: gv('int-fam') || 'normal',
+    mu:  gn('int-mu'),
+    sig: gn('int-sig'),
+    nu:  gn('int-nu') || 3
+  };
+  const betaPriors = cfg.preds.map(p => ({ fam: p.fam, mu: p.mu, sig: p.sig, nu: p.nu || 3 }));
+  const sigPrior = hasSig ? {
+    fam: gv('sig-fam') || 'exponential',
+    p1:  gn('sig-p1'),
+    p2:  gn('sig-p2') || 1,
+    nu:  gn('sig-nu') || 3
+  } : null;
+
+  // Interaction priors
+  const interPriors = (cfg.interTerms||[]).map(t => ({
+    name: t.name,
+    prior: { fam:'normal', mu: t.mu||0, sig: t.sig||1, nu:3 }
+  }));
+
+  // Distributional sigma — only active predictors
+  const activeDsb = distSigBetas.filter(b => b.active);
+  const distPriors = [];
+  if (cfg.distSigOn && activeDsb.length > 0) {
+    distPriors.push({
+      param: 'sigma',
+      preds: activeDsb.map(b => cfg.preds[b.predIdx]?.name || `x${b.predIdx+1}`),
+      intParsed:  { fam:'normal', mu: cfg.distSigIntMu||0, sig: cfg.distSigIntSig||1, nu:3 },
+      betaParsed: activeDsb.map(b => ({ fam:'normal', mu:b.mu||0, sig:b.sig||0.5, nu:3 }))
+    });
+  }
+  // Distributional ν — only for student, only active predictors
+  const activeDnb = distNuBetas.filter(b => b.active);
+  if (cfg.distNuOn && activeDnb.length > 0) {
+    distPriors.push({
+      param: 'nu',
+      preds: activeDnb.map(b => cfg.preds[b.predIdx]?.name || `x${b.predIdx+1}`),
+      intParsed:  { fam:'normal', mu: cfg.distNuIntMu||1, sig: cfg.distNuIntSig||1, nu:3 },
+      betaParsed: activeDnb.map(b => ({ fam:'normal', mu:b.mu||0, sig:b.sig||0.5, nu:3 }))
+    });
+  }
+
+  const payload = {
+    version:    2,
+    source:     'ppc',
+    ts:         Date.now(),
+    ppcFamily:  MODEL,
+    nPreds:     cfg.preds.length,
+    predNames:  cfg.preds.map((p,i) => p.name || `x${i+1}`),
+    inters:     (cfg.interTerms||[]).map(t => t.name),
+    interPriors,
+    intercept:  intPrior,
+    betas:      betaPriors,
+    sigma:      sigPrior,
+    distPriors,
+    lmm:        cfg.lmm,
+    groupVar:   'group',
+    reStruct:   cfg.reStruct === 'slope' ? 'slope' : 'intercept',
+    reInt:      { fam: cfg.reIntFam, p1: cfg.reIntP1 },
+    reSlp:      { fam: cfg.reSlpFam, p1: cfg.reSlpP1 },
+    lkjEta:     cfg.lkjEta,
+    slopeVarIndices: cfg.slopeVars || []
+  };
+
+  try {
+    localStorage.removeItem('ppc2brms');
+    localStorage.setItem('ppc2brms', JSON.stringify(payload));
+    _showXferToast('✓ Priors an brms Builder gesendet', 'var(--accent3)');
+  } catch(e) {
+    _showXferToast('⚠ localStorage nicht verfügbar — beide Tools im selben Browser öffnen', 'var(--accent)');
+    console.error('exportToBuilder:', e);
+  }
+};
+
+// ── IMPORT: Builder → PPC ─────────────────────────────────
+window.importFromBuilder = function() {
+  let raw;
+  try { raw = localStorage.getItem('brms2ppc'); } catch(e) {}
+  if (!raw) { _showXferToast('⚠ Keine Builder-Daten — zuerst im Builder auf "→ PP-Check" klicken', 'var(--accent)'); return; }
+
+  let d;
+  try { d = JSON.parse(raw); } catch(e) { _showXferToast('⚠ Datenfehler beim Import', 'var(--accent)'); return; }
+
+  // Set model family
+  const famMap = {
+    linear:'linear', gaussian:'linear', student:'student',
+    logistic:'logistic', bernoulli:'logistic',
+    poisson:'poisson', gamma:'gamma', Gamma:'gamma'
+  };
+  const newModel = famMap[d.ppcFamily] || famMap[d.family] || 'linear';
+  const modelBtn = document.querySelector(`#model-tabs [data-model="${newModel}"]`);
+  if (modelBtn) setModel(modelBtn);
+
+  // Set intercept prior
+  if (d.intercept) {
+    const ip = d.intercept;
+    const ifam = ip.fam || 'normal';
+    const intFamEl = document.getElementById('int-fam');
+    if (intFamEl) {
+      intFamEl.value = ifam;
+      const nuRow = document.getElementById('int-nu-row');
+      if (nuRow) nuRow.style.display = ifam === 'student_t' ? '' : 'none';
+    }
+    setSlider('int-mu',  ip.mu  ?? 0,   'd-imu', 1);
+    setSlider('int-sig', ip.sig ?? 2.5, 'd-isg', 1);
+    if (ifam === 'student_t') setSlider('int-nu', ip.nu ?? 3, 'd-inu', 1);
+  }
+
+  // Adjust predictor count and set priors
+  const targetN = d.nPreds || 1;
+  while (predictors.length < targetN) addPredictor();
+  while (predictors.length > targetN && predictors.length > 1) removePredictor(predictors[predictors.length-1].id);
+  if (d.betas) {
+    d.betas.forEach((b, i) => {
+      const p = predictors[i]; if (!p) return;
+      p.fam = b.fam || 'normal';
+      p.mu  = b.mu  ?? 0;
+      p.sig = b.sig ?? 1;
+      p.nu  = b.nu  ?? 3;
+    });
+    renderPredictors();
+  }
+
+  // Interaction terms
+  if (d.inters && d.inters.length > 0) {
+    interTerms = [];
+    nextInterId = 0;
+    d.inters.forEach(name => {
+      const existing = d.interPriors && d.interPriors.find(ip => ip.name === name);
+      const prior = existing?.prior;
+      interTerms.push({
+        id: nextInterId++, name,
+        mu: prior?.mu ?? 0,
+        sig: prior?.sig ?? 1
+      });
+    });
+    renderInterTerms();
+  }
+
+  // Reset distributional flags — only restore what Builder actually sent
+  const resetDistSig = () => {
+    const ck = document.getElementById('dist-sig-ck');
+    if (ck) { ck.checked = false; }
+    const stdUi = document.getElementById('sig-standard-ui');
+    if (stdUi) stdUi.style.display = '';
+    const ui = document.getElementById('dist-sig-ui');
+    if (ui) ui.style.display = 'none';
+    distSigBetas.forEach(b => { b.active = false; });
+  };
+  const resetDistNu = () => {
+    const ck = document.getElementById('dist-nu-ck');
+    if (ck) { ck.checked = false; }
+    const stdUi = document.getElementById('nu-standard-ui');
+    if (stdUi) stdUi.style.display = '';
+    const ui = document.getElementById('dist-nu-ui');
+    if (ui) ui.style.display = 'none';
+    distNuBetas.forEach(b => { b.active = false; });
+  };
+  resetDistSig();
+  resetDistNu();
+
+  // Distributional sigma — restore only the predictors the builder sent
+  if (d.distPriors && d.distPriors.length > 0) {
+    const dp = d.distPriors.find(x => x.param === 'sigma');
+    if (dp && (newModel==='linear'||newModel==='student')) {
+      const ck = document.getElementById('dist-sig-ck');
+      if (ck) { ck.checked = true; }
+      document.getElementById('sig-standard-ui').style.display = 'none';
+      document.getElementById('dist-sig-ui').style.display = '';
+      if (dp.intParsed) {
+        setSlider('ds-mu',  dp.intParsed.mu  || 0, 'd-dsmu', 1);
+        setSlider('ds-sig', dp.intParsed.sig || 1, 'd-dssig', 1);
+      }
+      const activePredNames = dp.preds || [];
+      distSigBetas.forEach((b, i) => {
+        const pname = predictors[i]?.name || `x${i+1}`;
+        b.active = activePredNames.includes(pname);
+        if (b.active && dp.betaParsed) {
+          const pi = activePredNames.indexOf(pname);
+          if (pi >= 0 && dp.betaParsed[pi]) {
+            b.mu  = dp.betaParsed[pi].mu  ?? 0;
+            b.sig = dp.betaParsed[pi].sig ?? 0.5;
+          }
+        }
+      });
+      renderDistSigBetas();
+    }
+    // Distributional ν
+    const dnp = d.distPriors.find(x => x.param === 'nu');
+    if (dnp && newModel==='student') {
+      const dnck = document.getElementById('dist-nu-ck');
+      if (dnck) { dnck.checked = true; }
+      document.getElementById('nu-standard-ui').style.display = 'none';
+      document.getElementById('dist-nu-ui').style.display = '';
+      if (dnp.intParsed) {
+        setSlider('dn-mu',  dnp.intParsed.mu  || 1, 'd-dnmu', 1);
+        setSlider('dn-sig', dnp.intParsed.sig || 1, 'd-dnsig', 1);
+      }
+      const activeNuNames = dnp.preds || [];
+      distNuBetas.forEach((b, i) => {
+        const pname = predictors[i]?.name || `x${i+1}`;
+        b.active = activeNuNames.includes(pname);
+        if (b.active && dnp.betaParsed) {
+          const pi = activeNuNames.indexOf(pname);
+          if (pi >= 0 && dnp.betaParsed[pi]) {
+            b.mu  = dnp.betaParsed[pi].mu  ?? 0;
+            b.sig = dnp.betaParsed[pi].sig ?? 0.5;
+          }
+        }
+      });
+      renderDistNuBetas();
+    }
+  }
+
+  // Sigma prior
+  if (d.sigma && (newModel==='linear'||newModel==='gamma'||newModel==='student')) {
+    const sp = _brmsSigToPPC(d.sigma);
+    const sfEl = document.getElementById('sig-fam');
+    if (sfEl) { sfEl.value = sp.fam; onSigFamChange(); }
+    setSlider('sig-p1', sp.p1 ?? 1, 'd-sp', 1);
+    if (sp.fam === 'half_student') setSlider('sig-nu', sp.nu ?? 3, 'd-snu', 1);
+  }
+
+  // LMM — note: d-reip and d-resp are the correct display IDs
+  const lmmOk = newModel==='linear' || newModel==='student';
+  if (d.lmm !== undefined && lmmOk) {
+    USE_LMM = !!d.lmm;
+    const lmmCard = document.getElementById('lmm-card');
+    const lmmBtn  = document.getElementById('btn-lmm');
+    if (lmmCard) lmmCard.style.display = USE_LMM ? '' : 'none';
+    if (lmmBtn)  lmmBtn.classList.toggle('active', USE_LMM);
+    if (USE_LMM) {
+      const rt = d.reStruct === 'slope' ? 'slope' : 'intercept';
+      const rtEl = document.getElementById('re-struct');
+      if (rtEl) { rtEl.value = rt; onReStructChange(); }
+      // Apply slope variable indices: only check the boxes that Builder sent
+      if (rt === 'slope' && Array.isArray(d.slopeVarIndices)) {
+        document.querySelectorAll('#re-slope-chks input[type=checkbox]').forEach(cb => {
+          cb.checked = d.slopeVarIndices.includes(parseInt(cb.value));
+        });
+      }
+      if (d.reInt) {
+        setSlider('re-int-p1', d.reInt.p1 ?? 1, 'd-reip', 1);
+        if (d.reInt.fam) { const el=document.getElementById('re-int-fam'); if(el) el.value=d.reInt.fam; }
+      }
+      if (d.reSlp) {
+        setSlider('re-slp-p1', d.reSlp.p1 ?? 1, 'd-resp', 1);
+        if (d.reSlp.fam) { const el=document.getElementById('re-slp-fam'); if(el) el.value=d.reSlp.fam; }
+      }
+      if (d.lkjEta) setSlider('re-lkj', d.lkjEta, 'd-lkj', 1);
+    }
+  }
+
+  // Clear stale data after import
+  try { localStorage.removeItem('brms2ppc'); } catch(e) {}
+
+  if (lastSimA) render();
+  _showXferToast('✓ Modell aus Builder importiert', 'var(--accent4)');
+};
+
+// ── Toast helper ──────────────────────────────────────────
+let _xferToastTimer = null;
+function _showXferToast(msg, col) {
+  let t = document.getElementById('xfer-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'xfer-toast';
+    t.style.cssText = 'position:fixed;bottom:1.1rem;right:1.1rem;font-family:"DM Mono",monospace;font-size:.72rem;padding:.5rem .9rem;z-index:9999;transition:opacity .35s,transform .35s;opacity:0;transform:translateY(8px);pointer-events:none;box-shadow:3px 3px 0 rgba(0,0,0,.2)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = col || 'var(--accent2)';
+  t.style.color = 'white';
+  t.style.opacity = '1';
+  t.style.transform = 'translateY(0)';
+  clearTimeout(_xferToastTimer);
+  _xferToastTimer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; }, 2800);
+}
+
+})(); // end IIFE
+</script>
+</body>
+</html>
