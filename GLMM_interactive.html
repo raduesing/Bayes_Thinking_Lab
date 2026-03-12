@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixed Models – Interaktiv (LMM &amp; GLMM)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+  :root {
+    --bg:#f5f0e8;--paper:#fdfaf4;--ink:#1a1410;--ink2:#4a3f35;
+    --accent:#c94a2a;--accent2:#2a6e8a;--accent3:#5a8a2a;
+    --grid:#e0d8cc;--panel:#eee8da;--border:#1a1410;
+    --shadow:rgba(0,0,0,0.06);
+    --chart-grid:rgba(0,0,0,0.07);--chart-tick:#2a2018;
+    --warn:#8a5a00;--warn-bg:#fff3cc;
+    --slider-track:#e0d8cc;--slider-thumb:#1a1410;
+  }
+  [data-theme="dark"] {
+    --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;
+    --accent:#e8614a;--accent2:#4ab0d8;--accent3:#7ec850;
+    --grid:#252a36;--panel:#1e2230;--border:#333a4a;
+    --shadow:rgba(0,0,0,0.4);
+    --chart-grid:rgba(255,255,255,0.06);--chart-tick:#c8c0b0;
+    --warn:#e8c040;--warn-bg:rgba(232,192,64,0.08);
+    --slider-track:#252a36;--slider-thumb:#e8e2d8;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;padding:1.2rem 1.8rem 2.5rem;transition:background .25s,color .25s;}
+
+  /* ── HEADER ── */
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.9rem;gap:1rem;}
+  h1{font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2;}
+  h1 em{font-style:italic;color:var(--accent);}
+  .subtitle{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);margin-top:.22rem;letter-spacing:.03em;}
+  .hbtns{display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-start;}
+  .icon-btn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.32rem .75rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;letter-spacing:.05em;color:var(--ink);display:flex;align-items:center;gap:.35rem;transition:all .15s;white-space:nowrap;}
+  .icon-btn:hover{background:var(--ink);color:var(--bg);}
+  .icon-btn.ib-on{border-color:var(--accent2);color:var(--accent2);}
+  .icon-btn.ib-on:hover{background:var(--accent2);color:var(--bg);}
+
+  /* ── MODEL / POOLING ROWS ── */
+  .control-rows{display:flex;flex-direction:column;gap:.38rem;margin-bottom:.9rem;}
+  .ctrl-row{display:flex;gap:.28rem;flex-wrap:wrap;align-items:center;}
+  .ctrl-label{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);letter-spacing:.07em;margin-right:.2rem;white-space:nowrap;min-width:5.5rem;}
+  .ctab{font-family:'DM Mono',monospace;font-size:.65rem;padding:.3rem .8rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;letter-spacing:.05em;transition:all .13s;color:var(--ink);}
+  .ctab:hover{background:var(--ink);color:var(--bg);}
+  .ctab.pp-on{background:var(--accent2);color:white;border-color:var(--accent2);}
+  .ctab.np-on{background:var(--accent3);color:#0f1117;border-color:var(--accent3);}
+  .ctab.cp-on{background:var(--accent);color:white;border-color:var(--accent);}
+  .ctab.mdl-on{background:var(--ink);color:var(--bg);}
+
+  /* ── OUTER GRID — sidebar fixed, charts fill rest ── */
+  .outer-grid{display:grid;grid-template-columns:220px 1fr;gap:1rem;align-items:start;width:100%;}
+
+  /* ── SIDEBAR ── */
+  .sidebar{display:flex;flex-direction:column;gap:.7rem;}
+  .sb-card{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow);}
+  .sb-card h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.65rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid);}
+  .h3a{color:var(--accent);}  .h3b{color:var(--accent2);}  .h3g{color:var(--accent3);}
+
+  .param-group{margin-bottom:.7rem;}
+  .param-group:last-child{margin-bottom:0;}
+  .param-label{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.18rem;}
+  .param-label span:first-child{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink);}
+  .pval{font-family:'DM Mono',monospace;font-size:.76rem;font-weight:500;}
+  .pva{color:var(--accent);}  .pvb{color:var(--accent2);}  .pvg{color:var(--accent3);}
+  input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--slider-track);outline:none;cursor:pointer;border-radius:2px;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--slider-thumb);border-radius:50%;cursor:pointer;}
+  input[type=range]::-webkit-slider-thumb:hover{background:var(--accent);}
+
+  .re-mode-row{display:flex;gap:.25rem;margin-bottom:.65rem;}
+  .re-btn{font-family:'DM Mono',monospace;font-size:.6rem;padding:.22rem .55rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .12s;}
+  .re-btn.re-on{background:var(--accent2);color:white;border-color:var(--accent2);}
+
+  .shrink-label-row{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);margin-bottom:.18rem;}
+  .shrink-track{height:5px;background:var(--grid);border-radius:3px;overflow:hidden;}
+  .shrink-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent3));transition:width .35s;}
+
+  .data-row{display:flex;align-items:center;gap:.45rem;margin-top:.35rem;}
+  .regen-btn{font-family:'DM Mono',monospace;font-size:.6rem;padding:.25rem .65rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;}
+  .regen-btn:hover{background:var(--accent);color:white;border-color:var(--accent);}
+  .nlabel{font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);}
+
+  .formula-box{background:var(--panel);border-left:3px solid var(--accent2);padding:.55rem .72rem;font-family:'DM Mono',monospace;font-size:.65rem;line-height:1.85;color:var(--ink);white-space:pre-wrap;}
+  .fxd{color:var(--accent);font-weight:500;}
+  .rnd{color:var(--accent2);font-weight:500;}
+  .gry{color:var(--ink2);}
+
+  .help-toggle{font-family:'DM Mono',monospace;font-size:.59rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.38rem;padding:0;width:100%;}
+  .help-toggle:hover{color:var(--ink);}
+  .htarrow{transition:transform .2s;display:inline-block;}
+  .help-body{display:none;margin-top:.55rem;font-family:'DM Mono',monospace;font-size:.62rem;line-height:1.72;color:var(--ink2);}
+  .help-body.open{display:block;}
+  .help-body b{color:var(--ink);font-weight:500;}
+  .hrow{display:flex;gap:.38rem;margin-bottom:.34rem;}
+  .hkey{flex-shrink:0;color:var(--accent2);font-weight:500;min-width:3rem;}
+  hr.hdiv{border:none;border-top:1px solid var(--grid);margin:.42rem 0;}
+
+  /* ── CHARTS COLUMN ── */
+  .charts-col{display:flex;flex-direction:column;gap:.9rem;}
+  .chart-panel{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow);}
+  .panel-label{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2);margin-bottom:.24rem;}
+  .panel-title{font-size:.85rem;font-weight:300;margin-bottom:.2rem;line-height:1.3;}
+  .panel-title em{color:var(--accent);font-style:italic;}
+
+  .simp-warn{display:none;font-family:'DM Mono',monospace;font-size:.62rem;padding:.38rem .65rem;border:1.5px solid var(--warn);color:var(--warn);background:var(--warn-bg);margin-bottom:.45rem;gap:.38rem;align-items:flex-start;line-height:1.5;}
+  .simp-warn.on{display:flex;}
+
+  .legend-row{display:flex;gap:.45rem;flex-wrap:wrap;margin-bottom:.38rem;}
+  .legend-item{display:flex;align-items:center;gap:.25rem;font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);}
+  .ldot{width:10px;height:10px;border-radius:50%;}
+  .lline{width:16px;height:2px;border-radius:1px;}
+
+  .bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-bottom:.7rem;}
+  .stat-box{background:var(--panel);padding:.38rem .52rem;border:1px solid var(--grid);}
+  .stat-lbl{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--ink2);letter-spacing:.04em;margin-bottom:.08rem;}
+  .stat-val{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500;color:var(--ink);}
+
+  .vpc-track{height:11px;display:flex;border-radius:2px;overflow:hidden;margin:.3rem 0;}
+  .vpc-between{background:var(--accent2);transition:width .35s;}
+  .vpc-resid{background:var(--grid);flex:1;}
+  .vpc-labels{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);}
+
+  .info-strip{padding:.6rem .82rem;background:var(--panel);border-left:3px solid var(--accent2);font-size:.7rem;line-height:1.62;color:var(--ink2);margin-top:.65rem;}
+  .info-strip strong{color:var(--ink);}
+
+  /* Results panel */
+  .res-section{margin-bottom:.7rem;padding-bottom:.55rem;border-bottom:1px solid var(--grid);}
+  .res-section:last-child{border-bottom:none;margin-bottom:0;}
+  .res-label{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:.35rem;}
+  .res-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);margin-bottom:.18rem;gap:.5rem;}
+  .res-row span:first-child{flex:1;}
+  .res-val{font-weight:500;color:var(--ink);white-space:nowrap;}
+  .res-val.active-mode{color:var(--accent2);font-weight:700;}
+  .re-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.63rem;margin-top:.2rem;}
+  .re-table th{color:var(--ink2);font-weight:400;letter-spacing:.04em;padding:.18rem .3rem;border-bottom:1px solid var(--grid);text-align:left;}
+  .re-table td{padding:.2rem .3rem;border-bottom:1px solid var(--grid)+'44';color:var(--ink);transition: opacity .2s;}
+  .re-table tbody tr{transition: opacity .2s, background .2s;}
+  .re-table tbody tr:hover{background:var(--panel);}
+  .grp-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.3rem;vertical-align:middle;}
+
+  canvas{max-width:100%;display:block;}
+  @media(max-width:960px){.outer-grid{grid-template-columns:1fr}.bottom-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <div>
+    <h1>(G)<em>LMM</em> — Mixed Models Interaktiv</h1>
+    <p class="subtitle">Gaussian · Poisson · Gamma · Logistisch &nbsp;|&nbsp; Partial / No / Complete Pooling &nbsp;|&nbsp; Shrinkage · ICC · Simpson</p>
+  </div>
+  <div class="hbtns">
+    <button class="icon-btn"       id="btn-outlier" onclick="toggleOutlier()" title="Ausreißer-Gruppe mit kleinem n hinzufügen">⚡ Ausreißer-Gruppe</button>
+    <button class="icon-btn"       id="btn-true" onclick="toggleTrue()" title="Wahre Parameter anzeigen">🎯 Wahre Param.</button>
+    <button class="icon-btn"       onclick="toggleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">DARK</span></button>
+  </div>
+</div>
+
+<div class="control-rows">
+  <div class="ctrl-row">
+    <span class="ctrl-label">LIKELIHOOD:</span>
+    <button class="ctab mdl-on" id="mdl-gauss"   onclick="setModel('gauss')">Gaussian (LMM)</button>
+    <button class="ctab"        id="mdl-poisson"  onclick="setModel('poisson')">Poisson (GLMM)</button>
+    <button class="ctab"        id="mdl-gamma"    onclick="setModel('gamma')">Gamma (GLMM)</button>
+    <button class="ctab"        id="mdl-logistic" onclick="setModel('logistic')">Logistisch (GLMM)</button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">POOLING:</span>
+    <button class="ctab pp-on" id="ptab-pp" onclick="setPooling('pp')">▸ Partial Pooling (LMM/GLMM)</button>
+    <button class="ctab"       id="ptab-np" onclick="setPooling('np')">▸ No Pooling</button>
+    <button class="ctab"       id="ptab-cp" onclick="setPooling('cp')">▸ Complete Pooling</button>
+  </div>
+</div>
+
+<div class="outer-grid">
+
+  <div class="sidebar">
+
+    <div class="sb-card">
+      <h3 class="h3a">Fixed Effects</h3>
+      <div class="param-group">
+        <div class="param-label"><span>γ₀₀ · Grand Intercept</span><span class="pval pva" id="v-g00">2.00</span></div>
+        <input type="range" id="g00" min="-2" max="6" step="0.1" value="2.0">
+      </div>
+      <div class="param-group">
+        <div class="param-label"><span>γ₁₀ · Fixed Slope</span><span class="pval pva" id="v-g10">0.60</span></div>
+        <input type="range" id="g10" min="-2" max="2" step="0.05" value="0.6">
+      </div>
+    </div>
+
+    <div class="sb-card">
+      <h3 class="h3b">Random Effects</h3>
+      <div class="re-mode-row">
+        <button class="re-btn re-on" id="re-int"  onclick="setREMode('int')">Random Intercept</button>
+        <button class="re-btn"       id="re-both" onclick="setREMode('both')">Intercept + Slope</button>
+      </div>
+      <div class="param-group" id="pg-tau0">
+        <div class="param-label"><span>τ₀ · SD Random Intercept</span><span class="pval pvb" id="v-tau0">1.00</span></div>
+        <input type="range" id="tau0" min="0" max="3" step="0.05" value="1.0">
+      </div>
+      <div class="param-group" id="pg-tau1" style="display:none">
+        <div class="param-label"><span>τ₁ · SD Random Slope</span><span class="pval pvb" id="v-tau1">0.30</span></div>
+        <input type="range" id="tau1" min="0" max="1.5" step="0.05" value="0.3">
+      </div>
+      <div class="param-group" id="pg-rho" style="display:none">
+        <div class="param-label">
+          <span>ρ · Korrelation u₀↔u₁</span><span class="pval pvb" id="v-rho">0.00</span>
+        </div>
+        <input type="range" id="rho" min="-0.95" max="0.95" step="0.05" value="0">
+        <div style="font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);margin-top:.2rem;line-height:1.5">
+          ρ&gt;0: Gruppen mit hohem Intercept haben steilen Slope (Fan-out)<br>
+          ρ&lt;0: Gruppen mit hohem Intercept haben flachen Slope (Fan-in)
+        </div>
+      </div>
+      <div class="param-group" id="pg-sigma">
+        <div class="param-label"><span>σ · Residual SD</span><span class="pval pvb" id="v-sigma">0.60</span></div>
+        <input type="range" id="sigma" min="0.1" max="2.5" step="0.05" value="0.6">
+      </div>
+    </div>
+
+    <div class="sb-card">
+      <h3 class="h3g">Datengenerierung</h3>
+      <div class="param-group">
+        <div class="param-label"><span>Gruppen J</span><span class="pval pvg" id="v-J">5</span></div>
+        <input type="range" id="J" min="2" max="8" step="1" value="5">
+      </div>
+      <div class="param-group">
+        <div class="param-label"><span>Beob. pro Gruppe n_j</span><span class="pval pvg" id="v-n">12</span></div>
+        <input type="range" id="n" min="4" max="30" step="1" value="12">
+      </div>
+      <div class="param-group">
+        <div class="param-label"><span>x-Bereich</span><span class="pval pvg" id="v-xr">±3.0</span></div>
+        <input type="range" id="xr" min="0.5" max="5" step="0.5" value="3">
+      </div>
+      <div class="param-group">
+        <div class="param-label">
+          <span>x-Gruppen-Versatz <span style="font-size:.58rem;color:var(--warn)">(Simpson)</span></span>
+          <span class="pval" style="color:var(--warn)" id="v-xoff">0.0</span>
+        </div>
+        <input type="range" id="xoff" min="0" max="3" step="0.1" value="0">
+      </div>
+      <div class="data-row">
+        <button class="regen-btn" onclick="regen()">⟳ Neue Daten</button>
+        <button class="regen-btn" id="btn-simpson" onclick="setSimpson()" style="border-color:var(--warn);color:var(--warn)" title="Simpson-Szenario laden">⚠ Simpson</button>
+        <span class="nlabel" id="v-N">N = 60</span>
+      </div>
+    </div>
+
+    <div class="sb-card">
+      <h3 class="h3b">Modellformel</h3>
+      <div class="formula-box" id="formula-box">–</div>
+    </div>
+
+    <div class="sb-card">
+      <button class="help-toggle" onclick="toggleHelp()">
+        <span class="htarrow" id="htarrow">▶</span>&nbsp;Bedienung &amp; Konzepte
+      </button>
+      <div class="help-body" id="help-body">
+        <div class="hrow"><span class="hkey">LMM</span><span>Kombiniert <b>feste Effekte</b> (γ, gleich für alle) mit <b>zufälligen Effekten</b> (u_j, gruppenspezifisch). Die Daten werden simuliert: τ₀, σ, g00, g10 sind die <i>wahren</i> Parameter, aus denen die Punkte gezogen werden.</span></div>
+        <div class="hrow"><span class="hkey">GLMM</span><span>Wie LMM, mit nicht-normaler Likelihood: <b>Poisson</b> (Zähldaten, Log-Link), <b>Gamma</b> (positive Daten), <b>Logistisch</b> (0/1-Daten, Logit-Link).</span></div>
+        <hr class="hdiv">
+        <div class="hrow"><span class="hkey">Partial</span><span><b>Partial Pooling:</b> Gruppenlinien werden zum Grand Mean geschrumpft — je kleiner n_j oder je kleiner τ₀ relativ zur (theoretischen) Residualvarianz, desto stärker.</span></div>
+        <div class="hrow"><span class="hkey">No Pool</span><span><b>No Pooling:</b> Unabhängige Geraden je Gruppe, kein Informationsaustausch. Overfit bei kleinen n_j.</span></div>
+        <div class="hrow"><span class="hkey">Complete</span><span><b>Complete Pooling:</b> Eine Gerade für alle — Gruppenstruktur wird ignoriert. Risiko: Simpson's Paradoxon.</span></div>
+        <hr class="hdiv">
+        <div class="hrow"><span class="hkey">ICC</span><span><b>Intraclass Correlation Coefficient = τ₀² / (τ₀² + σ²)</b> — Anteil der Gesamtvarianz, der <i>zwischen Gruppen</i> liegt. ICC > 0.05 gilt als Indikator dass ein LMM notwendig ist. Für logistische GLMMs wird hier Nakagawas theoretische Varianz (π²/3) genutzt.</span></div>
+        <div class="hrow"><span class="hkey">λ</span><span><b>Shrinkage-Faktor λ = τ₀² / (τ₀² + σ²/n_j)</b> — bestimmt, wie stark die Gruppen-Schätzung zum Grand Mean gezogen wird. Im Shrinkage-Diagramm symbolisieren die Pfeile diese Zugkraft.</span></div>
+        <hr class="hdiv">
+        <div class="hrow"><span class="hkey">⚡</span><span><b>Ausreißer-Gruppe</b> (n=3): Gruppe mit extrem wenig Daten und stark abweichendem Intercept. Beobachte im Shrinkage-Diagramm: diese Gruppe wird <i>viel stärker</i> zum Grand Mean gezogen als die Normalgruppen — LMM „glaubt" ihr weniger wegen kleinem n (λ ≈ niedrig). No Pooling glaubt ihr vollständig.</span></div>
+        <div class="hrow"><span class="hkey">🎯 Wahr</span><span><b>Wahre Parameter</b> (aus dem Datengenerator): Die gestrichelten Linien zeigen die <i>echten zugrundeliegenden Regressionsgeraden</i>, aus denen die Datenpunkte simuliert wurden.</span></div>
+        <div class="hrow"><span class="hkey">⟳</span><span>Neue Stichprobe mit denselben wahren Parametern — zeigt Sampling-Variabilität: wie stark schwanken die Schätzer von Datensatz zu Datensatz?</span></div>
+        <hr class="hdiv">
+        <div class="hrow"><span class="hkey">x-Versatz</span><span><b>x-Gruppen-Versatz (Simpson-Slider):</b> Verschiebt die x-Zentren der Gruppen auseinander. Bei Versatz=0 überlappen alle Gruppen denselben x-Bereich. Bei Versatz&gt;0 liegt Gruppe 1 links, Gruppe J rechts im x-Raum. Wenn gleichzeitig die Gruppen unterschiedliche Intercepts haben (τ₀&gt;0), entsteht eine <b>Konfundierung</b>: x korreliert mit der Gruppenzugehörigkeit. Das führt dazu, dass die Complete-Pooling-Linie einen anderen — oft entgegengesetzten — Slope schätzt als der wahre Within-Group-Slope: <b>Simpson's Paradoxon</b>. Tipp: ⚠-Preset zeigt ein fertiges Beispiel.</span></div>
+        <div class="hrow"><span class="hkey">ρ (rho)</span><span><b>Korrelation der Random Effects (nur Intercept+Slope-Modus):</b> Steuert ob Gruppen mit hohem Intercept auch einen hohen (ρ&gt;0) oder niedrigen (ρ&lt;0) Slope haben. <b>ρ&gt;0 (Fan-out):</b> Gruppen divergieren — hohe Gruppen steigen noch steiler an, niedrige noch flacher. <b>ρ&lt;0 (Fan-in):</b> Linien kreuzen sich — Gruppen mit hohem Startpunkt haben einen flacheren Slope. <b>ρ≈0:</b> Intercept und Slope variieren unabhängig.</span></div>
+      </div></div></div><div class="charts-col">
+
+    <div class="chart-panel">
+      <div class="panel-label">HAUPTPLOT — DATEN &amp; REGRESSIONSLINIEN</div>
+      <div class="panel-title" id="main-title">Partial Pooling: <em>Gruppenlinien mit Shrinkage</em></div>
+      <div class="simp-warn" id="simp-warn">
+        <span>⚠</span><span>Simpson-Risiko: Complete-Pooling-Linie zeigt eine <b>andere Richtung</b> als die gruppeninternen Effekte — Gruppenstruktur nicht ignorieren!</span>
+      </div>
+      <div class="legend-row" id="main-legend"></div>
+      <div style="position:relative;height:clamp(260px, 46vh, 520px)">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+
+    <div class="bottom-row">
+      <div class="chart-panel">
+        <div class="panel-label">SHRINKAGE-DIAGRAMM</div>
+        <div class="panel-title">No Pooling <em>vs.</em> Partial Pooling Intercepts</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);margin-bottom:.35rem;line-height:1.6">
+          <b>Wie lesen?</b> Jeder Punkt = eine Gruppe. X-Achse: ungeschrumpfter (No-Pooling) Intercept. Y-Achse: geschrumpfter (Partial-Pooling) Intercept.<br>
+          ○ = No-Pooling &nbsp;·&nbsp; ● = Partial-Pooling &nbsp;·&nbsp; Pfeil = Ausmaß und Richtung der Shrinkage
+          <span id="outlier-note" style="display:none;color:var(--accent)"> &nbsp;·&nbsp; ⚡ = Ausreißer-Gruppe (n=3)</span>
+        </div>
+        <div style="position:relative;height:clamp(160px, 22vh, 280px)">
+          <canvas id="shrinkChart"></canvas>
+        </div>
+        <div id="grp-table-panel" style="margin-top:.6rem"></div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="panel-label">MODELL-ERGEBNISSE</div>
+        <div class="panel-title">Geschätzte Parameter &amp; <em>Kennzahlen</em></div>
+        <div id="results-panel" style="margin-top:.4rem"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// THEME / HELP
+// ═══════════════════════════════════════════════════════════════
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+  document.getElementById('themeLabel').textContent = isDark ? 'DARK' : 'LIGHT';
+  renderAll();
+}
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function toggleHelp() {
+  const b = document.getElementById('help-body'), open = b.classList.toggle('open');
+  document.getElementById('htarrow').style.transform = open ? 'rotate(90deg)' : '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE OPTIONS & HOVER HIGHLIGHTING
+// ═══════════════════════════════════════════════════════════════
+let showTrue   = false;
+let showOutlier = false;
+let activeGid = null;
+
+function toggleTrue() {
+  showTrue = !showTrue;
+  document.getElementById('btn-true').classList.toggle('ib-on', showTrue);
+  renderAll();
+}
+function toggleOutlier() {
+  showOutlier = !showOutlier;
+  document.getElementById('btn-outlier').classList.toggle('ib-on', showOutlier);
+  document.getElementById('outlier-note').style.display = showOutlier ? 'inline' : 'none';
+  genData(); renderAll();
+}
+
+function highlightGroup(gid) {
+  if (activeGid === gid) return;
+  activeGid = gid;
+
+  // Fade Charts
+  [charts.main, charts.shrink].forEach(chart => {
+    if (!chart) return;
+    chart.data.datasets.forEach(ds => {
+      if (ds.gid !== undefined) {
+        const isFaded = gid !== null && ds.gid !== gid;
+        if (!ds.origBorder) ds.origBorder = ds.borderColor;
+        if (!ds.origBg) ds.origBg = ds.backgroundColor;
+
+        ds.borderColor = isFaded ? ds.origBorder.substring(0, 7) + '22' : ds.origBorder;
+        if (typeof ds.origBg === 'string' && ds.origBg.length > 7 && ds.origBg !== 'transparent') {
+           ds.backgroundColor = isFaded ? ds.origBg.substring(0, 7) + '11' : ds.origBg;
+        } else if (ds.origBg !== 'transparent') {
+           ds.backgroundColor = isFaded ? ds.origBg + '22' : ds.origBg;
+        }
+      }
+    });
+    chart.update('none');
+  });
+
+  // Highlight Table
+  const rows = document.querySelectorAll('.re-table tbody tr');
+  rows.forEach((tr, j) => {
+    tr.style.opacity = (gid === null || j === gid) ? '1' : '0.25';
+    tr.style.background = (gid === j) ? 'var(--panel)' : '';
+  });
+}
+
+// Chart.js Plugin for drawing arrows on the shrinkage lines
+const arrowPlugin = {
+  id: 'arrowPlugin',
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((meta, i) => {
+      if (meta.label && meta.label.startsWith('conn_')) {
+        const ds = chart.getDatasetMeta(i);
+        if(!ds.data || ds.data.length < 2) return;
+        const p1 = ds.data[0], p2 = ds.data[1]; // x, y are pixel coords
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return; // Point too close
+        
+        const angle = Math.atan2(dy, dx);
+        const headlen = 5;
+        ctx.save();
+        ctx.strokeStyle = chart.data.datasets[i].borderColor;
+        ctx.fillStyle = chart.data.datasets[i].borderColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        // Draw triangle head at p2
+        ctx.moveTo(p2.x, p2.y);
+        ctx.lineTo(p2.x - headlen * Math.cos(angle - Math.PI / 6), p2.y - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(p2.x - headlen * Math.cos(angle + Math.PI / 6), p2.y - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(p2.x, p2.y);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// COLORS
+// ═══════════════════════════════════════════════════════════════
+const GC = ['#e05a3a','#9b59d0','#2ecc8a','#e8880a','#e84a8a','#1ab8c8','#a0c020','#c87840'];
+const FE_COLOR = '#f0d000';
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let poolMode = 'pp', reMode = 'int', modelKey = 'gauss', seed = 42;
+let data = [], trueGrp = [];
+let charts = {main: null, shrink: null};
+
+// ═══════════════════════════════════════════════════════════════
+// SEEDED RNG
+// ═══════════════════════════════════════════════════════════════
+function mkRng(s) {
+  let st = s >>> 0;
+  return () => { st = (Math.imul(st, 1664525) + 1013904223) >>> 0; return st / 0x100000000; };
+}
+function rnorm(rng) {
+  return Math.sqrt(-2 * Math.log(Math.max(rng(), 1e-10))) * Math.cos(2 * Math.PI * rng());
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODEL DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+const MODELS = {
+  gauss: {
+    name: 'Gaussian (LMM)',
+    link: η => η,
+    invLink: μ => μ,
+    sample: (μ, sig, rng) => μ + rnorm(rng) * sig,
+    yLabel: 'y (stetig)',
+    formulaLink: 'μ = η (Identität)',
+    formulaDist: 'Y|x,u ~ N(μ, σ²)',
+    hasSigma: true,
+    yPositive: false,
+    yBinary: false,
+  },
+  poisson: {
+    name: 'Poisson (GLMM)',
+    link: μ => Math.log(Math.max(μ, 1e-9)),
+    invLink: η => Math.exp(η),
+    sample: (μ, sig, rng) => {
+      let λ = Math.max(μ, 1e-6), k = 0, p = 1, L = Math.exp(-λ);
+      if (λ > 30) return Math.max(0, Math.round(λ + rnorm(rng) * Math.sqrt(λ)));
+      do { k++; p *= rng(); } while (p > L);
+      return k - 1;
+    },
+    yLabel: 'y (Zählung)',
+    formulaLink: 'log(λ) = η  →  λ = exp(η)',
+    formulaDist: 'Y|x,u ~ Poisson(λ)',
+    hasSigma: false,
+    yPositive: true,
+    yBinary: false,
+  },
+  gamma: {
+    name: 'Gamma (GLMM)',
+    link: μ => Math.log(Math.max(μ, 1e-9)),
+    invLink: η => Math.exp(η),
+    sample: (μ, sig, rng) => {
+      const k = Math.max(1 / (sig * sig), 0.1);
+      if (k >= 1) {
+        const d = k - 1/3, c = 1 / Math.sqrt(9*d);
+        for (let i=0;i<200;i++) {
+          let x, v;
+          do { x = rnorm(rng); v = 1 + c*x; } while (v <= 0);
+          v = v*v*v;
+          const u = rng();
+          if (u < 1 - 0.0331*(x*x)*(x*x)) return μ * d * v / k;
+          if (Math.log(u) < 0.5*x*x + d*(1-v+Math.log(v))) return μ * d * v / k;
+        }
+        return μ;
+      }
+      return Math.abs(μ + rnorm(rng) * μ * sig);
+    },
+    yLabel: 'y (positiv stetig)',
+    formulaLink: 'log(μ) = η  →  μ = exp(η)',
+    formulaDist: 'Y|x,u ~ Gamma(k, θ)',
+    hasSigma: true,
+    yPositive: true,
+    yBinary: false,
+  },
+  logistic: {
+    name: 'Logistisch (GLMM)',
+    link: p => Math.log(Math.max(p, 1e-9) / Math.max(1 - p, 1e-9)),
+    invLink: η => 1 / (1 + Math.exp(-η)),
+    sample: (p, sig, rng) => rng() < p ? 1 : 0,
+    yLabel: 'y (0/1)',
+    formulaLink: 'logit(p) = η  →  p = σ(η)',
+    formulaDist: 'Y|x,u ~ Bernoulli(p)',
+    hasSigma: false,
+    yPositive: false,
+    yBinary: true,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// PARAMS
+// ═══════════════════════════════════════════════════════════════
+const P = () => ({
+  g00:  +document.getElementById('g00').value,
+  g10:  +document.getElementById('g10').value,
+  tau0: +document.getElementById('tau0').value,
+  tau1: +document.getElementById('tau1').value,
+  rho:  +document.getElementById('rho').value,
+  sig:  +document.getElementById('sigma').value,
+  J:    +document.getElementById('J').value | 0,
+  n:    +document.getElementById('n').value | 0,
+  xr:   +document.getElementById('xr').value,
+  xoff: +document.getElementById('xoff').value,
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DATA GENERATION
+// ═══════════════════════════════════════════════════════════════
+function genData() {
+  const p = P(), m = MODELS[modelKey], rng = mkRng(seed);
+  data = []; trueGrp = [];
+
+  const rhoClamp = Math.max(-0.999, Math.min(0.999, p.rho));
+  const L00 = p.tau0;
+  const L10 = rhoClamp * p.tau1;
+  const L11 = p.tau1 * Math.sqrt(Math.max(0, 1 - rhoClamp * rhoClamp));
+
+  for (let j = 0; j < p.J; j++) {
+    const z0 = rnorm(rng), z1 = rnorm(rng);
+    const u0 = L00 * z0;
+    const u1 = reMode === 'both' ? L10 * z0 + L11 * z1 : 0;
+    trueGrp.push({u0, u1, nj: p.n, isOutlier: false});
+    const xCenter = (j - (p.J-1)/2) * p.xoff;
+    for (let i = 0; i < p.n; i++) {
+      const x   = xCenter + (rng() * 2 - 1) * p.xr;
+      const eta = (p.g00 + u0) + (p.g10 + u1) * x;
+      const mu  = m.invLink(eta);
+      data.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
+    }
+  }
+  if (showOutlier) {
+    const j   = p.J;
+    // Extreme outlier to demonstrate strong shrinkage
+    const u0o = Math.max(p.tau0, 1.0) * 4.0; 
+    trueGrp.push({u0: u0o, u1: 0, nj: 3, isOutlier: true});
+    for (let i = 0; i < 3; i++) {
+      const x   = (rng() * 2 - 1) * p.xr;
+      const eta = (p.g00 + u0o) + p.g10 * x;
+      const mu  = m.invLink(eta);
+      data.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
+    }
+  }
+  document.getElementById('v-N').textContent = `N = ${data.length}`;
+}
+
+function regen() { seed = Math.random() * 1e8 | 0; genData(); renderAll(); }
+
+function setSimpson() {
+  document.getElementById('g00').value   = '3.0';
+  document.getElementById('g10').value   = '0.6';
+  document.getElementById('tau0').value  = '0.3';
+  document.getElementById('tau1').value  = '0.1';
+  document.getElementById('sigma').value = '0.35';
+  document.getElementById('J').value     = '5';
+  document.getElementById('n').value     = '20';
+  document.getElementById('xr').value    = '1.5';
+  document.getElementById('xoff').value  = '2.0';
+  document.getElementById('v-xoff').textContent = '2.0';
+  showOutlier = false;
+  document.getElementById('btn-outlier').classList.remove('ib-on');
+  reMode = 'int';
+  document.getElementById('re-int').classList.add('re-on');
+  document.getElementById('re-both').classList.remove('re-on');
+  document.getElementById('pg-tau1').style.display = 'none';
+
+  const rng = mkRng(42);
+  data = []; trueGrp = [];
+  const u0list = [3.5, 1.75, 0, -1.75, -3.5];
+  for (let j = 0; j < 5; j++) {
+    const u0 = u0list[j];
+    const xCenter = (j - 2) * 2.0; 
+    trueGrp.push({u0, u1: 0, nj: 20, isOutlier: false});
+    for (let i = 0; i < 20; i++) {
+      const x = xCenter + (rng() * 2 - 1) * 1.5;
+      const y = (3.0 + u0) + 0.6 * x + rnorm(rng) * 0.35;
+      data.push({gid: j, x, y});
+    }
+  }
+  document.getElementById('v-N').textContent = `N = ${data.length}`;
+
+  poolMode = 'cp';
+  ['pp','np','cp'].forEach(k => {
+    document.getElementById('ptab-'+k).className = 'ctab' + (k==='cp' ? ' cp-on' : '');
+  });
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GLM HELPERS (IRLS)
+// ═══════════════════════════════════════════════════════════════
+function wls(pts, weights) {
+  const n = pts.length;
+  if (n < 2) return {a: pts[0]?.y ?? 0, b: 0};
+  const sw = weights.reduce((s,w)=>s+w, 0);
+  const mx = pts.reduce((s,p,i)=>s+weights[i]*p.x, 0)/sw;
+  const my = pts.reduce((s,p,i)=>s+weights[i]*p.y, 0)/sw;
+  const sxx = pts.reduce((s,p,i)=>s+weights[i]*(p.x-mx)**2, 0);
+  const sxy = pts.reduce((s,p,i)=>s+weights[i]*(p.x-mx)*(p.y-my), 0);
+  const b = sxx > 1e-9 ? sxy/sxx : 0;
+  return {a: my - b*mx, b};
+}
+
+function glmFit(pts, invLink, linkDeriv, varFn, maxIter=8) {
+  let a = 0, b = 0;
+  const my = pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  a = invLink === (η=>η) ? my : Math.log(Math.max(my, 1e-6));
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    const wpts = [], ws = [];
+    for (const pt of pts) {
+      const eta = a + b*pt.x;
+      const mu  = invLink(eta);
+      const dmu = linkDeriv(eta);
+      const v   = varFn(mu);
+      const w   = (dmu*dmu) / Math.max(v, 1e-10);
+      const z   = eta + (pt.y - mu) / dmu;
+      wpts.push({x: pt.x, y: z});
+      ws.push(w);
+    }
+    const res = wls(wpts, ws);
+    const diff = Math.abs(res.a-a)+Math.abs(res.b-b);
+    a = res.a; b = res.b;
+    if (diff < 1e-6) break;
+  }
+  return {a, b};
+}
+
+function fitGLM(pts) {
+  const m = MODELS[modelKey];
+  if (modelKey === 'gauss') {
+    const n = pts.length;
+    if (n < 2) return {a: pts[0]?.y ?? 0, b: 0};
+    const mx = pts.reduce((s,p)=>s+p.x,0)/n, my = pts.reduce((s,p)=>s+p.y,0)/n;
+    const sxx = pts.reduce((s,p)=>s+(p.x-mx)**2,0);
+    const sxy = pts.reduce((s,p)=>s+(p.x-mx)*(p.y-my),0);
+    const b = sxx > 1e-9 ? sxy/sxx : 0;
+    return {a: my-b*mx, b};
+  }
+  if (modelKey === 'poisson')
+    return glmFit(pts, η=>Math.exp(η), η=>Math.exp(η), μ=>Math.max(μ,1e-6));
+  if (modelKey === 'gamma')
+    return glmFit(pts, η=>Math.exp(η), η=>Math.exp(η), μ=>Math.max(μ*μ,1e-6));
+  if (modelKey === 'logistic')
+    return glmFit(pts, η=>1/(1+Math.exp(-η)), η=>{ const s=1/(1+Math.exp(-η)); return s*(1-s); }, μ=>Math.max(μ*(1-μ),1e-6));
+  return {a:0,b:0};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LMM/GLMM EMPIRICAL BAYES ESTIMATES
+// ═══════════════════════════════════════════════════════════════
+function mmEst(p) {
+  const totalJ = trueGrp.length;
+  const m = MODELS[modelKey];
+
+  const grpFit = Array.from({length:totalJ}, (_,j) => fitGLM(data.filter(d=>d.gid===j)));
+  const cpFit  = fitGLM(data);
+  let npFit;
+
+  if (reMode === 'int') {
+    const totalN = data.length;
+    const bPooled = grpFit.reduce((s,g,j) => s + g.b * trueGrp[j].nj, 0) / totalN;
+    npFit = grpFit.map((g, j) => {
+      const pts = data.filter(d => d.gid === j);
+      const mx  = pts.reduce((s,d)=>s+d.x,0)/pts.length;
+      const my  = modelKey === 'gauss'
+        ? pts.reduce((s,d)=>s+d.y,0)/pts.length
+        : pts.reduce((s,d)=>s+m.link(Math.max(d.y,1e-9)),0)/pts.length;
+      return { a: my - bPooled * mx, b: bPooled };
+    });
+  } else {
+    npFit = grpFit;
+  }
+
+  const totalN = data.length;
+  const feA = grpFit.reduce((s,g,j) => s + g.a * trueGrp[j].nj, 0) / totalN;
+  const feB = grpFit.reduce((s,g,j) => s + g.b * trueGrp[j].nj, 0) / totalN;
+
+  // ── Theoretical Level-1 Variance for Shrinkage λ and ICC/R² ──
+  // For Gaussian: Level-1 variance = σ² (free parameter, from slider)
+  // For Logistic: Theoretical logistic variance = π²/3 ≈ 3.29
+  //               (Nakagawa & Schielzeth 2013, standard in R's performance::r2_nakagawa)
+  // For Poisson:  Nakagawa log-normal approximation = log(1 + 1/λ̄)
+  //               where λ̄ = exp(γ̂₀₀) is the mean count on response scale
+  // For Gamma:    With log-link and dispersion φ, Level-1 var ≈ log(1 + φ)
+  //               We estimate φ from data (φ̂ = σ² since we parameterise CV=σ)
+  //               Approximation: log(1 + p.sig²)
+  let v_lvl1_est = p.sig**2;  // Gaussian default
+  if (modelKey === 'logistic') {
+    v_lvl1_est = Math.PI * Math.PI / 3;                           // ≈ 3.290
+  } else if (modelKey === 'poisson') {
+    v_lvl1_est = Math.log(1 + 1/Math.max(Math.exp(feA), 0.01)); // Nakagawa approx
+  } else if (modelKey === 'gamma') {
+    v_lvl1_est = Math.log(1 + p.sig * p.sig);                   // log(1+φ) on log-scale
+  }
+
+  const ppFit = npFit.map((g, j) => {
+    const nj   = trueGrp[j].nj;
+    const lam0 = p.tau0 > 0 ? p.tau0**2 / (p.tau0**2 + v_lvl1_est/nj) : 0;
+    const lam1 = p.tau1 > 0 ? p.tau1**2 / (p.tau1**2 + v_lvl1_est/nj) : 0;
+    return {
+      a:    lam0 * g.a + (1 - lam0) * feA,
+      b:    reMode === 'int'
+              ? feB
+              : lam1 * g.b + (1 - lam1) * feB,
+      lam0, lam1
+    };
+  });
+
+  const λ0 = p.tau0 > 0 ? p.tau0**2 / (p.tau0**2 + v_lvl1_est/p.n) : 0;
+  const λ1 = p.tau1 > 0 ? p.tau1**2 / (p.tau1**2 + v_lvl1_est/p.n) : 0;
+
+  return {grpFit: npFit, cpFit, ppFit, feA, feB, λ0, λ1, totalJ, v_lvl1_est};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function setModel(k) {
+  modelKey = k;
+  document.getElementById('pg-sigma').style.display = MODELS[k].hasSigma ? '' : 'none';
+
+  const cfg = {
+    gauss:    { g00min:'-2',  g00max:'6',   g00val:'2.0',  g10min:'-2',   g10max:'2',    g10val:'0.6',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
+    poisson:  { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.3', g10max:'0.3',  g10val:'0.12', g10step:'0.02', sigmax:'2.5', sigval:'0.6'  },
+    // Fix: Reduzierter g10max Bereich bei Gamma für bessere Lesbarkeit
+    gamma:    { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.15',g10max:'0.15', g10val:'0.10', g10step:'0.01', sigmax:'1.2', sigval:'0.4'  },
+    logistic: { g00min:'-2',  g00max:'2',   g00val:'0.0',  g10min:'-1.0', g10max:'1.0',  g10val:'0.4',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
+  }[k];
+  const sl = id => document.getElementById(id);
+  sl('g00').min   = cfg.g00min;  sl('g00').max   = cfg.g00max;  sl('g00').value = cfg.g00val;
+  sl('g10').min   = cfg.g10min;  sl('g10').max   = cfg.g10max;  sl('g10').step  = cfg.g10step; sl('g10').value = cfg.g10val;
+  sl('sigma').max = cfg.sigmax;  if (MODELS[k].hasSigma) sl('sigma').value = cfg.sigval;
+  
+  if (k !== 'gauss') {
+    sl('tau0').max = '1.2';
+    if (+sl('tau0').value > 1.2) sl('tau0').value = '0.6';
+    sl('tau1').max = '0.8';
+    if (+sl('tau1').value > 0.8) sl('tau1').value = '0.2';
+  } else {
+    sl('tau0').max = '3';
+    sl('tau1').max = '1.5';
+  }
+
+  ['mdl-gauss','mdl-poisson','mdl-gamma','mdl-logistic'].forEach(id =>
+    document.getElementById(id).classList.toggle('mdl-on', id==='mdl-'+k));
+  genData(); renderAll();
+}
+
+function setPooling(m) {
+  poolMode = m;
+  ['pp','np','cp'].forEach(k => {
+    const b = document.getElementById('ptab-'+k);
+    b.className = 'ctab' + (k===m ? ' '+k+'-on' : '');
+  });
+  renderAll();
+}
+
+function setREMode(m) {
+  reMode = m;
+  ['int','both'].forEach(k => document.getElementById('re-'+k).classList.toggle('re-on', k===m));
+  document.getElementById('pg-tau1').style.display = m==='int' ? 'none' : '';
+  document.getElementById('pg-rho').style.display  = m==='int' ? 'none' : '';
+  genData(); renderAll();
+}
+
+function updateFormula(p) {
+  const m = MODELS[modelKey];
+  const reParts = ['<span class="rnd">u₀ⱼ</span>'];
+  const distLines = [`<span class="rnd">u₀ⱼ</span> <span class="gry">~ N(0,${p.tau0.toFixed(2)}²)</span>`];
+  if (reMode === 'both') {
+    reParts.push('<span class="rnd">u₁ⱼ</span>·x');
+    distLines.push(`<span class="rnd">u₁ⱼ</span> <span class="gry">~ N(0,${p.tau1.toFixed(2)}²)</span>`);
+    distLines.push(`<span class="gry">   Cor(u₀,u₁) = ${p.rho.toFixed(2)}</span>`);
+  }
+  distLines.push(`<span class="gry">   ${m.formulaDist}</span>`);
+  document.getElementById('formula-box').innerHTML =
+    `η = <span class="fxd">${p.g00.toFixed(2)} + ${p.g10.toFixed(2)}·x</span> + ${reParts.join(' + ')}\n` +
+    `<span class="gry">${m.formulaLink}</span>\n` +
+    distLines.join('\n');
+}
+
+function checkSimpson(cpFit, grpFit) {
+  const nPos = grpFit.filter(g=>g.b>0).length;
+  const risk = (cpFit.b > 0.1 && nPos < grpFit.length/2) ||
+               (cpFit.b < -0.1 && nPos > grpFit.length/2);
+  document.getElementById('simp-warn').classList.toggle('on', poolMode==='cp' && risk);
+}
+
+function updateTitles() {
+  const t = {
+    pp: 'Partial Pooling: <em>Gruppenlinien mit Shrinkage zum Grand Mean</em>',
+    np: 'No Pooling: <em>unabhängige GLM-Geraden je Gruppe</em>',
+    cp: 'Complete Pooling: <em>eine Linie für alle — Gruppenstruktur ignoriert</em>'
+  };
+  document.getElementById('main-title').innerHTML = t[poolMode];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN CHART
+// ═══════════════════════════════════════════════════════════════
+function buildMain(p, est) {
+  const {grpFit, cpFit, ppFit, feA, feB, totalJ} = est;
+  const m = MODELS[modelKey];
+
+  const allX = data.map(d=>d.x);
+  const dataXmin = Math.min(...allX), dataXmax = Math.max(...allX);
+  const xMargin = (dataXmax - dataXmin) * 0.12 + 0.3;
+  const xMin = dataXmin - xMargin, xMax = dataXmax + xMargin;
+  const lineXs = [];
+  const step = (xMax - xMin) / 80;
+  for (let x = xMin; x <= xMax + step*0.1; x += step) lineXs.push(+x.toFixed(4));
+
+  const ds = [];
+
+  for (let j=0; j<totalJ; j++) {
+    const isOut = trueGrp[j]?.isOutlier;
+    ds.push({ label:`G${j+1}`, gid: j, type:'scatter',
+      data: data.filter(d=>d.gid===j).map(d=>({x:d.x,y:d.y})),
+      backgroundColor: GC[j%GC.length]+'99',
+      borderColor: GC[j%GC.length]+'cc',
+      borderWidth: 1,
+      pointRadius: isOut ? 6 : 3,
+      pointStyle: isOut ? 'star' : 'circle',
+      pointHoverRadius: 6, order:5 });
+  }
+
+  if (poolMode === 'cp') {
+    ds.push({ label:'CP', type:'line',
+      data: lineXs.map(x=>({x,y:m.invLink(cpFit.a+cpFit.b*x)})),
+      borderColor:css('--accent'), backgroundColor:'transparent',
+      borderWidth:3, pointRadius:0, tension:0, order:2 });
+  } else {
+    const fits = poolMode==='np' ? grpFit : ppFit;
+    for (let j=0; j<totalJ; j++) {
+      const col = GC[j%GC.length];
+      ds.push({ label:`line_${j}`, gid: j, type:'line',
+        data: lineXs.map(x=>({x,y:m.invLink(fits[j].a+fits[j].b*x)})),
+        borderColor: col,
+        backgroundColor:'transparent',
+        borderWidth: trueGrp[j]?.isOutlier ? 2.5 : 2,
+        borderDash: poolMode==='np' ? [5,3] : [],
+        pointRadius:0, tension:0, order:2 });
+    }
+    ds.push({ label:'FE', type:'line',
+      data: lineXs.map(x=>({x,y:m.invLink(feA+feB*x)})),
+      borderColor: FE_COLOR, backgroundColor:'transparent',
+      borderWidth:3, borderDash:[8,4], pointRadius:0, tension:0, order:1 });
+  }
+
+  if (showTrue) {
+    for (let j=0; j<totalJ; j++) {
+      const u0=trueGrp[j].u0, u1=trueGrp[j].u1||0;
+      ds.push({ label:`true_${j}`, gid: j, type:'line',
+        data: [xMin, xMax].map(x=>({x,y:m.invLink((p.g00+u0)+(p.g10+u1)*x)})),
+        borderColor: GC[j%GC.length]+'bb', borderDash:[2,3],
+        backgroundColor:'transparent', borderWidth:1.2, pointRadius:0, tension:0, order:0 });
+    }
+  }
+
+  if (charts.main) charts.main.destroy();
+
+  const allY = data.map(d => d.y).sort((a,b) => a-b);
+  const q02  = allY[Math.floor(allY.length * 0.02)] ?? allY[0];
+  const q98  = allY[Math.ceil(allY.length  * 0.98) - 1] ?? allY[allY.length-1];
+  const yRange = Math.max(q98 - q02, 1e-3);
+  const yMargin = yRange * 0.18;
+  const yMin = MODELS[modelKey].yPositive ? Math.max(0, q02 - yMargin) : q02 - yMargin;
+  const yMax = q98 + yMargin;
+
+  charts.main = new Chart(document.getElementById('mainChart').getContext('2d'), {
+    type:'scatter', data:{datasets:ds},
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:150},
+      onHover: (e, elements) => {
+         let gid = null;
+         if (elements.length > 0) {
+             const dsIdx = elements[0].datasetIndex;
+             gid = charts.main.data.datasets[dsIdx].gid;
+         }
+         if (gid !== undefined) highlightGroup(gid);
+      },
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>ctx.raw?.x!==undefined?` x=${ctx.raw.x.toFixed(2)}, y=${ctx.raw.y.toFixed(2)}`:''}}
+      },
+      scales:{
+        x:{type:'linear', min: xMin, max: xMax,
+          title:{display:true, text:'Prädiktor x', font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{top:5}},
+          grid:{color:css('--chart-grid')},
+          ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:8}},
+        y:{min: yMin, max: yMax,
+          title:{display:true, text:m.yLabel, font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{bottom:5}},
+          grid:{color:css('--chart-grid')},
+          ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:7}}
+      }
+    }
+  });
+
+  let lhtml = '';
+  for (let j=0;j<totalJ;j++) {
+    const isOut = trueGrp[j]?.isOutlier;
+    lhtml += `<div class="legend-item"><div class="ldot" style="background:${GC[j%GC.length]}"></div><span>Gr.${j+1}${isOut?' ⚡':''}</span></div>`;
+  }
+  if (poolMode!=='cp')
+    lhtml += `<div class="legend-item"><div style="width:22px;height:3px;border-top:3px dashed ${FE_COLOR}"></div><span style="margin-left:3px">Fixed Effect γ̂</span></div>`;
+  else
+    lhtml += `<div class="legend-item"><div class="lline" style="background:${css('--accent')}"></div><span>Complete Pooling</span></div>`;
+  if (showTrue)
+    lhtml += `<div class="legend-item"><div style="width:16px;border-top:2px dashed ${css('--ink2')}"></div><span style="margin-left:2px">Wahre Param.</span></div>`;
+  document.getElementById('main-legend').innerHTML = lhtml;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHRINKAGE CHART
+// ═══════════════════════════════════════════════════════════════
+function buildShrink(p, est) {
+  const {grpFit, ppFit, feA, totalJ} = est;
+  const grandA = feA;
+  const ds = [];
+
+  const npVals = grpFit.map(g=>g.a);
+  const ppVals = ppFit.map(g=>g.a);
+  const allVals = [...npVals, ...ppVals, grandA];
+  const vmin = Math.min(...allVals) - 0.4;
+  const vmax = Math.max(...allVals) + 0.4;
+
+  ds.push({ label:'diag', type:'line', data:[{x:vmin,y:vmin},{x:vmax,y:vmax}],
+    borderColor:css('--ink2')+'55', borderDash:[3,3], borderWidth:1.2,
+    backgroundColor:'transparent', pointRadius:0, tension:0, order:5 });
+
+  ds.push({ label:'gm', type:'line', data:[{x:vmin,y:grandA},{x:vmax,y:grandA}],
+    borderColor:FE_COLOR+'90', borderDash:[5,3], borderWidth:1.5,
+    backgroundColor:'transparent', pointRadius:0, tension:0, order:5 });
+
+  for (let j=0; j<totalJ; j++) {
+    const col    = GC[j%GC.length];
+    const isOut  = trueGrp[j]?.isOutlier;
+    const np = npVals[j], pp = ppVals[j];
+
+    ds.push({ label:`conn_${j}`, gid: j, type:'line', data:[{x:np,y:np},{x:np,y:pp}],
+      borderColor:col+'a0', backgroundColor:'transparent',
+      borderWidth:2, pointRadius:0, tension:0, order:3 });
+    ds.push({ label:`np_${j}`, gid: j, type:'scatter', data:[{x:np,y:np}],
+      backgroundColor:'transparent', borderColor:col,
+      pointRadius: isOut?10:7, pointStyle: isOut?'star':'circle', borderWidth:2, order:2 });
+    ds.push({ label:`pp_${j}`, gid: j, type:'scatter', data:[{x:np,y:pp}],
+      backgroundColor:col, borderColor:col,
+      pointRadius: isOut?10:7, pointStyle: isOut?'star':'circle', order:1 });
+    if (showTrue) {
+      const trueA = p.g00 + trueGrp[j].u0;
+      ds.push({ label:`tr_${j}`, gid: j, type:'scatter', data:[{x:np,y:trueA}],
+        backgroundColor:'transparent', borderColor:'#ffffff', pointRadius:5,
+        pointStyle:'crossRot', borderWidth:2, order:0 });
+    }
+  }
+
+  if (charts.shrink) charts.shrink.destroy();
+  charts.shrink = new Chart(document.getElementById('shrinkChart').getContext('2d'), {
+    type:'scatter', data:{datasets:ds},
+    plugins: [arrowPlugin],
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:200},
+      onHover: (e, elements) => {
+         let gid = null;
+         if (elements.length > 0) {
+             const dsIdx = elements[0].datasetIndex;
+             gid = charts.shrink.data.datasets[dsIdx].gid;
+         }
+         if (gid !== undefined) highlightGroup(gid);
+      },
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{
+          const l=ctx.dataset.label||'';
+          if(l.startsWith('np_')) { const j=+l.split('_')[1]; return ` Gr.${j+1} No Pooling: ${ctx.raw.y.toFixed(3)} (n=${trueGrp[j]?.nj??p.n})`; }
+          if(l.startsWith('pp_')) { const j=+l.split('_')[1]; return ` Gr.${j+1} Partial Pooling: ${ctx.raw.y.toFixed(3)} (λ=${((ppFit[j]?.lam0??0)*100).toFixed(0)}%)`; }
+          return '';
+        }}}
+      },
+      scales:{
+        x:{title:{display:true, text:'No-Pooling Intercept', font:{family:'DM Mono',size:11,weight:'500'}, color:css('--chart-tick'), padding:{top:4}},
+          grid:{color:css('--chart-grid')}, ticks:{font:{family:'DM Mono',size:10}, color:css('--chart-tick')}},
+        y:{title:{display:true, text:'Partial-Pooling Intercept', font:{family:'DM Mono',size:11,weight:'500'}, color:css('--chart-tick')},
+          grid:{color:css('--chart-grid')}, ticks:{font:{family:'DM Mono',size:10}, color:css('--chart-tick')}}
+      }
+    }
+  });
+}
+
+function modelFitStats(p, est) {
+  const {grpFit, cpFit, ppFit, feA, feB, totalJ} = est;
+  const N = data.length;
+  const m = MODELS[modelKey];
+
+  function approxLogLik(fits, kFree) {
+    let ll = 0;
+    if (modelKey === 'gauss') {
+      const rss = data.reduce((s,d)=>{
+        const g = Array.isArray(fits) ? fits[d.gid] : fits;
+        return s + (d.y - (g.a + g.b*d.x))**2;
+      }, 0);
+      const sig2 = rss / N;
+      ll = -N/2 * (Math.log(2*Math.PI * Math.max(sig2,1e-10)) + 1);
+    } else if (modelKey === 'poisson') {
+      data.forEach(d => {
+        const g = Array.isArray(fits) ? fits[d.gid] : fits;
+        const mu = Math.max(m.invLink(g.a + g.b*d.x), 1e-9);
+        ll += d.y * Math.log(mu) - mu;
+      });
+    } else if (modelKey === 'gamma') {
+      data.forEach(d => {
+        const g = Array.isArray(fits) ? fits[d.gid] : fits;
+        const mu = Math.max(m.invLink(g.a + g.b*d.x), 1e-9);
+        ll += -Math.log(mu) - d.y/mu;
+      });
+    } else if (modelKey === 'logistic') {
+      data.forEach(d => {
+        const g = Array.isArray(fits) ? fits[d.gid] : fits;
+        const p = Math.max(1e-9, Math.min(1-1e-9, m.invLink(g.a + g.b*d.x)));
+        ll += d.y * Math.log(p) + (1-d.y) * Math.log(1-p);
+      });
+    }
+    return {ll, aic: -2*ll + 2*kFree, bic: -2*ll + kFree*Math.log(N)};
+  }
+
+  const hasSig  = modelKey === 'gauss' || modelKey === 'gamma' ? 1 : 0;
+  const k_cp = 2 + hasSig;
+  const k_np = reMode === 'int' ? (totalJ + 1 + hasSig) : (2*totalJ + hasSig);
+  const k_pp = reMode === 'int' ? (3 + hasSig) : (5 + hasSig);
+
+  let ssWithin = 0, sxxWithin = 0, dfRes = 0;
+  const grpMeanA = [];
+  for (let j = 0; j < totalJ; j++) {
+    const pts = data.filter(d => d.gid === j);
+    const g   = grpFit[j];
+    const mx  = pts.reduce((s,d)=>s+d.x,0)/pts.length;
+    pts.forEach(d => {
+      const eta_hat = g.a + g.b * d.x;
+      let r_link;
+      if (modelKey === 'gauss') {
+        r_link = d.y - eta_hat;
+      } else if (modelKey === 'poisson' || modelKey === 'gamma') {
+        r_link = Math.log(Math.max(d.y, 1e-9)) - eta_hat;
+      } else if (modelKey === 'logistic') {
+        const mu_hat = m.invLink(eta_hat);
+        const v_hat  = Math.max(mu_hat * (1 - mu_hat), 1e-6);
+        r_link = (d.y - mu_hat) / Math.sqrt(v_hat);
+      } else {
+        r_link = d.y - eta_hat;
+      }
+      ssWithin  += r_link ** 2;
+      sxxWithin += (d.x - mx) ** 2;
+    });
+    dfRes += pts.length - 2;
+    grpMeanA.push(g.a);
+  }
+  const sig2hat = dfRes > 0 ? ssWithin / dfRes : 1e-6;
+  const sighat  = Math.sqrt(sig2hat);
+
+  const nbar = data.length / totalJ;
+  const meanA = grpMeanA.reduce((s,v)=>s+v,0) / totalJ;
+  const varA  = grpMeanA.reduce((s,v)=>s+(v-meanA)**2,0) / Math.max(totalJ-1, 1);
+  const tau0hat2 = Math.max(0, varA - sig2hat / nbar);
+  const tau0hat  = Math.sqrt(tau0hat2);
+
+  const grpSlopeB = grpFit.map(g => g.b);
+  const meanB2 = grpSlopeB.reduce((s,v)=>s+v,0) / totalJ;
+  const varB   = grpSlopeB.reduce((s,v)=>s+(v-meanB2)**2,0) / Math.max(totalJ-1, 1);
+  const sxxMean = sxxWithin / totalJ;
+  const tau1hat2 = reMode === 'both' ? Math.max(0, varB - sig2hat / Math.max(sxxMean, 1e-9)) : 0;
+  const tau1hat  = Math.sqrt(tau1hat2);
+
+  const se_feB = sxxWithin > 0 ? Math.sqrt(sig2hat / sxxWithin) : 0;
+  const se_feA = Math.sqrt((tau0hat2 + sig2hat / nbar) / Math.max(totalJ, 1));
+  const z95 = 1.96;
+  const ci_feA = [feA - z95*se_feA, feA + z95*se_feA];
+  const ci_feB = [feB - z95*se_feB, feB + z95*se_feB];
+
+  const ciTau = (tauhat, df) => {
+    if (tauhat <= 1e-6 || df < 1) return null;
+    const se_log = Math.sqrt(2 / df);
+    return [tauhat * Math.exp(-z95 * se_log), tauhat * Math.exp(z95 * se_log)];
+  };
+  const ci_tau0 = ciTau(tau0hat, totalJ - 1);
+  const ci_tau1 = ciTau(tau1hat, totalJ - 1);
+
+  // ── FIX: Nakagawa R2 Theoretical Variance ────────
+  const fixedPred  = data.map(d => feA + feB * d.x);
+  const muFP       = fixedPred.reduce((s,v)=>s+v,0) / N;
+  const varFixed   = fixedPred.reduce((s,v)=>s+(v-muFP)**2,0) / N;
+  const varRandom  = tau0hat2;
+  const varResid   = est.v_lvl1_est; // Aus mmEst übergeben!
+  const varTotal   = varFixed + varRandom + varResid;
+  
+  const R2m = varTotal > 0 ? varFixed / varTotal : 0;
+  const R2c = varTotal > 0 ? (varFixed + varRandom) / varTotal : 0;
+
+  return {
+    cp_stats: approxLogLik(cpFit, k_cp),
+    np_stats: approxLogLik(grpFit, k_np),
+    pp_stats: approxLogLik(ppFit, k_pp),
+    k_cp, k_np, k_pp, R2m, R2c, varResid,
+    se_feA, se_feB, ci_feA, ci_feB,
+    tau0hat, tau1hat, sig2hat, sighat,
+    ci_tau0, ci_tau1
+  };
+}
+
+function updateResults(p, est) {
+  const {grpFit, cpFit, ppFit, feA, feB, λ0, totalJ} = est;
+  const fit  = modelFitStats(p, est);
+  
+  // FIX: ICC mit theoretischer Varianz
+  const vb   = fit.tau0hat**2;
+  const vr   = fit.varResid;
+  const vpc  = (vb+vr) > 0 ? vb/(vb+vr) : 0;
+
+  const cpSlope    = cpFit.b;
+  const withinSlope = feB;
+  const simpsonRisk = Math.sign(cpSlope) !== Math.sign(withinSlope)
+                      && Math.abs(cpSlope) > 0.05 && Math.abs(withinSlope) > 0.05;
+
+  function fmtCI(lo, hi) {
+    return '<span style="color:var(--ink2);font-size:.62rem">[' + lo.toFixed(3) + ', ' + hi.toFixed(3) + ']</span>';
+  }
+  function fmtCItau(ci) {
+    if (!ci) return '<span style="color:var(--ink2);font-size:.62rem">τ̂≈0 (nicht schätzbar)</span>';
+    return '<span style="color:var(--ink2);font-size:.62rem">[' + ci[0].toFixed(3) + ', ' + ci[1].toFixed(3) + ']</span>';
+  }
+  function fmtAIC(s, active) {
+    var cls = active ? 'res-val active-mode' : 'res-val';
+    return '<span class="' + cls + '">' + s.aic.toFixed(1) + '</span>';
+  }
+  function row(label, val, extraStyle) {
+    var style = extraStyle || '';
+    return '<div class="res-row" style="' + style + '"><span>' + label + '</span><span class="res-val">' + val + '</span></div>';
+  }
+  function subrow(label, val) {
+    return '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">' + label + '</span>' + val + '</div>';
+  }
+  function section(label, body) {
+    return '<div class="res-section"><div class="res-label">' + label + '</div>' + body + '</div>';
+  }
+
+  var grpRows = '';
+  for (var j = 0; j < totalJ; j++) {
+    var np = grpFit[j], pp = ppFit[j];
+    var isOut = trueGrp[j] && trueGrp[j].isOutlier;
+    var nj    = trueGrp[j] ? trueGrp[j].nj : p.n;
+    var lam   = pp.lam0 !== undefined ? pp.lam0 : λ0;
+    var rowStyle = isOut ? 'color:var(--accent)' : '';
+    grpRows += '<tr style="' + rowStyle + '" onmouseenter="highlightGroup('+j+')" onmouseleave="highlightGroup(null)">'
+      + '<td><span class="grp-dot" style="background:' + GC[j%GC.length] + '"></span>Gr.' + (j+1) + (isOut ? ' ⚡' : '') + '</td>'
+      + '<td>' + np.a.toFixed(3) + '</td>'
+      + '<td>' + pp.a.toFixed(3) + '</td>'
+      + '<td style="color:var(--accent2)">' + (lam*100).toFixed(0) + '%</td>'
+      + '<td style="color:var(--ink2)">' + nj + '</td>'
+      + '</tr>';
+  }
+
+  var html = '';
+
+  if (simpsonRisk) {
+    html += '<div style="background:var(--warn-bg);border:1.5px solid var(--warn);padding:.42rem .65rem;margin-bottom:.6rem;'
+      + 'font-family:\'DM Mono\',monospace;font-size:.65rem;color:var(--warn);line-height:1.5">'
+      + '⚠ <b>Simpson\'s Paradoxon erkannt!</b><br>'
+      + 'CP-Slope: <b>' + cpSlope.toFixed(3) + '</b> &nbsp;|&nbsp; Within-Slope: <b>' + withinSlope.toFixed(3) + '</b><br>'
+      + 'Gepoolter Effekt hat <b>umgekehrtes Vorzeichen</b> zum gruppeninternen Effekt.<br>'
+      + '→ Wechsle zu Partial/No Pooling um den wahren Effekt zu sehen.'
+      + '</div>';
+  }
+
+  var feBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;color:var(--ink2);margin-bottom:.3rem">'
+    + 'SE aus Within-Group-Residuen · <span style="color:var(--accent3)">■ geschätzt</span> &nbsp;<span style="color:var(--ink2)">· wahr = Datengenerator</span></div>'
+    + '<div class="res-row"><span>γ̂₀₀ · Grand Intercept</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + feA.toFixed(3) + '</span></div>'
+    + subrow('SE=' + fit.se_feA.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₀₀=' + p.g00.toFixed(3), fmtCI(fit.ci_feA[0], fit.ci_feA[1]))
+    + '<div class="res-row" style="margin-top:.3rem"><span>γ̂₁₀ · Fixed Slope</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + feB.toFixed(3) + '</span></div>'
+    + subrow('SE=' + fit.se_feB.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₁₀=' + p.g10.toFixed(3), fmtCI(fit.ci_feB[0], fit.ci_feB[1]));
+  if (simpsonRisk) {
+    feBody += '<div class="res-row" style="margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--grid)">'
+      + '<span style="color:var(--warn)">CP-Slope (verzerrt!)</span>'
+      + '<span class="res-val" style="color:var(--warn)">' + cpSlope.toFixed(3) + '</span></div>';
+  }
+  html += section('FIXED EFFECTS — Schätzung &amp; 95%-KI (Wald)', feBody);
+
+  var vcBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;color:var(--ink2);margin-bottom:.3rem">'
+    + 'Schätzung aus Daten (Method of Moments) · '
+    + '<span style="color:var(--accent3)">■ geschätzt</span> &nbsp;'
+    + '<span style="color:var(--ink2)">· wahr = Datengenerator</span></div>'
+    + '<div class="res-row"><span>τ̂₀ · SD Random Intercept</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + fit.tau0hat.toFixed(3) + '</span></div>'
+    + subrow('95%-KI &nbsp;·&nbsp; wahr τ₀=' + p.tau0.toFixed(3), fmtCItau(fit.ci_tau0));
+  if (reMode === 'both') {
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>τ̂₁ · SD Random Slope</span>'
+      + '<span class="res-val" style="color:var(--accent3)">' + fit.tau1hat.toFixed(3) + '</span></div>'
+      + subrow('95%-KI &nbsp;·&nbsp; wahr τ₁=' + p.tau1.toFixed(3), fmtCItau(fit.ci_tau1))
+      + '<div class="res-row" style="margin-top:.3rem"><span>ρ · Korrelation u₀↔u₁ <span style="font-size:.6rem;color:var(--ink2)">(wahr)</span></span>'
+      + '<span class="res-val" style="color:var(--ink2)">' + p.rho.toFixed(2) + '</span></div>';
+  }
+  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Residual SD (auf Link-Skala)</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + Math.sqrt(fit.varResid).toFixed(3) + '</span></div>'
+    + (MODELS[modelKey].hasSigma ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + '</span></div>' : '')
+    + '<div class="res-row" style="margin-top:.3rem"><span>ICC = τ̂₀²/(τ̂₀²+σ̂²)</span>'
+    + '<span class="res-val" style="color:var(--accent2)">' + (vpc*100).toFixed(1) + '%</span></div>'
+    + '<div class="vpc-track" style="margin:.28rem 0">'
+    + '<div class="vpc-between" style="width:' + Math.min(vpc*100,100).toFixed(0) + '%"></div>'
+    + '<div class="vpc-resid"></div></div>'
+    + '<div class="vpc-labels"><span>Zwischen-Gruppen ' + (vpc*100).toFixed(0) + '%</span>'
+    + '<span>Innerhalb ' + (100-vpc*100).toFixed(0) + '%</span></div>'
+    + '<div style="font-family:\'DM Mono\',monospace;font-size:.59rem;color:var(--ink2);margin-top:.2rem">'
+    + (vpc > 0.05 ? 'ICC=' + (vpc*100).toFixed(0) + '% > 5% → LMM notwendig' : 'ICC=' + (vpc*100).toFixed(0) + '% ≈ 0 → kaum Gruppenunterschiede')
+    + '</div>';
+  html += section('VARIANZKOMPONENTEN — geschätzt vs. wahr', vcBody);
+
+  var r2Body = row('R²<sub>marginal</sub> (Fixed Effects)', (fit.R2m*100).toFixed(1) + '%')
+    .replace('res-val">', 'res-val" style="color:var(--accent3)">')
+    + row('R²<sub>conditional</sub> (Fixed+Random)', (fit.R2c*100).toFixed(1) + '%')
+    .replace('res-val">', 'res-val" style="color:var(--accent2)">')
+    + '<div style="height:8px;display:flex;border-radius:2px;overflow:hidden;margin:.25rem 0">'
+    + '<div style="width:' + (fit.R2m*100).toFixed(0) + '%;background:var(--accent3)"></div>'
+    + '<div style="width:' + Math.max(0,(fit.R2c-fit.R2m)*100).toFixed(0) + '%;background:var(--accent2)88"></div>'
+    + '<div style="flex:1;background:var(--grid)"></div></div>'
+    + '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;color:var(--ink2);display:flex;gap:.7rem">'
+    + '<span style="color:var(--accent3)">■ Fixed</span><span style="color:var(--accent2)">■ Random</span><span>□ Residual</span></div>';
+  html += section('R² (Nakagawa &amp; Schielzeth 2013)', r2Body);
+
+  var aicBody = '<div class="res-row"><span>Complete Pooling (k=' + fit.k_cp + ')</span>'
+    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.cp_stats, poolMode==='cp')
+    + '<span class="res-val" style="color:var(--ink2);font-size:.6rem">' + fit.cp_stats.bic.toFixed(1) + '</span></span></div>'
+    + '<div class="res-row"><span>No Pooling (k=' + fit.k_np + ')</span>'
+    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.np_stats, poolMode==='np')
+    + '<span class="res-val" style="color:var(--ink2);font-size:.6rem">' + fit.np_stats.bic.toFixed(1) + '</span></span></div>'
+    + '<div class="res-row"><span>Partial Pooling/LMM (k=' + fit.k_pp + ')</span>'
+    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.pp_stats, poolMode==='pp')
+    + '<span class="res-val" style="color:var(--ink2);font-size:.6rem">' + fit.pp_stats.bic.toFixed(1) + '</span></span></div>'
+    + '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;color:var(--ink2);margin-top:.2rem">AIC (fett=aktiv) · BIC (grau) · kleiner = besser</div>';
+  html += section('MODELLVERGLEICH — AIC / BIC', aicBody);
+
+  var outlierRow = '';
+  if (showOutlier && ppFit[trueGrp.length-1]) {
+    var lamOut = (ppFit[trueGrp.length-1].lam0 || 0) * 100;
+    outlierRow = '<div class="res-row"><span>λ Ausreißer-Gruppe (n=3) ⚡</span>'
+      + '<span class="res-val" style="color:var(--accent)">' + lamOut.toFixed(0) + '%</span></div>';
+  }
+  var shrinkBody = '<div class="res-row"><span>λ für Standardgruppen (n=' + p.n + ')</span>'
+    + '<span class="res-val" style="color:var(--accent2)">' + (λ0*100).toFixed(0) + '%</span></div>'
+    + outlierRow
+    + '<div style="font-family:\'DM Mono\',monospace;font-size:.59rem;color:var(--ink2);margin-top:.2rem;line-height:1.55">'
+    + 'λ=100%: Partial ≈ No Pooling &nbsp;·&nbsp; λ=0%: Partial ≈ Grand Mean</div>';
+  html += section('SHRINKAGE λ = τ₀²/(τ₀²+σ²/nⱼ)', shrinkBody);
+
+  var modeDescr = {
+    pp: 'Partial Pooling (LMM): γ̂₀₀=' + feA.toFixed(3) + ', γ̂₁₀=' + feB.toFixed(3)
+      + '. R²_marg=' + (fit.R2m*100).toFixed(1) + '%, R²_cond=' + (fit.R2c*100).toFixed(1) + '%.',
+    np: 'No Pooling: Jede Gruppe hat eigene Schätzung (k=' + fit.k_np + ' Parameter). AIC=' + fit.np_stats.aic.toFixed(1) + '.',
+    cp: 'Complete Pooling: Eine Gerade für alle. AIC=' + fit.cp_stats.aic.toFixed(1) + (simpsonRisk ? ' — ⚠ Simpson-Risiko!' : '') + '.'
+  };
+  html += '<div class="info-strip" style="margin-top:.4rem">' + modeDescr[poolMode] + '</div>';
+
+  document.getElementById('results-panel').innerHTML = html;
+
+  document.getElementById('grp-table-panel').innerHTML =
+    '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;letter-spacing:.08em;text-transform:uppercase;'
+    + 'color:var(--accent2);margin-bottom:.3rem;padding-top:.5rem;border-top:1px solid var(--grid)">'
+    + 'RANDOM EFFECTS — GRUPPENINTERCEPTS</div>'
+    + '<table class="re-table"><thead><tr><th>Gr.</th><th>No-Pool â₀</th><th>Part.-Pool â₀</th><th>λ</th><th>n</th></tr></thead>'
+    + '<tbody id="re-table-body">' + grpRows + '</tbody></table>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════════
+function renderAll() {
+  const p = P();
+  [['g00'],['g10'],['tau0'],['tau1'],['sigma']].forEach(([id])=>
+    document.getElementById('v-'+id).textContent = (+document.getElementById(id).value).toFixed(2));
+  document.getElementById('v-rho').textContent = p.rho.toFixed(2);
+  document.getElementById('v-J').textContent  = p.J;
+  document.getElementById('v-n').textContent  = p.n;
+  document.getElementById('v-xr').textContent = `±${p.xr.toFixed(1)}`;
+
+  updateFormula(p);
+  updateTitles();
+  const est = mmEst(p);
+  checkSimpson(est.cpFit, est.grpFit);
+  buildMain(p, est);
+  buildShrink(p, est);
+  updateResults(p, est);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// LISTENERS + INIT
+// ═══════════════════════════════════════════════════════════════
+['g00','g10','tau0','tau1','sigma','rho'].forEach(id =>
+  document.getElementById(id).addEventListener('input', ()=>{ genData(); renderAll(); }));
+
+// FIX: Bei Datengenerierungs-Slidern während Drag nur Label updaten,
+// Rerendering erst bei Drop ('change'), um Lag zu vermeiden.
+['J','n','xr','xoff'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+     document.getElementById('v-'+id).textContent = (+el.value).toFixed(id==='xr'||id==='xoff'?1:0);
+  });
+  el.addEventListener('change', () => {
+     genData(); renderAll();
+  });
+});
+
+setPooling('pp');
+genData();
+renderAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bayesian Model Architect v3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap');
+
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;
+  --a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;
+}
+[data-theme="dark"]{
+  --bg:#0d1018;--paper:#141820;--ink:#ebe5d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;
+  --a5:#e07830;--a6:#2bc7c4;
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',serif;background:var(--bg);color:var(--ink);
+     display:flex;flex-direction:column;height:100vh;overflow:hidden;transition:background .2s,color .2s}
+
+/* ─── Header ──────────────────────────────────── */
+#hdr{background:var(--paper);border-bottom:1.5px solid var(--border);
+     padding:.5rem 1.1rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:.5rem}
+.hdr-l{display:flex;flex-direction:column;gap:.06rem}
+.hdr-title{font-size:1.12rem;font-weight:300;letter-spacing:-.02em}
+.hdr-title em{font-style:italic;color:var(--a2)}
+.hdr-title .ver{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--ink2);opacity:.55;vertical-align:middle;margin-left:.3rem}
+.hdr-sub{font-family:'DM Mono',monospace;font-size:.54rem;color:var(--ink2);letter-spacing:.02em}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.64rem;background:var(--panel);
+      border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--a2);color:var(--a2)}
+.hbtn.act{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+
+/* ─── Main 3-col ─────────────────────────────── */
+#main{flex:1;display:grid;grid-template-columns:300px 1fr 330px;overflow:hidden;min-height:0}
+
+/* ─── Sidebar ────────────────────────────────── */
+#sb{background:var(--paper);border-right:1.5px solid var(--border);
+    overflow-y:auto;padding:.8rem .85rem 3rem;display:flex;flex-direction:column;gap:.6rem}
+.sc{background:var(--bg);border:1px solid var(--grid);padding:.6rem .75rem;transition:box-shadow .18s}
+.sc.hl{box-shadow:0 0 0 2.5px var(--a4),0 2px 12px rgba(120,60,140,.15)}
+.sc-h{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.06em;color:var(--ink2);
+      text-transform:uppercase;margin-bottom:.5rem;display:flex;align-items:center;gap:.35rem}
+.sn{font-size:.54rem;background:var(--a2);color:var(--paper);padding:.05rem .24rem;font-family:'DM Mono',monospace}
+
+/* Likelihood buttons — friendlier, bigger */
+.fam-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem}
+.fb{font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);
+    border:2px solid var(--grid);color:var(--ink2);padding:.35rem .4rem;cursor:pointer;
+    transition:all .16s;text-align:center;line-height:1.4;border-radius:2px}
+.fb:hover{border-color:var(--a2);color:var(--a2)}
+.fb.sel{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.fb .fx{font-size:.55rem;opacity:.7;display:block;margin-top:.08rem}
+.lkd{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);line-height:1.65;
+     margin-top:.38rem;padding:.32rem .42rem;border-left:3px solid var(--a2);background:var(--panel);display:none}
+
+/* Predictor rows */
+.pr{display:flex;align-items:center;gap:.32rem;margin-bottom:.25rem}
+.pi{flex:1;background:var(--panel);border:1.5px solid var(--grid);color:var(--ink);
+    font-family:'DM Mono',monospace;font-size:.7rem;padding:.22rem .38rem;outline:none;transition:border .12s}
+.pi:focus{border-color:var(--a3)}
+.pd{cursor:pointer;color:var(--a1);font-size:.85rem;opacity:.6;padding:.08rem .18rem;transition:opacity .12s}
+.pd:hover{opacity:1}
+.pb-tag{font-family:'DM Mono',monospace;font-size:.6rem;padding:.1rem .32rem;
+        background:rgba(90,138,42,.15);color:var(--a3);min-width:1.9rem;text-align:center}
+.add-b{width:100%;font-family:'DM Mono',monospace;font-size:.65rem;background:transparent;
+       border:1.5px dashed var(--a3);color:var(--a3);padding:.25rem;cursor:pointer;transition:all .15s;margin-top:.05rem}
+.add-b:hover{background:var(--a3);color:var(--paper);border-style:solid}
+.pg{display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;font-size:.65rem;margin-bottom:.22rem}
+.pg label{color:var(--ink2);flex-shrink:0;min-width:2.6rem}
+.pg select,.pg input[type=text]{background:var(--panel);border:1.5px solid var(--grid);
+  color:var(--ink);font-family:'DM Mono',monospace;font-size:.67rem;padding:.2rem .35rem;flex:1;outline:none}
+.ml-toggle{display:flex;align-items:center;gap:.42rem;cursor:pointer;
+           font-family:'DM Mono',monospace;font-size:.68rem;margin-bottom:.35rem}
+.ml-opts{display:none}
+
+/* Prior blocks — friendlier */
+.prior-b{margin-bottom:.55rem;background:var(--panel);border-left:3.5px solid var(--grid);padding:.4rem .5rem}
+.prior-b.pi-int{border-color:var(--a2)}
+.prior-b.pi-beta{border-color:var(--a3)}
+.prior-b.pi-sig{border-color:var(--a5)}
+.prior-b.pi-nu{border-color:var(--a6)}
+.prior-b.pi-re{border-color:var(--a4)}
+.prior-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:.28rem;cursor:pointer}
+.prior-h-l{display:flex;align-items:center;gap:.32rem}
+.pbg{font-family:'DM Mono',monospace;font-size:.52rem;padding:.06rem .22rem}
+.pbg-int{background:rgba(42,110,138,.2);color:var(--a2)}
+.pbg-beta{background:rgba(90,138,42,.2);color:var(--a3)}
+.pbg-sig{background:rgba(184,92,0,.2);color:var(--a5)}
+.pbg-nu{background:rgba(14,124,123,.2);color:var(--a6)}
+.pbg-re{background:rgba(122,58,138,.2);color:var(--a4)}
+.prior-lbl{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink);font-weight:500}
+.prior-val{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);opacity:.75}
+.prior-exp{display:none;font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);
+           line-height:1.65;margin-bottom:.32rem;padding:.3rem .36rem;
+           background:var(--bg);border-left:2px solid var(--a4)}
+.prior-exp b{color:var(--ink)}
+/* Sliders — bigger, friendlier */
+.sl-r{display:flex;align-items:center;gap:.45rem;font-family:'DM Mono',monospace;font-size:.65rem;margin-bottom:.18rem}
+.sl-r label{color:var(--ink2);min-width:1.2rem;font-size:.62rem}
+.sl-r span.sv{min-width:2.3rem;text-align:right;color:var(--a2);font-size:.67rem;font-weight:500}
+input[type=range]{flex:1;height:4px;cursor:pointer;background:var(--grid);appearance:none;outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;background:var(--a2);border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.detail-g{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.3rem;margin-bottom:.4rem}
+.db{font-family:'DM Mono',monospace;font-size:.64rem;background:var(--panel);
+    border:1.5px solid var(--grid);color:var(--ink2);padding:.25rem .32rem;cursor:pointer;text-align:center}
+.db:hover{border-color:var(--a4)}
+.db.sel{background:var(--a4);color:var(--paper);border-color:var(--a4)}
+
+/* ─── Guide Banner ───────────────────────────── */
+#guide{background:var(--paper);border-bottom:2.5px solid var(--a4);flex-shrink:0;
+       overflow:hidden;transition:max-height .28s ease}
+#guide.open{max-height:175px}
+#guide.closed{max-height:0;border-bottom-width:0}
+.g-inner{padding:.55rem 1rem .6rem}
+.g-steps{display:flex;align-items:center;gap:.3rem;margin-bottom:.3rem}
+.g-step-n{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);margin-right:.15rem}
+.g-dot{width:9px;height:9px;border-radius:50%;background:var(--grid);cursor:pointer;flex-shrink:0;transition:all .15s;border:1.5px solid transparent}
+.g-dot.done{background:var(--a3);border-color:var(--a3)}
+.g-dot.act{background:var(--a4);border-color:var(--a4);box-shadow:0 0 0 3px rgba(200,122,216,.2)}
+.g-body{display:flex;gap:.9rem;align-items:flex-start}
+.g-text-a{flex:1;min-width:0}
+.g-title{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;color:var(--a4);margin-bottom:.24rem;letter-spacing:.01em}
+.g-text{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink2);line-height:1.7}
+.g-text b{color:var(--ink)}
+.g-nav{display:flex;flex-direction:column;gap:.3rem;flex-shrink:0}
+.g-btn{font-family:'DM Mono',monospace;font-size:.63rem;background:var(--panel);
+       border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;white-space:nowrap;transition:all .15s}
+.g-btn:hover{border-color:var(--a4);color:var(--a4)}
+.g-btn.prim{background:var(--a4);color:var(--paper);border-color:var(--a4)}
+.g-btn.prim:hover{opacity:.85}
+
+/* ─── Canvas area ────────────────────────────── */
+#ca{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-height:0}
+.cv-bar{background:var(--paper);border-bottom:1px solid var(--border);
+        padding:.35rem .85rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.cv-t{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+.legend{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;font-family:'DM Mono',monospace;font-size:.55rem;color:var(--ink2)}
+.li{display:flex;align-items:center;gap:.2rem}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.lr{width:11px;height:7px;border:1.5px solid currentColor;flex-shrink:0;opacity:.65}
+#dw{flex:1;overflow:hidden;position:relative;min-height:0}
+#svg{width:100%;height:100%}
+
+/* ─── Math Panel ─────────────────────────────── */
+#mp{background:var(--paper);border-left:1.5px solid var(--border);
+    overflow-y:auto;display:flex;flex-direction:column;min-height:0}
+.mp-h{background:var(--paper);border-bottom:1px solid var(--border);
+      padding:.38rem .8rem;flex-shrink:0;font-family:'DM Mono',monospace;
+      font-size:.62rem;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+#mlines{padding:.65rem .85rem .3rem;font-size:.9rem}
+.mblock{margin-bottom:.7rem}
+.mblk-l{font-family:'DM Mono',monospace;font-size:.5rem;color:var(--ink2);opacity:.5;
+        text-transform:uppercase;letter-spacing:.08em;margin-bottom:.25rem}
+.mrow{padding:.1rem .35rem;cursor:pointer;transition:background .12s;
+      border-left:2.5px solid transparent;font-size:.88rem;line-height:2;
+      font-family:'DM Mono',monospace}
+.mrow:hover{background:var(--panel)}
+.mrow.act{background:var(--panel);border-left-color:var(--a4)}
+.msep{height:1px;background:var(--grid);margin:.4rem 0}
+
+/* Inline explanation for math panel */
+#exbox{margin:.5rem .8rem .8rem;padding:.55rem .7rem;
+       background:var(--panel);border-left:4px solid var(--a4);
+       font-family:'DM Mono',monospace;font-size:.62rem;line-height:1.75;
+       color:var(--ink2);display:none}
+.ex-title{color:var(--ink);font-weight:500;margin-bottom:.32rem;font-size:.7rem;letter-spacing:.01em}
+.ex-sec{margin-bottom:.35rem}
+.ex-sec:last-child{margin:0}
+.ex-lbl{color:var(--a4);font-size:.52rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.1rem}
+
+#toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);
+       background:var(--paper);border:1.5px solid var(--border);padding:.38rem .9rem;
+       font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink);
+       opacity:0;pointer-events:none;transition:opacity .25s;z-index:100}
+#toast.show{opacity:1}
+
+/* MathJax output styling */
+.MJX-TEX{font-size:1em !important}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="hdr-l">
+    <div class="hdr-title">Bayesian Model <em>Architect</em><span class="ver">v3</span></div>
+    <div class="hdr-sub">Kruschke-Diagramme · McElreath-Notation · Geführter Modellaufbau</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" id="btn-guide" onclick="toggleGuide()">📖 Guide</button>
+    <button class="hbtn" id="btn-ex"    onclick="toggleEx()">💡 Erklärungen</button>
+    <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<div id="main">
+
+<!-- ═══ SIDEBAR ═══ -->
+<div id="sb">
+
+  <div class="sc" id="sc-lk">
+    <div class="sc-h"><span class="sn">1</span> Likelihood — Welche Verteilung?</div>
+    <div class="fam-grid">
+      <button class="fb sel" data-fam="normal"    onclick="setFam(this)">Gaussian<span class="fx">Stetig, symmetrisch</span></button>
+      <button class="fb"    data-fam="student"   onclick="setFam(this)">Student-t<span class="fx">Robust, Ausreißer</span></button>
+      <button class="fb"    data-fam="bernoulli" onclick="setFam(this)">Bernoulli<span class="fx">Binär 0 / 1</span></button>
+      <button class="fb"    data-fam="poisson"   onclick="setFam(this)">Poisson<span class="fx">Zähldaten ≥ 0</span></button>
+      <button class="fb"    data-fam="gamma"     onclick="setFam(this)">Gamma<span class="fx">Positiv, rechtsschief</span></button>
+    </div>
+    <div id="lkd" class="lkd"></div>
+  </div>
+
+  <div class="sc" id="sc-var">
+    <div class="sc-h"><span class="sn">2</span> Variablen</div>
+    <div class="pg"><label>AV</label><input type="text" id="ov" value="y" oninput="sched()"></div>
+    <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);margin-bottom:.3rem">Prädiktoren</div>
+    <div id="pred-list"></div>
+    <button class="add-b" onclick="addPred()">＋ Prädiktor hinzufügen</button>
+  </div>
+
+  <div class="sc" id="sc-str">
+    <div class="sc-h"><span class="sn">3</span> Struktur</div>
+    <label class="ml-toggle"><input type="checkbox" id="ml-ck" onchange="sched()"> Mehrebenenmodell (hierarchisch)</label>
+    <div id="ml-opts" class="ml-opts">
+      <div class="pg"><label>Gruppe</label><input type="text" id="gv" value="j" oninput="sched()"></div>
+      <div class="pg"><label>Varying</label>
+        <select id="re-type" onchange="sched()">
+          <option value="int">Intercept (α_j)</option>
+          <option value="slope">Intercept + Slopes (α_j, β_j)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="sc" id="sc-pr">
+    <div class="sc-h"><span class="sn">4</span> Priors</div>
+    <div id="prior-ui"></div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="sn">5</span> Detailtiefe</div>
+    <div class="detail-g">
+      <button class="db"     data-d="simple" onclick="setDet(this)">Minimal</button>
+      <button class="db sel" data-d="medium" onclick="setDet(this)">Standard</button>
+      <button class="db"     data-d="full"   onclick="setDet(this)">Voll</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ CENTER ═══ -->
+<div id="ca">
+
+  <div id="guide" class="open">
+    <div class="g-inner">
+      <div class="g-steps">
+        <span class="g-step-n" id="gs-n"></span>
+        <span id="gs-dots"></span>
+      </div>
+      <div class="g-body">
+        <div class="g-text-a">
+          <div class="g-title" id="g-tit"></div>
+          <div class="g-text"  id="g-txt"></div>
+        </div>
+        <div class="g-nav">
+          <button class="g-btn prim" id="g-next" onclick="gNext()">Weiter →</button>
+          <button class="g-btn" id="g-prev" onclick="gPrev()" style="display:none">← Zurück</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cv-bar">
+    <span class="cv-t">Modelldiagramm (Kruschke-Notation)</span>
+    <div class="legend">
+      <span class="li"><span class="ld" style="background:var(--a2)"></span>α</span>
+      <span class="li"><span class="ld" style="background:var(--a3)"></span>β</span>
+      <span class="li"><span class="ld" style="background:var(--a5)"></span>σ</span>
+      <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
+      <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
+      <span class="li"><span class="lr" style="color:var(--ink2)"></span>Plate</span>
+      <span class="li" style="opacity:.55">○ latent &nbsp; ◉ beobachtet</span>
+    </div>
+  </div>
+
+  <div id="dw">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs id="defs"></defs>
+      <g id="g-plates"></g>
+      <g id="g-edges"></g>
+      <g id="g-nodes"></g>
+    </svg>
+  </div>
+
+</div>
+
+<!-- ═══ MATH PANEL ═══ -->
+<div id="mp">
+  <div class="mp-h">McElreath-Notation</div>
+  <div id="mlines"></div>
+  <div id="exbox">
+    <div class="ex-title" id="ex-tit">— klicke auf einen Knoten —</div>
+    <div class="ex-sec" id="ex-what-s"><div class="ex-lbl">Was ist das?</div><div id="ex-what"></div></div>
+    <div class="ex-sec" id="ex-why-s"><div class="ex-lbl">Warum dieser Prior?</div><div id="ex-why"></div></div>
+    <div class="ex-sec" id="ex-tip-s"><div class="ex-lbl">Tipp</div><div id="ex-tip"></div></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+<div id="toast"></div>
+
+<!-- MathJax for formula rendering -->
+<script>
+MathJax = {
+  tex:{ inlineMath:[['$','$']], displayMath:[['$$','$$']] },
+  options:{ skipHtmlTags:['script','noscript','style','textarea','pre'] },
+  startup:{ typeset:false }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let DARK=true, DET='medium', ACTIVE=null, SHOW_EX=true;
+let _t=null, GSTEP=0, GOPEN=true;
+
+const M = {
+  fam:'normal', out:'y',
+  preds:[
+    {name:'x₁', pr:{fam:'normal',mu:0,sig:2.5}},
+    {name:'x₂', pr:{fam:'normal',mu:0,sig:2.5}},
+  ],
+  ml:false, gv:'j', ret:'int',
+  pr:{
+    alpha: {fam:'normal',      mu:0,  sig:10 },
+    sigma: {fam:'exponential', p1:1          },
+    nu:    {fam:'gamma',       p1:2,  p2:0.1 },
+    mu_a:  {fam:'normal',      mu:0,  sig:5  },
+    sig_a: {fam:'exponential', p1:1          },
+    mu_b:  {fam:'normal',      mu:0,  sig:2.5},
+    sig_b: {fam:'exponential', p1:1          },
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+//  GUIDE
+// ═══════════════════════════════════════════════════════
+const STEPS=[
+  {t:'Schritt 1 — Likelihood: Wie entstehen deine Daten?',
+   tx:'Der erste Schritt beim Modellaufbau: Welcher Prozess hat deine Daten erzeugt? <b>Gaussian</b> → stetige, annähernd symmetrisch verteilte Daten (z.B. Körpergröße, Reaktionszeiten nach Bereinigung). <b>Student-t</b> → wie Gaussian, aber robuster gegen Ausreißer. <b>Bernoulli</b> → binäre Ja/Nein-Outcomes (Kauf, Rückfall, Überleben). <b>Poisson</b> → Ereigniszählungen (Anzahl Fehler, Besuche). <b>Gamma</b> → positive, rechtsschiefe Werte (Wartezeiten, Kosten). Wähle jetzt links.',
+   hl:'sc-lk'},
+  {t:'Schritt 2 — Variablen: Was modellierst du?',
+   tx:'Gib der abhängigen Variable (AV) einen sinnvollen Namen. Soll nur der Mittelwert geschätzt werden? → kein Prädiktor nötig. Hast du erklärende Variablen (Alter, Dosis, Gruppe)? → füge sie als Prädiktoren hinzu. Jeder Prädiktor bekommt einen eigenen Steigungsparameter β. Im Diagramm siehst du live, wie das Modell wächst.',
+   hl:'sc-var'},
+  {t:'Schritt 3 — Struktur: Flach oder hierarchisch?',
+   tx:'Gibt es eine Gruppenstruktur in deinen Daten — z.B. Messungen innerhalb von Personen, Schulen, Kliniken? Dann ist ein <b>hierarchisches Modell</b> angebracht. Die Gruppen bekommen eigene Parameter (α_j), die aber aus einem gemeinsamen <b>Hyperprior</b> stammen. Das erzeugt <em>Partial Pooling</em>: Gruppen mit wenig Daten werden zur Gesamtmitte gezogen, Gruppen mit vielen Daten behalten ihren eigenen Schätzwert.',
+   hl:'sc-str'},
+  {t:'Schritt 4 — Das Modelldiagramm verstehen',
+   tx:'Schau das Diagramm in der Mitte an! <b>Offene Kreise (○)</b> sind unbekannte Parameter — sie brauchen Priors. <b>Der Punkt (•)</b> ist der deterministische Prädiktor μ_i: er wird aus α, β und x berechnet, ohne Zufall. <b>Der schattierte Doppelkreis (◉)</b> sind deine beobachteten Daten y. Die Pfeile zeigen die generative Richtung: Prior → Parameter → μ_i → y. Jede Ebene des Diagramms entspricht einer Zeile der Formel rechts.',
+   hl:null},
+  {t:'Schritt 5 — Priors: Vorwissen explizit machen',
+   tx:'Jeder Parameter (offener Kreis) braucht einen <b>Prior</b> — eine Verteilung, die dein Vorwissen über seinen plausiblen Wertebereich beschreibt. Sieh die kleinen Kurven in den Kreisen: sie zeigen die Prior-Form! Ändere die Slider links und beobachte, wie sich die Kurve im Knoten live anpasst. Klicke auf ▸ bei einem Prior für eine ausführliche Erklärung. Klicke auf jeden Knoten im Diagramm für weitere Infos.',
+   hl:'sc-pr'},
+  {t:'Fertig — Dein vollständiges Bayesianisches Modell',
+   tx:'Das Diagramm zeigt das komplette Modell. Rechts siehst du die formale McElreath-Notation — genau wie im Lehrbuch. Das Modell ist nun bereit für den <b>brms Model Builder</b>: dort übersetze es in R-Code. <b>Tipp:</b> Klicke auf beliebige Knoten oder Formelzeilen für kontextuelle Erklärungen. Der Guide bleibt über den 📖-Button oben immer erreichbar.',
+   hl:null},
+];
+function renderGuide(){
+  const s=STEPS[GSTEP];
+  document.getElementById('gs-n').textContent=`Schritt ${GSTEP+1} / ${STEPS.length}`;
+  document.getElementById('g-tit').textContent=s.t;
+  document.getElementById('g-txt').innerHTML=s.tx;
+  document.getElementById('g-next').textContent=GSTEP===STEPS.length-1?'✓ Schließen':'Weiter →';
+  document.getElementById('g-prev').style.display=GSTEP>0?'':'none';
+  document.getElementById('gs-dots').innerHTML=STEPS.map((_,i)=>
+    `<span class="g-dot ${i<GSTEP?'done':i===GSTEP?'act':''}" onclick="gJump(${i})" title="Schritt ${i+1}"></span>`
+  ).join('');
+  document.querySelectorAll('.sc').forEach(c=>c.classList.remove('hl'));
+  if(s.hl) document.getElementById(s.hl)?.classList.add('hl');
+}
+function gNext(){ if(GSTEP<STEPS.length-1){GSTEP++;renderGuide();}else toggleGuide(); }
+function gPrev(){ if(GSTEP>0){GSTEP--;renderGuide();} }
+function gJump(i){ GSTEP=i;renderGuide(); }
+function toggleGuide(){
+  GOPEN=!GOPEN;
+  document.getElementById('guide').className=GOPEN?'open':'closed';
+  document.getElementById('btn-guide').classList.toggle('act',GOPEN);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPLANATIONS
+// ═══════════════════════════════════════════════════════
+const EX={
+  alpha:{title:'Intercept α',
+    what:'α ist der erwartete Wert des linearen Prädiktors wenn alle x=0. Bei zentrierten Prädiktoren entspricht er dem Gesamtmittelwert der AV (auf Link-Skala).',
+    why:'Normal(0, 10): sehr breiter, schwacher Prior. σ=10 sagt nur: α ist irgendwo in einem weiten Bereich. Skaliere ihn zur Skala deiner AV — wenn y Reaktionszeiten in ms sind, nutze Normal(500, 300) oder ähnliches.',
+    tip:'Tipp: Z-standardisiere deine AV vor der Analyse. Dann ist Normal(0, 2) ein sinnvoller Prior für α.'},
+  beta:{title:'Steigungsparameter β',
+    what:'β misst den Effekt eines Prädiktors: pro Einheit Anstieg in x ändert sich der lineare Prädiktor um β (auf Link-Skala). β=0 bedeutet kein linearer Zusammenhang.',
+    why:'Normal(0, 2.5): regularisierender Prior. Erwartet moderate bis kleine Effekte und bremst extreme Schätzungen wenn die Daten dünn sind — verhindert Overfitting.',
+    tip:'Bei standardisierten Variablen gilt: |β|≈0.2 kleiner Effekt, ≈0.5 mittel, ≈0.8 groß (Cohens d-Analogie).'},
+  sigma:{title:'Residualstreuung σ',
+    what:'σ ist die verbleibende Streuung der y_i um μ_i — das irreduktible Rauschen, das das Modell nicht erklären kann. σ muss immer > 0 sein.',
+    why:'Exponential(λ): Prior für positive Werte. E[σ]=1/λ. λ=1 → E[σ]=1. Kleineres λ erlaubt größere σ-Werte (flacherer Prior).',
+    tip:'Wenn du weißt, dass σ ≈ 5 sein sollte: nutze Exp(0.2) oder Half-Normal(0, 5). Passe λ an die erwartete Größenordnung der Streuung an.'},
+  nu:{title:'Freiheitsgrade ν (Student-t)',
+    what:'ν steuert wie "schwer" die Ränder der Verteilung sind. ν=1 ≈ Cauchy (extrem schwere Ränder, sehr robust), ν=30 ≈ Normal (praktisch normal).',
+    why:'Gamma(2, 0.1): E[ν]=20. Erlaubt sowohl kleine (robuste) als auch große (normalnahe) Werte. brms-Standardprior.',
+    tip:'Für sehr robuste Modellierung: fixiere ν=4. Moderat robust: ν=7–15. Wenn du unsicher bist: lass ν als Parameter mit Prior.'},
+  alpha_j:{title:'Gruppen-Intercept α_j',
+    what:'α_j ist der gruppenspezifische Intercept. Jede Gruppe j hat ihren eigenen α_j-Wert, der jedoch aus dem gemeinsamen Hyperprior Normal(μ_α, σ_α) stammt.',
+    why:'Partial Pooling: Gruppen mit wenig Daten werden zu μ_α gezogen (Shrinkage). Gruppen mit vielen Daten behalten ihre eigene Schätzung. Beides zugleich — besser als Complete Pooling oder No Pooling.',
+    tip:'Das Goldene am hierarchischen Modell: es lernt die optimale Pooling-Stärke aus den Daten selbst über σ_α!'},
+  mu_a:{title:'Hyperprior μ_α',
+    what:'μ_α ist der Gesamtmittelwert der Gruppen-Intercepts. Er ist selbst unsicher und bekommt einen Prior — das macht ihn zum "Hyperprior".',
+    why:'Normal(0, 5): schwacher Prior für den Gesamtmittelwert. Skaliere ihn zur Skala der AV (auf Link-Skala).',
+    tip:'Hyperpriors erzeugen die hierarchische Struktur: Gruppen "lernen voneinander" durch den gemeinsamen μ_α.'},
+  sig_a:{title:'Hyperprior σ_α',
+    what:'σ_α ist die Streuung der Gruppen-Intercepts um μ_α. Kleines σ_α → viel Pooling (Gruppen ähnlich). Großes σ_α → wenig Pooling (Gruppen sehr verschieden).',
+    why:'Exp(1): bevorzugt moderate Heterogenität zwischen Gruppen. σ_α ist inhaltlich sehr aussagekräftig!',
+    tip:'Schau dir σ_α im Posterior an: er sagt dir, wie unterschiedlich die Gruppen nach Kontrolle der Prädiktoren noch sind.'},
+  det:{title:'Deterministischer Knoten (•)',
+    what:'Der kleine ausgefüllte Punkt (•) ist der lineare Prädiktor μ_i. Er ist vollständig durch seine Eingaben bestimmt — keine Zufälligkeit, kein Prior. μ_i = α + β₁x₁ + β₂x₂ + …',
+    why:'Deterministisch = Kruschke\'s kleiner schwarzer Punkt. Es gibt nichts zu schätzen, nur zu berechnen.',
+    tip:'Bei Bernoulli/Poisson/Gamma wird μ_i durch eine Link-Funktion transformiert: logit⁻¹(μ) für Wahrscheinlichkeiten, exp(μ) für positive Werte.'},
+  y:{title:'Beobachtete Daten y_i (◉)',
+    what:'Der schattierte Doppelkreis (◉) steht für beobachtete Daten. Bekannt, nicht geschätzt. Bayes dreht die Logik um: Gegeben y, was ist wahrscheinlich für θ?',
+    why:'P(θ|y) ∝ P(y|θ) · P(θ) — Posterior ∝ Likelihood × Prior. Das Diagramm liest sich von oben (Hyperpriors) nach unten (Daten).',
+    tip:'Kruschkes Notation: Schattiert = beobachtet, unschattiert = latent/unbekannt. Alles, was wir nicht sehen, braucht einen Prior.'}
+};
+
+// Prior distribution explanations
+const PR_EX={
+  normal:'<b>Normal(μ, σ)</b>: Symmetrische Glockenkurve. μ = Zentrum, σ = Breite. Erlaubt positive und negative Werte. Geeignet für Intercepts und Slopes.',
+  exponential:'<b>Exponential(λ)</b>: Nur positive Werte. Stark bei 0, dann abfallend. E[x]=1/λ. Geeignet für Streuungsparameter (σ, τ). λ klein → flacher Prior, erlaubt große Werte.',
+  gamma:'<b>Gamma(α, β)</b>: Nur positive Werte, flexibel formbar. α>1: glockenartig. α<1: monoton fallend. E[x]=α/β. Geeignet für Freiheitsgrade ν oder Rateparameter.',
+  half_normal:'<b>Normal⁺(0, σ)</b>: Normal-Verteilung nur für positive Werte. Geeignet für Streuungsparameter. σ kontrolliert die erwartete Größenordnung.',
+  student_t:'<b>Student-t(ν, μ, σ)</b>: Symmetrisch, aber schwere Ränder. ν klein → robuster Prior, der extreme Werte erlaubt.',
+};
+
+// ═══════════════════════════════════════════════════════
+//  CSS variable helpers
+// ═══════════════════════════════════════════════════════
+function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const C={
+  int: ()=>cv('--a2'), beta:()=>cv('--a3'), sig:()=>cv('--a5'),
+  nu:  ()=>cv('--a6'), re:  ()=>cv('--a4'), data:()=>cv('--a1'),
+  ink2:()=>cv('--ink2'), ink:()=>cv('--ink'), paper:()=>cv('--paper'), grid:()=>cv('--grid'),
+};
+
+// ═══════════════════════════════════════════════════════
+//  PRIOR STRING
+// ═══════════════════════════════════════════════════════
+function prS(pr,dp=1){
+  if(!pr) return '?';
+  const f=pr.fam||'normal', n=(v,d=dp)=>parseFloat(v).toFixed(d).replace(/\.?0+$/,'');
+  if(f==='normal')      return `Normal(${n(pr.mu??0)}, ${n(pr.sig??1)})`;
+  if(f==='student_t')   return `t(${n(pr.nu??3,0)}, ${n(pr.mu??0)}, ${n(pr.sig??1)})`;
+  if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
+  if(f==='gamma')       return `Gamma(${n(pr.p1??2)}, ${n(pr.p2??0.1,2)})`;
+  if(f==='half_normal') return `Normal⁺(0, ${n(pr.p1??1)})`;
+  return `${f}(${n(pr.p1??1)})`;
+}
+function famS(pr){ return {normal:'Normal',exponential:'Exp',gamma:'Gamma',half_normal:'HN',student_t:'t'}[pr?.fam]||pr?.fam||''; }
+
+// ═══════════════════════════════════════════════════════
+//  MINI CURVES — truly live-responsive
+// ═══════════════════════════════════════════════════════
+function miniCurve(pr){
+  if(!pr) pr={fam:'normal',mu:0,sig:1};
+  const W=40,H=14,N=70;
+  const dens=[];
+  const f=pr.fam||'normal';
+  const sig=Math.max(0.01,pr.sig??1);
+  const p1=Math.max(0.01,pr.p1??1),p2=Math.max(0.01,pr.p2??1);
+
+  for(let i=0;i<=N;i++){
+    const t=i/N; let d=0;
+    if(f==='normal'||f==='student_t'){
+      // Width responds to σ: larger σ = wider, shallower bell
+      const eff=Math.min(sig,5);
+      const x=(t-0.5)*8;
+      d=Math.exp(-0.5*(x/eff)**2); // bell width scales with sig
+    } else if(f==='exponential'){
+      d=t<0.015?0:Math.exp(-t*5.5*p1); // faster decay = higher λ
+    } else if(f==='half_normal'){
+      d=t<0.01?0:Math.exp(-0.5*(t*4.5/p1)**2);
+    } else if(f==='gamma'){
+      const a=Math.max(0.2,p1),rt=Math.max(0.05,p2);
+      const peak=Math.max(0.01,(a-1)/rt);
+      const xsc=t*(peak*3.5+2);
+      d=xsc>0?Math.pow(xsc,a-1)*Math.exp(-rt*xsc):0;
+    } else if(f==='beta'){
+      const a=Math.max(0.1,p1),b=Math.max(0.1,p2);
+      d=(t<=0||t>=1)?0:Math.pow(t,a-1)*Math.pow(1-t,b-1);
+    } else {
+      d=Math.exp(-0.5*((t-0.5)*7)**2);
+    }
+    dens.push(Math.max(0,d));
+  }
+  const mx=Math.max(...dens,0.001);
+  const pts=dens.map((d,i)=>{
+    const x=(-W/2+(i/N)*W).toFixed(1);
+    const y=(H/2-(d/mx)*H*0.87).toFixed(1);
+    return `${x},${y}`;
+  });
+  return `M${pts[0]}L${pts.slice(1).join('L')}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SVG HELPER
+// ═══════════════════════════════════════════════════════
+function se(tag,a={},txt){
+  const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const [k,v] of Object.entries(a)) e.setAttribute(k,v);
+  if(txt!=null) e.textContent=txt;
+  return e;
+}
+
+// ═══════════════════════════════════════════════════════
+//  LAYOUT — bigger, more spacious
+// ═══════════════════════════════════════════════════════
+const R=38, OR=34;
+
+function buildLayout(){
+  const W=740, H=590, cx=W/2;
+  const K=M.preds.length, isML=M.ml;
+  const hS=hasSig(), hN=hasNu();
+  const nodes={}, edges=[], plates=[];
+
+  // ── Parameter nodes ──────────────────────────────────
+  const pNodes=[];
+  pNodes.push({id:'alpha', lbl:isML?`α[${M.gv}]`:'α', sub:'Intercept', col:'int', pk:'alpha'});
+  M.preds.forEach((p,i)=>pNodes.push({
+    id:`b${i}`, lbl:K>1?`β${SUB[i]||i+1}`:'β', sub:p.name||`x${i+1}`, col:'beta',
+    pk:`beta_${i}`, prObj:p.pr
+  }));
+  if(hS) pNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma'});
+  if(hN) pNodes.push({id:'nu',   lbl:'ν',sub:'Freiheitsgrade',col:'nu', pk:'nu'});
+
+  const nP=pNodes.length;
+  const pY=isML?290:230;
+  const sp=Math.min(130,(W-110)/(Math.max(nP,1)));
+  const px0=cx-(nP-1)*sp/2;
+  pNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
+
+  // ── Prior labels above each parameter node ───────────
+  pNodes.forEach((p)=>{
+    const nd=nodes[p.id];
+    const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu:p.prObj;
+    const pid=`pl_${p.id}`;
+    // Position: directly above the node with some spacing
+    nodes[pid]={ id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+50),col:p.col,parentId:p.id };
+    edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
+  });
+
+  // ── Multilevel hyperpriors ───────────────────────────
+  if(isML){
+    const ax=nodes['alpha'].x;
+    nodes['mu_a'] ={id:'mu_a', lbl:'μ_α',sub:'Hyper-Mittel', col:'re',pk:'mu_a', type:'stoch',x:ax-70,y:110};
+    nodes['sig_a']={id:'sig_a',lbl:'σ_α',sub:'Hyper-Streuung',col:'re',pk:'sig_a',type:'stoch',x:ax+70,y:110};
+    // their prior labels
+    nodes['pl_mu_a'] ={id:'pl_mu_a', type:'plbl',prObj:M.pr.mu_a, x:ax-70,y:110-(R+50),col:'re',parentId:'mu_a'};
+    nodes['pl_sig_a']={id:'pl_sig_a',type:'plbl',prObj:M.pr.sig_a,x:ax+70,y:110-(R+50),col:'re',parentId:'sig_a'};
+    edges.push({fr:'pl_mu_a', to:'mu_a', col:'re',isPL:true});
+    edges.push({fr:'pl_sig_a',to:'sig_a',col:'re',isPL:true});
+    edges.push({fr:'mu_a', to:'alpha',col:'re'});
+    edges.push({fr:'sig_a',to:'alpha',col:'re'});
+    // Remove individual alpha prior label
+    delete nodes['pl_alpha'];
+    const pli=edges.findIndex(e=>e.fr==='pl_alpha');
+    if(pli>=0) edges.splice(pli,1);
+    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:ax-78,y:pY-75,w:156,h:160,col:'re',dash:true});
+    if(M.ret==='slope'&&K>0){
+      const bx=nodes['b0'].x;
+      nodes['mu_b'] ={id:'mu_b', lbl:'μ_β',sub:'Hyper-Mittel β', col:'re',pk:'mu_b', type:'stoch',x:bx-65,y:110};
+      nodes['sig_b']={id:'sig_b',lbl:'σ_β',sub:'Hyper-Streuung β',col:'re',pk:'sig_b',type:'stoch',x:bx+65,y:110};
+      nodes['pl_mu_b'] ={id:'pl_mu_b', type:'plbl',prObj:M.pr.mu_b, x:bx-65,y:110-(R+50),col:'re',parentId:'mu_b'};
+      nodes['pl_sig_b']={id:'pl_sig_b',type:'plbl',prObj:M.pr.sig_b,x:bx+65,y:110-(R+50),col:'re',parentId:'sig_b'};
+      edges.push({fr:'pl_mu_b', to:'mu_b', col:'re',isPL:true});
+      edges.push({fr:'pl_sig_b',to:'sig_b',col:'re',isPL:true});
+      edges.push({fr:'mu_b',to:'b0',col:'re'});
+      edges.push({fr:'sig_b',to:'b0',col:'re'});
+      delete nodes['pl_b0'];
+      const pli2=edges.findIndex(e=>e.fr==='pl_b0');
+      if(pli2>=0) edges.splice(pli2,1);
+    }
+  }
+
+  // ── Deterministic node ───────────────────────────────
+  const detY=isML?430:380;
+  const detLbl=M.fam==='bernoulli'?'p_i':M.fam==='poisson'?'λ_i':'μ_i';
+  nodes['det']={id:'det',type:'det',lbl:detLbl,formula:buildLinear(),x:cx,y:detY};
+
+  // ── Data node ────────────────────────────────────────
+  const dataY=detY+115;
+  nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
+
+  // ── Observation plate ────────────────────────────────
+  if(DET!=='simple'){
+    const pm=Math.max(85,70+K*14);
+    plates.push({id:'obs',lbl:isML?'i = 1…Nⱼ':'i = 1…N',x:cx-pm,y:detY-62,w:pm*2,h:210,col:'data',dash:false});
+  }
+
+  // ── Covariate boxes (full detail) ────────────────────
+  if(DET==='full'){
+    M.preds.forEach((p,i)=>{
+      nodes[`xv${i}`]={id:`xv${i}`,type:'cov',lbl:p.name||`x${i+1}`,x:cx-60+(i*36),y:detY+18,col:'ink2'};
+      edges.push({fr:`xv${i}`,to:'det',col:'ink2',dash:true});
+    });
+  }
+
+  // ── Structural edges ─────────────────────────────────
+  pNodes.forEach(p=>{
+    if(p.id!=='sigma'&&p.id!=='nu') edges.push({fr:p.id,to:'det',col:p.col});
+  });
+  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-42});
+  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 42});
+  edges.push({fr:'det',to:'y',col:'data'});
+
+  return {nodes,edges,plates,W,H};
+}
+
+const SUB=['₁','₂','₃','₄'];
+const hasSig=()=>['normal','student','gamma'].includes(M.fam);
+const hasNu =()=>M.fam==='student';
+
+function buildLinear(){
+  const K=M.preds.length,isML=M.ml,j=M.gv;
+  const a=isML?`α[${j}]`:'α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${SUB[i]||i+1}`:'β';return `${b}·${p.name||'x'}ᵢ`;});
+  const lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
+  if(M.fam==='bernoulli') return `logit⁻¹(${lin})`;
+  if(M.fam==='poisson'||M.fam==='gamma') return `exp(${lin})`;
+  return lin;
+}
+function sampStr(){
+  const y=M.out||'y';
+  return {normal:`${y}ᵢ ~ Normal(μᵢ, σ)`,student:`${y}ᵢ ~ t(ν, μᵢ, σ)`,
+    bernoulli:`${y}ᵢ ~ Bernoulli(pᵢ)`,poisson:`${y}ᵢ ~ Poisson(λᵢ)`,gamma:`${y}ᵢ ~ Gamma(μᵢ, φ)`}[M.fam]||`${y}ᵢ ~ ?`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+function render(){
+  const defs=document.getElementById('defs');
+  const gP=document.getElementById('g-plates');
+  const gE=document.getElementById('g-edges');
+  const gN=document.getElementById('g-nodes');
+  defs.innerHTML='';gP.innerHTML='';gE.innerHTML='';gN.innerHTML='';
+
+  ['int','beta','sig','nu','re','data','ink2'].forEach(c=>{
+    const m=se('marker',{id:`a-${c}`,markerWidth:'7',markerHeight:'7',refX:'5.5',refY:'3.5',orient:'auto'});
+    m.appendChild(se('path',{d:'M0,0 L0,7 L7,3.5 z',fill:C[c]?C[c]():C.ink2()}));
+    defs.appendChild(m);
+    // Softer arrow for prior labels
+    const ms=se('marker',{id:`as-${c}`,markerWidth:'5',markerHeight:'5',refX:'4',refY:'2.5',orient:'auto'});
+    ms.appendChild(se('path',{d:'M0,0 L0,5 L5,2.5 z',fill:C[c]?C[c]():C.ink2()}));
+    defs.appendChild(ms);
+  });
+
+  const D=buildLayout();
+  D.plates.forEach(p=>drawPlate(gP,p));
+  D.edges.forEach(e=>{ const a=D.nodes[e.fr],b=D.nodes[e.to]; if(a&&b) drawEdge(gE,a,b,e); });
+  Object.values(D.nodes).forEach(n=>drawNode(gN,n));
+}
+
+function drawPlate(g,p){
+  const c=p.col==='data'?C.data():p.col==='re'?C.re():C.ink2();
+  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:c,'fill-opacity':'0.04',stroke:'none'}));
+  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:'none',stroke:c,
+    'stroke-width':'1.5','stroke-dasharray':p.dash?'7,4':'6,5',opacity:'0.5'}));
+  g.appendChild(se('text',{x:p.x+p.w-10,y:p.y+p.h-8,'text-anchor':'end',fill:c,
+    'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.75'},p.lbl));
+}
+
+function drawEdge(g,a,b,edge){
+  const c=C[edge.col]?C[edge.col]():C.ink2();
+  if(a.type==='plbl'){
+    // Simple short vertical arrow from prior label down to node
+    const x=a.x, y1=a.y+12, y2=b.y-R-6;
+    g.appendChild(se('line',{x1:x,y1,x2:x,y2,stroke:c,'stroke-width':'1.4',
+      'stroke-dasharray':'4,2.5',opacity:'0.65',
+      'marker-end':`url(#as-${edge.col||'ink2'})`}));
+    return;
+  }
+  const rA=a.type==='det'?7:a.type==='obs'?OR:R;
+  const rB=b.type==='det'?7:b.type==='obs'?OR:R;
+  const dx=b.x-a.x,dy=b.y-a.y,len=Math.sqrt(dx*dx+dy*dy)||1;
+  const ux=dx/len,uy=dy/len;
+  const x1=(a.x+ux*(rA+2)).toFixed(1), y1=(a.y+uy*(rA+2)).toFixed(1);
+  const x2=(b.x-ux*(rB+8)).toFixed(1), y2=(b.y-uy*(rB+8)).toFixed(1);
+  const mX=((+x1+ +x2)/2+(edge.crv||0)).toFixed(1), mY=(( +y1+ +y2)/2).toFixed(1);
+  const d=`M${x1},${y1} C${x1},${mY} ${mX},${mY} ${x2},${y2}`;
+  g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.1':'1.7',
+    fill:'none','stroke-dasharray':edge.dash?'4,2':'',
+    'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.75'}));
+}
+
+function drawNode(g,node){
+  const grp=se('g',{transform:`translate(${node.x},${node.y})`,style:'cursor:pointer',id:`n-${node.id}`});
+  grp.addEventListener('click',()=>onNodeClick(node));
+  if(node.type==='plbl')  drawPLbl(grp,node);
+  else if(node.type==='stoch') drawStoch(grp,node);
+  else if(node.type==='det')   drawDet(grp,node);
+  else if(node.type==='obs')   drawObs(grp,node);
+  else if(node.type==='cov')   drawCov(grp,node);
+  g.appendChild(grp);
+}
+
+function drawPLbl(g,node){
+  const c=C[node.col]?C[node.col]():C.ink2();
+  const s=prS(node.prObj); const w=s.length*5.8+14;
+  // Rounded pill label
+  g.appendChild(se('rect',{x:-w/2,y:-10,width:w,height:20,rx:10,
+    fill:c,opacity:'0.12',stroke:c,'stroke-width':'1','stroke-opacity':'0.5'}));
+  g.appendChild(se('text',{x:'0',y:'0','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'9.5',opacity:'0.95',
+    'font-weight':'500'},`~ ${s}`));
+}
+
+function drawStoch(g,node){
+  const c=C[node.col]?C[node.col]():C.ink2();
+  const isAct=ACTIVE===node.id;
+  const pr=getPr(node);
+
+  // Shadow
+  g.appendChild(se('circle',{cx:'2',cy:'3',r:R,fill:'rgba(0,0,0,0.12)'}));
+  // Background
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:R,fill:C.paper(),stroke:c,'stroke-width':isAct?'3.5':'2.5'}));
+  if(isAct){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:R+5,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
+  }
+
+  // Parameter name — bigger, clearer
+  const fs=node.lbl.length>4?'11':node.lbl.length>2?'14':'18';
+  g.appendChild(se('text',{x:'0',y:'-6','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'600'},node.lbl));
+
+  // Mini distribution curve — live
+  if(pr){
+    g.appendChild(se('path',{d:miniCurve(pr),stroke:c,'stroke-width':'1.3',fill:'none',
+      transform:'translate(0,11)',opacity:'0.88'}));
+    if(DET!=='simple'){
+      g.appendChild(se('text',{x:'0',y:R-6,'text-anchor':'middle',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8',opacity:'0.7'},famS(pr)));
+    }
+  }
+  if(DET==='full'&&node.sub){
+    g.appendChild(se('text',{x:'0',y:R+16,'text-anchor':'middle',
+      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.6'},node.sub));
+  }
+}
+
+function getPr(node){
+  if(node.pk==='alpha') return M.pr.alpha;
+  if(node.pk==='sigma') return M.pr.sigma;
+  if(node.pk==='nu')    return M.pr.nu;
+  if(node.pk==='mu_a')  return M.pr.mu_a;
+  if(node.pk==='sig_a') return M.pr.sig_a;
+  if(node.pk==='mu_b')  return M.pr.mu_b;
+  if(node.pk==='sig_b') return M.pr.sig_b;
+  if(node.pk?.startsWith('beta_')){ const i=parseInt(node.pk.split('_')[1]); return M.preds[i]?.pr; }
+  if(node.prObj) return node.prObj;
+  return null;
+}
+
+function drawDet(g,node){
+  const c=C.ink2(); const isAct=ACTIVE===node.id;
+  // Big dot
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:'9',fill:c,opacity:isAct?'0.85':'0.55'}));
+  if(isAct) g.appendChild(se('circle',{cx:'0',cy:'0',r:'13',fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.25'}));
+
+  if(DET==='simple'){
+    g.appendChild(se('text',{x:'15',y:'1','dominant-baseline':'middle',fill:c,
+      'font-family':"'DM Mono',monospace",'font-size':'13',opacity:'0.85'},node.lbl));
+    return;
+  }
+  // Formula centered below the dot
+  g.appendChild(se('text',{x:'0',y:'-20','text-anchor':'middle',
+    fill:C.ink(),'font-family':"'DM Mono',monospace",'font-size':'13','font-weight':'500',opacity:'0.9'},
+    `${node.lbl} =`));
+  g.appendChild(se('text',{x:'0',y:'-5','text-anchor':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.formula||''));
+}
+
+function drawObs(g,node){
+  const c=C.data(); const isAct=ACTIVE===node.id;
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR,fill:c,opacity:'0.10'}));
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR,fill:'none',stroke:c,'stroke-width':isAct?'3.5':'3'}));
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR-9,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.35'}));
+  g.appendChild(se('text',{x:'0',y:'-1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':'18','font-weight':'600'},node.lbl||'y'));
+  if(DET!=='simple'&&node.sub){
+    g.appendChild(se('text',{x:'0',y:OR+15,'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.sub));
+  }
+}
+
+function drawCov(g,node){
+  const c=C.ink2();
+  g.appendChild(se('rect',{x:-19,y:-9,width:38,height:18,fill:c,opacity:'0.1',stroke:c,'stroke-width':'0.9',rx:'3'}));
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'11'},node.lbl));
+}
+
+// ═══════════════════════════════════════════════════════
+//  MATH PANEL — proper formatted HTML
+// ═══════════════════════════════════════════════════════
+const CC={int:'--a2',beta:'--a3',sig:'--a5',nu:'--a6',re:'--a4',data:'--a1'};
+
+function buildMath(){
+  const K=M.preds.length,isML=M.ml,j=M.gv;
+  const y=M.out||'y',hS=hasSig(),hN=hasNu();
+  let html='';
+
+  function row(inner,cc,nid){
+    const act=ACTIVE===nid?' act':'';
+    const style=cc?`color:var(${CC[cc]})`:'';
+    return `<div class="mrow${act}" style="${style}" onclick="onMathClick('${nid||''}')">${inner}</div>`;
+  }
+  function block(lbl,rows){
+    return `<div class="mblock"><div class="mblk-l">${lbl}</div>${rows}</div>`;
+  }
+  // Superscript/subscript helpers for HTML
+  function sub(s){ return `<sub>${s}</sub>`; }
+  function sup(s){ return `<sup>${s}</sup>`; }
+  const tilde='~', sim='∼';
+  const space='&thinsp;';
+
+  // Likelihood
+  const lkMap={
+    normal:   `${y}${sub('i')} ${sim} Normal(μ${sub('i')}, σ)`,
+    student:  `${y}${sub('i')} ${sim} Student-t(ν, μ${sub('i')}, σ)`,
+    bernoulli:`${y}${sub('i')} ${sim} Bernoulli(p${sub('i')})`,
+    poisson:  `${y}${sub('i')} ${sim} Poisson(λ${sub('i')})`,
+    gamma:    `${y}${sub('i')} ${sim} Gamma(μ${sub('i')}, φ)`,
+  };
+  html+=block('Likelihood', row(lkMap[M.fam]||lkMap.normal,'data','y'));
+
+  // Linear predictor
+  const a=isML?`α[${j}]`:'α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${sub(i+1)}`:'β'; return `${b}·${p.name||`x${i+1}`}${sub('i')}`;});
+  const lin=a+(bs.length?`${space}+${space}${bs.join(`${space}+${space}`)}`:'');
+  const lpMap={
+    normal:lin, student:lin,
+    bernoulli:`logit${sup('-1')}(${lin})`,
+    poisson:`exp(${lin})`, gamma:`exp(${lin})`
+  };
+  const detL=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
+  html+=block('Linearer Prädiktor', row(`${detL}${sub('i')} = ${lpMap[M.fam]||lin}`, 'data', 'det'));
+  html+='<div class="msep"></div>';
+
+  // Priors
+  let pRows='';
+  if(isML){
+    pRows+=row(`α[${j}] ${sim} Normal(μ${sub('α')}, σ${sub('α')})`,'int','alpha');
+    pRows+='<div style="height:.2rem"></div>';
+    pRows+=row(`μ${sub('α')} ${sim} ${htmlPr(M.pr.mu_a)}`,'re','mu_a');
+    pRows+=row(`σ${sub('α')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sig_a');
+    if(M.ret==='slope'){
+      pRows+=row(`μ${sub('β')} ${sim} ${htmlPr(M.pr.mu_b)}`,'re','mu_b');
+      pRows+=row(`σ${sub('β')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sig_b');
+    }
+  } else {
+    pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
+  }
+  M.preds.forEach((p,i)=>{
+    const b=K>1?`β${sub(i+1)}`:'β';
+    pRows+=row(`${b} ${sim} ${htmlPr(p.pr)}`,'beta',`b${i}`);
+  });
+  if(hS) pRows+=row(`σ ${sim} ${htmlPr(M.pr.sigma)}`,'sig','sigma');
+  if(hN) pRows+=row(`ν ${sim} ${htmlPr(M.pr.nu)}`,'nu','nu');
+  html+=block('Priors', pRows);
+
+  document.getElementById('mlines').innerHTML=html;
+}
+
+function htmlPr(pr){
+  if(!pr) return '?';
+  const f=pr.fam||'normal';
+  const n=(v,d=1)=>parseFloat(v).toFixed(d).replace(/\.?0+$/,'');
+  const sub=s=>`<sub>${s}</sub>`;
+  if(f==='normal')      return `Normal(${n(pr.mu??0)},&thinsp;${n(pr.sig??1)})`;
+  if(f==='student_t')   return `t(${n(pr.nu??3,0)},&thinsp;${n(pr.mu??0)},&thinsp;${n(pr.sig??1)})`;
+  if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
+  if(f==='gamma')       return `Gamma(${n(pr.p1??2)},&thinsp;${n(pr.p2??0.1,2)})`;
+  if(f==='half_normal') return `Normal<sup>+</sup>(0,&thinsp;${n(pr.p1??1)})`;
+  return `${f}(${n(pr.p1??1)})`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PRIOR UI — per-predictor, with explanation toggle
+// ═══════════════════════════════════════════════════════
+function buildPriorUI(){
+  const isML=M.ml,hS=hasSig(),hN=hasNu();
+  let html='';
+
+  function blk(cls,lbl,badgeCls,valStr,exTxt,sliders){
+    return `<div class="prior-b pi-${cls}">
+      <div class="prior-h" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'">
+        <div class="prior-h-l">
+          <span class="pbg pbg-${badgeCls}">${cls}</span>
+          <span class="prior-lbl">${lbl}</span>
+        </div>
+        <span class="prior-val">${valStr}</span>
+      </div>
+      <div class="prior-exp">${exTxt}</div>
+      ${sliders}
+    </div>`;
+  }
+
+  function sls(params){
+    return params.map(p=>`
+      <div class="sl-r">
+        <label>${p.l}</label>
+        <input type="range" min="${p.mn}" max="${p.mx}" step="${p.st}" value="${p.v}"
+          oninput="${p.fn};sched()">
+        <span class="sv">${parseFloat(p.v).toFixed(p.dp||1)}</span>
+      </div>`).join('');
+  }
+
+  // Alpha
+  html+=blk('int','α — Intercept','int',prS(M.pr.alpha),
+    PR_EX.normal+'<br><b>Tipp:</b> Passe σ an die Skala der AV an. Bei z-standardisierter AV: Normal(0, 2).',
+    sls([
+      {l:'μ',mn:-20,mx:20,st:0.5,dp:1,v:M.pr.alpha.mu??0,
+       fn:"M.pr.alpha.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+      {l:'σ',mn:0.1,mx:20,st:0.2,dp:1,v:M.pr.alpha.sig??10,
+       fn:"M.pr.alpha.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+    ])
+  );
+
+  // Per-predictor betas
+  M.preds.forEach((p,i)=>{
+    if(!p.pr) p.pr={fam:'normal',mu:0,sig:2.5};
+    const K=M.preds.length;
+    const lb=K>1?`β${SUB[i]||i+1} — ${p.name||`x${i+1}`}`:`β — ${p.name||'x'}`;
+    html+=blk('beta',lb,'beta',prS(p.pr),
+      PR_EX.normal+'<br><b>Tipp:</b> Bei standardisierten Variablen: Normal(0, 1) bis Normal(0, 2.5) gut geeignet.',
+      sls([
+        {l:'μ',mn:-5,mx:5,st:0.1,dp:1,v:p.pr.mu??0,
+         fn:`M.preds[${i}].pr.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
+        {l:'σ',mn:0.1,mx:10,st:0.1,dp:1,v:p.pr.sig??2.5,
+         fn:`M.preds[${i}].pr.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
+      ])
+    );
+  });
+
+  // Sigma
+  if(hS) html+=blk('sig','σ — Residualstreuung','sig',prS(M.pr.sigma),
+    PR_EX.exponential+'<br><b>Tipp:</b> E[σ] = 1/λ. Wenn σ ≈ 5 erwartet: λ = 0.2.',
+    sls([
+      {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sigma.p1??1,
+       fn:"M.pr.sigma.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+    ])
+  );
+
+  // Nu
+  if(hN) html+=blk('nu','ν — Freiheitsgrade','nu',prS(M.pr.nu),
+    PR_EX.gamma+'<br><b>Tipp:</b> E[ν] = α/β. brms-Standard: Gamma(2, 0.1) → E[ν]=20.',
+    sls([
+      {l:'α',mn:0.5,mx:10,st:0.1,dp:1,v:M.pr.nu.p1??2,
+       fn:"M.pr.nu.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+      {l:'β',mn:0.01,mx:0.5,st:0.01,dp:2,v:M.pr.nu.p2??0.1,
+       fn:"M.pr.nu.p2=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+    ])
+  );
+
+  // Hyperpriors
+  if(isML){
+    html+=blk('re','μ_α — Hyper-Mittel','re',prS(M.pr.mu_a),
+      PR_EX.normal+'<br><b>Was:</b> Mittlerer Intercept über alle Gruppen. Skaliere zur AV-Skala.',
+      sls([
+        {l:'μ',mn:-10,mx:10,st:0.5,dp:1,v:M.pr.mu_a.mu??0,
+         fn:"M.pr.mu_a.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+        {l:'σ',mn:0.5,mx:15,st:0.5,dp:1,v:M.pr.mu_a.sig??5,
+         fn:"M.pr.mu_a.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+      ])
+    );
+    html+=blk('re','σ_α — Hyper-Streuung','re',prS(M.pr.sig_a),
+      PR_EX.exponential+'<br><b>Was:</b> Heterogenität zwischen Gruppen. Klein = viel Pooling.',
+      sls([
+        {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
+         fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+      ])
+    );
+  }
+
+  document.getElementById('prior-ui').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PREDICTOR LIST
+// ═══════════════════════════════════════════════════════
+function renderPreds(){
+  document.getElementById('pred-list').innerHTML=M.preds.map((p,i)=>`
+    <div class="pr">
+      <span class="pb-tag">β${SUB[i]||i+1}</span>
+      <input class="pi" type="text" value="${p.name||`x${i+1}`}" placeholder="Name"
+             oninput="M.preds[${i}].name=this.value;sched()">
+      <span class="pd" onclick="removePred(${i})" title="Entfernen">✕</span>
+    </div>`).join('');
+}
+function addPred(){
+  if(M.preds.length>=4){showToast('Maximal 4 Prädiktoren');return;}
+  M.preds.push({name:`x${M.preds.length+1}`,pr:{fam:'normal',mu:0,sig:2.5}});update();
+}
+function removePred(i){M.preds.splice(i,1);update();}
+
+// ═══════════════════════════════════════════════════════
+//  INTERACTIONS
+// ═══════════════════════════════════════════════════════
+const LK_DESC={
+  normal:'y_i ~ Normal(μ_i, σ): Stetig, symmetrisch. Residuen annähernd normal. Klassische lineare Regression.',
+  student:'y_i ~ t(ν, μ_i, σ): Schwere Ränder durch ν. Robust gegen Ausreißer. ν→∞ ≈ Normal.',
+  bernoulli:'y_i ~ Bernoulli(p_i): Binär 0/1. Logit-Link: p = logit⁻¹(α+βx) ∈ (0,1).',
+  poisson:'y_i ~ Poisson(λ_i): Zähldaten. Log-Link: λ = exp(α+βx) > 0.',
+  gamma:'y_i ~ Gamma(μ_i, φ): Positive, rechtsschiefe Daten. Log-Link.'
+};
+
+function setFam(btn){
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); M.fam=btn.dataset.fam;
+  const d=document.getElementById('lkd');
+  d.textContent=LK_DESC[M.fam]||''; d.style.display=M.fam==='normal'?'none':'';
+  update();
+}
+function setDet(btn){
+  document.querySelectorAll('.db').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); DET=btn.dataset.d; sched();
+}
+function toggleTheme(){
+  DARK=!DARK;
+  document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
+  document.getElementById('btn-th').textContent=DARK?'☀ Light':'🌙 Dark';
+  sched();
+}
+
+function onNodeClick(node){
+  if(node.type==='plbl') ACTIVE=node.parentId;
+  else ACTIVE=node.id;
+  const ek=ACTIVE==='det'?'det':ACTIVE==='y'?'y'
+          :ACTIVE==='alpha'&&M.ml?'alpha_j'
+          :ACTIVE==='mu_a'?'mu_a':ACTIVE==='sig_a'?'sig_a'
+          :ACTIVE?.startsWith('b')?'beta'
+          :EX[ACTIVE]?ACTIVE:'alpha';
+  if(SHOW_EX) showExplain(ek);
+  render();buildMath();
+}
+function onMathClick(nid){
+  if(!nid) return;
+  ACTIVE=nid;
+  const ek=nid==='det'?'det':nid==='y'?'y':nid==='alpha'&&M.ml?'alpha_j'
+          :nid.startsWith('b')?'beta':EX[nid]?nid:'alpha';
+  if(SHOW_EX) showExplain(ek);
+  render();buildMath();
+}
+function showExplain(key){
+  const e=EX[key]||EX['alpha'];
+  const box=document.getElementById('exbox');
+  box.style.display='';
+  document.getElementById('ex-tit').textContent=e.title||key;
+  document.getElementById('ex-what').textContent=e.what||'';
+  const wy=document.getElementById('ex-why-s');
+  if(e.why){wy.style.display='';document.getElementById('ex-why').textContent=e.why;}
+  else wy.style.display='none';
+  const tp=document.getElementById('ex-tip-s');
+  if(e.tip){tp.style.display='';document.getElementById('ex-tip').textContent=e.tip;}
+  else tp.style.display='none';
+}
+function toggleEx(){
+  SHOW_EX=!SHOW_EX;
+  document.getElementById('btn-ex').classList.toggle('act',SHOW_EX);
+  const box=document.getElementById('exbox');
+  if(!SHOW_EX) box.style.display='none';
+  else showExplain(ACTIVE&&EX[ACTIVE]?ACTIVE:'alpha');
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN UPDATE
+// ═══════════════════════════════════════════════════════
+function sched(){clearTimeout(_t);_t=setTimeout(update,55);}
+function update(){
+  M.ml =(document.getElementById('ml-ck').checked);
+  M.gv =(document.getElementById('gv').value.trim()||'j');
+  M.ret=(document.getElementById('re-type').value);
+  M.out=(document.getElementById('ov').value.trim()||'y');
+  document.getElementById('ml-opts').style.display=M.ml?'':'none';
+  renderPreds();buildPriorUI();render();buildMath();
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+let _tt;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2100);
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  renderGuide();update();
+  window.addEventListener('resize',()=>{clearTimeout(_t);_t=setTimeout(render,90);});
+  setTimeout(()=>{if(SHOW_EX)showExplain('alpha');},600);
+});
+</script>
+</body>
+</html>

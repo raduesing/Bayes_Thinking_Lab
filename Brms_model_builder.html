@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>brms Model Builder v17</title>
+<script>
+MathJax = {
+  tex: { inlineMath:[['$','$']], displayMath:[['$$','$$'],['\\[','\\]']], tags:'none' },
+  options: { skipHtmlTags:['script','noscript','style','textarea'] },
+  startup: {
+    typeset: false,
+    ready() {
+      MathJax.startup.defaultReady();
+      // Typeset the math content that was rendered before MathJax finished loading
+      const el = document.getElementById('math-content');
+      if (el && el.innerHTML) MathJax.typesetPromise([el]).catch(()=>{});
+    }
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+:root {
+  --bg:#f5f0e8;--paper:#fdfaf4;--ink:#1a1410;--ink2:#4a3f35;
+  --accent:#c94a2a;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#8a3a8a;
+  --accent5:#b85c00;--accent6:#0e7c7b;
+  --grid:#e0d8cc;--panel:#eee8da;--border:#c0b8a8;--shadow:rgba(0,0,0,.06);
+}
+[data-theme="dark"] {
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;
+  --accent:#e8614a;--accent2:#4ab0d8;--accent3:#7ec850;--accent4:#c87ad8;
+  --accent5:#e07830;--accent6:#2bc7c4;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;--shadow:rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     display:flex;height:100vh;overflow:hidden;transition:background .25s,color .25s}
+#sidebar{width:340px;flex-shrink:0;background:var(--paper);border-right:1.5px solid var(--border);
+         overflow-y:auto;padding:.85rem .95rem 2rem;display:flex;flex-direction:column;gap:.6rem}
+#preview{flex-grow:1;overflow-y:auto;padding:1.3rem 1.8rem 3rem;background:var(--bg)}
+/* Header */
+.hdr-title{font-size:1.3rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.hdr-title em{font-style:italic;color:var(--accent2)}
+.hdr-sub{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);margin-top:.15rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);opacity:.42;margin-top:.06rem}
+.hbtns{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.5rem}
+/* Buttons */
+.ibtn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.28rem .65rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      letter-spacing:.04em;color:var(--ink);transition:all .15s;white-space:nowrap}
+.ibtn:hover{background:var(--ink);color:var(--bg)}
+.ibtn.xfer-out{border-color:var(--accent3);color:var(--accent3)}
+.ibtn.xfer-out:hover{background:var(--accent3);color:white}
+.ibtn.xfer-in{border-color:var(--accent4);color:var(--accent4)}
+.ibtn.xfer-in:hover{background:var(--accent4);color:white}
+/* Cards */
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.75rem .9rem;
+       box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.67rem;letter-spacing:.11em;text-transform:uppercase;
+          color:var(--accent2);margin-bottom:.48rem;padding-bottom:.2rem;border-bottom:1px solid var(--grid)}
+.scard h3.ha{color:var(--accent)}.scard h3.hg{color:var(--accent3)}.scard h3.hp{color:var(--accent4)}
+/* Form elements */
+.pg{margin-bottom:.42rem}
+.lbl{font-family:'DM Mono',monospace;font-size:.69rem;color:var(--ink);display:block;margin-bottom:.15rem}
+select,input[type=text]{width:100%;font-family:'DM Mono',monospace;font-size:.68rem;
+       background:var(--panel);border:1px solid var(--grid);color:var(--ink);
+       padding:.26rem .4rem;outline:none;cursor:pointer}
+select:focus,input[type=text]:focus{border-color:var(--accent2)}
+input[type=number]{font-family:'DM Mono',monospace;font-size:.72rem;background:var(--panel);
+                   border:1px solid var(--grid);color:var(--ink);padding:.24rem .38rem;outline:none;width:100%}
+input[type=number]:focus{border-color:var(--accent2)}
+input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!important}
+/* Model tabs */
+.rbtn{font-family:'DM Mono',monospace;font-size:.66rem;padding:.24rem .6rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .13s}
+.rbtn:hover,.rbtn.sel{background:var(--accent2);color:white;border-color:var(--accent2)}
+/* Tags (interactions) */
+.tag{font-family:'DM Mono',monospace;font-size:.66rem;background:rgba(42,110,138,.1);
+     color:var(--accent2);padding:.16rem .48rem;border:1px solid var(--accent2);
+     cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;margin:.1rem}
+.tag:hover{background:var(--accent2);color:white}
+/* Predictor blocks */
+.pred-block{border:1px solid var(--grid);padding:.42rem .52rem;margin-bottom:.25rem}
+.pred-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:.28rem}
+.pred-idx{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--accent3)}
+.pred-rm{font-family:'DM Mono',monospace;font-size:.64rem;border:1px solid var(--grid);
+         background:transparent;cursor:pointer;color:var(--ink2);padding:.05rem .28rem;transition:all .1s}
+.pred-rm:hover{background:var(--accent);color:white;border-color:var(--accent)}
+.add-pred{font-family:'DM Mono',monospace;font-size:.68rem;border:1px dashed var(--grid);
+          background:transparent;cursor:pointer;color:var(--ink2);padding:.22rem;
+          width:100%;transition:all .12s}
+.add-pred:hover{border-color:var(--accent3);color:var(--accent3)}
+/* Prior rows */
+.prior-row{display:grid;grid-template-columns:1.1fr 1.6fr;gap:.3rem;align-items:center;margin-bottom:.3rem}
+.prior-lbl{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);
+           background:var(--panel);padding:.22rem .38rem;overflow:hidden;text-overflow:ellipsis;
+           white-space:nowrap;border:1px solid var(--grid);display:flex;align-items:center;gap:.2rem}
+.prior-inp{font-family:'DM Mono',monospace;font-size:.72rem;background:var(--panel);
+           border:1px solid var(--grid);color:var(--ink);padding:.22rem .38rem;outline:none;width:100%}
+.prior-inp:focus{border-color:var(--accent2)}
+.prior-class{display:inline-block;font-family:'DM Mono',monospace;font-size:.55rem;
+             padding:.08rem .3rem;margin-right:.28rem;border-radius:0;opacity:.85}
+.pc-b{background:rgba(90,138,42,.18);color:var(--accent3)}
+.pc-i{background:rgba(42,110,138,.18);color:var(--accent2)}
+.pc-s{background:rgba(184,92,0,.18);color:var(--accent5)}
+.pc-n{background:rgba(14,124,123,.18);color:var(--accent6)}
+.pc-sd{background:rgba(138,58,138,.18);color:var(--accent4)}
+/* Sub-section */
+.sub-section{background:var(--panel);border-left:3px solid var(--accent3);padding:.55rem .7rem;margin-top:.3rem}
+/* Infobox */
+.infobox{padding:.35rem .55rem;background:var(--panel);border-left:3px solid var(--accent2);
+         font-family:'DM Mono',monospace;font-size:.63rem;line-height:1.65;color:var(--ink2);margin-top:.32rem}
+.infobox b{color:var(--ink)}
+/* Grid layouts */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.4rem}
+/* Code block */
+.codewrap{background:#090c12;border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow);
+          overflow:hidden;margin-bottom:1rem}
+[data-theme="light"] .codewrap{background:#1a1410}
+.code-hdr{display:flex;justify-content:space-between;align-items:center;
+          padding:.38rem .7rem;border-bottom:1px solid #1e2535}
+[data-theme="light"] .code-hdr{border-bottom-color:#2a2520}
+.code-lbl{font-family:'DM Mono',monospace;font-size:.65rem;color:#556080;letter-spacing:.06em;text-transform:uppercase}
+.copy-btn{font-family:'DM Mono',monospace;font-size:.66rem;padding:.15rem .48rem;border:1px solid #334;
+          background:transparent;cursor:pointer;color:#9eabc2;transition:all .12s}
+.copy-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.codeblk{padding:.7rem 1rem;font-family:'DM Mono',monospace;font-size:.76rem;line-height:1.9;
+         color:#9eabc2;white-space:pre;overflow-x:auto}
+[data-theme="light"] .codeblk{color:#b0a890}
+.kw{color:#e07b6a}.fn{color:#7ab8d4}.str{color:#8ecfa0}.cm{color:#556080}.nm{color:#e8d49a}
+/* Math block */
+.math-block{background:var(--paper);border:1.5px solid var(--border);padding:1.2rem 1.5rem;
+            box-shadow:2px 2px 0 var(--shadow);margin-bottom:1rem;overflow-x:auto}
+.math-sec{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;
+          color:var(--ink2);margin-bottom:.6rem;padding-bottom:.2rem;border-bottom:1px solid var(--grid)}
+.math-sec.ca{color:var(--accent2)}.math-sec.cg{color:var(--accent3)}.math-sec.cp{color:var(--accent4)}.math-sec.cr{color:var(--accent)}.math-sec.cs{color:var(--accent5)}.math-sec.cn{color:var(--accent6)}
+.math-row{margin-bottom:.4rem}
+/* Preview header */
+.pvw-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem}
+.pvw-title{font-size:1.05rem;font-weight:300;letter-spacing:-.01em}
+.pvw-title em{font-style:italic;color:var(--accent)}
+/* panel header inline button */
+.panel-btn{font-family:'DM Mono',monospace;font-size:.63rem;padding:.2rem .5rem;
+           border:1px solid var(--border);background:transparent;cursor:pointer;
+           color:var(--ink2);transition:all .15s;white-space:nowrap}
+.panel-btn:hover{background:var(--ink);color:var(--bg)}
+/* Toast */
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--accent2);color:white;
+       font-family:'DM Mono',monospace;font-size:.72rem;padding:.52rem .95rem;
+       box-shadow:3px 3px 0 rgba(0,0,0,.25);z-index:9999;
+       transition:opacity .35s,transform .35s;opacity:0;transform:translateY(8px);pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════ -->
+<div id="sidebar">
+
+  <!-- Header -->
+  <div>
+    <div class="hdr-title">brms <em>Model Builder</em></div>
+    <div class="hdr-sub">Bayesianische Modelle · brms · McElreath-Notation</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · v17 by Claude</div>
+    <div class="hbtns">
+      <button class="ibtn xfer-out" onclick="exportToPPC()" title="Modellstruktur &amp; Priors an Prior Predictive Tool senden">⬡ → PP-Check</button>
+      <button class="ibtn xfer-in"  onclick="importFromPPC()" title="Priors aus Prior Predictive Tool importieren">⬡ ← PP-Check</button>
+      <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+    </div>
+  </div>
+
+  <!-- 1. Likelihood -->
+  <div class="scard">
+    <h3>1 · Likelihood</h3>
+    <div class="pg">
+      <span class="lbl">Verteilungsfamilie</span>
+      <div style="display:flex;flex-direction:column;gap:.22rem" id="fam-tabs">
+        <button class="rbtn sel" data-fam="gaussian"  onclick="setFamily(this)">Gaussian  <span style="float:right;opacity:.45;font-size:.56rem">Normal(μ,σ)</span></button>
+        <button class="rbtn"     data-fam="student"   onclick="setFamily(this)">Student-t <span style="float:right;opacity:.45;font-size:.56rem">t(μ,σ,ν)</span></button>
+        <button class="rbtn"     data-fam="bernoulli" onclick="setFamily(this)">Bernoulli <span style="float:right;opacity:.45;font-size:.56rem">logit link</span></button>
+        <button class="rbtn"     data-fam="poisson"   onclick="setFamily(this)">Poisson   <span style="float:right;opacity:.45;font-size:.56rem">log link</span></button>
+        <button class="rbtn"     data-fam="Gamma"     onclick="setFamily(this)">Gamma     <span style="float:right;opacity:.45;font-size:.56rem">log link</span></button>
+      </div>
+    </div>
+    <div class="pg">
+      <span class="lbl">Outcome-Variable (y)</span>
+      <input type="text" id="outcome" value="y" oninput="update()">
+    </div>
+  </div>
+
+  <!-- 2. Prädiktoren -->
+  <div class="scard">
+    <h3 class="hg">2 · Prädiktoren (Fixed Effects)</h3>
+    <div id="pred-list"></div>
+    <button class="add-pred" onclick="addPredictor()">+ Prädiktor hinzufügen</button>
+  </div>
+
+  <!-- 3. Interaktionen -->
+  <div class="scard">
+    <h3 class="hg">3 · Interaktionen</h3>
+    <div class="pg">
+      <span class="lbl">Interaktion eingeben (z.B. x1:x2) + Enter</span>
+      <input type="text" id="inter-input" placeholder="z.B. age:sex"
+             onkeydown="if(event.key==='Enter')addInter()">
+    </div>
+    <div id="inter-tags" style="min-height:.5rem"></div>
+  </div>
+
+  <!-- 4. Distributional -->
+  <div class="scard" id="dist-card">
+    <h3 class="hp">4 · Distributional Model</h3>
+    <div class="infobox" style="margin-bottom:.5rem">
+      <b>Optional:</b> Auxiliary-Parameter (σ, ν) können selbst als Funktion von Prädiktoren modelliert werden — ein <em>distributional model</em> in brms.
+    </div>
+    <div id="dist-area"></div>
+  </div>
+
+  <!-- 5. Random Effects -->
+  <div class="scard">
+    <h3>5 · Random Effects</h3>
+    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.69rem">
+      <input type="checkbox" id="has-re" onchange="update()"> Random Effects aktivieren
+    </label>
+    <div id="re-ui" style="display:none;margin-top:.5rem">
+      <div class="sub-section">
+        <div class="pg">
+          <span class="lbl">Gruppierungsvariable</span>
+          <input type="text" id="group-var" value="subject" oninput="update()">
+        </div>
+        <div class="pg">
+          <span class="lbl">Struktur</span>
+          <select id="re-type" onchange="update()">
+            <option value="int">Random Intercept only  (1 | group)</option>
+            <option value="slope">Random Intercept + Slope  (1 + x | group)</option>
+          </select>
+        </div>
+        <div id="re-slope-area" style="display:none">
+          <span class="lbl">Slope-Prädiktoren (Variablennamen, kommagetrennt)</span>
+          <input type="text" id="re-slope-vars" placeholder="z.B. time, age" oninput="update()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Priors -->
+  <div class="scard">
+    <h3 class="ha">6 · Priors</h3>
+    <div class="infobox" style="margin-bottom:.5rem;font-size:.6rem">
+      Priors im brms-Format: <b>normal(0,2.5)</b> · <b>exponential(1)</b> · <b>student_t(3,0,1)</b> · <b>cauchy(0,2.5)</b> · <b>gamma(2,0.1)</b> · <b>lkj(2)</b>
+    </div>
+    <div id="prior-list"></div>
+  </div>
+
+  <!-- 7. Sampling -->
+  <div class="scard">
+    <h3>7 · Sampling &amp; Speichern</h3>
+    <div class="grid2">
+      <div class="pg"><span class="lbl">Iterationen</span><input type="number" id="iter" value="2000" oninput="update()"></div>
+      <div class="pg"><span class="lbl">Warmup</span><input type="number" id="warm" value="1000" oninput="update()"></div>
+      <div class="pg"><span class="lbl">Chains</span><input type="number" id="chains" value="4" oninput="update()"></div>
+      <div class="pg"><span class="lbl">Cores</span><input type="number" id="cores" value="4" oninput="update()"></div>
+    </div>
+    <div class="pg" style="margin-top:.3rem">
+      <span class="lbl">Backend</span>
+      <select id="backend" onchange="update()">
+        <option value="rstan">rstan</option>
+        <option value="cmdstanr">cmdstanr</option>
+      </select>
+    </div>
+    <div class="pg" style="margin-top:.3rem">
+      <span class="lbl" title="adapt_delta: Ziel-Akzeptanzrate (Standard 0.80). Bei Divergenzen auf 0.90–0.99 erhöhen.">adapt_delta</span>
+      <input type="number" id="adapt-delta" value="0.80" min="0.5" max="0.999" step="0.01" oninput="update()">
+    </div>
+    <div class="pg">
+      <span class="lbl" title="max_treedepth: Maximale NUTS-Baumtiefe. Standard 10. Bei Warnungen auf 12–15 erhöhen.">max_treedepth</span>
+      <input type="number" id="max-tree" value="10" min="5" max="20" step="1" oninput="update()">
+    </div>
+    <div class="pg" style="margin-top:.3rem">
+      <span class="lbl" title="Dateiname zum Cachen des Fits (ohne .rds). Leer = nicht speichern.">fit speichern als</span>
+      <input type="text" id="fit-file" placeholder="z.B. model_m1  (leer = kein file=)" oninput="update()" style="font-family:'DM Mono',monospace;font-size:.7rem">
+    </div>
+    <div class="pg">
+      <span class="lbl">Fit-Objekt</span>
+      <input type="text" id="fit-name" value="fit" placeholder="fit" oninput="update()" style="font-family:'DM Mono',monospace;font-size:.7rem">
+    </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<!-- ═══ PREVIEW ══════════════════════════════════════════════ -->
+<div id="preview">
+
+  <div class="pvw-hdr">
+    <div class="pvw-title">Mathematisches <em>Modell</em></div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2)">McElreath-Notation · Live-Vorschau</div>
+      <button class="panel-btn" onclick="downloadLatex()" title="Formel als .tex exportieren">↓ LaTeX</button>
+    </div>
+  </div>
+
+  <!-- Math -->
+  <div class="math-block" id="math-block">
+    <div class="math-sec ca">Likelihood &amp; Lineare Prädiktoren</div>
+    <div id="math-content" style="font-size:.92rem;line-height:2.2"></div>
+  </div>
+
+  <!-- R Code -->
+  <div class="codewrap">
+    <div class="code-hdr">
+      <span class="code-lbl">R · brms</span>
+      <div style="display:flex;gap:.35rem">
+        <button class="copy-btn" onclick="copyCode()">📋 Kopieren</button>
+        <button class="panel-btn" onclick="downloadR()" title="Als .R Datei speichern">↓ .R</button>
+      </div>
+    </div>
+    <div class="codeblk" id="code-block">Code wird generiert …</div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let FAMILY   = 'gaussian';
+let DARK     = true;
+let predictorNames = [];   // empty = intercept-only model by default
+let nextPredId = 1;
+let inters   = [];
+let userPriors = {};
+
+const DEF_PRIORS = {
+  Intercept:    'normal(0, 5)',
+  b:            'normal(0, 2)',
+  sigma:        'exponential(1)',
+  nu:           'gamma(2, 0.1)',
+  sd:           'normal(0, 1)',   // brms: normal(0,x) with lb=0 — Stan truncates automatically
+  cor:          'lkj(2)',
+  // Distributional priors (log-scale)
+  dist_int:     'normal(0, 1)',   // α_σ / α_ν intercept on log scale
+  dist_b:       'normal(0, 0.5)' // β_{σ/ν,k} slopes on log scale
+};
+
+// family → PPC model name
+const FAM2PPC  = { gaussian:'linear', student:'student', bernoulli:'logistic', poisson:'poisson', Gamma:'gamma' };
+const PPC2FAM  = { linear:'gaussian', logistic:'bernoulli', poisson:'poisson', gamma:'Gamma' };
+
+// families that have sigma in brms
+const HAS_SIGMA = new Set(['gaussian','student','Gamma']);
+// families with nu fixed parameter
+const HAS_NU    = new Set(['student']);
+
+// ═══════════════════════════════════════════════════════════
+//  THEME
+// ═══════════════════════════════════════════════════════════
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FAMILY
+// ═══════════════════════════════════════════════════════════
+function setFamily(btn) {
+  FAMILY = btn.dataset.fam;
+  document.querySelectorAll('#fam-tabs .rbtn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  rebuildDistArea();
+  update();
+}
+function gFamily() { return FAMILY; }
+
+// ═══════════════════════════════════════════════════════════
+//  PREDICTORS
+// ═══════════════════════════════════════════════════════════
+function renderPredList() {
+  const c = document.getElementById('pred-list');
+  c.innerHTML = '';
+  predictorNames.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'pred-block';
+    div.innerHTML = `
+      <div class="pred-hdr">
+        <span class="pred-idx">Prädiktor ${i+1}</span>
+        ${predictorNames.length > 1 ? `<button class="pred-rm" onclick="removePredictor(${i})">✕</button>` : ''}
+      </div>
+      <input type="text" value="${name}" placeholder="Variablenname"
+             oninput="predictorNames[${i}]=this.value.trim()||'x${i+1}';update()">`;
+    c.appendChild(div);
+  });
+}
+function addPredictor() {
+  const n = predictorNames.length + 1;
+  predictorNames.push('x' + n);
+  renderPredList();
+  update();
+}
+function removePredictor(idx) {
+  if (predictorNames.length <= 1) return;
+  predictorNames.splice(idx, 1);
+  renderPredList();
+  update();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INTERACTIONS
+// ═══════════════════════════════════════════════════════════
+function addInter() {
+  const inp = document.getElementById('inter-input');
+  const v = inp.value.trim();
+  if (v && !inters.includes(v)) { inters.push(v); inp.value = ''; update(); }
+}
+function removeInter(idx) { inters.splice(idx, 1); update(); }
+
+function renderInterTags() {
+  document.getElementById('inter-tags').innerHTML =
+    inters.map((t,i) => `<span class="tag" onclick="removeInter(${i})">${t} ✕</span>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DISTRIBUTIONAL
+// ═══════════════════════════════════════════════════════════
+function rebuildDistArea() {
+  const f = gFamily();
+  const params = [];
+  if (HAS_SIGMA.has(f)) params.push({ id:'sigma', label:'σ vorhersagen?' });
+  if (HAS_NU.has(f))    params.push({ id:'nu',    label:'ν vorhersagen?' });
+  const area = document.getElementById('dist-area');
+  area.innerHTML = params.map(p => `
+    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.69rem;margin-bottom:.5rem">
+      <input type="checkbox" class="d-ck" data-p="${p.id}" onchange="update()" > ${p.label}
+    </label>
+    <div id="d-box-${p.id}" class="sub-section" style="display:none;margin-bottom:.4rem">
+      <span class="lbl">Prädiktoren für ${p.id} (kommagetrennt)</span>
+      <input type="text" class="d-pre" data-p="${p.id}" placeholder="z.B. x1, x2" oninput="update()">
+    </div>`).join('');
+  document.getElementById('dist-card').style.display =
+    (f === 'poisson' || f === 'bernoulli') ? 'none' : '';
+}
+
+function getActiveDistParams() {
+  const out = [];
+  document.querySelectorAll('.d-ck').forEach(ck => {
+    const p  = ck.dataset.p;
+    const box = document.getElementById('d-box-' + p);
+    if (box) box.style.display = ck.checked ? '' : 'none';
+    if (ck.checked) {
+      const inp = box.querySelector('input');
+      const preds = inp ? inp.value.split(',').map(s=>s.trim()).filter(Boolean) : [];
+      out.push({ n: p, preds });
+    }
+  });
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PRIOR HELPERS
+// ═══════════════════════════════════════════════════════════
+function gPrior(id, cls, defOverride) {
+  if (!userPriors[id]) userPriors[id] = defOverride || DEF_PRIORS[cls] || 'normal(0, 1)';
+  return userPriors[id];
+}
+
+// Render the prior section and return { ui: htmlString, rows: [{id,label,cls,coef,dpar,sym}] }
+function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
+  const rows = [];
+  const f    = gFamily();
+
+  const addRow = (id, label, cls, coef, dpar, sym, defOverride) => {
+    rows.push({ id, label, cls, coef, dpar, sym, defOverride });
+  };
+
+  // Intercept
+  addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha');
+
+  // β per predictor
+  preds.forEach(p =>
+    addRow('mu_b_' + p, 'β\u2009' + p, 'b', p, null, '\\beta_{' + p + '}'));
+
+  // β per interaction — coef uses : notation as required by brms
+  inters.forEach(ix =>
+    addRow('mu_b_' + ix, 'β\u2009' + ix, 'b', ix, null,
+           '\\beta_{' + ix.replace(/:/g, '\\!:\\!') + '}'));
+
+  // Distributional priors (log-scale) — use tighter defaults
+  activeD.forEach(d => {
+    addRow(d.n + '_int', 'α\u2009' + d.n + ' (log)', 'Intercept', null, d.n,
+           '\\alpha_{' + d.n + '}', DEF_PRIORS.dist_int);
+    d.preds.forEach(p =>
+      addRow(d.n + '_b_' + p, 'β\u2009' + d.n + '\u200B·\u200B' + p, 'b', p, d.n,
+             '\\beta_{' + d.n + ',' + p + '}', DEF_PRIORS.dist_b));
+  });
+
+  // Fixed scale params (only when NOT in distributional model)
+  if (HAS_SIGMA.has(f) && !activeD.find(d => d.n === 'sigma'))
+    addRow('fixed_sigma', 'σ', 'sigma', null, null, '\\sigma');
+  if (HAS_NU.has(f) && !activeD.find(d => d.n === 'nu'))
+    addRow('fixed_nu', 'ν', 'nu', null, null, '\\nu');
+
+  // Random effects priors
+  if (hasRE) {
+    addRow('re_sd_int', 'τ₀\u2009sd(Intercept)', 'sd', 'Intercept', null, '\\tau_0');
+    if (reType === 'slope') {
+      slopeVars.forEach((sv, idx) =>
+        addRow('re_sd_slp_' + sv, 'τ' + (idx+1) + '\u2009sd(' + sv + ')', 'sd', sv, null,
+               '\\tau_{' + (idx+1) + '}'));
+      // Correlation prior
+      if (!userPriors['re_cor']) userPriors['re_cor'] = DEF_PRIORS.cor;
+      rows.push({ id:'re_cor', label:'ρ\u2009cor', cls:'cor', coef:null, dpar:null, sym:'\\rho' });
+    }
+  }
+
+  // Build UI HTML — color-coded by parameter family
+  const clsBadge = (cls, dpar) => {
+    // For distributional rows, badge color matches the dpar type
+    let badgeCls;
+    if (dpar === 'sigma') badgeCls = 'pc-s';
+    else if (dpar === 'nu') badgeCls = 'pc-n';
+    else {
+      const map = { Intercept:'pc-i', b:'pc-b', sigma:'pc-s', nu:'pc-n', sd:'pc-sd', cor:'pc-sd' };
+      badgeCls = map[cls] || 'pc-b';
+    }
+    return `<span class="prior-class ${badgeCls}">${dpar ? dpar+'·'+cls : cls}</span>`;
+  };
+  let pUI = '';
+  rows.forEach(r => {
+    pUI += `<div class="prior-row">
+      <div class="prior-lbl">${clsBadge(r.cls, r.dpar)}${r.label}</div>
+      <input class="prior-inp" type="text" id="pi-${r.id}"
+             value="${gPrior(r.id, r.cls, r.defOverride)}"
+             oninput="userPriors['${r.id}']=this.value;schedUpdate()">
+    </div>`;
+  });
+  document.getElementById('prior-list').innerHTML = pUI;
+
+  return rows;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  R CODE GENERATION
+// ═══════════════════════════════════════════════════════════
+function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows) {
+  const y    = document.getElementById('outcome').value || 'y';
+  const f    = gFamily();
+  const iter = document.getElementById('iter').value;
+  const warm = document.getElementById('warm').value;
+  const ch   = document.getElementById('chains').value;
+  const co   = document.getElementById('cores').value;
+  const back = document.getElementById('backend').value;
+  const delta = parseFloat(document.getElementById('adapt-delta')?.value || 0.80).toFixed(2);
+  const tree  = parseInt(document.getElementById('max-tree')?.value || 10);
+  const fileRaw = (document.getElementById('fit-file')?.value || '').trim();
+  const fitName = (document.getElementById('fit-name')?.value || 'fit').trim() || 'fit';
+  const fileLine = fileRaw ? `\n  <span class="nm">file</span>   = <span class="str">"${fileRaw}"</span>,` : '';
+  const needsControl = (parseFloat(delta) !== 0.80 || tree !== 10);
+  const controlLine  = needsControl
+    ? `\n  <span class="nm">control</span> = <span class="fn">list</span>(<span class="nm">adapt_delta</span> = ${delta}, <span class="nm">max_treedepth</span> = ${tree}),`
+    : '';
+
+  // formula always in bf() to avoid errors
+  const muTerms = [...preds, ...inters].join(' + ') || '1';
+  let reC = '';
+  if (hasRE && g) {
+    if (reType === 'slope' && slopeVars.length > 0) {
+      reC = ` + (1 + ${slopeVars.join(' + ')} | ${g})`;
+    } else {
+      reC = ` + (1 | ${g})`;
+    }
+  }
+
+  let formCode;
+  if (activeD.length > 0) {
+    let lines = `bf(\n  ${y} ~ ${muTerms}${reC}`;
+    activeD.forEach(d => {
+      lines += `,\n  ${d.n} ~ ${d.preds.join(' + ') || '1'}`;
+    });
+    lines += '\n)';
+    formCode = lines;
+  } else {
+    formCode = `bf(${y} ~ ${muTerms}${reC})`;
+  }
+
+  // priors array — class without quotes (R convention), coef always with quotes
+  // Note: for class = sd, brms/Stan applies lb=0 automatically (truncation)
+  const pArr = priorRows.map(r => {
+    const cls  = `class = ${r.cls}`;
+    const coef = r.coef ? `, coef = "${r.coef}"` : '';
+    const dpar = r.dpar ? `, dpar = "${r.dpar}"` : '';
+    return `  <span class="str">prior(${gPrior(r.id, r.cls, r.defOverride)}, ${cls}${coef}${dpar})</span>`;
+  });
+
+  const famStr = f === 'gaussian' ? 'gaussian()' :
+                 f === 'student'  ? 'student()' :
+                 f === 'bernoulli'? 'bernoulli("logit")' :
+                 f === 'poisson'  ? 'poisson("log")' :
+                 f === 'Gamma'    ? 'Gamma("log")' : `${f}()`;
+
+  return `<span class="cm"># brms Model Builder v18 — generierter Code</span>
+
+<span class="nm">model_formula</span> <span class="kw">&lt;-</span> ${formCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+<span class="nm">priors</span> <span class="kw">&lt;-</span> <span class="fn">c</span>(
+${pArr.join(',\n')}
+)
+
+<span class="nm">${fitName}</span> <span class="kw">&lt;-</span> <span class="fn">brm</span>(
+  <span class="nm">formula</span> = model_formula,
+  <span class="nm">family</span>  = <span class="fn">${famStr}</span>,
+  <span class="nm">prior</span>   = priors,
+  <span class="nm">data</span>    = my_data,
+  <span class="nm">iter</span>    = ${iter},
+  <span class="nm">warmup</span>  = ${warm},
+  <span class="nm">chains</span>  = ${ch},
+  <span class="nm">cores</span>   = ${co},
+  <span class="nm">backend</span> = <span class="str">"${back}"</span>,${fileLine}${controlLine}
+  <span class="nm">seed</span>    = 42
+)`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MATH GENERATION  (McElreath style)
+// ═══════════════════════════════════════════════════════════
+function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows) {
+  const y  = document.getElementById('outcome').value || 'y';
+  const f  = gFamily();
+
+  // Link info per family
+  const famTex = {
+    gaussian:  `\\text{Normal}(\\mu_i,\\, \\sigma)`,
+    student:   `\\text{Student-t}(\\nu,\\, \\mu_i,\\, \\sigma)`,
+    bernoulli: `\\text{Bernoulli}(p_i)`,
+    poisson:   `\\text{Poisson}(\\lambda_i)`,
+    Gamma:     `\\text{Gamma}(\\mu_i,\\, \\phi)`
+  };
+  const muLinkTex = {
+    gaussian:  `\\mu_i`,
+    student:   `\\mu_i`,
+    bernoulli: `\\text{logit}(p_i)`,
+    poisson:   `\\log(\\lambda_i)`,
+    Gamma:     `\\log(\\mu_i)`
+  };
+
+  const muTex = muLinkTex[f] || '\\mu_i';
+
+  // Build μ linear predictor
+  let muLine = `${muTex} &= \\alpha`;
+  preds.forEach(p => { muLine += ` + \\beta_{${p}}\\, ${p}_i`; });
+  inters.forEach(ix => {
+    const parts = ix.split(':');
+    muLine += ` + \\beta_{${ix.replace(/:/g, '\\!:\\!')}}\\,(${parts.join(' \\cdot ')})_i`;
+  });
+  if (hasRE && g) {
+    muLine += ` + u_{0,\\,${g}[i]}`;
+    if (reType === 'slope' && slopeVars.length > 0) {
+      slopeVars.forEach((sv, k) => { muLine += ` + u_{${k+1},\\,${g}[i]}\\, ${sv}_i`; });
+    }
+  }
+
+  let tex = `\\[\\begin{aligned}\n${y}_i &\\sim ${famTex[f] || '\\cdot'} \\\\[6pt]\n${muLine} \\\\`;
+
+  // Distributional lines
+  activeD.forEach(d => {
+    const link = d.n === 'nu' ? '' : '\\log(';
+    const close = d.n === 'nu' ? '' : ')';
+    let dLine = `${link}${d.n}_i${close} &= \\alpha_{${d.n}}`;
+    d.preds.forEach(p => { dLine += ` + \\beta_{${d.n},${p}}\\, ${p}_i`; });
+    tex += `\\\\[4pt]\n${dLine} \\\\`;
+  });
+
+  // Random effects
+  if (hasRE && g) {
+    if (reType === 'slope' && slopeVars.length > 0) {
+      const K = slopeVars.length; // number of slope predictors
+      // Build (K+1)-dim vector notation  (u_0, u_1, ..., u_K)
+      const uVec  = Array.from({length: K+1}, (_, i) => `u_${i}`).join(' \\\\ ');
+      const zVec  = Array.from({length: K+1}, () => '0').join(' \\\\ ');
+      // Build Σ matrix: diagonal τ_k^2, off-diagonal ρ_{jk}·τ_j·τ_k
+      const dim = K + 1;
+      const rows = [];
+      for (let r = 0; r < dim; r++) {
+        const cols2 = [];
+        for (let c = 0; c < dim; c++) {
+          if (r === c) {
+            cols2.push(`\\tau_${r}^2`);
+          } else {
+            const lo = Math.min(r, c), hi = Math.max(r, c);
+            cols2.push(`\\rho_{${lo}${hi}}\\,\\tau_${lo}\\tau_${hi}`);
+          }
+        }
+        rows.push(cols2.join(' & '));
+      }
+      const sigMat = rows.join(' \\\\ ');
+      tex += `\\\\[4pt]\n\\begin{pmatrix} ${uVec} \\end{pmatrix}_j &\\sim \\operatorname{MVNormal}\\!\\left(\\begin{pmatrix} ${zVec} \\end{pmatrix},\\;\\boldsymbol{\\Sigma}\\right) \\\\[4pt]\n\\boldsymbol{\\Sigma} &= \\begin{pmatrix} ${sigMat} \\end{pmatrix} \\\\`;
+    } else {
+      tex += `\\\\[4pt]\nu_{0,j} &\\sim \\text{Normal}(0,\\, \\tau_0) \\\\`;
+    }
+  }
+
+  tex += `\n\\end{aligned}\\]`;
+
+  // Prior block
+  tex += `<div class="math-sec cg" style="margin-top:1rem">Priors</div>`;
+  tex += `\\[\\begin{aligned}\n`;
+  const priorLines = priorRows.map(r => `${r.sym} &\\sim ${fmtPriorTex(gPrior(r.id, r.cls))}`);
+  tex += priorLines.join(' \\\\[3pt]\n');
+  tex += `\n\\end{aligned}\\]`;
+
+  return tex;
+}
+
+// Returns complete LaTeX like \operatorname{Normal}(0,\,2.5)
+function fmtPriorTex(str) {
+  if (!str) return '\\cdot';
+  const m = str.trim().match(/^([a-zA-Z_]+)\((.+)\)$/);
+  if (!m) return str.replace(/[&<>]/g, '');
+  const fam  = m[1].toLowerCase();
+  const args = m[2].replace(/,\s*/g, ',\\,');
+  const famTex = {
+    normal:'Normal', exponential:'Exponential', student_t:'Student\\text{-}t',
+    cauchy:'Cauchy', gamma:'Gamma', lkj:'LKJ',
+    half_normal:'Half\\text{-}Normal', half_student:'Half\\text{-}t',
+    half_cauchy:'Half\\text{-}Cauchy'
+  };
+  const n = famTex[fam] || fam;
+  return `\\operatorname{${n}}(${args})`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN UPDATE
+// ═══════════════════════════════════════════════════════════
+let _updTimer = null;
+function schedUpdate() { clearTimeout(_updTimer); _updTimer = setTimeout(update, 250); }
+
+function update() {
+  const preds     = predictorNames.filter(Boolean);
+  const hasRE     = document.getElementById('has-re').checked;
+  const g         = document.getElementById('group-var').value.trim() || 'group';
+  const reType    = document.getElementById('re-type').value;
+  const slopeVars = reType === 'slope'
+    ? document.getElementById('re-slope-vars').value.split(',').map(s=>s.trim()).filter(Boolean)
+    : [];
+
+  // Show/hide RE slope area
+  document.getElementById('re-ui').style.display      = hasRE ? '' : 'none';
+  document.getElementById('re-slope-area').style.display = (hasRE && reType === 'slope') ? '' : 'none';
+
+  renderInterTags();
+
+  const activeD = getActiveDistParams();
+
+  // Prior section
+  const priorRows = buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars);
+
+  // R Code
+  document.getElementById('code-block').innerHTML =
+    buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+
+  // Math
+  const mathContent = document.getElementById('math-content');
+  mathContent.innerHTML = buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+
+  // Typeset MathJax
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetPromise([mathContent]).catch(()=>{});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DOWNLOAD: R CODE
+// ═══════════════════════════════════════════════════════════
+function downloadR() {
+  const raw = document.getElementById('code-block').innerText;
+  const blob = new Blob([raw], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const y = document.getElementById('outcome').value || 'y';
+  a.download = `brms_model_${y}_${new Date().toISOString().slice(0,10)}.R`;
+  a.click();
+  showToast('R-Code gespeichert ✓');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DOWNLOAD: LaTeX
+// ═══════════════════════════════════════════════════════════
+function downloadLatex() {
+  const preds     = predictorNames.filter(Boolean);
+  const hasRE     = document.getElementById('has-re').checked;
+  const g         = document.getElementById('group-var').value.trim() || 'group';
+  const reType    = document.getElementById('re-type').value;
+  const slopeVars = reType === 'slope'
+    ? document.getElementById('re-slope-vars').value.split(',').map(s=>s.trim()).filter(Boolean)
+    : [];
+  const activeD = getActiveDistParams();
+  const priorRows = buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars);
+
+  // Regenerate raw LaTeX via buildMath (before MathJax processes it)
+  const rawHtml = buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+
+  // Strip HTML tags to get clean LaTeX
+  // buildMath returns \[...\] blocks interleaved with <div> section labels
+  // We convert <div class="math-sec ...">TEXT</div> → \medskip\noindent\textsc{TEXT}\par
+  let cleanTex = rawHtml
+    .replace(/<div[^>]*class="math-sec[^"]*"[^>]*>([\s\S]*?)<\/div>/g, (_, t) =>
+      `\n\\medskip\\noindent\\textsc{${t.trim()}}\\par\n`)
+    .replace(/<[^>]+>/g, '')   // strip remaining HTML
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+
+  const y = document.getElementById('outcome').value || 'y';
+  const f = gFamily();
+  const today = new Date().toLocaleDateString('de-DE');
+
+  const doc = `% brms Model Builder v14 — Mathematisches Modell (McElreath-Notation)
+% Modell: ${y} ~ ${f}
+% Generiert: ${today}
+
+\\documentclass[12pt]{article}
+\\usepackage{amsmath, amssymb, bm, microtype}
+\\usepackage[a4paper, margin=2.5cm]{geometry}
+
+\\title{Bayesianisches Regressionsmodell}
+\\author{}
+\\date{${today}}
+
+\\begin{document}
+\\maketitle
+
+\\section*{Modellspezifikation}
+
+${cleanTex}
+
+\\end{document}
+`;
+
+  const blob = new Blob([doc], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `model_${y}_${new Date().toISOString().slice(0,10)}.tex`;
+  a.click();
+  showToast('LaTeX exportiert ✓');
+}
+function copyCode() {
+  const text = document.getElementById('code-block').innerText;
+  navigator.clipboard.writeText(text).then(() => showToast('Code kopiert ✓'));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(msg, col) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = col || 'var(--accent2)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PRIOR PARSING UTILITIES
+// ═══════════════════════════════════════════════════════════
+function parsePriorStr(str) {
+  if (!str) return null;
+  const m = str.trim().match(/^([a-zA-Z_]+)\(([^)]+)\)$/);
+  if (!m) return null;
+  const fam  = m[1].toLowerCase();
+  const args = m[2].split(',').map(s => parseFloat(s.trim())).filter(isFinite);
+  switch (fam) {
+    case 'normal':      return { fam:'normal',      mu:args[0]??0,   sig:args[1]??1,   nu:3 };
+    case 'student_t':   return { fam:'student_t',   nu:args[0]??3,   mu:args[1]??0,   sig:args[2]??1 };
+    case 'cauchy':      return { fam:'cauchy',       mu:args[0]??0,   sig:args[1]??1,   nu:3 };
+    case 'exponential': return { fam:'exponential',  p1:args[0]??1,   p2:1,             nu:3 };
+    case 'gamma':       return { fam:'gamma',        p1:args[0]??2,   p2:args[1]??1,    nu:3 };
+    case 'lkj':         return { fam:'lkj',          eta:args[0]??2 };
+    default:            return null;
+  }
+}
+
+// PPC loc/scale → brms prior string
+function ppcLocToStr(p) {
+  if (!p) return 'normal(0, 5)';
+  switch (p.fam) {
+    case 'normal':    return `normal(${fmt(p.mu)}, ${fmt(p.sig)})`;
+    case 'student_t': return `student_t(${fmt(p.nu??3)}, ${fmt(p.mu)}, ${fmt(p.sig)})`;
+    case 'cauchy':    return `cauchy(${fmt(p.mu)}, ${fmt(p.sig)})`;
+    default:          return `normal(${fmt(p.mu??0)}, ${fmt(p.sig??1)})`;
+  }
+}
+function ppcSigmaToStr(p) {
+  if (!p) return 'exponential(1)';
+  switch (p.fam) {
+    case 'exponential': return `exponential(${fmt(p.p1)})`;
+    case 'half_normal': return `normal(0, ${fmt(p.p1)})`;
+    case 'half_student':return `student_t(${fmt(p.nu??3)}, 0, ${fmt(p.p1)})`;
+    case 'half_cauchy': return `cauchy(0, ${fmt(p.p1)})`;
+    case 'gamma':       return `gamma(${fmt(p.p1)}, ${fmt(p.p2??1)})`;
+    default:            return `exponential(${fmt(p.p1??1)})`;
+  }
+}
+function fmt(n) {
+  const v = parseFloat(n);
+  if (!isFinite(v)) return '1';
+  return (v === Math.floor(v)) ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, '');
+}
+
+// brms parsed → PPC sigma config
+function brmsParsToPPCSig(p) {
+  if (!p) return { fam:'exponential', p1:1, p2:1, nu:3 };
+  switch (p.fam) {
+    case 'exponential': return { fam:'exponential',  p1:p.p1??1,  p2:1,      nu:3 };
+    case 'normal':      return { fam:'half_normal',  p1:Math.abs(p.sig??p.mu??1), p2:1, nu:3 };
+    case 'student_t':   return { fam:'half_student', p1:p.sig??1, p2:p.nu??3, nu:p.nu??3 };
+    case 'cauchy':      return { fam:'half_cauchy',  p1:p.sig??1, p2:1,       nu:3 };
+    case 'gamma':       return { fam:'gamma',        p1:p.p1??2,  p2:p.p2??1, nu:3 };
+    default:            return { fam:'exponential',  p1:1,        p2:1,       nu:3 };
+  }
+}
+function brmsParsToPPCLoc(p) {
+  if (!p) return { fam:'normal', mu:0, sig:1, nu:3 };
+  switch (p.fam) {
+    case 'normal':    return { fam:'normal',    mu:p.mu??0, sig:p.sig??1, nu:3 };
+    case 'student_t': return { fam:'student_t', mu:p.mu??0, sig:p.sig??1, nu:p.nu??3 };
+    case 'cauchy':    return { fam:'cauchy',    mu:p.mu??0, sig:p.sig??1, nu:3 };
+    default:          return { fam:'normal',    mu:0,       sig:1,        nu:3 };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TRANSFER: Builder → PPC
+// ═══════════════════════════════════════════════════════════
+function exportToPPC() {
+  const preds   = predictorNames.filter(Boolean);
+  const hasRE   = document.getElementById('has-re').checked;
+  const g       = document.getElementById('group-var').value.trim() || 'group';
+  const reType  = document.getElementById('re-type').value;
+  const slopeVars = reType === 'slope'
+    ? document.getElementById('re-slope-vars').value.split(',').map(s=>s.trim()).filter(Boolean)
+    : [];
+  const activeD = getActiveDistParams();
+  const f       = gFamily();
+
+  const intParsed   = parsePriorStr(gPrior('mu_int', 'Intercept'));
+  const betaParsed  = preds.map(p => parsePriorStr(gPrior('mu_b_' + p, 'b')));
+  const sigParsed   = parsePriorStr(gPrior('fixed_sigma', 'sigma'));
+  const reIntParsed = parsePriorStr(gPrior('re_sd_int', 'sd'));
+  const firstSlope  = slopeVars[0];
+  const reSlpParsed = firstSlope ? parsePriorStr(gPrior('re_sd_slp_' + firstSlope, 'sd')) : null;
+  const lkjParsed   = parsePriorStr(gPrior('re_cor', 'cor'));
+
+  // Convert sd priors — normal(0,x) maps to half_normal in PPC, etc.
+  const reIntSig  = brmsParsToPPCSig(reIntParsed);
+  const reSlpSig  = reSlpParsed ? brmsParsToPPCSig(reSlpParsed) : null;
+
+  // Build interaction priors for PPC (each interaction gets its own prior)
+  const interPriors = inters.map(ix => ({
+    name: ix,
+    prior: parsePriorStr(gPrior('mu_b_' + ix, 'b'))
+  }));
+
+  // Build distributional priors for PPC
+  const distPriors = activeD.map(d => ({
+    param: d.n,
+    preds: d.preds,
+    intParsed:  parsePriorStr(gPrior(d.n + '_int', 'Intercept')),
+    betaParsed: d.preds.map(p => parsePriorStr(gPrior(d.n + '_b_' + p, 'b')))
+  }));
+
+  const payload = {
+    version:    2,
+    source:     'brmsBuilder',
+    ts:         Date.now(),
+    family:     f,
+    ppcFamily:  FAM2PPC[f] || 'linear',
+    nPreds:     preds.length,
+    predNames:  preds,
+    inters:     inters,
+    interPriors,
+    intercept:  brmsParsToPPCLoc(intParsed),
+    betas:      betaParsed.map(p => brmsParsToPPCLoc(p)),
+    sigma:      sigParsed ? brmsParsToPPCSig(sigParsed) : null,
+    distPriors,
+    lmm:        hasRE,
+    groupVar:   g,
+    reStruct:   reType === 'slope' ? 'slope' : 'intercept',
+    reInt:      { fam: reIntSig.fam, p1: reIntSig.p1 },
+    reSlp:      reSlpSig ? { fam: reSlpSig.fam, p1: reSlpSig.p1 } : { fam:'half_normal', p1:1 },
+    lkjEta:     lkjParsed?.eta ?? 2,
+    slopeVarIndices: slopeVars.map(sv => preds.indexOf(sv)).filter(i => i >= 0)
+  };
+
+  try {
+    // Always clear stale data first, then write fresh
+    localStorage.removeItem('brms2ppc');
+    localStorage.setItem('brms2ppc', JSON.stringify(payload));
+    showToast('✓ Modell an PP-Check gesendet', 'var(--accent3)');
+  } catch(e) {
+    showToast('⚠ localStorage nicht verfügbar — öffne beide Tools im selben Browser', 'var(--accent)');
+    console.error('exportToPPC:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TRANSFER: PPC → Builder
+// ═══════════════════════════════════════════════════════════
+function importFromPPC() {
+  let raw;
+  try { raw = localStorage.getItem('ppc2brms'); } catch(e) {}
+  if (!raw) { showToast('⚠ Keine Daten vom PP-Check gefunden — zuerst im PP-Check auf "→ Builder" klicken', 'var(--accent)'); return; }
+
+  let d;
+  try { d = JSON.parse(raw); } catch(e) { showToast('⚠ Datenfehler beim Import', 'var(--accent)'); return; }
+
+  // Set family
+  const newFam = PPC2FAM[d.ppcFamily] || PPC2FAM[d.family] || 'gaussian';
+  FAMILY = newFam;
+  document.querySelectorAll('#fam-tabs .rbtn').forEach(b => {
+    b.classList.toggle('sel', b.dataset.fam === newFam);
+  });
+  rebuildDistArea();
+
+  // Predictor count + names
+  const n = d.nPreds || 1;
+  predictorNames = Array.from({ length: n }, (_, i) =>
+    (d.predNames && d.predNames[i]) ? d.predNames[i] : ('x' + (i + 1)));
+  renderPredList();
+
+  // Apply priors
+  if (d.intercept) userPriors['mu_int'] = ppcLocToStr(d.intercept);
+  if (d.betas) {
+    d.betas.forEach((b, i) => {
+      const nm = predictorNames[i] || ('x' + (i + 1));
+      userPriors['mu_b_' + nm] = ppcLocToStr(b);
+    });
+  }
+  if (d.sigma) userPriors['fixed_sigma'] = ppcSigmaToStr(d.sigma);
+
+  // Interactions
+  if (d.inters && d.inters.length > 0) {
+    inters = [...d.inters];
+    if (d.interPriors) {
+      d.interPriors.forEach(ip => {
+        if (ip.prior) userPriors['mu_b_' + ip.name] = ppcLocToStr(brmsParsToPPCLoc(ip.prior));
+      });
+    }
+  }
+
+  // RE settings
+  if (d.lmm !== undefined) {
+    document.getElementById('has-re').checked = !!d.lmm;
+    if (d.groupVar) document.getElementById('group-var').value = d.groupVar;
+    const rt = (d.reStruct === 'slope') ? 'slope' : 'int';
+    document.getElementById('re-type').value = rt;
+    if (d.reInt) userPriors['re_sd_int'] = `exponential(${fmt(d.reInt.p1 ?? 1)})`;
+    if (d.reSlp && d.slopeVarIndices && d.slopeVarIndices.length > 0) {
+      const svNames = d.slopeVarIndices.map(i => predictorNames[i] || ('x'+(i+1)));
+      document.getElementById('re-slope-vars').value = svNames.join(', ');
+      svNames.forEach(sv => { userPriors['re_sd_slp_'+sv] = `exponential(${fmt(d.reSlp.p1??1)})`; });
+    }
+    if (d.lkjEta) userPriors['re_cor'] = `lkj(${fmt(d.lkjEta)})`;
+  }
+
+  // Clear stale data
+  try { localStorage.removeItem('ppc2brms'); } catch(e) {}
+  update();
+  showToast('✓ Priors aus PP-Check importiert', 'var(--accent4)');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+function init() {
+  renderPredList();
+  rebuildDistArea();
+  update();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
