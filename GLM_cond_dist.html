@@ -115,13 +115,26 @@
 <div class="header-row">
   <div>
     <h1>Bedingte Verteilungen im <em>GLM</em></h1>
-    <p class="subtitle" id="main-subtitle">Ansicht 1: Dichte/PMF (Single, Ghost oder Ridgeline) &nbsp;·&nbsp; Ansicht 2: E[Y|x] als Funktion von x</p>
+    <p class="subtitle" id="main-subtitle">Ansicht 1: Dichte/PMF (Single, Ghost oder Ridgeline) &nbsp;·&nbsp; Ansicht 2: E[Y|x] als Funktion von x &nbsp;·&nbsp; Szenarien ein-/ausklappen &nbsp;→&nbsp; eigene Parameter erkunden &nbsp;→&nbsp; Reflexionsfragen bearbeiten</p>
     <p style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);opacity:.55;margin-top:.12rem;letter-spacing:.02em">© Dr. Rainer Düsing</p>
   </div>
   <div class="header-btns">
+    <a href="GLM_3D_visual.html" target="_blank" class="icon-btn" title="Dieselben Verteilungen als 3D-Landschaft — direkt weiter">⬡ GLM IN 3D</a>
     <button class="icon-btn" onclick="toggleTheme()"><span id="themeIcon">🌙</span><span id="themeLabel">DARK</span></button>
   </div>
 </div>
+
+
+<!-- ═══════════════ LERNSCHICHT 1: SZENARIEN ═══════════════ -->
+<div id="scenario-strip">
+  <div class="scenario-strip-head">
+    <span class="sc-head-label">SZENARIEN</span>
+    <span class="sc-head-sub">Wähle ein Forschungsszenario — oder erkunde die Parameter frei</span>
+    <button class="sc-collapse-btn collapsed" id="sc-collapse-btn" onclick="toggleScenarioBar()" title="Szenarien ein-/ausblenden">▾</button>
+  </div>
+  <div id="scenario-cards-row" class="hidden"></div>
+</div>
+<div id="scenario-ctx-box" style="display:none"></div>
 
 <div class="tabs" id="tabs"></div>
 
@@ -190,6 +203,11 @@
       </table>
     </div>
     <div class="info-strip" id="info-strip"></div>
+
+    <!-- ════ LERNSCHICHT 2: REFLEXION ════ -->
+    <div id="reflection-panel"></div>
+
+
   </div>
 </div>
 
@@ -357,12 +375,12 @@ const MODELS = {
     name: 'Gamma', paramShort: 'μ', paramLabel: 'μ (Erwartungswert)',
     extraParams: [{id:'kshape', label:'k (Shape)', min:0.5, max:10, step:0.5, default:2}],
     xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3], 
-    description: `Kanonischer Link: <strong>Invers</strong>. η = 1/μ. (Achtung: η muss hier strikt positiv bleiben!). Varianz wächst quadratisch: Var = μ²/k. Die Intervall-Bänder weiten sich stark.`,
-    getParam: (eta, e) => 1 / Math.max(eta, 0.02),
+    description: `Praxis-Link: <strong>Logarithmus</strong>. log(μ) = η → μ = exp(η). Kein Clipping, beliebige β-Werte erlaubt. Varianz wächst quadratisch: Var = μ²/k — die Intervall-Bänder weiten sich mit dem Mittelwert. Ridgeline: Die Verteilungen werden breiter und rechtsschiefiger, je größer x.`,
+    getParam: (eta, e) => Math.exp(eta),
     getEY:    (mu, e) => mu,
     getCI:    (mu, e) => [Math.max(0.01, mu - 1.96*(mu/Math.sqrt(e.kshape))), mu + 1.96*(mu/Math.sqrt(e.kshape))],
     paramStr: (v) => `μ = ${v.toFixed(3)}`,
-    formulaHtml: (e) => `η = β₀ + β₁·x<br>1/μ = η &nbsp;⟹&nbsp; μ = <span class="computed">1/η</span><br>k = <span class="computed">${e.kshape.toFixed(1)}</span> (Shape)<br>Y|x ~ Gamma(k, θ=μ/k)`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>log(μ) = η &nbsp;⟹&nbsp; μ = <span class="computed">exp(η)</span><br>k = <span class="computed">${e.kshape.toFixed(1)}</span> (Shape)<br>Y|x ~ Gamma(k, θ=μ/k)`,
     buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
       if (isLeft) {
         const k = e.kshape, mus = xVals.map(x=>m.getParam(b0+b1*x,e));
@@ -421,7 +439,43 @@ const MODELS = {
       }
     },
     distAxis: (m, b0, b1, xVals, e) => ({xMin:0, xMax:e.ntrials, xLabel:'k (Erfolge)'})
+  },
+
+  bernoulli: {
+    name: 'Bernoulli (Logist.)', paramShort: 'p', paramLabel: 'p (Erfolgs-W.)',
+    extraParams: [],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Kanonischer Link: <strong>Logit</strong>. logit(p) = η. <strong>Spezialfall der Binomialverteilung mit n = 1</strong>: Y ∈ {0, 1}. Die Regressionskurve zeigt die S-förmige Wahrscheinlichkeitsfunktion p(x) = σ(η). Varianz = p(1−p) — maximal bei p = 0.5, null an den Rändern.`,
+    getParam: (eta, e) => 1/(1+Math.exp(-eta)),
+    getEY:    (p, e) => p,
+    getCI:    (p, e) => { const sd = Math.sqrt(p*(1-p)); return [Math.max(0, p - 1.96*sd), Math.min(1, p + 1.96*sd)]; },
+    paramStr: (v) => `p = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>logit(p) = η &nbsp;⟹&nbsp; p = <span class="computed">σ(η)</span><br>Y|x ~ Bernoulli(p) = Bin(1, p)`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        // PMF: only 0 and 1
+        let maxDens = 0;
+        xVals.forEach(x => { const p = m.getParam(b0+b1*x,e); if(Math.max(p,1-p)>maxDens) maxDens=Math.max(p,1-p); });
+        return xVals.map((x,i) => {
+          const p = m.getParam(b0+b1*x,e), isHL = x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode === 'ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          const pts = [
+            {x:0, y: viewMode==='ridgeline' ? [offset, (1-p)+offset] : (1-p)},
+            {x:1, y: viewMode==='ridgeline' ? [offset, p+offset]     : p}
+          ];
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1.5, barPercentage:.45, categoryPercentage:.7};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.08) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => ({xMin:-0.5, xMax:1.5, xLabel:'y (0 = Misserfolg, 1 = Erfolg)'})
   }
+
 };
 
 // Helper for Right Chart
@@ -449,7 +503,7 @@ function _buildRegPlot(m, b0, b1, e, hlX, xs) {
 }
 
 // ── STATE ────────────────────────────────────────────────────────────────────
-let currentModel = 'poisson', b0 = 0.5, b1 = 0.4, extras = {}, highlightX = 0;
+let currentModel = 'ols', b0 = 0.0, b1 = 0.5, extras = {}, highlightX = 0;
 let chartLeft = null, chartRight = null;
 let playInterval = null, playIdx = 0;
 
@@ -577,12 +631,15 @@ function renderAll() {
 
   // --- Right Chart ---
   const dsR = m.buildDatasets(m, b0, b1, m.xValues, extras, highlightX, false);
-  const axR_key = currentModel + (showCI?"_CI":"");
+  // Include max E[Y|x] in key so chart rebuilds when beta changes drastically (fixes Gamma clipping)
+  const _maxEY = Math.max(...m.xValues.map(x => m.getEY(m.getParam(b0+b1*x, extras), extras)));
+  const axR_key = currentModel + (showCI?"_CI":"") + '_' + Math.round(_maxEY * 10);
   
   // FIX: Dynamische Y-Achsen Konfiguration für Right Chart
   const yAxisRight = { title:{display:true, text:'E[Y|x]'}, grid:{color:css('--chart-grid')}, ticks:{color:css('--chart-tick')} };
-  if (currentModel !== 'ols') yAxisRight.min = 0; // Poisson, Gamma, NegBin, Binomial dürfen nicht ins Minus fallen
+  if (currentModel !== 'ols') yAxisRight.min = 0; // Poisson, Gamma, NegBin, Binomial, Bernoulli dürfen nicht ins Minus fallen
   if (currentModel === 'binomial') yAxisRight.max = extras.ntrials; // Binomial ist nach oben beschränkt
+  if (currentModel === 'bernoulli') yAxisRight.max = 1; // Bernoulli: p ∈ [0,1]
   
   if (!chartRight || lastRightAxis !== axR_key) {
     if(chartRight) chartRight.destroy();
@@ -622,3 +679,461 @@ initTabs(); initModel(); renderAll();
 </script>
 </body>
 </html>
+<!-- ═══════════════════════════════════════════════════════════════════
+     LERNSCHICHTEN — Zusätzliche Styles
+═══════════════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Szenario-Leiste ─────────────────────────────────────────── */
+#scenario-strip {
+  background: var(--paper);
+  border: 1.5px solid var(--border);
+  margin-bottom: .75rem;
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+.scenario-strip-head {
+  display: flex; align-items: center; gap: .8rem;
+  padding: .6rem 1rem; border-bottom: 1px solid var(--grid);
+}
+.sc-head-label {
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  letter-spacing: .12em; color: var(--accent2); white-space: nowrap;
+  border: 1px solid var(--accent2); padding: .18rem .45rem;
+}
+.sc-head-sub {
+  font-family: 'DM Mono', monospace; font-size: .62rem;
+  color: var(--ink2); flex: 1;
+}
+.sc-collapse-btn {
+  font-family: 'DM Mono', monospace; font-size: .75rem;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--ink2); padding: 0 .3rem; transition: transform .2s;
+  line-height: 1;
+}
+.sc-collapse-btn.collapsed { transform: rotate(-90deg); }
+
+#scenario-cards-row {
+  display: flex; gap: .5rem; flex-wrap: wrap;
+  padding: .7rem 1rem;
+}
+#scenario-cards-row.hidden { display: none; }
+
+.sc-card {
+  font-family: 'DM Mono', monospace; font-size: .67rem;
+  padding: .35rem .75rem; border: 1.5px solid var(--border);
+  background: transparent; cursor: pointer; color: var(--ink);
+  display: flex; align-items: center; gap: .45rem;
+  transition: all .15s; letter-spacing: .03em;
+}
+.sc-card:hover { background: var(--panel); }
+.sc-card.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.sc-badge {
+  font-size: .56rem; padding: .1rem .35rem;
+  background: var(--accent2); color: white;
+  border-radius: 2px; letter-spacing: .04em;
+}
+.sc-card.active .sc-badge { background: var(--accent); }
+
+/* ── Szenario-Kontext-Box ────────────────────────────────────── */
+#scenario-ctx-box {
+  background: var(--paper); border: 1.5px solid var(--accent2);
+  border-top: none; padding: .9rem 1.1rem 1rem;
+  font-family: 'Fraunces', Georgia, serif; font-size: .83rem;
+  line-height: 1.7; color: var(--ink2);
+  box-shadow: 2px 2px 0 var(--shadow);
+  margin-bottom: .75rem;
+  animation: ctx-slide .18s ease-out;
+}
+@keyframes ctx-slide { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+.ctx-title {
+  font-family: 'DM Mono', monospace; font-size: .62rem;
+  letter-spacing: .1em; color: var(--accent2); text-transform: uppercase;
+  margin-bottom: .45rem;
+}
+.ctx-text { color: var(--ink); margin-bottom: .65rem; }
+.ctx-params {
+  font-family: 'DM Mono', monospace; font-size: .68rem;
+  background: var(--panel); border-left: 3px solid var(--accent);
+  padding: .45rem .7rem; margin-bottom: .6rem;
+  color: var(--ink2); line-height: 1.8;
+}
+.ctx-params .pv { color: var(--accent); font-weight: 600; }
+.ctx-reveal-wrap { margin-top: .5rem; }
+.ctx-reveal-btn {
+  font-family: 'DM Mono', monospace; font-size: .63rem;
+  padding: .3rem .75rem; border: 1.5px solid var(--accent2);
+  background: transparent; cursor: pointer; color: var(--accent2);
+  letter-spacing: .05em; transition: all .15s;
+}
+.ctx-reveal-btn:hover { background: var(--accent2); color: var(--bg); }
+.ctx-reveal-content {
+  display: none; margin-top: .6rem;
+  background: var(--panel); border-left: 3px solid var(--accent2);
+  padding: .55rem .8rem; font-size: .8rem;
+  line-height: 1.7; color: var(--ink);
+  animation: ctx-slide .15s ease-out;
+}
+.ctx-reveal-content.open { display: block; }
+
+/* ── Reflexions-Panel ────────────────────────────────────────── */
+#reflection-panel {
+  margin-top: 1rem;
+  border: 1.5px solid var(--border);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 var(--shadow);
+}
+.reflect-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .55rem 1rem; border-bottom: 1px solid var(--grid);
+}
+.reflect-head-label {
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  letter-spacing: .12em; color: var(--accent2);
+  border: 1px solid var(--accent2); padding: .18rem .45rem;
+}
+.reflect-toggle-btn {
+  font-family: 'DM Mono', monospace; font-size: .75rem;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--ink2); padding: 0 .3rem; transition: transform .2s;
+}
+.reflect-toggle-btn.collapsed { transform: rotate(-90deg); }
+.reflect-body { padding: .75rem 1rem; }
+.reflect-body.hidden { display: none; }
+.reflect-item {
+  padding: .6rem 0;
+  border-bottom: 1px dashed var(--grid);
+}
+.reflect-item:last-child { border-bottom: none; padding-bottom: 0; }
+.reflect-q {
+  font-family: 'Fraunces', Georgia, serif; font-size: .83rem;
+  line-height: 1.65; color: var(--ink); cursor: default;
+}
+.reflect-q-symbol {
+  font-family: 'DM Mono', monospace; font-size: .78rem;
+  color: var(--accent2); margin-right: .4rem; font-weight: 600;
+}
+.reflect-hint-btn {
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  margin-top: .4rem; padding: .22rem .6rem;
+  border: 1px solid var(--grid); background: transparent;
+  cursor: pointer; color: var(--ink2); letter-spacing: .04em;
+  transition: all .12s; display: inline-block;
+}
+.reflect-hint-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.reflect-hint {
+  display: none; margin-top: .4rem;
+  font-family: 'Fraunces', Georgia, serif; font-size: .78rem;
+  line-height: 1.65; color: var(--ink2);
+  border-left: 2px solid var(--accent2);
+  padding-left: .65rem;
+  animation: ctx-slide .15s ease-out;
+}
+.reflect-hint.open { display: block; }
+
+
+</style>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     LERNSCHICHTEN — JavaScript
+═══════════════════════════════════════════════════════════════════════ -->
+<script>
+// ══════════════════════════════════════════════════════════════════
+// DATEN: Szenarien
+// ══════════════════════════════════════════════════════════════════
+const SCENARIOS = {
+  reaktionszeiten: {
+    title: 'Reaktionszeiten', badge: 'GAMMA',
+    model: 'gamma', b0: -0.35, b1: 0.20,
+    extras: { kshape: 4 }, hlX: 0,
+    context: 'In einer kognitiven Studie wird die Reaktionszeit in Sekunden (0.4–1.3 s) durch den Schwierigkeitsgrad der Aufgabe vorhergesagt. Der Prädiktor ist z-transformiert (Mittelwert = 0, SD = 1). Reaktionszeiten sind streng positiv und rechtsschief — je schwieriger die Aufgabe (höheres x), desto länger die Reaktionszeit.',
+    paramDesc: 'β₀ = −0.35 · β₁ = 0.20 · k (Shape) = 4 · AV: Reaktionszeit in s (Log-Link: μ = exp(η))',
+    reveal: '<strong>Warum Gamma?</strong> Reaktionszeiten sind streng positiv (> 0) und rechtsschief — OLS würde negative Werte zulassen. Der Log-Link (μ = exp(η)) ist in der Praxis bevorzugt: keine Einschränkung an η, Koeffizienten als multiplikative Effekte interpretierbar. x = 0 (mittlere Schwierigkeit): μ = exp(−0.35) ≈ 0.70 s. x = 3 (hoch): μ ≈ 1.28 s. x = −3 (niedrig): μ ≈ 0.39 s. Varianz wächst quadratisch: Var = μ²/k — im Ridgeline-Plot breiter und rechtsschiefiger bei höherem x.'
+  },
+  arztbesuche: {
+    title: 'Arztbesuche', badge: 'POISSON',
+    model: 'poisson', b0: 1.2, b1: 0.5,
+    extras: {}, hlX: 0,
+    context: 'In einer Gesundheitsstudie wird die Anzahl der Arztbesuche im letzten Jahr durch den Stresslevel (z-standardisiert) vorhergesagt. Häufigkeiten sind ganzzahlig und können nicht negativ werden.',
+    paramDesc: 'β₀ = 1.20 · β₁ = 0.50',
+    reveal: '<strong>Warum Poisson?</strong> Zähldaten (ganzzahlig, ≥ 0) passen natürlich zur Poisson-Verteilung. Der Log-Link garantiert λ > 0. Wichtig: Bei Poisson gilt Varianz = Mittelwert — aktiviere das Prädiktionsintervall und sieh, wie die Streuungsbreite mit wachsendem x trichterförmig zunimmt.'
+  },
+  schlafstoerungen: {
+    title: 'Schlafstörungen', badge: 'NEG.BIN.',
+    model: 'negbin', b0: 1.0, b1: 0.6,
+    extras: { alpha: 0.8 }, hlX: 0.75,
+    context: 'Die Anzahl der Schlafstörungen pro Monat wird durch den Stresslevel vorhergesagt. Klinische Zähldaten zeigen oft mehr Streuung als der Mittelwert (Überdispersion), weil individuelle Unterschiede die Varianz zusätzlich erhöhen.',
+    paramDesc: 'β₀ = 1.00 · β₁ = 0.60 · α (Dispersion) = 0.80',
+    reveal: '<strong>Warum Neg. Binomial?</strong> Bei Überdispersion (Varianz > Mittelwert) unterschätzt Poisson die Streuung und produziert zu schmale Konfidenzintervalle. Die NB ergänzt den Dispersionsparameter α: Var = μ + αμ². Erhöhe α von 0.05 auf 1.5 und beobachte in der Ridgeline-Ansicht, wie die Verteilungen breiter werden.'
+  },
+  therapieerfolg: {
+    title: 'Therapieerfolg', badge: 'BINOMIAL',
+    model: 'binomial', b0: 0.0, b1: 0.8,
+    extras: { ntrials: 12 }, hlX: 0.75,
+    context: 'Die Anzahl erfolgreicher Therapiesitzungen (von 12) wird durch die Qualität der therapeutischen Beziehung vorhergesagt. Die Outcomes sind diskret, nicht-negativ und nach oben durch n = 12 begrenzt. Eine bessere Therapeuten-Klienten-Beziehung erhöht die Erfolgswahrscheinlichkeit.',
+    paramDesc: 'β₀ = 0.00 · β₁ = 0.80 · n (Versuche) = 12',
+    reveal: '<strong>Warum Binomial?</strong> Die Outcomes liegen in [0, n] — das verbietet OLS, der ins Unendliche extrapoliert. Der Logit-Link modelliert p ∈ (0, 1). Aktiviere das PI: Die Bänder schnüren sich an den Rändern zusammen, weil Var = np(1−p) gegen 0 geht, wenn p → 0 oder p → 1.'
+  },
+  therapieerfolg_bern: {
+    title: 'Therapieerfolg (ja/nein)', badge: 'BERNOULLI',
+    model: 'bernoulli', b0: 0.2, b1: 0.9,
+    extras: {}, hlX: 0.75,
+    context: 'Eine Therapiesitzung gilt als "erfolgreich" (1) oder "nicht erfolgreich" (0). Die Erfolgswahrscheinlichkeit wird durch die Therapiedauer (z-standardisiert) vorhergesagt. Das ist der Bernoulli-Spezialfall der Binomialverteilung mit n = 1 — das einfachste binäre Outcome-Modell.',
+    paramDesc: 'β₀ = 0.20 · β₁ = 0.90 · n = 1 (Bernoulli = Bin(1, p))',
+    reveal: '<strong>Bernoulli als Spezialfall:</strong> Bin(n=1, p) = Bernoulli(p). Das PMF zeigt nur zwei Balken: P(Y=0) = 1−p und P(Y=1) = p. Die S-Kurve (Logit-Link) garantiert p ∈ (0,1). Im Unterschied zur Binomialverteilung mit n > 1 gibt es hier keine "Anzahl Erfolge" — nur Erfolg oder Misserfolg. Vergleiche: Lade das <em>Therapieerfolg</em>-Szenario und setze n = 1 dort — du siehst dieselbe Kurve!'
+  },
+  lernleistung: {
+    title: 'Lernleistung', badge: 'OLS',
+    model: 'ols', b0: 0.0, b1: 0.6,
+    extras: { sigma: 0.7 }, hlX: 0,
+    context: 'In einer Lernstudie wird die Gedächtnisleistung (z-standardisiert) durch die Anzahl der Übungsdurchgänge vorhergesagt. Die Zielvariable ist kontinuierlich, annähernd symmetrisch und ohne natürliche Grenzen.',
+    paramDesc: 'β₀ = 0.00 · β₁ = 0.60 · σ = 0.70',
+    reveal: '<strong>Warum OLS / Normal?</strong> Standardisierte Testwerte sind kontinuierlich und symmetrisch. Die Normalverteilung ist angemessen: keine natürlichen Grenzen, Residuen symmetrisch verteilt. Der Identitäts-Link ist direkt interpretierbar: ein Durchgang mehr → β₁ Einheiten mehr im Test.'
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════
+// DATEN: Reflexionsfragen pro Modell
+// ══════════════════════════════════════════════════════════════════
+const REFLECTIONS = {
+  ols: [
+    {
+      q: 'Die Streuung σ bleibt über alle x-Werte konstant (Homoskedastizität). In welchen Forschungskontexten ist das realistisch — und wann wäre es ein Problem?',
+      hint: 'Standardisierte Testwerte oder kalibrierte Messungen zeigen oft stabile Varianz. Einkommen, Reaktionszeiten oder biologische Maße werden aber mit steigendem Mittelwert typischerweise variabler (Heteroskedastizität) — dann ist OLS nicht optimal.'
+    },
+    {
+      q: 'Setze β₁ auf einen stark negativen Wert und wähle x = −3. Für welche Art von Daten würde diese Vorhersage inhaltlich unmöglich sein?',
+      hint: 'Für Daten mit natürlicher Untergrenze 0 (Häufigkeiten, Zeiten, Preise) entstehen bei negativem β₁ und kleinen x-Werten unmögliche negative Vorhersagen — ein klarer Hinweis auf das falsche Modell.'
+    }
+  ],
+  poisson: [
+    {
+      q: 'Aktiviere das 95%-Prädiktionsintervall. Wie verhält sich die Bandbreite für kleine vs. große x-Werte — und warum ist der trichterförmige Verlauf bei Zähldaten statistisch korrekt?',
+      hint: 'Bei Poisson gilt Varianz = Mittelwert = λ. Höheres λ bei großem x → mehr absolute Streuung. Der wachsende Trichter ist kein Fehler, sondern korrekte Modellierung der Mean-Variance-Beziehung bei count data.'
+    },
+    {
+      q: 'Setze β₁ = 0. Was passiert mit den Verteilungen und dem Regressionsplot? Was entspricht das in einem Hypothesentest?',
+      hint: 'β₁ = 0 bedeutet kein Zusammenhang zwischen x und y — alle λ-Werte sind gleich, die Regressionslinie ist horizontal. Das entspricht der Nullhypothese H₀: β₁ = 0, die mit einem Wald-Test oder Likelihood-Ratio-Test geprüft wird.'
+    }
+  ],
+  negbin: [
+    {
+      q: 'Erhöhe α schrittweise von 0.05 auf 1.5 und beobachte die Ridgeline-Ansicht. Ab welchem Wert werden die Verteilungen merklich breiter — und was bedeutet das für die Prädiktionsintervalle?',
+      hint: 'Var = μ + αμ². Bei α → 0 nähert sich NegBin der Poisson an. Ab α ≈ 0.3–0.5 wird der Unterschied in den PI-Bändern deutlich. Hohe α-Werte (α > 1) signalisieren starke Überdispersion — häufig bei klinischen Populationen mit großer Heterogenität.'
+    },
+    {
+      q: 'Wie erkennt man in echten Daten, ob Poisson oder Neg. Binomial angemessener ist — schon vor der Modellierung?',
+      hint: 'Vergleiche Mittelwert und Varianz der rohen Zähldaten. Ist Varianz ≈ Mittelwert → Poisson. Ist Varianz >> Mittelwert → Überdispersion → Neg. Binomial in Betracht ziehen. In R: dispersiontest() aus dem AER-Paket, oder einfach Mittelwert vs. Varianz vergleichen.'
+    }
+  ],
+  gamma: [
+    {
+      q: 'Der kanonische Link für Gamma ist der Invers-Link (η = 1/μ). In der Praxis wird aber fast immer der Log-Link bevorzugt. Welche Vorteile könnte das haben?',
+      hint: 'Der Log-Link interpretiert Koeffizienten als multiplikative Effekte (Ratios), ist numerisch stabiler und harmoniert mit anderen log-linearen Modellen. Der Invers-Link hat einen engen Gültigkeitsbereich (η > 0 zwingend) und ist schwieriger zu interpretieren.'
+    },
+    {
+      q: 'Welche psychologischen oder medizinischen Messwerte wären typische Kandidaten für ein Gamma-GLM? Nenne 3 Beispiele und begründe kurz.',
+      hint: 'Reaktionszeiten, Überlebenszeiten, Verweildauer in Therapie, Cortisol-Spiegel, Augenbewegungslatenz, Einkommen — alle streng positiv, rechtsschief mit wachsender Streuung. Die Gamma-Verteilung erfasst genau diese Eigenschaften.'
+    }
+  ],
+  binomial: [
+    {
+      q: 'Aktiviere das PI und beobachte, wie es sich bei x = ±3 zusammenschnürt. Warum ist das kein Modellierungsfehler, sondern mathematisch notwendig?',
+      hint: 'Var = np(1−p). Bei p → 0 oder p → 1 geht die Varianz → 0. Das ist ein Feature: Die Binomialverteilung "weiß", dass extreme Wahrscheinlichkeiten weniger Spielraum lassen. In OLS wären die Bänder fälschlicherweise konstant.'
+    },
+    {
+      q: 'Setze β₁ = 0 und variiere β₀. Was entspricht β₀ in diesem Fall inhaltlich — und wie liest man p aus β₀ heraus?',
+      hint: 'β₁ = 0 → p ist konstant über alle x. β₀ kodiert dann die Basis-Erfolgswahrscheinlichkeit: p = 1/(1+e^(−β₀)) = σ(β₀). Für β₀ = 0 → p = 0.5. Das ist das Intercept-Only-Modell, die Baseline bei Gruppenvergleichen.'
+    },
+    {
+      q: 'Setze n = 1 (Versuche). Was passiert mit der Verteilungsdarstellung und der Regressionskurve? Was ist der Zusammenhang zum Bernoulli-Tab?',
+      hint: 'Bin(n=1, p) = Bernoulli(p). Mit n=1 zeigt die Binomialverteilung exakt dasselbe wie der Bernoulli-Tab: zwei Balken (P(Y=0) und P(Y=1)), dieselbe S-Kurve. Der Bernoulli-Tab ist also ein Spezialfall — zum Vergleich beide nebeneinander öffnen.'
+    }
+  ],
+  bernoulli: [
+    {
+      q: 'Der PMF zeigt nur zwei Balken. Was bedeutet die Höhe jedes Balkens — und wie verändert sich das Verhältnis P(Y=1)/P(Y=0) wenn du β₁ erhöhst?',
+      hint: 'P(Y=1) = p = σ(η), P(Y=0) = 1−p. Wenn β₁ > 0 und x wächst, steigt p → 1 und P(Y=0) fällt → 0. Die Odds Ratio für eine Einheit x: exp(β₁). Das ist das Kernresultat der logistischen Regression.'
+    },
+    {
+      q: 'Wähle x = 0 und notiere p. Ändere β₀ von −2 auf +2. Welche Transformation wandelt β₀ in p um — und warum kann man β₀ nicht direkt als Wahrscheinlichkeit lesen?',
+      hint: 'p = σ(β₀) = 1/(1+e^(−β₀)). Die Logit-Transformation ist nichtlinear: β₀ = 0 → p = 0.5; β₀ = 2 → p ≈ 0.88; β₀ = −2 → p ≈ 0.12. β₀ liegt auf der log-Odds-Skala, nicht auf der Wahrscheinlichkeitsskala — ein häufiges Missverständnis!'
+    }
+  ]
+};
+
+// ══════════════════════════════════════════════════════════════════
+// ZUSTAND
+// ══════════════════════════════════════════════════════════════════
+let activeScenarioId = null;
+let scenarioBarOpen = false;
+let reflectionOpen = true;
+
+// ══════════════════════════════════════════════════════════════════
+// SCHICHT 1: Szenario-Leiste
+// ══════════════════════════════════════════════════════════════════
+function initScenarioBar() {
+  const row = document.getElementById('scenario-cards-row');
+  Object.entries(SCENARIOS).forEach(([id, sc]) => {
+    const btn = document.createElement('button');
+    btn.className = 'sc-card';
+    btn.id = 'sc-card-' + id;
+    btn.innerHTML = `${sc.title} <span class="sc-badge">${sc.badge}</span>`;
+    btn.onclick = () => {
+      if (activeScenarioId === id) {
+        clearScenario();
+      } else {
+        loadScenario(id);
+      }
+    };
+    row.appendChild(btn);
+  });
+}
+
+function toggleScenarioBar() {
+  scenarioBarOpen = !scenarioBarOpen;
+  const row = document.getElementById('scenario-cards-row');
+  const btn = document.getElementById('sc-collapse-btn');
+  const ctx = document.getElementById('scenario-ctx-box');
+  row.classList.toggle('hidden', !scenarioBarOpen);
+  btn.classList.toggle('collapsed', !scenarioBarOpen);
+  if (!scenarioBarOpen) ctx.style.display = 'none';
+}
+
+function loadScenario(id) {
+  const sc = SCENARIOS[id];
+  if (!sc) return;
+
+  // 1. Modell-Tab wechseln falls nötig
+  if (currentModel !== sc.model) {
+    currentModel = sc.model;
+    lastLeftAxis = null; lastRightAxis = null;
+    if (typeof playInterval !== 'undefined' && playInterval) togglePlay();
+    initModel();
+  }
+
+  // 2. β₀, β₁ setzen
+  document.getElementById('b0').value = sc.b0;
+  document.getElementById('b1').value = sc.b1;
+
+  // 3. Highlight-X
+  const m = MODELS[currentModel];
+  if (m.xValues.includes(sc.hlX)) {
+    highlightX = sc.hlX;
+  }
+
+  // 4. Extra-Params (nach initModel() im DOM vorhanden)
+  if (sc.extras) {
+    Object.entries(sc.extras).forEach(([k, v]) => {
+      const el = document.getElementById(k);
+      if (el) {
+        el.value = v;
+        extras[k] = v;
+        const vEl = document.getElementById(k + '-val');
+        if (vEl) vEl.textContent = Number.isInteger(v) ? v : v.toFixed(2);
+      }
+    });
+  }
+
+  // 5. Rendern
+  renderAll();
+
+  // 6. Karten-Zustand
+  activeScenarioId = id;
+  document.querySelectorAll('.sc-card').forEach(c => c.classList.remove('active'));
+  const activeCard = document.getElementById('sc-card-' + id);
+  if (activeCard) activeCard.classList.add('active');
+
+  // 7. Kontext-Box anzeigen
+  updateScenarioCtx(id);
+
+  // 8. Reflexionsfragen auf das geladene Modell aktualisieren
+  updateReflection();
+}
+
+function clearScenario() {
+  activeScenarioId = null;
+  document.querySelectorAll('.sc-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('scenario-ctx-box').style.display = 'none';
+}
+
+function updateScenarioCtx(id) {
+  const sc = SCENARIOS[id];
+  const box = document.getElementById('scenario-ctx-box');
+  box.innerHTML = `
+    <div class="ctx-title">SZENARIO — ${sc.title.toUpperCase()}</div>
+    <div class="ctx-text">${sc.context}</div>
+    <div class="ctx-params">Geladene Parameter: <span class="pv">${sc.paramDesc}</span></div>
+    <div class="ctx-reveal-wrap">
+      <button class="ctx-reveal-btn" onclick="toggleCtxReveal(this)">▸ Warum diese Verteilungsfamilie?</button>
+      <div class="ctx-reveal-content">${sc.reveal}</div>
+    </div>`;
+  box.style.display = 'block';
+}
+
+function toggleCtxReveal(btn) {
+  const content = btn.nextElementSibling;
+  const open = content.classList.toggle('open');
+  btn.textContent = open ? '▾ Warum diese Verteilungsfamilie?' : '▸ Warum diese Verteilungsfamilie?';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SCHICHT 2: Reflexionsfragen
+// ══════════════════════════════════════════════════════════════════
+function updateReflection() {
+  const panel = document.getElementById('reflection-panel');
+  if (!panel) return;
+  const qs = REFLECTIONS[currentModel];
+  if (!qs || qs.length === 0) { panel.innerHTML = ''; return; }
+
+  const bodyHtml = qs.map((item, i) => `
+    <div class="reflect-item">
+      <div class="reflect-q">
+        <span class="reflect-q-symbol">?</span>${item.q}
+      </div>
+      <button class="reflect-hint-btn" onclick="toggleReflectHint(this)">Hinweis anzeigen</button>
+      <div class="reflect-hint">${item.hint}</div>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="reflect-head">
+      <span class="reflect-head-label">REFLEXIONSFRAGEN</span>
+      <button class="reflect-toggle-btn" id="reflect-toggle-btn" onclick="toggleReflectionPanel(this)">▾</button>
+    </div>
+    <div class="reflect-body" id="reflect-body">${bodyHtml}</div>`;
+  
+  if (!reflectionOpen) {
+    document.getElementById('reflect-body').classList.add('hidden');
+    document.getElementById('reflect-toggle-btn').classList.add('collapsed');
+  }
+}
+
+function toggleReflectHint(btn) {
+  const hint = btn.nextElementSibling;
+  const open = hint.classList.toggle('open');
+  btn.textContent = open ? 'Hinweis ausblenden' : 'Hinweis anzeigen';
+}
+
+function toggleReflectionPanel(btn) {
+  reflectionOpen = !reflectionOpen;
+  document.getElementById('reflect-body').classList.toggle('hidden', !reflectionOpen);
+  btn.classList.toggle('collapsed', !reflectionOpen);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HOOK: Reflexion bei Tab-Wechsel aktualisieren
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('tab')) {
+    // Tab wurde geklickt → Reflexion updaten und Szenario-Auswahl aufheben
+    setTimeout(updateReflection, 80);
+    activeScenarioId = null;
+    document.querySelectorAll('.sc-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('scenario-ctx-box').style.display = 'none';
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════════════════════════
+initScenarioBar();
+updateReflection();
+</script>
