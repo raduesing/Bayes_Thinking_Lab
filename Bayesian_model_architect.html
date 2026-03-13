@@ -116,7 +116,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 /* ─── Guide Banner ───────────────────────────── */
 #guide{background:var(--paper);border-bottom:2.5px solid var(--a4);flex-shrink:0;
        overflow:hidden;transition:max-height .28s ease}
-#guide.open{max-height:175px}
+#guide.open{max-height:200px}
 #guide.closed{max-height:0;border-bottom-width:0}
 .g-inner{padding:.55rem 1rem .6rem}
 .g-steps{display:flex;align-items:center;gap:.3rem;margin-bottom:.3rem}
@@ -135,6 +135,10 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 .g-btn:hover{border-color:var(--a4);color:var(--a4)}
 .g-btn.prim{background:var(--a4);color:var(--paper);border-color:var(--a4)}
 .g-btn.prim:hover{opacity:.85}
+.g-link-btn{font-family:'DM Mono',monospace;font-size:.62rem;display:inline-block;
+  margin-top:.3rem;padding:.22rem .7rem;background:var(--a3);color:var(--paper);
+  border:1.5px solid var(--a3);text-decoration:none;transition:opacity .15s;cursor:pointer}
+.g-link-btn:hover{opacity:.8}
 
 /* ─── Canvas area ────────────────────────────── */
 #ca{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-height:0}
@@ -169,7 +173,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 #exbox{margin:.5rem .8rem .8rem;padding:.55rem .7rem;
        background:var(--panel);border-left:4px solid var(--a4);
        font-family:'DM Mono',monospace;font-size:.62rem;line-height:1.75;
-       color:var(--ink2);display:none}
+       color:var(--ink2)}
 .ex-title{color:var(--ink);font-weight:500;margin-bottom:.32rem;font-size:.7rem;letter-spacing:.01em}
 .ex-sec{margin-bottom:.35rem}
 .ex-sec:last-child{margin:0}
@@ -194,7 +198,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
   </div>
   <div class="hdr-btns">
     <button class="hbtn" id="btn-guide" onclick="toggleGuide()">📖 Guide</button>
-    <button class="hbtn" id="btn-ex"    onclick="toggleEx()">💡 Erklärungen</button>
+    <button class="hbtn" id="btn-ex"    onclick="toggleEx()" title="Klicke auf einen Knoten oder Formelzeile für Erklärungen — Infopanel ein/aus">💡 Erklärungen</button>
     <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
@@ -245,8 +249,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 
   <div class="sc">
     <div class="sc-h"><span class="sn">5</span> Detailtiefe</div>
-    <div class="detail-g">
-      <button class="db"     data-d="simple" onclick="setDet(this)">Minimal</button>
+    <div class="detail-g" style="grid-template-columns:1fr 1fr">
       <button class="db sel" data-d="medium" onclick="setDet(this)">Standard</button>
       <button class="db"     data-d="full"   onclick="setDet(this)">Voll</button>
     </div>
@@ -285,7 +288,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
       <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
       <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
       <span class="li"><span class="lr" style="color:var(--ink2)"></span>Plate</span>
-      <span class="li" style="opacity:.55">○ latent &nbsp; ◉ beobachtet</span>
+      <span class="li" style="opacity:.55">○ latent &nbsp; □ beobachtet</span>
     </div>
   </div>
 
@@ -336,10 +339,7 @@ let _t=null, GSTEP=0, GOPEN=true;
 
 const M = {
   fam:'normal', out:'y',
-  preds:[
-    {name:'x₁', pr:{fam:'normal',mu:0,sig:2.5}},
-    {name:'x₂', pr:{fam:'normal',mu:0,sig:2.5}},
-  ],
+  preds:[],
   ml:false, gv:'j', ret:'int',
   pr:{
     alpha: {fam:'normal',      mu:0,  sig:10 },
@@ -357,22 +357,25 @@ const M = {
 // ═══════════════════════════════════════════════════════
 const STEPS=[
   {t:'Schritt 1 — Likelihood: Wie entstehen deine Daten?',
-   tx:'Der erste Schritt beim Modellaufbau: Welcher Prozess hat deine Daten erzeugt? <b>Gaussian</b> → stetige, annähernd symmetrisch verteilte Daten (z.B. Körpergröße, Reaktionszeiten nach Bereinigung). <b>Student-t</b> → wie Gaussian, aber robuster gegen Ausreißer. <b>Bernoulli</b> → binäre Ja/Nein-Outcomes (Kauf, Rückfall, Überleben). <b>Poisson</b> → Ereigniszählungen (Anzahl Fehler, Besuche). <b>Gamma</b> → positive, rechtsschiefe Werte (Wartezeiten, Kosten). Wähle jetzt links.',
+   tx:'Der erste Schritt: Welcher Prozess hat deine Daten erzeugt? <b>Gaussian</b> → stetig, symmetrisch (z.B. IQ-Werte, Körpergröße, z-standardisierte Testwerte). <b>Student-t</b> → wie Gaussian, robuster gegen Ausreißer (z.B. Reaktionszeiten nach Ausreißerbereinigung, Einkommensdaten). <b>Bernoulli</b> → binäre Ja/Nein-Outcomes (Kauf, Rückfall, Therapieerfolg). <b>Poisson</b> → Ereigniszählungen (Arztbesuche, Fehleranzahl). <b>Gamma</b> → positiv, rechtsschief (Reaktionszeiten in ms/s, Wartezeiten, Cortisol). Wähle jetzt links.',
    hl:'sc-lk'},
   {t:'Schritt 2 — Variablen: Was modellierst du?',
-   tx:'Gib der abhängigen Variable (AV) einen sinnvollen Namen. Soll nur der Mittelwert geschätzt werden? → kein Prädiktor nötig. Hast du erklärende Variablen (Alter, Dosis, Gruppe)? → füge sie als Prädiktoren hinzu. Jeder Prädiktor bekommt einen eigenen Steigungsparameter β. Im Diagramm siehst du live, wie das Modell wächst.',
+   tx:'Gib der abhängigen Variable (AV) einen sinnvollen Namen. Kein Prädiktor nötig, wenn nur der Mittelwert interessiert. Hast du erklärende Variablen? → füge sie als Prädiktoren hinzu (max. 4). <b>Hinweis zu Namen:</b> Die Prädiktor-Namen im Feld sind rein für die Diagrammdarstellung — sie erscheinen in der Formelnotation als Variablenbezeichner. Sie ändern nichts an der Modellstruktur selbst. Im Diagramm siehst du live, wie das Modell wächst.',
    hl:'sc-var'},
   {t:'Schritt 3 — Struktur: Flach oder hierarchisch?',
-   tx:'Gibt es eine Gruppenstruktur in deinen Daten — z.B. Messungen innerhalb von Personen, Schulen, Kliniken? Dann ist ein <b>hierarchisches Modell</b> angebracht. Die Gruppen bekommen eigene Parameter (α_j), die aber aus einem gemeinsamen <b>Hyperprior</b> stammen. Das erzeugt <em>Partial Pooling</em>: Gruppen mit wenig Daten werden zur Gesamtmitte gezogen, Gruppen mit vielen Daten behalten ihren eigenen Schätzwert.',
+   tx:'Gibt es eine Gruppenstruktur in deinen Daten (Personen, Schulen, Kliniken)? Dann ist ein <b>hierarchisches Modell</b> angebracht. Gruppen bekommen eigene Parameter (α_j) aus einem gemeinsamen <b>Hyperprior</b> — das erzeugt <em>Partial Pooling</em>. Hierarchische Strukturen können mit <b>(Generalized) Linear Mixed Models (GLMM)</b> ausgewertet werden. Hier geht es direkt zum interaktiven Tutorial:<br><br><a href="GLMM_interactive.html" target="_blank" class="g-link-btn">→ GLMM Interactive Tutorial</a>',
    hl:'sc-str'},
   {t:'Schritt 4 — Das Modelldiagramm verstehen',
-   tx:'Schau das Diagramm in der Mitte an! <b>Offene Kreise (○)</b> sind unbekannte Parameter — sie brauchen Priors. <b>Der Punkt (•)</b> ist der deterministische Prädiktor μ_i: er wird aus α, β und x berechnet, ohne Zufall. <b>Der schattierte Doppelkreis (◉)</b> sind deine beobachteten Daten y. Die Pfeile zeigen die generative Richtung: Prior → Parameter → μ_i → y. Jede Ebene des Diagramms entspricht einer Zeile der Formel rechts.',
+   tx:'Schau das Diagramm an! <b>Offene Kreise (○)</b> = unbekannte Parameter mit Priors. <b>Punkt (•)</b> = deterministischer Prädiktor μ_i, aus α, β und x berechnet — kein Zufall, kein Prior. <b>Formelzeile</b> = zeigt exakt welcher Parameter welchen Term beiträgt. <b>Rechteck (□)</b> = beobachtete Daten y. Pfeile zeigen generative Richtung. Jede Ebene = eine Zeile in der Formel rechts. <b>Tipp:</b> Klicke 💡 Knoten-Info oben, dann auf beliebige Knoten für Details.',
    hl:null},
-  {t:'Schritt 5 — Priors: Vorwissen explizit machen',
-   tx:'Jeder Parameter (offener Kreis) braucht einen <b>Prior</b> — eine Verteilung, die dein Vorwissen über seinen plausiblen Wertebereich beschreibt. Sieh die kleinen Kurven in den Kreisen: sie zeigen die Prior-Form! Ändere die Slider links und beobachte, wie sich die Kurve im Knoten live anpasst. Klicke auf ▸ bei einem Prior für eine ausführliche Erklärung. Klicke auf jeden Knoten im Diagramm für weitere Infos.',
+  {t:'Schritt 5 — Das Modell von unten nach oben lesen',
+   tx:'Ein Bayesianisches Modell liest man von unten nach oben. <b>Unten: die Daten y.</b> Sie sind gemäß der <em>Likelihood</em> verteilt — z.B. y_i ~ Normal(μ_i, σ). <b>Darüber: der deterministische Teil</b> — μ_i setzt sich aus den Regressionsparametern zusammen: μ_i = α + β·x_i. Das ist die Gleichung ohne Zufall. <b>Darüber: der stochastische Teil</b> — jeder offene Kreis (α, β, σ…) ist unbekannt und braucht einen <em>Prior</em>, der das Vorwissen darüber beschreibt. Priors fließen von oben ins Modell, Daten von unten — der <em>Posterior</em> entsteht aus dem Treffen beider.',
+   hl:null},
+  {t:'Schritt 6 — Priors: Vorwissen explizit machen',
+   tx:'Jeder Parameter braucht einen <b>Prior</b> — eine Verteilung über seinen plausiblen Wertebereich. Die kleinen Kurven in den Kreisen zeigen die Prior-Form live! Ändere die Slider links und beobachte, wie sich die Kurve anpasst. Klicke auf ▸ bei einem Prior-Block für eine Erklärung. <b>Klicke auf Knoten im Diagramm</b> (💡 Knoten-Info aktiv) für kontextuelle Hinweise zu jedem Parameter.',
    hl:'sc-pr'},
-  {t:'Fertig — Dein vollständiges Bayesianisches Modell',
-   tx:'Das Diagramm zeigt das komplette Modell. Rechts siehst du die formale McElreath-Notation — genau wie im Lehrbuch. Das Modell ist nun bereit für den <b>brms Model Builder</b>: dort übersetze es in R-Code. <b>Tipp:</b> Klicke auf beliebige Knoten oder Formelzeilen für kontextuelle Erklärungen. Der Guide bleibt über den 📖-Button oben immer erreichbar.',
+  {t:'Fertig — Dein Modell verstehen und weiterdenken',
+   tx:'Das Diagramm zeigt dein vollständiges Modell in Kruschke-Notation. Rechts siehst du die McElreath-Notation. <b>Der Architect ist bewusst didaktisch gehalten</b> — er hilft dir, die Struktur Bayesianischer Modelle zu verstehen: Welche Verteilung? Welche Parameter brauchen Priors? Wie hängt alles zusammen? <br><br>Für komplexere Modelle und tatsächlichen R-Code empfiehlt sich der <b>brms Model Builder</b> — dort baust du das Modell Schritt für Schritt selbst und erzeugst direkt ausführbaren brms-Code. Architect und Builder teilen dieselbe Logik, aber sind eigenständige Werkzeuge.<br><br><a href="Brms_model_builder.html" target="_blank" class="g-link-btn">→ brms Model Builder</a>',
    hl:null},
 ];
 function renderGuide(){
@@ -431,10 +434,12 @@ const EX={
     tip:'Schau dir σ_α im Posterior an: er sagt dir, wie unterschiedlich die Gruppen nach Kontrolle der Prädiktoren noch sind.'},
   det:{title:'Deterministischer Knoten (•)',
     what:'Der kleine ausgefüllte Punkt (•) ist der lineare Prädiktor μ_i. Er ist vollständig durch seine Eingaben bestimmt — keine Zufälligkeit, kein Prior. μ_i = α + β₁x₁ + β₂x₂ + …',
-    why:'Deterministisch = Kruschke\'s kleiner schwarzer Punkt. Es gibt nichts zu schätzen, nur zu berechnen.',
+    whyLbl:'Wie funktioniert das?',
+    why:'Deterministisch = Kruschkes kleiner schwarzer Punkt. Es gibt nichts zu schätzen, nur zu berechnen.',
     tip:'Bei Bernoulli/Poisson/Gamma wird μ_i durch eine Link-Funktion transformiert: logit⁻¹(μ) für Wahrscheinlichkeiten, exp(μ) für positive Werte.'},
-  y:{title:'Beobachtete Daten y_i (◉)',
-    what:'Der schattierte Doppelkreis (◉) steht für beobachtete Daten. Bekannt, nicht geschätzt. Bayes dreht die Logik um: Gegeben y, was ist wahrscheinlich für θ?',
+  y:{title:'Beobachtete Daten y_i (□)',
+    what:'Das Rechteck (□) steht für beobachtete Daten. Bekannt, nicht geschätzt. Bayes dreht die Logik um: Gegeben y, was ist wahrscheinlich für θ?',
+    whyLbl:'Die Likelihood',
     why:'P(θ|y) ∝ P(y|θ) · P(θ) — Posterior ∝ Likelihood × Prior. Das Diagramm liest sich von oben (Hyperpriors) nach unten (Daten).',
     tip:'Kruschkes Notation: Schattiert = beobachtet, unschattiert = latent/unbekannt. Alles, was wir nicht sehen, braucht einen Prior.'}
 };
@@ -530,27 +535,75 @@ function se(tag,a={},txt){
 // ═══════════════════════════════════════════════════════
 //  LAYOUT — bigger, more spacious
 // ═══════════════════════════════════════════════════════
-const R=38, OR=34;
+const R=42, OR=38;
+
+// ── Approx monospace char width at 13px ──
+const _CW=8.4;
+
+// Returns array of {text, nodeId} for formula terms
+function buildFormulaTerms(){
+  const K=M.preds.length, isML=M.ml, j=M.gv;
+  const lhs=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
+  const prefix=M.fam==='bernoulli'?'logit⁻¹(':'';
+  const expPfx=(M.fam==='poisson'||M.fam==='gamma')?'exp(':'';
+  const suffix=(prefix||expPfx)?')':'';
+  const pfx=prefix||expPfx;
+  const terms=[];
+  terms.push({text:`${lhs}ᵢ = ${pfx}`,nodeId:null});
+  const aLbl=isML?`α[${j}]`:'α';
+  terms.push({text:aLbl,nodeId:'alpha'});
+  M.preds.forEach((p,i)=>{
+    const bSym=K>1?`β${SUB[i]||i+1}`:'β';
+    const xSym=(p.name||`x${i+1}`)+'ᵢ';
+    terms.push({text:' + ',nodeId:null});
+    terms.push({text:bSym,nodeId:`b${i}`}); // arrow target
+    terms.push({text:'·'+xSym,nodeId:null});
+  });
+  if(suffix) terms.push({text:suffix,nodeId:null});
+  return terms;
+}
+
+// Compute x-center of each node's term given formula start x
+function computeTermCenters(terms, startX){
+  const map={};
+  let cx=startX;
+  terms.forEach(t=>{
+    const w=t.text.length*_CW;
+    if(t.nodeId) map[t.nodeId]=cx+w/2;
+    cx+=w;
+  });
+  return map; // nodeId → center x
+}
+
+function formulaWidth(terms){
+  return terms.reduce((s,t)=>s+t.text.length*_CW,0);
+}
 
 function buildLayout(){
-  const W=740, H=590, cx=W/2;
+  // Responsive: use actual SVG size
+  const svgEl=document.getElementById('svg');
+  const W=Math.max(680,svgEl.clientWidth||740);
+  const H=Math.max(520,svgEl.clientHeight||590);
+  const cx=W/2;
   const K=M.preds.length, isML=M.ml;
   const hS=hasSig(), hN=hasNu();
   const nodes={}, edges=[], plates=[];
 
   // ── Parameter nodes ──────────────────────────────────
   const pNodes=[];
-  pNodes.push({id:'alpha', lbl:isML?`α[${M.gv}]`:'α', sub:'Intercept', col:'int', pk:'alpha'});
+  pNodes.push({id:'alpha',lbl:isML?`α[${M.gv}]`:'α',sub:'Intercept',col:'int',pk:'alpha'});
   M.preds.forEach((p,i)=>pNodes.push({
     id:`b${i}`, lbl:K>1?`β${SUB[i]||i+1}`:'β', sub:p.name||`x${i+1}`, col:'beta',
     pk:`beta_${i}`, prObj:p.pr
   }));
   if(hS) pNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma'});
-  if(hN) pNodes.push({id:'nu',   lbl:'ν',sub:'Freiheitsgrade',col:'nu', pk:'nu'});
+  if(hN) pNodes.push({id:'nu',   lbl:'ν',sub:'df',col:'nu',pk:'nu'});
 
+  // Wide spacing — use 80% of width for params
   const nP=pNodes.length;
-  const pY=isML?290:230;
-  const sp=Math.min(130,(W-110)/(Math.max(nP,1)));
+  const pY=isML?330:220;
+  const usableW=W*0.82;
+  const sp=nP<=1?0:Math.min(170,usableW/(nP-1));
   const px0=cx-(nP-1)*sp/2;
   pNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
 
@@ -559,34 +612,31 @@ function buildLayout(){
     const nd=nodes[p.id];
     const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu:p.prObj;
     const pid=`pl_${p.id}`;
-    // Position: directly above the node with some spacing
-    nodes[pid]={ id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+50),col:p.col,parentId:p.id };
+    nodes[pid]={id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+52),col:p.col,parentId:p.id};
     edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
   });
 
-  // ── Multilevel hyperpriors ───────────────────────────
+  // ── Multilevel hyperpriors ────────────────────────────
   if(isML){
     const ax=nodes['alpha'].x;
-    nodes['mu_a'] ={id:'mu_a', lbl:'μ_α',sub:'Hyper-Mittel', col:'re',pk:'mu_a', type:'stoch',x:ax-70,y:110};
-    nodes['sig_a']={id:'sig_a',lbl:'σ_α',sub:'Hyper-Streuung',col:'re',pk:'sig_a',type:'stoch',x:ax+70,y:110};
-    // their prior labels
-    nodes['pl_mu_a'] ={id:'pl_mu_a', type:'plbl',prObj:M.pr.mu_a, x:ax-70,y:110-(R+50),col:'re',parentId:'mu_a'};
-    nodes['pl_sig_a']={id:'pl_sig_a',type:'plbl',prObj:M.pr.sig_a,x:ax+70,y:110-(R+50),col:'re',parentId:'sig_a'};
+    nodes['mu_a'] ={id:'mu_a', lbl:'μ_α',sub:'Hyper-Mittel',  col:'re',pk:'mu_a', type:'stoch',x:ax-80,y:155};
+    nodes['sig_a']={id:'sig_a',lbl:'σ_α',sub:'Hyper-Streuung',col:'re',pk:'sig_a',type:'stoch',x:ax+80,y:155};
+    nodes['pl_mu_a'] ={id:'pl_mu_a', type:'plbl',prObj:M.pr.mu_a, x:ax-80,y:155-(R+52),col:'re',parentId:'mu_a'};
+    nodes['pl_sig_a']={id:'pl_sig_a',type:'plbl',prObj:M.pr.sig_a,x:ax+80,y:155-(R+52),col:'re',parentId:'sig_a'};
     edges.push({fr:'pl_mu_a', to:'mu_a', col:'re',isPL:true});
     edges.push({fr:'pl_sig_a',to:'sig_a',col:'re',isPL:true});
     edges.push({fr:'mu_a', to:'alpha',col:'re'});
     edges.push({fr:'sig_a',to:'alpha',col:'re'});
-    // Remove individual alpha prior label
     delete nodes['pl_alpha'];
     const pli=edges.findIndex(e=>e.fr==='pl_alpha');
     if(pli>=0) edges.splice(pli,1);
-    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:ax-78,y:pY-75,w:156,h:160,col:'re',dash:true});
+    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:ax-90,y:pY-65,w:180,h:165,col:'re',dash:true});
     if(M.ret==='slope'&&K>0){
       const bx=nodes['b0'].x;
-      nodes['mu_b'] ={id:'mu_b', lbl:'μ_β',sub:'Hyper-Mittel β', col:'re',pk:'mu_b', type:'stoch',x:bx-65,y:110};
-      nodes['sig_b']={id:'sig_b',lbl:'σ_β',sub:'Hyper-Streuung β',col:'re',pk:'sig_b',type:'stoch',x:bx+65,y:110};
-      nodes['pl_mu_b'] ={id:'pl_mu_b', type:'plbl',prObj:M.pr.mu_b, x:bx-65,y:110-(R+50),col:'re',parentId:'mu_b'};
-      nodes['pl_sig_b']={id:'pl_sig_b',type:'plbl',prObj:M.pr.sig_b,x:bx+65,y:110-(R+50),col:'re',parentId:'sig_b'};
+      nodes['mu_b'] ={id:'mu_b', lbl:'μ_β',sub:'Hyper-Mittel β', col:'re',pk:'mu_b', type:'stoch',x:bx-70,y:155};
+      nodes['sig_b']={id:'sig_b',lbl:'σ_β',sub:'Hyper-Streuung β',col:'re',pk:'sig_b',type:'stoch',x:bx+70,y:155};
+      nodes['pl_mu_b'] ={id:'pl_mu_b', type:'plbl',prObj:M.pr.mu_b, x:bx-70,y:155-(R+52),col:'re',parentId:'mu_b'};
+      nodes['pl_sig_b']={id:'pl_sig_b',type:'plbl',prObj:M.pr.sig_b,x:bx+70,y:155-(R+52),col:'re',parentId:'sig_b'};
       edges.push({fr:'pl_mu_b', to:'mu_b', col:'re',isPL:true});
       edges.push({fr:'pl_sig_b',to:'sig_b',col:'re',isPL:true});
       edges.push({fr:'mu_b',to:'b0',col:'re'});
@@ -597,35 +647,56 @@ function buildLayout(){
     }
   }
 
-  // ── Deterministic node ───────────────────────────────
-  const detY=isML?430:380;
+  // ── Deterministic formula node ────────────────────────
+  const detY=isML?480:370;
+  const terms=buildFormulaTerms();
+  const fw=Math.max(formulaWidth(terms)+56, 180);
+  const boxHalfW=fw/2;
+  // All positions relative to node center (cx)
+  // Text starts at -boxHalfW+28 (left padding inside box)
+  let relX=-boxHalfW+28;
+  const relTermCenters={};
+  terms.forEach(t=>{
+    const tw=t.text.length*_CW;
+    if(t.nodeId) relTermCenters[t.nodeId]=relX+tw/2;
+    relX+=tw;
+  });
   const detLbl=M.fam==='bernoulli'?'p_i':M.fam==='poisson'?'λ_i':'μ_i';
-  nodes['det']={id:'det',type:'det',lbl:detLbl,formula:buildLinear(),x:cx,y:detY};
+  nodes['det']={id:'det',type:'det',lbl:detLbl,
+    formula:buildLinear(), formulaTerms:terms,
+    relTermCenters, boxHalfW,
+    x:cx, y:detY};
 
-  // ── Data node ────────────────────────────────────────
-  const dataY=detY+115;
+  // ── Data node ─────────────────────────────────────────
+  const dataY=detY+140;
   nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
 
-  // ── Observation plate ────────────────────────────────
+  // ── Observation plate ─────────────────────────────────
   if(DET!=='simple'){
-    const pm=Math.max(85,70+K*14);
-    plates.push({id:'obs',lbl:isML?'i = 1…Nⱼ':'i = 1…N',x:cx-pm,y:detY-62,w:pm*2,h:210,col:'data',dash:false});
+    const pm=Math.max(fw/2+30, 90);
+    plates.push({id:'obs',lbl:isML?'i = 1…Nⱼ':'i = 1…N',x:cx-pm,y:detY-68,w:pm*2,h:240,col:'data',dash:false});
   }
 
-  // ── Covariate boxes (full detail) ────────────────────
+  // ── Covariate boxes ────────────────────────────────────
   if(DET==='full'){
     M.preds.forEach((p,i)=>{
-      nodes[`xv${i}`]={id:`xv${i}`,type:'cov',lbl:p.name||`x${i+1}`,x:cx-60+(i*36),y:detY+18,col:'ink2'};
+      nodes[`xv${i}`]={id:`xv${i}`,type:'cov',lbl:p.name||`x${i+1}`,x:cx-50+(i*38),y:detY+20,col:'ink2'};
       edges.push({fr:`xv${i}`,to:'det',col:'ink2',dash:true});
     });
   }
 
-  // ── Structural edges ─────────────────────────────────
+  // ── Structural edges ──────────────────────────────────
+  // α and β → det: arrow tip targets the term in the formula box
   pNodes.forEach(p=>{
-    if(p.id!=='sigma'&&p.id!=='nu') edges.push({fr:p.id,to:'det',col:p.col});
+    if(p.id!=='sigma'&&p.id!=='nu'){
+      // termX is ABSOLUTE: node.x + relative offset
+      const rel=relTermCenters[p.id]??0;
+      const termX=cx+rel; // absolute x of term center
+      edges.push({fr:p.id,to:'det',col:p.col,termX});
+    }
   });
-  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-42});
-  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 42});
+  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-55});
+  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 55});
   edges.push({fr:'det',to:'y',col:'data'});
 
   return {nodes,edges,plates,W,H};
@@ -688,24 +759,40 @@ function drawPlate(g,p){
 function drawEdge(g,a,b,edge){
   const c=C[edge.col]?C[edge.col]():C.ink2();
   if(a.type==='plbl'){
-    // Simple short vertical arrow from prior label down to node
+    // Vertical dashed arrow from prior label to param node
     const x=a.x, y1=a.y+12, y2=b.y-R-6;
-    g.appendChild(se('line',{x1:x,y1,x2:x,y2,stroke:c,'stroke-width':'1.4',
-      'stroke-dasharray':'4,2.5',opacity:'0.65',
+    g.appendChild(se('line',{x1:x,y1,x2:x,y2,stroke:c,'stroke-width':'1.5',
+      'stroke-dasharray':'5,3',opacity:'0.7',
       'marker-end':`url(#as-${edge.col||'ink2'})`}));
     return;
   }
-  const rA=a.type==='det'?7:a.type==='obs'?OR:R;
-  const rB=b.type==='det'?7:b.type==='obs'?OR:R;
-  const dx=b.x-a.x,dy=b.y-a.y,len=Math.sqrt(dx*dx+dy*dy)||1;
-  const ux=dx/len,uy=dy/len;
-  const x1=(a.x+ux*(rA+2)).toFixed(1), y1=(a.y+uy*(rA+2)).toFixed(1);
-  const x2=(b.x-ux*(rB+8)).toFixed(1), y2=(b.y-uy*(rB+8)).toFixed(1);
-  const mX=((+x1+ +x2)/2+(edge.crv||0)).toFixed(1), mY=(( +y1+ +y2)/2).toFixed(1);
-  const d=`M${x1},${y1} C${x1},${mY} ${mX},${mY} ${x2},${y2}`;
-  g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.1':'1.7',
-    fill:'none','stroke-dasharray':edge.dash?'4,2':'',
-    'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.75'}));
+  const rA=a.type==='det'?8:a.type==='obs'?23:R;
+  const rB=b.type==='det'?8:b.type==='obs'?23:R;
+
+  // For α/β→det edges: arrow tip lands at the term's x-position in the formula
+  let tx2=b.x, ty2=b.y;
+  if(b.type==='det' && edge.termX!=null){
+    tx2=edge.termX;
+    ty2=b.y-10; // top of formula box
+  }
+
+  const dx=tx2-a.x, dy=ty2-a.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const ux=dx/len, uy=dy/len;
+  const x1=(a.x+ux*(rA+3)).toFixed(1), y1=(a.y+uy*(rA+3)).toFixed(1);
+  // End point: for term-targeted edges, land exactly at termX
+  const x2=edge.termX!=null?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
+  const y2=edge.termX!=null?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
+  // Control point with gentle curve
+  const midX=((+x1+ +x2)/2).toFixed(1);
+  const midY=((+y1+ +y2)/2).toFixed(1);
+  const cx1=(+x1+(edge.crv||0)*0.3).toFixed(1);
+  const cy1=(+y1+(+y2- +y1)*0.3).toFixed(1);
+  const cx2=(+x2+(edge.crv||0)*0.3).toFixed(1);
+  const cy2=(+y2-(+y2- +y1)*0.3).toFixed(1);
+  const d=`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
+  g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.2':'1.8',
+    fill:'none','stroke-dasharray':edge.dash?'5,2.5':'',
+    'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
 }
 
 function drawNode(g,node){
@@ -778,32 +865,63 @@ function getPr(node){
 
 function drawDet(g,node){
   const c=C.ink2(); const isAct=ACTIVE===node.id;
-  // Big dot
-  g.appendChild(se('circle',{cx:'0',cy:'0',r:'9',fill:c,opacity:isAct?'0.85':'0.55'}));
-  if(isAct) g.appendChild(se('circle',{cx:'0',cy:'0',r:'13',fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.25'}));
+  const terms=node.formulaTerms||[];
+  const bHW=node.boxHalfW||100;
+  const relTCs=node.relTermCenters||{};
 
   if(DET==='simple'){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'9',fill:c,opacity:isAct?'0.85':'0.55'}));
     g.appendChild(se('text',{x:'15',y:'1','dominant-baseline':'middle',fill:c,
       'font-family':"'DM Mono',monospace",'font-size':'13',opacity:'0.85'},node.lbl));
     return;
   }
-  // Formula centered below the dot
-  g.appendChild(se('text',{x:'0',y:'-20','text-anchor':'middle',
-    fill:C.ink(),'font-family':"'DM Mono',monospace",'font-size':'13','font-weight':'500',opacity:'0.9'},
-    `${node.lbl} =`));
-  g.appendChild(se('text',{x:'0',y:'-5','text-anchor':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.formula||''));
+
+  // ── Formula box (all coords relative to node center) ──
+  const bL=-bHW, bT=-20, bW=bHW*2, bH=40;
+
+  g.appendChild(se('rect',{x:bL,y:bT,width:bW,height:bH,rx:'6',
+    fill:C.paper(),'fill-opacity':'0.9',stroke:c,'stroke-width':'1.2','stroke-opacity':'0.4'}));
+  if(isAct) g.appendChild(se('rect',{x:bL-3,y:bT-3,width:bW+6,height:bH+6,rx:'8',
+    fill:'none',stroke:c,'stroke-width':'1.5',opacity:'0.2'}));
+
+  // Render terms — positions relative to node center
+  let rx=-bHW+28;
+  terms.forEach(t=>{
+    let fill=c, fw='400', opacity='0.75';
+    if(t.nodeId==='alpha'){fill=C.int();fw='700';opacity='0.98';}
+    else if(t.nodeId&&t.nodeId.startsWith('b')){fill=C.beta();fw='700';opacity='0.98';}
+    else if(t.nodeId==='sigma'){fill=C.sig();fw='700';opacity='0.98';}
+    g.appendChild(se('text',{x:rx.toFixed(1),y:'6','dominant-baseline':'middle',
+      fill,'font-family':"'DM Mono',monospace",'font-size':'13.5','font-weight':fw,opacity},t.text));
+    rx+=t.text.length*_CW;
+  });
+
+  // Dot indicator above-left of box
+  const dotX=(-bHW+14).toFixed(1);
+  g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'7',fill:c,opacity:isAct?'0.85':'0.55'}));
+  if(isAct) g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'11',fill:'none',stroke:c,'stroke-width':'1.1',opacity:'0.22'}));
+  g.appendChild(se('line',{x1:dotX,y1:'-22',x2:dotX,y2:bT.toString(),stroke:c,'stroke-width':'1.1',opacity:'0.35'}));
 }
 
 function drawObs(g,node){
   const c=C.data(); const isAct=ACTIVE===node.id;
-  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR,fill:c,opacity:'0.10'}));
-  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR,fill:'none',stroke:c,'stroke-width':isAct?'3.5':'3'}));
-  g.appendChild(se('circle',{cx:'0',cy:'0',r:OR-9,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.35'}));
-  g.appendChild(se('text',{x:'0',y:'-1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'Fraunces',serif",'font-size':'18','font-weight':'600'},node.lbl||'y'));
+  const lbl=node.lbl||'y';
+  // Width adapts to label length
+  const rw=Math.max(70, lbl.length*14+32), rh=46, rx2=8;
+  const x0=-rw/2, y0=-rh/2;
+  // Shadow
+  g.appendChild(se('rect',{x:x0+3,y:y0+4,width:rw,height:rh,rx:rx2,fill:'rgba(0,0,0,0.14)'}));
+  // Fill
+  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:c,opacity:'0.12'}));
+  // Border (double-line effect: outer thin + inner)
+  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:'none',stroke:c,'stroke-width':isAct?'3.5':'3'}));
+  g.appendChild(se('rect',{x:x0+6,y:y0+6,width:rw-12,height:rh-12,rx:Math.max(2,rx2-4),fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.4'}));
+  if(isAct) g.appendChild(se('rect',{x:x0-4,y:y0-4,width:rw+8,height:rh+8,rx:rx2+3,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
+  // Label
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':'18','font-weight':'600'},lbl));
   if(DET!=='simple'&&node.sub){
-    g.appendChild(se('text',{x:'0',y:OR+15,'text-anchor':'middle',
+    g.appendChild(se('text',{x:'0',y:rh/2+14,'text-anchor':'middle',
       fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.sub));
   }
 }
@@ -1074,8 +1192,12 @@ function showExplain(key){
   document.getElementById('ex-tit').textContent=e.title||key;
   document.getElementById('ex-what').textContent=e.what||'';
   const wy=document.getElementById('ex-why-s');
-  if(e.why){wy.style.display='';document.getElementById('ex-why').textContent=e.why;}
-  else wy.style.display='none';
+  if(e.why){
+    wy.style.display='';
+    // Use custom label if defined, otherwise default
+    wy.querySelector('.ex-lbl').textContent=e.whyLbl||'Warum dieser Prior?';
+    document.getElementById('ex-why').textContent=e.why;
+  } else wy.style.display='none';
   const tp=document.getElementById('ex-tip-s');
   if(e.tip){tp.style.display='';document.getElementById('ex-tip').textContent=e.tip;}
   else tp.style.display='none';
@@ -1084,8 +1206,7 @@ function toggleEx(){
   SHOW_EX=!SHOW_EX;
   document.getElementById('btn-ex').classList.toggle('act',SHOW_EX);
   const box=document.getElementById('exbox');
-  if(!SHOW_EX) box.style.display='none';
-  else showExplain(ACTIVE&&EX[ACTIVE]?ACTIVE:'alpha');
+  box.style.display=SHOW_EX?'':'none';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1116,8 +1237,15 @@ function showToast(msg){
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
   renderGuide();update();
+  // Knoten-Info: start active, show default hint
+  document.getElementById('btn-ex').classList.add('act');
+  const box=document.getElementById('exbox');
+  document.getElementById('ex-tit').textContent='← Klicke auf einen Knoten im Diagramm oder eine Zeile in der Notation rechts';
+  document.getElementById('ex-what').textContent='Hier erscheint eine kontextuelle Erklärung zu jedem Parameter, Link und Prior.';
+  document.getElementById('ex-why-s').style.display='none';
+  document.getElementById('ex-tip-s').style.display='none';
   window.addEventListener('resize',()=>{clearTimeout(_t);_t=setTimeout(render,90);});
-  setTimeout(()=>{if(SHOW_EX)showExplain('alpha');},600);
+  setTimeout(()=>{ if(SHOW_EX) showExplain('alpha'); },800);
 });
 </script>
 </body>
