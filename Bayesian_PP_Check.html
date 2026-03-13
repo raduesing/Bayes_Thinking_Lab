@@ -1,3 +1,4 @@
+console.log("tool loaded");
 <!DOCTYPE html>
 <html lang="de" data-theme="dark">
 <head>
@@ -191,8 +192,7 @@ svg text{font-family:'DM Mono',monospace}
     <button class="ibtn" onclick="exportSVG()">↓ SVG</button>
     <button class="ibtn" onclick="exportPNG()">↓ PNG</button>
     <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
-    <button class="ibtn" id="btn-from-builder" onclick="importFromBuilder()" style="border-color:var(--accent4);color:var(--accent4)" title="Modellstruktur &amp; Priors aus brms Builder importieren">⬡ ← Builder</button>
-    <button class="ibtn" id="btn-to-builder"   onclick="exportToBuilder()"   style="border-color:var(--accent3);color:var(--accent3)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
+    <button class="ibtn" id="btn-to-builder" onclick="exportToBuilder()" style="border-color:var(--accent3);color:var(--accent3)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
   </div>
 </div>
 <div class="outer">
@@ -3623,11 +3623,14 @@ window.exportToBuilder = function() {
   };
 
   try {
-    // Write data to localStorage — Builder reads it when user clicks import there
-    localStorage.removeItem('ppc2brms');
+    // Overwrite — no removeItem (avoids brief gap where key doesn't exist)
     localStorage.setItem('ppc2brms', JSON.stringify(payload));
-    _showXferToast('✓ Priors gespeichert → im Builder auf "⬡ ← PP-Check" klicken', 'var(--accent3)');
-    // Show persistent hint bar
+    // postMessage to Builder if it's our opener or stored reference
+    const builderWin = window.opener || window._builderWin;
+    if (builderWin && !builderWin.closed) {
+      try { builderWin.postMessage({ type: 'ppc2brms', data: payload }, '*'); } catch(ex) {}
+    }
+    _showXferToast('✓ Priors an Builder gesendet', 'var(--accent3)');
     _showBuilderHint();
   } catch(e) {
     _showXferToast('⚠ localStorage nicht verfügbar — beide Tools im selben Browser öffnen', 'var(--accent)');
@@ -3654,9 +3657,9 @@ function _showBuilderHint() {
       <strong style="border:1px solid rgba(255,255,255,.6);padding:.1rem .35rem">⬡ ← PP-Check</strong> klicken.
     </span>
     <span style="display:flex;gap:.7rem;align-items:center">
-      <a href="Brms_model_builder.html" target="_blank"
-         style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem"
-         onclick="document.getElementById('builder-hint-bar').remove()">
+      <a href="Brms_model_builder.html"
+         style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem;cursor:pointer"
+         onclick="window._builderWin=window.open('Brms_model_builder.html','_blank');document.getElementById('builder-hint-bar').remove();return false;">
         Model Builder öffnen →
       </a>
       <span onclick="this.parentElement.parentElement.remove()"
@@ -3845,9 +3848,7 @@ window.importFromBuilder = function() {
     }
   }
 
-  // Clear stale data after import
-  try { localStorage.removeItem('brms2ppc'); } catch(e) {}
-
+  // Note: keep brms2ppc in localStorage so repeated imports (button re-click) still work
   if (lastSimA) render();
   _showXferToast('✓ Modell aus Builder importiert', 'var(--accent4)');
 };
@@ -3872,6 +3873,74 @@ function _showXferToast(msg, col) {
 }
 
 })(); // end IIFE
+
+// ── Cross-tab & cross-browser data sync ──────────────────
+// Strategy: storage event (Chromium) + polling (Firefox + file://)
+// Both read the SAME localStorage key; de-duplication via timestamp.
+
+let _lastBrms2ppcTs = 0;
+
+function _checkForBuilderData() {
+
+  // Firefox file:// fallback via window.name
+  try {
+
+    if (window.name) {
+
+      const msg = JSON.parse(window.name);
+
+      if (msg.type === "brms2ppc") {
+
+        localStorage.setItem('brms2ppc', JSON.stringify(msg.payload));
+
+        window.name = "";
+
+      }
+
+    }
+
+  } catch(e){}
+
+  try {
+
+    const raw = localStorage.getItem('brms2ppc');
+
+    if (!raw) return;
+
+    const d = JSON.parse(raw);
+
+    const ts = d.ts || 0;
+
+    if (ts > _lastBrms2ppcTs) {
+
+      _lastBrms2ppcTs = ts;
+
+      if (window.importFromBuilder)
+        window.importFromBuilder();
+
+    }
+
+  } catch(e) {}
+
+}
+
+// 1. storage event — fires instantly in Chromium (Edge, Opera, Chrome)
+window.addEventListener('storage', function(ev) {
+  if (ev.key === 'brms2ppc') _checkForBuilderData();
+});
+
+// 2. postMessage — fires if PPC received a direct message
+window.addEventListener('message', function(ev) {
+  if (ev.data && ev.data.type === 'brms2ppc') _checkForBuilderData();
+});
+
+// 3. Polling — universal fallback, covers Firefox + file://
+setInterval(_checkForBuilderData, 600);
+
+// 4. Check on page load (Builder may have already written data before PPC opened)
+window.addEventListener('load', function() {
+  setTimeout(_checkForBuilderData, 800);
+});
 </script>
 </body>
 </html>

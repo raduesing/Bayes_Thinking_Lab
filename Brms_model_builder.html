@@ -1,3 +1,4 @@
+console.log("tool loaded");
 <!DOCTYPE html>
 <html lang="de" data-theme="dark">
 <head>
@@ -39,7 +40,8 @@ MathJax = {
 body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
      display:flex;height:100vh;overflow:hidden;transition:background .25s,color .25s}
 #sidebar{width:340px;flex-shrink:0;background:var(--paper);border-right:1.5px solid var(--border);
-         overflow-y:auto;padding:.85rem .95rem 2rem;display:flex;flex-direction:column;gap:.6rem}
+         overflow-y:auto;padding:.85rem .95rem 2rem;display:flex;flex-direction:column;gap:.6rem;margin-top:0}
+body{padding-top:2.4rem}
 #preview{flex-grow:1;overflow-y:auto;padding:1.3rem 1.8rem 3rem;background:var(--bg)}
 /* Header */
 .hdr-title{font-size:1.3rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
@@ -159,19 +161,25 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
 </head>
 <body>
 
+<!-- ═══ TOP BAR ══════════════════════════════════════════════ -->
+<div id="topbar" style="position:fixed;top:0;left:0;right:0;height:2.4rem;background:var(--paper);border-bottom:1.5px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 .8rem;gap:.4rem;z-index:100;flex-shrink:0">
+  <span style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);margin-right:.4rem;opacity:.6">brms Model Builder</span>
+  <button class="ibtn xfer-out" id="btn-send-ppc" onclick="exportToPPC()" 
+    style="border-color:var(--accent3);color:var(--accent3);font-size:.64rem;padding:.2rem .55rem"
+    title="Modell an PP-Check senden">⬡ → PP-Check</button>
+  <button class="ibtn" id="btn-theme" onclick="toggleTheme()" 
+    style="font-size:.64rem;padding:.2rem .5rem">☀ Light</button>
+</div>
+
 <!-- ═══ SIDEBAR ═══════════════════════════════════════════════ -->
-<div id="sidebar">
+<div id="sidebar" style="margin-top:2.4rem">
 
   <!-- Header -->
   <div>
     <div class="hdr-title">brms <em>Model Builder</em></div>
     <div class="hdr-sub">Bayesianische Modelle · brms · McElreath-Notation</div>
     <div class="hdr-auth">© Dr. Rainer Düsing · v17 by Claude</div>
-    <div class="hbtns">
-      <button class="ibtn xfer-out" onclick="exportToPPC()" title="Modellstruktur &amp; Priors an Prior Predictive Tool senden">⬡ → PP-Check</button>
-      <button class="ibtn xfer-in"  onclick="importFromPPC()" title="Priors aus Prior Predictive Tool importieren">⬡ ← PP-Check</button>
-      <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
-    </div>
+    <!-- transfer buttons moved to top-bar -->
   </div>
 
   <!-- 1. Likelihood -->
@@ -352,7 +360,14 @@ const DEF_PRIORS = {
 
 // family → PPC model name
 const FAM2PPC  = { gaussian:'linear', student:'student', bernoulli:'logistic', poisson:'poisson', Gamma:'gamma' };
-const PPC2FAM  = { linear:'gaussian', logistic:'bernoulli', poisson:'poisson', gamma:'Gamma' };
+const PPC2FAM  = { 
+  linear:'gaussian',
+  student:'student',
+  logistic:'bernoulli',
+  poisson:'poisson',
+  gamma:'Gamma',
+  gaussian:'gaussian'
+};
 
 // families that have sigma in brms
 const HAS_SIGMA = new Set(['gaussian','student','Gamma']);
@@ -1001,11 +1016,21 @@ function exportToPPC() {
   };
 
   try {
-    // Write data to localStorage — PPC reads it when user clicks import there
-    localStorage.removeItem('brms2ppc');
+    // Overwrite — no removeItem (avoids brief gap where key doesn't exist)
     localStorage.setItem('brms2ppc', JSON.stringify(payload));
-    showToast('✓ Modell gespeichert → im PP-Check auf "⬡ ← Builder" klicken', 'var(--accent3)');
-    // Show persistent hint if PPC isn't open yet
+    // Firefox/file:// fallback
+    try {
+      window.name = JSON.stringify({
+        type: "brms2ppc",
+        payload: payload,
+        ts: Date.now()
+      });
+    } catch(e){}
+    // postMessage to PPC if it was opened via our window reference
+    if (window._ppcWin && !window._ppcWin.closed) {
+      try { window._ppcWin.postMessage({ type: 'brms2ppc', data: payload }, '*'); } catch(ex) {}
+    }
+    showToast('✓ Modell an PP-Check gesendet', 'var(--accent3)');
     _showPPCHint();
   } catch(e) {
     showToast('⚠ localStorage nicht verfügbar — öffne beide Tools im selben Browser', 'var(--accent)');
@@ -1032,9 +1057,9 @@ function _showPPCHint() {
       <strong style="border:1px solid rgba(255,255,255,.6);padding:.1rem .35rem">⬡ ← Builder</strong> klicken.
     </span>
     <span style="display:flex;gap:.7rem;align-items:center">
-      <a href="Bayesian_PP_Check.html" target="_blank"
-         style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem"
-         onclick="document.getElementById('ppc-hint-bar').remove()">
+      <a href="Bayesian_PP_Check.html"
+         style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem;cursor:pointer"
+         onclick="window._ppcWin=window.open('Bayesian_PP_Check.html','_blank');document.getElementById('ppc-hint-bar').remove();return false;">
         PP-Check öffnen →
       </a>
       <span onclick="this.parentElement.parentElement.remove()"
@@ -1121,6 +1146,40 @@ function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ── Cross-tab & cross-browser data sync ──────────────────
+// Strategy: storage event (Chromium) + polling (Firefox + file://)
+// Both read the SAME localStorage key; de-duplication via timestamp.
+
+let _lastPpc2brmsTs = 0;
+
+function _checkForPPCData() {
+  try {
+    const raw = localStorage.getItem('ppc2brms');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    const ts = d.ts || 0;
+    if (ts > _lastPpc2brmsTs) {
+      _lastPpc2brmsTs = ts;
+      importFromPPC();
+    }
+  } catch(e) {}
+}
+
+// 1. storage event — fires instantly in Chromium (Edge, Opera, Chrome)
+//    Does NOT fire in Firefox for file:// — covered by polling below
+window.addEventListener('storage', function(ev) {
+  if (ev.key === 'ppc2brms') _checkForPPCData();
+});
+
+// 2. postMessage — fires if PPC was opened via window reference
+window.addEventListener('message', function(ev) {
+  if (ev.data && ev.data.type === 'ppc2brms') _checkForPPCData();
+});
+
+// 3. Polling — universal fallback, covers Firefox + file://
+//    Runs every 600ms, only triggers import when timestamp changes
+setInterval(_checkForPPCData, 600);
 </script>
 </body>
 </html>
