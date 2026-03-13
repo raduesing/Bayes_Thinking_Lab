@@ -3623,21 +3623,48 @@ window.exportToBuilder = function() {
   };
 
   try {
+    // Write data to localStorage — Builder reads it when user clicks import there
     localStorage.removeItem('ppc2brms');
     localStorage.setItem('ppc2brms', JSON.stringify(payload));
-    // If opened from the builder window, focus it and trigger auto-import
-    if (window.opener && !window.opener.closed) {
-      try { window.opener.postMessage({ type: 'ppc2brms', ts: payload.ts }, '*'); } catch(ex) {}
-      window.opener.focus();
-      _showXferToast('✓ Priors an brms Builder gesendet — Fenster fokussiert', 'var(--accent3)');
-    } else {
-      _showXferToast('✓ Priors an brms Builder gesendet', 'var(--accent3)');
-    }
+    _showXferToast('✓ Priors gespeichert → im Builder auf "⬡ ← PP-Check" klicken', 'var(--accent3)');
+    // Show persistent hint bar
+    _showBuilderHint();
   } catch(e) {
     _showXferToast('⚠ localStorage nicht verfügbar — beide Tools im selben Browser öffnen', 'var(--accent)');
     console.error('exportToBuilder:', e);
   }
 };
+
+function _showBuilderHint() {
+  const existing = document.getElementById('builder-hint-bar');
+  if (existing) { existing.remove(); }
+  const bar = document.createElement('div');
+  bar.id = 'builder-hint-bar';
+  bar.style.cssText = [
+    'position:fixed','bottom:0','left:0','right:0',
+    'background:var(--accent2)','color:white',
+    'font-family:"DM Mono",monospace','font-size:.72rem',
+    'padding:.55rem 1.2rem','display:flex','align-items:center',
+    'justify-content:space-between','z-index:9999',
+    'box-shadow:0 -2px 12px rgba(0,0,0,.25)'
+  ].join(';');
+  bar.innerHTML = `
+    <span>✓ Priors gespeichert.&nbsp;&nbsp;
+      <strong>Schritt 2:</strong> Zum brms Model Builder wechseln und dort auf
+      <strong style="border:1px solid rgba(255,255,255,.6);padding:.1rem .35rem">⬡ ← PP-Check</strong> klicken.
+    </span>
+    <span style="display:flex;gap:.7rem;align-items:center">
+      <a href="Brms_model_builder.html" target="_blank"
+         style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem"
+         onclick="document.getElementById('builder-hint-bar').remove()">
+        Model Builder öffnen →
+      </a>
+      <span onclick="this.parentElement.parentElement.remove()"
+            style="cursor:pointer;opacity:.7;font-size:1rem;padding:.1rem .3rem">✕</span>
+    </span>`;
+  document.body.appendChild(bar);
+  setTimeout(() => { if (bar.parentElement) bar.remove(); }, 18000);
+}
 
 // ── IMPORT: Builder → PPC ─────────────────────────────────
 window.importFromBuilder = function() {
@@ -3845,16 +3872,6 @@ function _showXferToast(msg, col) {
 }
 
 })(); // end IIFE
-
-// ── Cross-window communication ────────────────────────────
-// Listen for Builder→PPC signal: auto-trigger importFromBuilder
-window.addEventListener('message', function(ev) {
-  if (ev.data && ev.data.type === 'brms2ppc') {
-    if (window.importFromBuilder) {
-      window.importFromBuilder();
-    }
-  }
-});
 </script>
 </body>
 </html>
