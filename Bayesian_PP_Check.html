@@ -3910,13 +3910,21 @@ function _checkForBuilderData() {
 
     const ts = d.ts || 0;
 
-    if (ts > _lastBrms2ppcTs) {
+    // Only auto-import if data is new AND was written within 5 minutes
+    // (prevents stale data from re-applying on every poll tick)
+    const ageMs = Date.now() - ts;
+    if (ts > _lastBrms2ppcTs && ageMs < 5 * 60 * 1000) {
 
       _lastBrms2ppcTs = ts;
 
       if (window.importFromBuilder)
         window.importFromBuilder();
 
+    } else if (ts <= _lastBrms2ppcTs) {
+      // already handled, nothing to do
+    } else {
+      // stale data — mark as seen so we don't keep checking
+      _lastBrms2ppcTs = ts;
     }
 
   } catch(e) {}
@@ -3936,9 +3944,27 @@ window.addEventListener('message', function(ev) {
 // 3. Polling — universal fallback, covers Firefox + file://
 setInterval(_checkForBuilderData, 600);
 
-// 4. Check on page load (Builder may have already written data before PPC opened)
+// 4. Check on page load — only if Builder data was written recently (< 5 min)
+//    This prevents stale localStorage from auto-loading on fresh opens.
 window.addEventListener('load', function() {
-  setTimeout(_checkForBuilderData, 800);
+  setTimeout(function() {
+    try {
+      const raw = localStorage.getItem('brms2ppc');
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      const ts = d.ts || 0;
+      const ageMs = Date.now() - ts;
+      // Only auto-import if data was written within the last 5 minutes
+      if (ageMs < 5 * 60 * 1000) {
+        _checkForBuilderData();
+      }
+      // Stale data exists but won't auto-load — update internal timestamp
+      // so manual import button still works by calling importFromBuilder() directly
+      else {
+        _lastBrms2ppcTs = ts; // suppress future auto-polls for this stale entry
+      }
+    } catch(e) {}
+  }, 800);
 });
 </script>
 </body>
