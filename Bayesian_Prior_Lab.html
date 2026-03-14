@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prior Lab — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.6/jstat.min.js"></script>
+<style>
+/* ── Design System (matches Bayes Thinking Lab) ─────────── */
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;
+  --a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--shadow:rgba(0,0,0,.07);
+}
+[data-theme="dark"]{
+  --bg:#0d1018;--paper:#141820;--ink:#ebe5d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;
+  --a5:#e07830;--a6:#2bc7c4;
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;--shadow:rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Fraunces',Georgia,serif;
+  background:var(--bg);color:var(--ink);
+  min-height:100vh;
+  transition:background .25s,color .25s;
+}
+
+/* ── TOPBAR ─────────────────────────────────────────────── */
+#topbar{
+  position:sticky;top:0;z-index:200;
+  background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.45rem 1.4rem;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;
+}
+.topbar-l{display:flex;align-items:baseline;gap:.7rem}
+.topbar-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em}
+.topbar-title em{font-style:italic;color:var(--a2)}
+.topbar-sub{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);letter-spacing:.04em}
+.topbar-btns{display:flex;gap:.35rem;align-items:center}
+.tbtn{font-family:'DM Mono',monospace;font-size:.64rem;padding:.22rem .6rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .15s;letter-spacing:.03em;white-space:nowrap}
+.tbtn:hover{border-color:var(--a2);color:var(--a2)}
+.tbtn.hint{border-color:var(--a3);color:var(--a3)}
+.tbtn.hint:hover{background:var(--a3);color:var(--bg)}
+
+/* ── LAYOUT ─────────────────────────────────────────────── */
+#app{display:grid;grid-template-columns:290px 1fr;min-height:calc(100vh - 2.6rem)}
+
+/* ── SIDEBAR ────────────────────────────────────────────── */
+#sidebar{
+  background:var(--paper);border-right:1.5px solid var(--border);
+  padding:.9rem .95rem 3rem;display:flex;flex-direction:column;gap:.65rem;
+  overflow-y:auto;
+}
+.sc{background:var(--bg);border:1px solid var(--grid);padding:.65rem .75rem}
+.sc-h{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+      text-transform:uppercase;color:var(--ink2);margin-bottom:.5rem;
+      padding-bottom:.22rem;border-bottom:1px solid var(--grid)}
+.sc-h.ca{color:var(--a2)}.sc-h.cg{color:var(--a3)}.sc-h.cr{color:var(--a1)}
+
+/* Distribution buttons */
+.dist-grid{display:flex;flex-direction:column;gap:.22rem}
+.dbtn{
+  font-family:'DM Mono',monospace;font-size:.67rem;padding:.32rem .7rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);text-align:left;transition:all .12s;letter-spacing:.02em;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.dbtn:hover{border-color:var(--a2);color:var(--a2)}
+.dbtn.sel{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.dbtn .dcat{font-size:.52rem;opacity:.7}
+
+/* Param rows */
+.pg{margin-bottom:.38rem}
+.pl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem}
+.plbl{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink2)}
+.pval{font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500;color:var(--a2)}
+input[type=range]{
+  width:100%;-webkit-appearance:none;height:3px;background:var(--grid);
+  outline:none;cursor:pointer;border-radius:2px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;background:var(--a2);
+  border-radius:50%;cursor:pointer;box-shadow:0 0 6px rgba(74,176,216,.45);
+}
+input[type=number]{
+  font-family:'DM Mono',monospace;font-size:.7rem;width:100%;
+  background:var(--panel);border:1px solid var(--grid);color:var(--ink);
+  padding:.25rem .38rem;outline:none;
+}
+input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
+
+/* Stats */
+.stats-row{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}
+.sstat{flex:1;min-width:60px;background:var(--panel);border:1px solid var(--grid);
+       padding:.35rem .5rem}
+.sstat .sv{font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500;
+           color:var(--ink);display:block}
+.sstat .sl{font-family:'DM Mono',monospace;font-size:.52rem;color:var(--ink2)}
+
+/* ── MAIN CANVAS ────────────────────────────────────────── */
+#main{padding:1.2rem 1.6rem 3rem;display:flex;flex-direction:column;gap:1rem;overflow-y:auto}
+
+/* Plot area */
+#plot-card{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.2rem;
+           box-shadow:2px 2px 0 var(--shadow)}
+#plot-title{font-size:1.15rem;font-weight:300;margin-bottom:.12rem}
+#plot-title em{font-style:italic;color:var(--a2)}
+#plot-desc{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);
+           line-height:1.7;margin-bottom:.6rem}
+#plot-svg-wrap{width:100%}
+
+/* Coverage intervals */
+#coverage{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
+.cov-item{font-family:'DM Mono',monospace;font-size:.61rem;
+          background:var(--panel);border:1px solid var(--grid);padding:.28rem .55rem}
+.cov-item b{color:var(--a2)}
+
+/* ── BRMS CODE ──────────────────────────────────────────── */
+.code-card{background:#090c12;border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow)}
+[data-theme="light"] .code-card{background:#1a1410}
+.code-hdr{display:flex;justify-content:space-between;align-items:center;
+          padding:.35rem .7rem;border-bottom:1px solid #1e2535}
+.code-lbl{font-family:'DM Mono',monospace;font-size:.6rem;color:#556080;
+          letter-spacing:.07em;text-transform:uppercase}
+.copy-btn{font-family:'DM Mono',monospace;font-size:.62rem;padding:.15rem .45rem;
+          border:1px solid #334;background:transparent;cursor:pointer;color:#9eabc2;transition:all .12s}
+.copy-btn:hover{border-color:var(--a2);color:var(--a2)}
+.codeblk{padding:.6rem .95rem;font-family:'DM Mono',monospace;font-size:.75rem;
+         line-height:1.85;color:#9eabc2;white-space:pre;overflow-x:auto}
+[data-theme="light"] .codeblk{color:#b0a890}
+.kw{color:#e07b6a}.fn{color:#7ab8d4}.str{color:#8ecfa0}.cm{color:#556080}.nm{color:#e8d49a}
+
+/* ── CI SOLVER CARD ─────────────────────────────────────── */
+#solver-card{
+  background:var(--paper);border:1.5px solid var(--a5);padding:1rem 1.2rem;
+  box-shadow:2px 2px 0 var(--shadow);
+}
+.solver-hero{
+  font-size:1.05rem;font-weight:300;letter-spacing:-.01em;margin-bottom:.35rem;
+}
+.solver-hero em{font-style:italic;color:var(--a5)}
+.solver-desc{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);
+             line-height:1.7;margin-bottom:.8rem}
+.solver-grid{display:grid;grid-template-columns:1fr 1fr 80px auto;gap:.5rem;align-items:end;margin-bottom:.65rem}
+@media(max-width:700px){.solver-grid{grid-template-columns:1fr 1fr;}}
+.solver-lbl{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);margin-bottom:.22rem}
+.solve-btn{
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  border:1.5px solid var(--a5);background:transparent;cursor:pointer;
+  color:var(--a5);padding:.38rem .8rem;transition:all .15s;letter-spacing:.04em;
+  white-space:nowrap;
+}
+.solve-btn:hover{background:var(--a5);color:var(--paper)}
+#solver-result{
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--a2);
+  line-height:1.85;background:var(--panel);border-left:3px solid var(--a5);
+  padding:.55rem .8rem;margin-top:.5rem;display:none;
+}
+#solver-result.show{display:block}
+
+/* ── LEARN CARDS ────────────────────────────────────────── */
+#learn-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+@media(max-width:750px){#learn-grid{grid-template-columns:1fr}}
+.learn-card{
+  background:var(--paper);border:1.5px solid var(--border);padding:.9rem 1rem;
+  box-shadow:2px 2px 0 var(--shadow);
+}
+.learn-h{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+         text-transform:uppercase;margin-bottom:.4rem;padding-bottom:.22rem;
+         border-bottom:1px solid var(--grid)}
+.learn-h.ca{color:var(--a2)}.learn-h.cg{color:var(--a3)}
+.learn-h.cr{color:var(--a1)}.learn-h.co{color:var(--a5)}
+.learn-body{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);line-height:1.75}
+.learn-body b{color:var(--ink)}
+.learn-body .tag{
+  display:inline-block;font-family:'DM Mono',monospace;font-size:.55rem;
+  padding:.06rem .3rem;background:rgba(74,176,216,.12);color:var(--a2);
+  border:1px solid var(--a2);margin:.08rem .08rem 0 0;
+}
+
+/* ── COMPARISON TABLE ───────────────────────────────────── */
+.comp-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.61rem}
+.comp-table th{text-align:left;color:var(--ink2);padding:.32rem .6rem;
+               border-bottom:1px solid var(--grid);font-weight:500;letter-spacing:.05em}
+.comp-table td{padding:.3rem .6rem;border-bottom:1px solid var(--grid);color:var(--ink2)}
+.comp-table td:first-child{color:var(--ink);font-weight:500}
+.comp-table tr:last-child td{border-bottom:none}
+.comp-table .tick{color:var(--a3)}.comp-table .cross{color:var(--a1);opacity:.5}
+
+/* ── CONTEXT EXAMPLES ───────────────────────────────────── */
+.examples-flow{display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem}
+.ex-row{
+  display:flex;align-items:baseline;gap:.55rem;padding:.35rem .6rem;
+  background:var(--panel);border-left:3px solid var(--grid);
+  font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);
+  cursor:pointer;transition:border-color .12s,background .12s;
+}
+.ex-row:hover{border-left-color:var(--a2);background:var(--bg)}
+.ex-row .ex-dist{color:var(--a2);font-weight:500;min-width:6rem}
+.ex-row .ex-use{flex:1}
+.ex-row .ex-params{color:var(--ink);opacity:.6;font-size:.57rem}
+
+/* ── TOAST ──────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a2);color:white;
+  font-family:'DM Mono',monospace;font-size:.7rem;padding:.45rem .9rem;
+  box-shadow:3px 3px 0 var(--shadow);z-index:999;
+  opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* ── PP-CHECK HINT ──────────────────────────────────────── */
+#ppc-hint{
+  background:var(--panel);border:1.5px solid var(--a3);padding:.65rem .9rem;
+  font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);line-height:1.7;
+}
+#ppc-hint b{color:var(--ink)}#ppc-hint .hl{color:var(--a3)}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="topbar-l">
+    <div class="topbar-title">Prior <em>Lab</em></div>
+    <div class="topbar-sub">Distribution Explorer · CI-Solver · brms-ready</div>
+  </div>
+  <div class="topbar-btns">
+    <button class="tbtn hint" onclick="window.open('Bayesian_PP_Check.html','_blank')" title="Zum Prior Predictive Check">⬡ PP-Check</button>
+    <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div id="app">
+
+  <!-- SIDEBAR: distribution picker + params -->
+  <div id="sidebar">
+
+    <!-- PP-Check Hinweis -->
+    <div id="ppc-hint">
+      <b>💡 Auch im PP-Check:</b> Das Prior Lab ist als kompaktes Modal <b>direkt im Prior Predictive Check</b> eingebettet (Button <span class="hl">⬡ Prior Lab</span>). Priors können dort sofort angewendet werden — ohne diese Seite öffnen zu müssen.
+    </div>
+
+    <!-- Distribution picker -->
+    <div class="sc">
+      <div class="sc-h ca">Verteilung</div>
+      <div class="dist-grid" id="dist-list"></div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="sc">
+      <div class="sc-h">Parameter</div>
+      <div id="params-area"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="sc">
+      <div class="sc-h">Kennwerte</div>
+      <div class="stats-row" id="stats-area"></div>
+    </div>
+
+    <!-- x-Achse -->
+    <div class="sc">
+      <div class="sc-h">Darstellungsbereich</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.35rem">
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);margin-bottom:.18rem">von</div>
+          <input type="number" id="xlo" value="-4" step="0.5" onchange="drawPlot()">
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);margin-bottom:.18rem">bis</div>
+          <input type="number" id="xhi" value="4"  step="0.5" onchange="drawPlot()">
+        </div>
+      </div>
+      <button class="tbtn" onclick="autoRange()" style="width:100%">↔ Auto-Bereich</button>
+    </div>
+
+    <!-- Context examples -->
+    <div class="sc">
+      <div class="sc-h cg">brms-Defaults laden &amp; erkunden</div>
+      <div class="examples-flow" id="examples-area"></div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAIN -->
+  <div id="main">
+
+    <!-- Plot -->
+    <div id="plot-card">
+      <div id="plot-title"></div>
+      <div id="plot-desc"></div>
+      <div id="plot-svg-wrap"></div>
+      <div id="coverage"></div>
+    </div>
+
+    <!-- brms code -->
+    <div class="code-card">
+      <div class="code-hdr">
+        <span class="code-lbl">brms Prior-Syntax</span>
+        <button class="copy-btn" onclick="copyCode()">📋 Kopieren</button>
+      </div>
+      <div class="codeblk" id="brms-code"></div>
+    </div>
+
+    <!-- CI Solver info banner (outside solver-card) -->
+    <div style="background:var(--panel);border-left:4px solid var(--a5);padding:.7rem 1rem;font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);line-height:1.75">
+      <b style="color:var(--ink)">Das Kernproblem beim Prior-Wählen:</b> Als Forschende hast du oft eine inhaltliche Vorstellung — z.B. <em>„95% der plausiblen Effekte liegen zwischen −2 und +5"</em> — weißt aber nicht, welche Parameterwerte dieser Vorstellung entsprechen. Für die Normalverteilung ist das direkt berechenbar (μ = Mittelpunkt, σ aus Quantilfunktion). Für alle anderen Verteilungen ist keine geschlossene Formel verfügbar. Der Solver unten findet die Parameter numerisch.
+    </div>
+
+    <!-- CI Solver (FEATURED) -->
+    <div id="solver-card">
+      <div class="solver-hero">⟳ Credible Interval → <em>Parameter berechnen</em></div>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);margin-bottom:.65rem;line-height:1.65" id="solver-hint">
+        <!-- Filled dynamically per distribution -->
+      </div>
+      <div class="solver-grid">
+        <div>
+          <div class="solver-lbl">Untere Grenze</div>
+          <input type="number" id="ci-lo" value="-2" step="0.1">
+        </div>
+        <div>
+          <div class="solver-lbl">Obere Grenze</div>
+          <input type="number" id="ci-hi" value="5" step="0.1">
+        </div>
+        <div>
+          <div class="solver-lbl">Masse (%)</div>
+          <input type="number" id="ci-pct" value="95" min="1" max="99" step="1">
+        </div>
+        <button class="solve-btn" onclick="solvCI()">▶ Berechnen</button>
+      </div>
+      <div id="solver-result"></div>
+    </div>
+
+    <!-- Learn grid -->
+    <div id="learn-grid">
+
+      <div class="learn-card">
+        <div class="learn-h ca">Was ist ein Prior?</div>
+        <div class="learn-body">
+          Ein <b>Prior P(θ)</b> ist eine Wahrscheinlichkeitsverteilung über mögliche Parameterwerte, <em>bevor</em> du die Daten siehst. Er kodiert dein Vorwissen.<br><br>
+          <b>Zu vage</b> (z.B. Uniform): du machst keine Annahmen, aber der Sampler muss riesige Räume erkunden → langsam, oft divergent.<br><br>
+          <b>Zu eng</b>: du behinderst das Lernen aus den Daten. Der Posterior ≈ Prior, unabhängig von den Daten.<br><br>
+          <b>Weakly informative</b> → der goldene Mittelweg: schließt grob unmögliche Werte aus, lässt aber viel Lernraum.
+        </div>
+      </div>
+
+      <div class="learn-card">
+        <div class="learn-h cg">Welche Verteilung wählen?</div>
+        <div class="learn-body">
+          <b>Parameter ohne Constraint (α, β):</b>
+          <span class="tag">Normal</span><span class="tag">Student-t</span><span class="tag">Cauchy</span><br><br>
+          <b>Positive Parameter (σ, τ, λ):</b>
+          <span class="tag">Exponential</span><span class="tag">Half-Normal</span><span class="tag">Half-t</span><span class="tag">Gamma</span><br><br>
+          <b>Proportionen / Wahrscheinlichkeiten:</b>
+          <span class="tag">Beta</span><br><br>
+          <b>Korrelationsmatrizen:</b>
+          <span class="tag">LKJ</span><br><br>
+          Faustregel: <b>Student-t(3,0,σ)</b> als robuste Alternative zu Normal, da schwerere Ränder Ausreißer im Prior tolerieren.
+        </div>
+      </div>
+
+      <div class="learn-card">
+        <div class="learn-h co">Gelman's Empfehlungen</div>
+        <div class="learn-body">
+          Für <b>z-standardisierte</b> Variablen (SD=1):<br>
+          · Intercept α: <b>Normal(0, 2.5)</b><br>
+          · Slope β: <b>Normal(0, 1)</b><br>
+          · Streuung σ: <b>Exponential(1)</b> oder <b>Half-Normal(0,1)</b><br><br>
+          Für <b>Rohskalen</b> muss man skalieren:<br>
+          <b>σ_prior ≈ 2–3 × SD(y) / SD(x)</b><br><br>
+          Beispiel Reaktionszeiten (MW≈400ms, SD≈80ms):<br>
+          α: Normal(400, 100), β pro SD(x): Normal(0, 160)
+        </div>
+      </div>
+
+      <div class="learn-card">
+        <div class="learn-h cr">Häufige Fallstricke</div>
+        <div class="learn-body">
+          <b>Prior-Skala nicht an die AV angepasst:</b> Normal(0,1) für einen Slope bei Rohskalen (z.B. kg, €, ms) impliziert, dass +1 Einheit x → ±1 Einheit y — je nach Skala absurd eng oder viel zu weit. Immer die Metrik der AV im Kopf behalten.<br><br>
+          <b>σ als Normal(0,x) in brms:</b> Das ist korrekt — brms wendet automatisch lb=0 an (truncation). Keine Sonderbehandlung nötig, kein <code>half_normal()</code>.<br><br>
+          <b>ν für Student-t zu klein:</b> ν=1 entspricht Cauchy (kein E[x]), ν=2 hat keine endliche Varianz. Empfohlen: ν ≥ 3, typisch 3–7 für robust.<br><br>
+          <b>Beta-Prior für Wahrscheinlichkeiten vergessen:</b> zi, zoi, coi-Parameter in brms sind auf [0,1] — Beta(1,1) ist Uniform, Beta(2,8) sagt: meist wenig Zero-Inflation.
+        </div>
+      </div>
+
+    </div><!-- /learn-grid -->
+
+    <!-- Comparison table -->
+    <div class="learn-card">
+      <div class="learn-h ca">Vergleichstabelle — Priors für σ und τ</div>
+      <table class="comp-table">
+        <thead><tr><th>Verteilung</th><th>brms-Syntax</th><th>E[σ]</th><th>Schwere Ränder</th><th>Wann?</th></tr></thead>
+        <tbody>
+          <tr><td>Exponential(1)</td><td><code>exponential(1)</code></td><td>1.0</td><td class="cross">✗</td><td>brms-Standard; schwach informativ</td></tr>
+          <tr><td>Half-Normal(1)</td><td><code>normal(0,1)</code></td><td>0.80</td><td class="cross">✗</td><td>Wenn σ < 2 erwartet</td></tr>
+          <tr><td>Half-Student-t(3,0,1)</td><td><code>student_t(3,0,1)</code></td><td>~0.90</td><td class="tick">✓</td><td>Kompromiss; gute Default-Wahl</td></tr>
+          <tr><td>Half-Cauchy(1)</td><td><code>cauchy(0,1)</code></td><td>—</td><td class="tick">✓✓</td><td>Sehr vage; hohe σ-Werte möglich</td></tr>
+          <tr><td>Gamma(2, 0.1)</td><td><code>gamma(2,0.1)</code></td><td>20</td><td class="cross">✗</td><td>brms-Standard für ν in Student-t</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Theme ──────────────────────────────────────────────────
+let DARK = true;
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  drawPlot();
+}
+function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+// ── Distribution definitions (from pp_check Prior Lab) ────
+function plErf(x){
+  const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;
+  const sign=x<0?-1:1; const ax=Math.abs(x);
+  const t=1/(1+p*ax);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-ax*ax);
+  return sign*y;
+}
+function owenT(h,a){
+  const wts=[0.5688888889,0.4786286705,0.4786286705,0.2369268851,0.2369268851];
+  const pts=[0.0000000000,0.5384693101,-0.5384693101,0.9061798459,-0.9061798459];
+  const half_a=a/2; let s=0;
+  for(let i=0;i<5;i++){const x=half_a*(1+pts[i]);s+=wts[i]*Math.exp(-.5*h*h*(1+x*x))/(1+x*x);}
+  return half_a*s/(2*Math.PI);
+}
+
+const DISTS = [
+  {
+    id:'normal', name:'Normal', brms:'normal(μ, σ)',
+    cat:'Unbegrenzt',
+    desc:'Symmetrische Glockenkurve. Standard für Intercepts und Koeffizienten bei z-standardisierten Variablen.',
+    use:'α, β (Intercept & Slopes)',
+    params:[{id:'mu',label:'μ (Lage)',min:-20,max:20,step:0.1,val:0},{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:1}],
+    pdf:(x,p)=>{const z=(x-p.mu)/p.sig;return Math.exp(-.5*z*z)/(p.sig*Math.sqrt(2*Math.PI));},
+    cdf:(x,p)=>jStat.normal.cdf(x,p.mu,p.sig),
+    mean:p=>p.mu, variance:p=>p.sig**2,
+    support:()=>[-Infinity,Infinity],
+    brmsLine:(p,cls,coef)=>`prior(<span class="fn">normal</span>(<span class="nm">${fmtN(p.mu)}</span>, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'b'}${coef?`, <span class="nm">coef</span> = <span class="str">"${coef}"`:''})`
+  },
+  {
+    id:'student_t', name:'Student-t', brms:'student_t(ν, μ, σ)',
+    cat:'Unbegrenzt',
+    desc:'Wie Normal, aber mit schwereren Tails durch den Freiheitsgrad ν. ν=1 ≈ Cauchy (extrem heavy-tailed), ν→∞ ≈ Normal. Empfohlen: ν=3–7 für robuste Priors. Der Solver findet μ und σ für das gewählte ν.',
+    use:'α (brms-Standard), robuste β',
+    params:[{id:'nu',label:'ν (df)',min:1,max:50,step:0.5,val:3},{id:'mu',label:'μ (Lage)',min:-20,max:20,step:0.1,val:0},{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:2.5}],
+    pdf:(x,p)=>jStat.studentt.pdf((x-p.mu)/p.sig,p.nu)/p.sig,
+    cdf:(x,p)=>jStat.studentt.cdf((x-p.mu)/p.sig,p.nu),
+    mean:p=>(p.nu>1?p.mu:NaN), variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2):Infinity),
+    support:()=>[-Infinity,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">student_t</span>(<span class="nm">${fmtN(p.nu,0)}</span>, <span class="nm">${fmtN(p.mu)}</span>, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'Intercept'})`
+  },
+  {
+    id:'cauchy', name:'Cauchy', brms:'cauchy(μ, σ)',
+    cat:'Unbegrenzt',
+    desc:'Extrem schwere Ränder. Kein endlicher Mittelwert. Früher beliebt für σ-Priors.',
+    use:'Sehr vage Priors für β',
+    params:[{id:'mu',label:'μ (Lage)',min:-20,max:20,step:0.1,val:0},{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:1}],
+    pdf:(x,p)=>1/(Math.PI*p.sig*(1+((x-p.mu)/p.sig)**2)),
+    cdf:(x,p)=>.5+Math.atan((x-p.mu)/p.sig)/Math.PI,
+    mean:p=>'—', variance:p=>'—',
+    support:()=>[-Infinity,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">cauchy</span>(<span class="nm">${fmtN(p.mu)}</span>, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'b'})`
+  },
+  {
+    id:'exponential', name:'Exponential', brms:'exponential(λ)',
+    cat:'Positiv',
+    desc:'Monoton fallend, startet bei 0. Definiert auf x≥0 — kein Shift möglich. E[x]=1/λ. brms-Standard für σ. λ=1: E[σ]=1, λ=0.5: E[σ]=2. Solver: Untere Grenze immer 0, nur obere Grenze relevnt.',
+    use:'σ (brms-Standard), τ',
+    params:[{id:'lambda',label:'λ (Rate)',min:0.01,max:5,step:0.05,val:1}],
+    pdf:(x,p)=>(x<0?0:p.lambda*Math.exp(-p.lambda*x)),
+    cdf:(x,p)=>(x<0?0:1-Math.exp(-p.lambda*x)),
+    mean:p=>1/p.lambda, variance:p=>1/p.lambda**2,
+    support:()=>[0,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">exponential</span>(<span class="nm">${fmtN(p.lambda,3)}</span>), <span class="nm">class</span> = ${cls||'sigma'})`
+  },
+  {
+    id:'half_normal', name:'Half-Normal', brms:'normal(0, σ)  # lb=0 auto',
+    cat:'Positiv',
+    desc:'Normal(0,σ) gespiegelt auf x≥0. Kein Shift — Untergrenze ist immer 0. E[x]≈0.8σ. Weakly informative für σ und τ. Solver: Gib an, bis wohin 95% der Masse reichen sollen.',
+    use:'σ, τ (Random-Effect SD)',
+    params:[{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:1}],
+    pdf:(x,p)=>(x<0?0:Math.sqrt(2/Math.PI)/p.sig*Math.exp(-.5*(x/p.sig)**2)),
+    cdf:(x,p)=>(x<0?0:jStat.normal.cdf(x,0,p.sig)*2-1),
+    mean:p=>p.sig*Math.sqrt(2/Math.PI), variance:p=>p.sig**2*(1-2/Math.PI),
+    support:()=>[0,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">normal</span>(0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># lb=0 automatisch</span>`
+  },
+  {
+    id:'half_student', name:'Half-Student-t', brms:'student_t(ν, 0, σ)',
+    cat:'Positiv',
+    desc:'Student-t mit x≥0 — kein Shift. Schwerere Ränder als Half-Normal: hohe σ-Werte werden nicht völlig ausgeschlossen. ν steuert Tail-Schwere (wie bei Student-t oben), σ wird durch den Solver bestimmt.',
+    use:'σ, τ, Prior für extreme SDs möglich',
+    params:[{id:'nu',label:'ν (df)',min:1,max:50,step:0.5,val:3},{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:2.5}],
+    pdf:(x,p)=>(x<0?0:2*jStat.studentt.pdf(x/p.sig,p.nu)/p.sig),
+    cdf:(x,p)=>(x<0?0:2*jStat.studentt.cdf(x/p.sig,p.nu)-1),
+    mean:p=>(p.nu>1?p.sig*Math.sqrt(p.nu/Math.PI)*jStat.gammafn((p.nu-1)/2)/jStat.gammafn(p.nu/2):NaN),
+    variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2)*(1-2/Math.PI):Infinity),
+    support:()=>[0,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">student_t</span>(<span class="nm">${fmtN(p.nu,0)}</span>, 0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})`
+  },
+  {
+    id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
+    cat:'Positiv',
+    desc:'Cauchy mit x≥0 — kein Shift, Untergrenze immer 0. Extrem schwere Ränder: auch sehr große σ-Werte erhalten noch Wahrscheinlichkeitsmasse. Solver: Nur obere Grenze relevant.',
+    use:'Sehr vage σ/τ-Priors',
+    params:[{id:'sig',label:'σ (Skala)',min:0.01,max:20,step:0.1,val:1}],
+    pdf:(x,p)=>(x<0?0:2/(Math.PI*p.sig*(1+(x/p.sig)**2))),
+    cdf:(x,p)=>(x<0?0:2*Math.atan(x/p.sig)/Math.PI),
+    mean:p=>'—', variance:p=>'—',
+    support:()=>[0,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">cauchy</span>(0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})`
+  },
+  {
+    id:'gamma', name:'Gamma', brms:'gamma(α, β)',
+    cat:'Positiv',
+    desc:'Flexibler Prior für positive Werte. E[x]=α/β. α=1: Exponential. brms-Standard für ν.',
+    use:'ν (Student-t), Konzentrations-parameter',
+    params:[{id:'alpha',label:'α (Shape)',min:0.1,max:20,step:0.1,val:2},{id:'beta',label:'β (Rate)',min:0.1,max:20,step:0.1,val:0.1}],
+    pdf:(x,p)=>(x<=0?0:jStat.gamma.pdf(x,p.alpha,1/p.beta)),
+    cdf:(x,p)=>(x<=0?0:jStat.gamma.cdf(x,p.alpha,1/p.beta)),
+    mean:p=>p.alpha/p.beta, variance:p=>p.alpha/(p.beta**2),
+    support:()=>[0,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">gamma</span>(<span class="nm">${fmtN(p.alpha)}</span>, <span class="nm">${fmtN(p.beta,2)}</span>), <span class="nm">class</span> = ${cls||'nu'})`
+  },
+  {
+    id:'beta', name:'Beta', brms:'beta(α, β)',
+    cat:'[0,1]',
+    desc:'Definiert auf [0,1]. Für Wahrscheinlichkeiten, Proportionen, zi/zoi/coi in brms. α=β=1: Uniform.',
+    use:'zi, zoi, coi, phi (Proportionen)',
+    params:[{id:'alpha',label:'α (Shape 1)',min:0.1,max:20,step:0.1,val:1},{id:'beta_',label:'β (Shape 2)',min:0.1,max:20,step:0.1,val:1}],
+    pdf:(x,p)=>(x<0||x>1?0:jStat.beta.pdf(x,p.alpha,p.beta_)),
+    cdf:(x,p)=>(x<0?0:x>1?1:jStat.beta.cdf(x,p.alpha,p.beta_)),
+    mean:p=>p.alpha/(p.alpha+p.beta_),
+    variance:p=>p.alpha*p.beta_/((p.alpha+p.beta_)**2*(p.alpha+p.beta_+1)),
+    support:()=>[0,1],
+    brmsLine:(p,cls)=>`prior(<span class="fn">beta</span>(<span class="nm">${fmtN(p.alpha)}</span>, <span class="nm">${fmtN(p.beta_)}</span>), <span class="nm">class</span> = ${cls||'zi'})`
+  },
+  {
+    id:'lkj', name:'LKJ', brms:'lkj(η)',
+    cat:'[-1,1]',
+    desc:'Prior für Korrelationsmatrizen in Random-Slope-Modellen. η=1: Uniform. η>1: konzentriert um 0 (ρ≈0 bevorzugt).',
+    use:'cor (Random-Slope Korrelationen)',
+    params:[{id:'eta',label:'η (Konzentration)',min:0.5,max:20,step:0.25,val:2}],
+    pdf:(x,p)=>{if(x<=-1||x>=1)return 0;const B=jStat.betafn(p.eta,p.eta);return Math.pow(1-x*x,p.eta-1)/(2*(2*p.eta-1)*B||1);},
+    cdf:(x,p)=>null,
+    mean:p=>0, variance:p=>(p.eta>1?1/(2*p.eta-1):null),
+    support:()=>[-1,1],
+    brmsLine:(p,cls)=>`prior(<span class="fn">lkj</span>(<span class="nm">${fmtN(p.eta)}</span>), <span class="nm">class</span> = ${cls||'cor'})`
+  },
+];
+
+// Context examples (clickable — load params on click)
+const EXAMPLES = [
+  {dist:'normal',     p:{mu:0,  sig:2.5}, desc:'α-Intercept: z-std., weakly inf.'},
+  {dist:'normal',     p:{mu:0,  sig:1},   desc:'β-Slope: z-std., Gelman-Empf.'},
+  {dist:'student_t',  p:{nu:3,  mu:0,sig:2.5}, desc:'α-Intercept: brms-Standard'},
+  {dist:'exponential',p:{lambda:1},       desc:'σ: brms-Standard (E[σ]=1)'},
+  {dist:'half_normal',p:{sig:1},          desc:'σ / τ: weakly informative'},
+  {dist:'half_student',p:{nu:3, sig:2.5}, desc:'σ / τ: brms-Standard (class=sd)'},
+  {dist:'gamma',      p:{alpha:2,beta:0.1}, desc:'ν: Student-t brms-Standard'},
+  {dist:'beta',       p:{alpha:1,beta_:1}, desc:'zi / zoi / coi: uniform [0,1]'},
+  {dist:'beta',       p:{alpha:2,beta_:8}, desc:'zi: wenig Zero-Inflation erwartet'},
+  {dist:'lkj',        p:{eta:2},          desc:'cor: regularisiert (η=2)'},
+];
+
+// ── State ──────────────────────────────────────────────────
+let CUR = DISTS[0];
+let PARAMS = {};
+
+// ── Init ───────────────────────────────────────────────────
+function init() {
+  buildDistList();
+  buildExamples();
+  selectDist(DISTS[0].id);
+}
+
+function buildDistList() {
+  const c = document.getElementById('dist-list');
+  const groups = {};
+  DISTS.forEach(d => {
+    if (!groups[d.cat]) groups[d.cat] = [];
+    groups[d.cat].push(d);
+  });
+  let html = '';
+  for (const [cat, dists] of Object.entries(groups)) {
+    html += `<div style="font-family:'DM Mono',monospace;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);opacity:.5;margin:.3rem 0 .12rem;padding-left:.1rem">${cat}</div>`;
+    dists.forEach(d => {
+      html += `<button class="dbtn${d===CUR?' sel':''}" id="db-${d.id}" onclick="selectDist('${d.id}')">${d.name}</button>`;
+    });
+  }
+  c.innerHTML = html;
+}
+
+function buildExamples() {
+  const c = document.getElementById('examples-area');
+  const greekMap = {mu:'μ', sig:'σ', nu:'ν', lambda:'λ', alpha:'α', beta:'β', beta_:'β', eta:'η'};
+  c.innerHTML = EXAMPLES.map(ex => {
+    const d = DISTS.find(x => x.id === ex.dist);
+    const paramStr = Object.entries(ex.p)
+      .map(([k,v]) => `${greekMap[k]||k}=${v}`)
+      .join(', ');
+    return `<div class="ex-row" onclick="loadExample('${ex.dist}',${JSON.stringify(ex.p)})">
+      <span class="ex-dist">${d?.name||ex.dist}</span>
+      <span class="ex-use">${ex.desc}</span>
+      <span class="ex-params">${paramStr}</span>
+    </div>`;
+  }).join('');
+}
+
+function loadExample(distId, params) {
+  // 1. Switch distribution
+  CUR = DISTS.find(d => d.id === distId);
+  // 2. Start from defaults, then apply example params on top
+  PARAMS = {};
+  CUR.params.forEach(p => { PARAMS[p.id] = p.val; });
+  Object.entries(params).forEach(([k,v]) => { PARAMS[k] = +v; });
+  // 3. Highlight the correct dist button
+  document.querySelectorAll('.dbtn').forEach(b => {
+    b.classList.toggle('sel', b.id === 'db-'+distId);
+  });
+  // 4. Rebuild sliders — they read from PARAMS so example values appear immediately
+  buildParams();
+  // 5. Update solver hint (e.g. disable ci-lo for positive dists)
+  updateSolverHint();
+  // 6. Auto-range + draw (single pass, with correct params)
+  autoRange();
+}
+
+function selectDist(id) {
+  CUR = DISTS.find(d => d.id === id);
+  PARAMS = {};
+  CUR.params.forEach(p => { PARAMS[p.id] = p.val; });
+  document.querySelectorAll('.dbtn').forEach(b => {
+    b.classList.toggle('sel', b.id === 'db-'+id);
+  });
+  buildParams();
+  updateSolverHint();
+  autoRange();
+}
+
+function updateSolverHint() {
+  const hint = document.getElementById('solver-hint');
+  if (!hint) return;
+  const posOnly = ['exponential','half_normal','half_student','half_cauchy'];
+  const isPos   = posOnly.includes(CUR.id);
+  const loEl    = document.getElementById('ci-lo');
+  if (isPos) {
+    if (loEl) { loEl.value = 0; loEl.disabled = true; loEl.style.opacity = '.35'; loEl.title = 'Untergrenze ist immer 0 (kein Shift erlaubt)'; }
+    hint.innerHTML = '<b style="color:var(--a5)">Positive Verteilung:</b> Die Untergrenze ist fest 0 — kein Shift möglich. Gib nur an, bis wohin die obere Grenze reichen soll.'
+      + (CUR.id === 'half_student' ? '<br><span style="opacity:.7">ν steuert die Schwere der Tails und muss separat im Slider eingestellt werden.</span>' : '');
+  } else if (CUR.id === 'student_t') {
+    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
+    hint.innerHTML = '<b style="color:var(--a2)">Student-t:</b> Stelle zuerst ν (Freiheitsgrade) über den Slider ein — ν bestimmt die Tail-Schwere. Dann werden μ und σ für das gewählte ν berechnet.';
+  } else if (CUR.id === 'lkj') {
+    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
+    hint.innerHTML = '<span style="opacity:.6">Für LKJ ist kein automatischer Solver verfügbar — bitte η über den Slider einstellen.</span>';
+  } else {
+    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
+    hint.innerHTML = '';
+  }
+}
+
+function buildParams() {
+  const c = document.getElementById('params-area');
+  const decFor = id => id==='lambda'?3 : id==='nu'?1 : id==='eta'?2 : 2;
+  c.innerHTML = CUR.params.map(p => `
+    <div class="pg">
+      <div class="pl">
+        <span class="plbl">${p.label}</span>
+        <span class="pval" id="slv-${p.id}">${fmtN(PARAMS[p.id], decFor(p.id))}</span>
+      </div>
+      <input type="range" id="slr-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}"
+             value="${PARAMS[p.id]}" oninput="setParam('${p.id}',+this.value)">
+    </div>`).join('');
+}
+
+function setParam(id, val) {
+  PARAMS[id] = val;
+  const s = document.getElementById('slv-'+id);
+  if (s) s.textContent = fmtN(val, id==='nu'?1:id==='lambda'?3:2);
+  drawPlot();
+}
+
+// ── Auto range ─────────────────────────────────────────────
+function autoRange() {
+  const supp = CUR.support(PARAMS);
+  let lo, hi;
+  if (CUR.id==='beta') { lo=0; hi=1; }
+  else if (CUR.id==='lkj') { lo=-1; hi=1; }
+  else {
+    try {
+      if (CUR.cdf) {
+        lo = findQ(0.005); hi = findQ(0.995);
+      } else {
+        const mu = typeof CUR.mean(PARAMS)==='number' ? CUR.mean(PARAMS) : 0;
+        const sd = typeof CUR.variance(PARAMS)==='number' ? Math.sqrt(CUR.variance(PARAMS)) : 3;
+        lo = supp[0]===-Infinity ? mu-4*Math.max(sd,1) : supp[0];
+        hi = mu + 4*Math.max(sd,1);
+      }
+    } catch(e) { lo=-5; hi=5; }
+  }
+  lo = Math.max(lo, isFinite(supp[0]) ? supp[0] : lo);
+  hi = Math.min(hi, isFinite(supp[1]) ? supp[1] : hi);
+  const pad = (hi-lo)*0.06;
+  document.getElementById('xlo').value = Math.round((lo-pad)*100)/100;
+  document.getElementById('xhi').value = Math.round((hi+pad)*100)/100;
+  drawPlot();
+}
+
+function findQ(q) {
+  let a = isFinite(CUR.support(PARAMS)[0]) ? CUR.support(PARAMS)[0]-1e-6 : -1e7;
+  let b = isFinite(CUR.support(PARAMS)[1]) ? CUR.support(PARAMS)[1]+1e-6 :  1e7;
+  for (let i=0;i<100;i++) {
+    const m=(a+b)/2;
+    const c=CUR.cdf(m,PARAMS)||0;
+    if(c<q) a=m; else b=m;
+    if(b-a<1e-7) break;
+  }
+  return (a+b)/2;
+}
+
+// ── Draw plot ──────────────────────────────────────────────
+function drawPlot() {
+  const lo = parseFloat(document.getElementById('xlo').value)||(-5);
+  const hi = parseFloat(document.getElementById('xhi').value)||(5);
+  if (lo >= hi) return;
+
+  const N = 500;
+  const xs = Array.from({length:N}, (_,i) => lo + i*(hi-lo)/(N-1));
+  const ys = xs.map(x => {
+    try { const v=CUR.pdf(x,PARAMS); return (isFinite(v)&&v>=0)?v:0; } catch(e){return 0;}
+  });
+  const yMax = Math.max(...ys)*1.15||1;
+
+  const wrap = document.getElementById('plot-svg-wrap');
+  if (!wrap) return;
+  const W = wrap.clientWidth || 700;
+  const H = 280;
+  const m = {l:50,r:20,t:18,b:38};
+  const Wp = W-m.l-m.r, Hp = H-m.t-m.b;
+
+  d3.select(wrap).selectAll('*').remove();
+  const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H).style('overflow','visible');
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xSc = d3.scaleLinear().domain([lo,hi]).range([0,Wp]);
+  const ySc = d3.scaleLinear().domain([0,yMax]).range([Hp,0]);
+  const grid = cv('--grid'), ink2 = cv('--ink2'), a2 = cv('--a2'), a3 = cv('--a3');
+
+  g.append('g').call(d3.axisLeft(ySc).ticks(4).tickSize(-Wp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
+  g.append('g').attr('transform',`translate(0,${Hp})`)
+   .call(d3.axisBottom(xSc).ticks(7).tickSize(-Hp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
+
+  // CI shading (95%)
+  if (CUR.cdf) {
+    try {
+      const q025 = findQVal(0.025), q975 = findQVal(0.975);
+      const xsCI = xs.filter(x => x>=q025 && x<=q975);
+      if (xsCI.length > 1) {
+        const ciPts = xsCI.map((x,i)=>[x,CUR.pdf(x,PARAMS)]);
+        const areaCI = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+        g.append('path').datum(ciPts).attr('fill',a2).attr('fill-opacity',.18).attr('d',areaCI);
+        // CI boundary lines
+        [q025,q975].forEach(qx => {
+          if (qx>=lo && qx<=hi) {
+            g.append('line').attr('x1',xSc(qx)).attr('x2',xSc(qx)).attr('y1',0).attr('y2',Hp)
+             .attr('stroke',a2).attr('stroke-width',1.2).attr('stroke-dasharray','4,3').attr('opacity',.7);
+          }
+        });
+        // 95% label
+        const mid = (q025+q975)/2;
+        if (mid>=lo && mid<=hi) {
+          g.append('text').attr('x',xSc(mid)).attr('y',14)
+           .attr('text-anchor','middle').attr('fill',a2).attr('font-size','10px').attr('font-family','DM Mono,monospace')
+           .attr('opacity',.8).text('95%-CrI');
+        }
+      }
+    } catch(e){}
+  }
+
+  if (lo<0&&hi>0) {
+    g.append('line').attr('x1',xSc(0)).attr('x2',xSc(0)).attr('y1',0).attr('y2',Hp)
+     .attr('stroke',grid).attr('stroke-dasharray','3,4').attr('opacity',.8);
+  }
+
+  // Gradient fill
+  const gradId = 'gr-'+Date.now();
+  const defs = svg.append('defs');
+  const lg = defs.append('linearGradient').attr('id',gradId).attr('x1',0).attr('x2',0).attr('y1',0).attr('y2',1);
+  lg.append('stop').attr('offset','0%').attr('stop-color',a2).attr('stop-opacity',.35);
+  lg.append('stop').attr('offset','100%').attr('stop-color',a2).attr('stop-opacity',.02);
+
+  const pts = xs.map((x,i)=>[x,ys[i]]);
+  const area = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+  const line = d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis);
+
+  g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
+  g.append('path').datum(pts).attr('fill','none').attr('stroke',a2).attr('stroke-width',2.5).attr('d',line);
+
+  // Mean line
+  const mn = CUR.mean(PARAMS);
+  if (typeof mn==='number' && isFinite(mn) && mn>=lo && mn<=hi) {
+    g.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',0).attr('y2',Hp)
+     .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+    g.append('text').attr('x',xSc(mn)+4).attr('y',13)
+     .attr('fill',a3).attr('font-size','10px').attr('font-family','DM Mono,monospace').text('E[x]');
+  }
+
+  // Title + description
+  document.getElementById('plot-title').innerHTML = `<em>${CUR.name}</em> — <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:var(--ink2)">${CUR.brms}</span>`;
+  document.getElementById('plot-desc').innerHTML = `<b>Einsatz:</b> ${CUR.use}<br>${CUR.desc}`;
+
+  // Stats
+  const mean = CUR.mean(PARAMS);
+  const vari = CUR.variance(PARAMS);
+  const sd = typeof vari==='number' && isFinite(vari) ? Math.sqrt(vari) : '—';
+  document.getElementById('stats-area').innerHTML = `
+    <div class="sstat"><span class="sv">${typeof mean==='number'&&isFinite(mean)?fmtN(mean,3):'—'}</span><span class="sl">E[x]</span></div>
+    <div class="sstat"><span class="sv">${typeof sd==='number'?fmtN(sd,3):sd}</span><span class="sl">SD</span></div>
+    <div class="sstat"><span class="sv">${typeof vari==='number'&&isFinite(vari)?fmtN(vari,3):(vari===Infinity?'∞':'—')}</span><span class="sl">Var</span></div>`;
+
+  // Coverage intervals
+  let covHTML = '';
+  if (CUR.cdf) {
+    [[50,'50%'],[80,'80%'],[95,'95%'],[99,'99%']].forEach(([pct,lbl]) => {
+      try {
+        const qlo = findQVal((1-pct/100)/2);
+        const qhi = findQVal(1-(1-pct/100)/2);
+        covHTML += `<div class="cov-item"><b>${lbl}</b> [${fmtN(qlo,2)}, ${fmtN(qhi,2)}]</div>`;
+      } catch(e){}
+    });
+  }
+  document.getElementById('coverage').innerHTML = covHTML
+    ? `<span style="font-family:'DM Mono',monospace;font-size:.52rem;color:var(--ink2);opacity:.5;letter-spacing:.1em;text-transform:uppercase;display:block;width:100%;margin-bottom:.2rem">Credible Intervals</span>${covHTML}`
+    : '';
+
+  // brms code
+  const brmsHtml = CUR.brmsLine ? CUR.brmsLine(PARAMS) : `prior(${CUR.brms}, class = b)`;
+  document.getElementById('brms-code').innerHTML = brmsHtml;
+}
+
+function findQVal(q) {
+  const supp = CUR.support(PARAMS);
+  let a = isFinite(supp[0]) ? supp[0]-1e-6 : -1e7;
+  let b = isFinite(supp[1]) ? supp[1]+1e-6 :  1e7;
+  for (let i=0;i<120;i++) {
+    const m=(a+b)/2;
+    const c=CUR.cdf(m,PARAMS)||0;
+    if(c<q) a=m; else b=m;
+    if(b-a<1e-8) break;
+  }
+  return (a+b)/2;
+}
+
+// ── CI Solver ──────────────────────────────────────────────
+function plInvNorm(p){
+  if(p<=0)return -Infinity;if(p>=1)return Infinity;
+  const a=[2.515517,0.802853,0.010328],b=[1.432788,0.189269,0.001308];
+  const t=p<.5?Math.sqrt(-2*Math.log(p)):Math.sqrt(-2*Math.log(1-p));
+  const num=a[0]+t*(a[1]+t*a[2]),den=1+t*(b[0]+t*(b[1]+t*b[2]));
+  const z=t-num/den;return p<.5?-z:z;
+}
+function _plGammaInc(a,x){
+  if(x<=0)return 0;
+  function lgam(z){const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,1.208650973866179e-3,-5.395239384953e-6];let y=z,t=z+5.5;t-=(z+0.5)*Math.log(t);let s=1.000000000190015;for(let j=0;j<6;j++)s+=c[j]/++y;return -t+Math.log(2.5066282746310005*s/z);}
+  if(x<a+1){let ap=a,del=1/a,sum=del;for(let n=0;n<600;n++){ap++;del*=x/ap;sum+=del;if(Math.abs(del)<1e-14*Math.abs(sum))break;}return Math.min(1,Math.exp(-x+a*Math.log(x)-lgam(a))*sum);}
+  else{let b2=x+1-a,c=1e300,d=1/b2,h=d;for(let i=1;i<=600;i++){const an=-i*(i-a);b2+=2;d=an*d+b2;if(Math.abs(d)<1e-300)d=1e-300;c=b2+an/c;if(Math.abs(c)<1e-300)c=1e-300;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<1e-14)break;}return Math.max(0,1-Math.exp(-x+a*Math.log(x)-lgam(a))*h);}
+}
+function _chi2cdf(x,df){return x<=0?0:_plGammaInc(df/2,x/2);}
+function _chi2inv(p,df){
+  if(p<=0)return 0;if(p>=1)return 1e15;
+  const z=plInvNorm(p),h=2/(9*df);
+  let lo=0,hi=Math.max(1e-9,df*Math.pow(Math.max(1e-9,1-h+z*Math.sqrt(h)),3))*4+200;
+  while(_chi2cdf(hi,df)<p)hi*=4;
+  for(let i=0;i<200;i++){const m=(lo+hi)/2;if(_chi2cdf(m,df)<p){lo=m;}else{hi=m;}if(hi-lo<1e-10*(1+m))break;}
+  return (lo+hi)/2;
+}
+
+function solvCI() {
+  const lo = parseFloat(document.getElementById('ci-lo').value);
+  const hi = parseFloat(document.getElementById('ci-hi').value);
+  const pct = parseFloat(document.getElementById('ci-pct').value)||95;
+  const res = document.getElementById('solver-result');
+  res.classList.add('show');
+  if (!isFinite(lo)||!isFinite(hi)||lo>=hi) { res.textContent='Fehler: Untere Grenze muss < obere Grenze sein.'; return; }
+  if (pct<=0||pct>=100) { res.textContent='Fehler: Masse muss zwischen 1% und 99% liegen.'; return; }
+  const q_lo=(1-pct/100)/2, q_hi=1-q_lo;
+  const setP=(id,v)=>{const r=document.getElementById('slr-'+id),s=document.getElementById('slv-'+id);if(r)r.value=v;if(s)s.textContent=fmtN(+v);if(PARAMS[id]!==undefined)PARAMS[id]=+v;};
+
+  try {
+    if (CUR.id==='normal') {
+      const z_lo=plInvNorm(q_lo),z_hi=plInvNorm(q_hi);
+      const sigma=(hi-lo)/(z_hi-z_lo), mu=(lo+hi)/2;
+      res.innerHTML=`<b>Normal:</b> μ = <b>${fmtN(mu,4)}</b>, σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(mu+sigma*z_lo,3)}, ${fmtN(mu+sigma*z_hi,3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma);
+    } else if (CUR.id==='student_t') {
+      const nu=PARAMS.nu||3;
+      const t_lo=jStat.studentt.inv(q_lo,nu),t_hi=jStat.studentt.inv(q_hi,nu);
+      const sigma=(hi-lo)/(t_hi-t_lo),mu=(lo+hi)/2;
+      res.innerHTML=`<b>Student-t(ν=${fmtN(nu,1)} — fest eingestellt):</b><br>μ = <b>${fmtN(mu,4)}</b>, σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(mu+sigma*t_lo,3)}, ${fmtN(mu+sigma*t_hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">ν steuert Tail-Schwere und muss inhaltlich gewählt werden. μ und σ wurden automatisch berechnet.</span>`;
+      setP('mu',mu); setP('sig',sigma);
+    } else if (CUR.id==='cauchy') {
+      const t_lo=Math.tan(Math.PI*(q_lo-.5)),t_hi=Math.tan(Math.PI*(q_hi-.5));
+      const sigma=(hi-lo)/(t_hi-t_lo),mu=(lo+hi)/2;
+      res.innerHTML=`<b>Cauchy:</b> μ = <b>${fmtN(mu,4)}</b>, σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(mu+sigma*t_lo,3)}, ${fmtN(mu+sigma*t_hi,3)}]</span>`;
+      setP('mu',mu); setP('sig',sigma);
+    } else if (CUR.id==='exponential') {
+      const lambda=-Math.log(1-q_hi)/hi;
+      res.innerHTML=`<b>Exponential:</b> λ = <b>${fmtN(lambda,4)}</b> → E[x] = ${fmtN(1/lambda,3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(-Math.log(1-q_hi)/lambda,3)}] — Untergrenze ist immer 0</span>`;
+      setP('lambda',lambda);
+    } else if (CUR.id==='half_normal') {
+      const sigma=hi/plInvNorm((q_hi+1)/2);
+      res.innerHTML=`<b>Half-Normal:</b> σ = <b>${fmtN(sigma,4)}</b> → E[x] = ${fmtN(sigma*Math.sqrt(2/Math.PI),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(hi,3)}] — Untergrenze immer 0, kein Shift</span>`;
+      setP('sig',sigma);
+    } else if (CUR.id==='half_cauchy') {
+      const sigma=hi/Math.tan(Math.PI*q_hi/2);
+      res.innerHTML=`<b>Half-Cauchy:</b> σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(hi,3)}] — Untergrenze immer 0, kein Shift</span>`;
+      setP('sig',sigma);
+    } else if (CUR.id==='gamma') {
+      if (lo<=0) { res.textContent='Fehler: Gamma ist auf x>0 definiert — untere Grenze > 0 setzen.'; return; }
+      function _getBeta(a){return _chi2inv(q_hi,2*a)/(2*hi);}
+      let aLo=0.01,aHi=500;
+      for(let i=0;i<200;i++){const am=(aLo+aHi)/2;const beta=_getBeta(am);const cdf=_chi2cdf(2*beta*lo,2*am);if(cdf>q_lo)aLo=am;else aHi=am;if(aHi-aLo<1e-9)break;}
+      const alpha=(aLo+aHi)/2,beta=_getBeta(alpha);
+      const ciLo=_chi2inv(q_lo,2*alpha)/(2*beta),ciHi=_chi2inv(q_hi,2*alpha)/(2*beta);
+      res.innerHTML=`<b>Gamma:</b> α = <b>${fmtN(alpha,4)}</b>, β = <b>${fmtN(beta,4)}</b> → E[x] = ${fmtN(alpha/beta,3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(ciLo,3)}, ${fmtN(ciHi,3)}]</span>`;
+      setP('alpha',alpha); setP('beta',beta);
+    } else if (CUR.id==='beta') {
+      if (lo<0||hi>1) { res.textContent='Fehler: Beta ist auf [0,1] definiert.'; return; }
+      function betaInner(a){let bLo=1e-4,bHi=2000;for(let i=0;i<120;i++){const bm=(bLo+bHi)/2;if(jStat.beta.cdf(hi,a,bm)<q_hi)bLo=bm;else bHi=bm;if(bHi-bLo<1e-9)break;}return(bLo+bHi)/2;}
+      let aLo=1e-4,aHi=500;
+      for(let i=0;i<120;i++){const am=(aLo+aHi)/2;const bm=betaInner(am);if(jStat.beta.cdf(lo,am,bm)<q_lo)aHi=am;else aLo=am;if(aHi-aLo<1e-7)break;}
+      const a=(aLo+aHi)/2,b_=betaInner(a);
+      const ciLo=jStat.beta.inv(q_lo,a,b_),ciHi=jStat.beta.inv(q_hi,a,b_);
+      res.innerHTML=`<b>Beta:</b> α = <b>${fmtN(a,4)}</b>, β = <b>${fmtN(b_,4)}</b> → E[x] = ${fmtN(a/(a+b_),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(ciLo,3)}, ${fmtN(ciHi,3)}]</span>`;
+      setP('alpha',a); setP('beta_',b_);
+    } else {
+      if (!CUR.cdf) { res.innerHTML='<span style="opacity:.6">Für diese Verteilung kein automatischer Solver. Bitte Parameter manuell anpassen.</span>'; return; }
+      const clo=CUR.cdf(lo,PARAMS)||0, chi=CUR.cdf(hi,PARAMS)||0;
+      res.innerHTML=`<span style="opacity:.6">Aktuelle Parameter: P(x<${lo})=${fmtN(clo*100,1)}%, P(x<${hi})=${fmtN(chi*100,1)}%.<br>Ziel: ${fmtN(q_lo*100,1)}% / ${fmtN(q_hi*100,1)}%. Parameter manuell anpassen.</span>`;
+      return;
+    }
+    autoRange();
+  } catch(e) { res.textContent='Solver-Fehler: '+e.message; }
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function fmtN(v, dec=2) {
+  const n = parseFloat(v);
+  if (!isFinite(n)) return '—';
+  return n.toFixed(dec).replace(/\.?0+$/, '') || '0';
+}
+function copyCode() {
+  const el = document.getElementById('brms-code');
+  navigator.clipboard.writeText(el.innerText).then(() => showToast('Kopiert ✓'));
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+window.addEventListener('resize', () => drawPlot());
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
