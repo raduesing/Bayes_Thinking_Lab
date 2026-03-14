@@ -167,6 +167,28 @@ svg text{font-family:'DM Mono',monospace}
 /* Calibration plot */
 .cal-wrap{margin-top:.45rem}
 @media(max-width:900px){.outer{grid-template-columns:1fr;height:auto;overflow:visible}.sidebar{overflow-y:visible}.two,.three,.ab-wrap{grid-template-columns:1fr}}
+
+/* ── Intercept-Prior Info Modal ─────────────────────────── */
+#ipm-overlay{position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.68);
+  backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:1.5rem;}
+#ipm-overlay.open{display:flex}
+#ipm-modal{max-width:600px;width:100%;background:var(--paper);border:2px solid var(--accent);
+  box-shadow:0 0 40px rgba(232,97,74,.18),0 16px 48px rgba(0,0,0,.55);}
+#ipm-header{display:flex;align-items:center;justify-content:space-between;
+  padding:.75rem 1.1rem .65rem;background:var(--accent);}
+#ipm-header span{font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500;
+  color:white;letter-spacing:.04em;display:flex;align-items:center;gap:.45rem;}
+#ipm-close{font-family:'DM Mono',monospace;font-size:.75rem;
+  border:1.5px solid rgba(255,255,255,.55);background:transparent;
+  cursor:pointer;color:white;padding:.2rem .6rem;transition:all .15s;}
+#ipm-close:hover{background:rgba(255,255,255,.18)}
+#ipm-body{padding:1.1rem 1.3rem 1.25rem;font-family:'DM Mono',monospace;
+  font-size:.67rem;line-height:1.85;color:var(--ink2)}
+#ipm-body b{color:var(--ink)}
+#ipm-body code{background:var(--surf2,var(--panel));border:1px solid var(--border2,var(--border));
+  color:var(--accent2);padding:.06rem .38rem;font-size:.72rem;}
+#ipm-body .ipm-strong{display:block;margin-top:.85rem;padding:.5rem .75rem;
+  background:var(--accent);color:white;font-weight:500;font-size:.68rem;}
 </style>
 </head>
 <body>
@@ -184,7 +206,7 @@ svg text{font-family:'DM Mono',monospace}
     <p class="auth">© Dr. Rainer Düsing · Bugfixes & Features by Claude</p>
   </div>
   <div class="hbtns">
-    <button class="ibtn" id="btn-priorlab" onclick="openPriorLab()" style="border-color:var(--accent2);color:var(--accent2)">⬡ Prior Lab</button>
+    <button class="ibtn" id="btn-priorlab" onclick="openPriorLab()" style="border-color:var(--accent2);color:var(--accent2)">⬡ Prior Lab light</button>
     <button class="ibtn" id="btn-ab"    onclick="toggleAB()">⊞ A/B Vergleich</button>
     <button class="ibtn" id="btn-lmm"   onclick="toggleLMM()">⊕ Mixed Model</button>
     <button class="ibtn" onclick="exportR()">↓ R-Code</button>
@@ -200,12 +222,36 @@ svg text{font-family:'DM Mono',monospace}
   <!-- Modell -->
   <div class="scard">
     <h3 class="ha">Modell</h3>
-    <div style="display:flex;flex-direction:column;gap:.22rem" id="model-tabs">
-      <button class="rbtn sel" data-model="linear"   onclick="setModel(this)">Lineare Regression <span style="float:right;opacity:.5;font-size:.56rem">gaussian()</span></button>
-      <button class="rbtn"     data-model="student"  onclick="setModel(this)">Student-t Regression <span style="float:right;opacity:.5;font-size:.56rem">student()</span></button>
-      <button class="rbtn"     data-model="logistic" onclick="setModel(this)">Logistische Regression <span style="float:right;opacity:.5;font-size:.56rem">bernoulli()</span></button>
-      <button class="rbtn"     data-model="poisson"  onclick="setModel(this)">Poisson Regression <span style="float:right;opacity:.5;font-size:.56rem">poisson()</span></button>
-      <button class="rbtn"     data-model="gamma"    onclick="setModel(this)">Gamma Regression <span style="float:right;opacity:.5;font-size:.56rem">Gamma()</span></button>
+    <select id="model-select" onchange="setModelFromSelect()" style="font-size:.67rem;margin-bottom:.3rem">
+      <optgroup label="── Stetig ──────────────────────">
+        <option value="linear"           selected>Gaussian — Normal(μ, σ)</option>
+        <option value="student">Student-t — t(ν, μ, σ)</option>
+        <option value="lognormal">Lognormal — LN(μ, σ)</option>
+        <option value="shifted_lognormal">Shifted Lognormal — SLN(μ, σ, δ)</option>
+        <option value="skew_normal">Skew-Normal — SN(μ, σ, ξ)</option>
+      </optgroup>
+      <optgroup label="── Zähldaten ───────────────────">
+        <option value="poisson">Poisson — Poisson(λ)</option>
+        <option value="negbinomial">Neg. Binomial — NB(μ, φ)</option>
+      </optgroup>
+      <optgroup label="── Binär / Proportionen ────────">
+        <option value="logistic">Bernoulli — Bernoulli(p)</option>
+        <option value="beta_reg">Beta — Beta(μ, φ)</option>
+        <option value="beta_binomial">Beta-Binomial — BB(n, μ, φ)</option>
+        <option value="zero_inflated_beta">ZI-Beta — ZIBeta(μ, φ, π)</option>
+        <option value="zero_one_inflated_beta">ZOI-Beta — ZOIB(μ, φ, ζ, κ)</option>
+      </optgroup>
+      <optgroup label="── Gamma ───────────────────────">
+        <option value="gamma">Gamma — Gamma(μ, φ)</option>
+      </optgroup>
+      <optgroup label="── Ordinal / Nominal ───────────">
+        <option value="cumulative">Kumulativ (ordinal) — logit</option>
+        <option value="categorical">Kategorisch (nominal)</option>
+      </optgroup>
+    </select>
+    <div id="trials-row" style="display:none">
+      <div class="pl"><span class="lbl">Trials-Variable (beta_binomial)</span></div>
+      <input type="text" id="trials-var" value="trials" style="font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);border:1px solid var(--grid);color:var(--ink);padding:.26rem .4rem;outline:none;width:100%" oninput="if(lastSimA)render()">
     </div>
   </div>
 
@@ -419,6 +465,86 @@ svg text{font-family:'DM Mono',monospace}
     </div>
   </div>
 
+  <!-- AUX PARAMS (φ, δ, ξ, zi, zoi, coi) — shown per model -->
+  <div class="scard" id="aux-card" style="display:none">
+    <h3 style="color:var(--accent6)">Aux-Parameter</h3>
+    <div class="infobox" style="margin-bottom:.5rem;font-size:.6rem">
+      <b>Verteilungs-spezifische Parameter.</b> Priors nach brms-Empfehlung.<br>
+      Verteilungsmodelle (distributional models) für diese Parameter sind unten konfigurierbar.
+    </div>
+    <!-- φ: Beta, beta_binomial, ZI-Beta, ZOIB, negbinomial, Gamma -->
+    <div id="aux-phi-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">φ · Präzisions-/Shape-Prior <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>φ (phi)</b><br>Beta/ZI-Beta/ZOIB: Präzision. Größer = enger um μ.<br>NegBin/Gamma: Shape/Overdispersion.<br>brms: gamma(0.01, 0.01) ist flat — hier: exponential(1).</span></span></span>
+          <span class="pv" id="d-phi-p1" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="phi-p1" min="0.05" max="5" step="0.05" value="1" oninput="updDisp('phi-p1','d-phi-p1',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+    <!-- δ (ndt): shifted_lognormal -->
+    <div id="aux-ndt-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">δ · Non-Decision Time Prior<span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>δ (ndt)</b><br>Shift-Parameter der Shifted Lognormal.<br>δ > 0, muss < min(y). brms: normal(0,0.3) mit lb=0.</span></span></span>
+          <span class="pv" id="d-ndt-mu" style="color:var(--accent6)">0.0</span></div>
+        <input type="range" id="ndt-mu" min="-2" max="2" step="0.05" value="0" oninput="updDisp('ndt-mu','d-ndt-mu',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">σ_δ</span><span class="pv" id="d-ndt-sig" style="color:var(--accent6)">0.30</span></div>
+        <input type="range" id="ndt-sig" min="0.05" max="2" step="0.05" value="0.3" oninput="updDisp('ndt-sig','d-ndt-sig',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+    <!-- ξ (alpha/skewness): skew_normal -->
+    <div id="aux-alpha-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">ξ · Schiefe-Prior <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>ξ (alpha/skewness)</b><br>Schiefe der Skew-Normal. ξ=0 = symmetrisch, ξ>0 = rechtsschief, ξ<0 = linksschief.<br>brms: no prior (flat) — hier: normal(0,2).</span></span></span>
+          <span class="pv" id="d-alpha-mu" style="color:var(--accent6)">0.0</span></div>
+        <input type="range" id="alpha-mu" min="-5" max="5" step="0.1" value="0" oninput="updDisp('alpha-mu','d-alpha-mu',1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">σ_ξ</span><span class="pv" id="d-alpha-sig" style="color:var(--accent6)">2.00</span></div>
+        <input type="range" id="alpha-sig" min="0.1" max="8" step="0.1" value="2" oninput="updDisp('alpha-sig','d-alpha-sig',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+    <!-- π (zi): zero_inflated_beta -->
+    <div id="aux-zi-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">π · Zero-Inflation Prior <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>π (zi)</b><br>P(y=0) Zero-Inflation. Beta(1,1) = uniform auf [0,1].<br>Stärkeres Vorwissen: Beta(2,8) → selten 0.</span></span></span>
+          <span class="pv" id="d-zi-a" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="zi-a" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('zi-a','d-zi-a',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        <div class="pl" style="margin-top:.3rem"><span class="lbl">β (Beta-Shape 2)</span><span class="pv" id="d-zi-b" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="zi-b" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('zi-b','d-zi-b',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+    <!-- ζ/κ (zoi/coi): zero_one_inflated_beta -->
+    <div id="aux-zoicoi-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">ζ · ZOI Prior (P(y=0 or 1))</span>
+          <span class="pv" id="d-zoi-a" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="zoi-a" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('zoi-a','d-zoi-a',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        <div class="pl" style="margin-top:.2rem"><span class="lbl">β₂</span><span class="pv" id="d-zoi-b" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="zoi-b" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('zoi-b','d-zoi-b',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+      <div class="pg">
+        <div class="pl"><span class="lbl">κ · COI Prior (P(y=1|y∈{0,1}))</span>
+          <span class="pv" id="d-coi-a" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="coi-a" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('coi-a','d-coi-a',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+        <div class="pl" style="margin-top:.2rem"><span class="lbl">β₂</span><span class="pv" id="d-coi-b" style="color:var(--accent6)">1.00</span></div>
+        <input type="range" id="coi-b" min="0.5" max="5" step="0.1" value="1" oninput="updDisp('coi-b','d-coi-b',2);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+    <!-- nCat: cumulative/categorical -->
+    <div id="aux-ncat-section" style="display:none">
+      <div class="pg">
+        <div class="pl"><span class="lbl">Anzahl Kategorien K</span><span class="pv" id="d-ncat" style="color:var(--accent6)">5</span></div>
+        <input type="range" id="ncat" min="3" max="10" step="1" value="5" oninput="updDispInt('ncat','d-ncat');if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+      <div class="pg" id="thresh-prior-row">
+        <div class="pl"><span class="lbl">Threshold-Prior σ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>K−1 Thresholds τ_k</b><br>brms: student_t(3,0,2.5).<br>Hier: normal(0, σ_thresh).</span></span></span>
+          <span class="pv" id="d-thresh-sig" style="color:var(--accent6)">2.5</span></div>
+        <input type="range" id="thresh-sig" min="0.5" max="8" step="0.1" value="2.5" oninput="updDisp('thresh-sig','d-thresh-sig',1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+      </div>
+    </div>
+  </div>
+
   <div class="scard" id="lmm-card" style="display:none">
     <h3 class="hp">Random Effects (LMM)</h3>
     <div class="infobox" style="margin-bottom:.5rem">Nur lineare Regression. Modelliert Gruppenstruktur (z.B. Schüler in Schulen).</div>
@@ -510,7 +636,7 @@ svg text{font-family:'DM Mono',monospace}
     <div class="expl-body">
       <b>Workflow:</b><br>
       1. Modell wählen<br>
-      2. ⬡ <b>Prior Lab</b> öffnen — Verteilung explorieren, Credible Interval-Solver nutzen, passende μ/σ finden<br>
+      2. ⬡ <b>Prior Lab light</b> öffnen — Verteilung explorieren, Credible Interval-Solver nutzen, passende μ/σ finden<br>
       3. Priors einstellen (Preset als Ausgangspunkt)<br>
       4. Simulation starten → Ampel grün?<br>
       5. Daten hochladen → pp_check mit echten x-Werten<br>
@@ -635,6 +761,10 @@ function setSigRange() {
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
 
+function updDispInt(id, dispId) {
+  const el=document.getElementById(id); if(!el)return;
+  const dp=document.getElementById(dispId); if(dp) dp.textContent=Math.round(+el.value);
+}
 function updDisp(sliderId, dispId, dec) {
   const el = document.getElementById(sliderId);
   if (!el) return;
@@ -706,44 +836,93 @@ function setPredSigMax(id, maxVal) {
 // ─────────────────────────────────────────────────────────
 //  MODEL
 // ─────────────────────────────────────────────────────────
+// Called from select onchange
+function setModelFromSelect() {
+  MODEL = document.getElementById('model-select').value;
+  applyModelUI();
+}
+// Called programmatically (e.g. from importFromBuilder)
 function setModel(btn) {
-  MODEL = btn.dataset.model;
-  document.querySelectorAll('#model-tabs .rbtn').forEach(b => b.classList.remove('sel'));
-  btn.classList.add('sel');
-  const hasSig    = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
-  const distSigOk = hasSig && MODEL !== 'gamma';
-  document.getElementById('sigma-card').style.display = hasSig ? '' : 'none';
-  document.getElementById('nu-card').style.display    = MODEL==='student' ? '' : 'none';
+  // btn can be a button element (legacy) or a string model key
+  if (typeof btn === 'string') {
+    MODEL = btn;
+    const sel = document.getElementById('model-select');
+    if (sel) sel.value = MODEL;
+  } else {
+    MODEL = btn.dataset.model;
+    const sel = document.getElementById('model-select');
+    if (sel) sel.value = MODEL;
+    // legacy btn reference (no-op with select-based UI)
+  }
+  applyModelUI();
+}
 
-  // Show/hide distributional toggle inside sigma-card
+function applyModelUI() {
+  // Which families have which params
+  const hasSig    = ['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
+  const hasPhi    = ['beta_reg','beta_binomial','zero_inflated_beta','zero_one_inflated_beta','negbinomial','gamma'].includes(MODEL);
+  const hasNdt    = MODEL === 'shifted_lognormal';
+  const hasAlpha  = MODEL === 'skew_normal';
+  const hasZi     = MODEL === 'zero_inflated_beta';
+  const hasZoiCoi = MODEL === 'zero_one_inflated_beta';
+  const hasNCat   = MODEL === 'cumulative' || MODEL === 'categorical';
+  const distSigOk = hasSig && MODEL !== 'gamma';
+
+  document.getElementById('sigma-card').style.display = hasSig ? '' : 'none';
+  document.getElementById('nu-card').style.display    = MODEL === 'student' ? '' : 'none';
+
+  // Aux card visibility
+  const auxCard = document.getElementById('aux-card');
+  const showAux = hasPhi || hasNdt || hasAlpha || hasZi || hasZoiCoi || hasNCat;
+  if (auxCard) auxCard.style.display = showAux ? '' : 'none';
+  const s = id => { const el=document.getElementById(id); if(el) el.style.display='none'; };
+  const sh = id => { const el=document.getElementById(id); if(el) el.style.display=''; };
+  s('aux-phi-section'); s('aux-ndt-section'); s('aux-alpha-section');
+  s('aux-zi-section'); s('aux-zoicoi-section'); s('aux-ncat-section');
+  if (hasPhi)    sh('aux-phi-section');
+  if (hasNdt)    sh('aux-ndt-section');
+  if (hasAlpha)  sh('aux-alpha-section');
+  if (hasZi)     sh('aux-zi-section');
+  if (hasZoiCoi) sh('aux-zoicoi-section');
+  if (hasNCat)   sh('aux-ncat-section');
+
+  // Trials row
+  const tr = document.getElementById('trials-row');
+  if (tr) tr.style.display = MODEL === 'beta_binomial' ? '' : 'none';
+
+  // Distributional sigma toggle
   const dstRow = document.getElementById('dist-sig-toggle-row');
   if (dstRow) dstRow.style.display = distSigOk ? '' : 'none';
   if (!distSigOk) {
     const ck = document.getElementById('dist-sig-ck');
     if (ck && ck.checked) { ck.checked = false; onDistSigChange(); }
   }
-  // Hide distributional ν mode when switching away from student
   if (MODEL !== 'student') {
     const dnck = document.getElementById('dist-nu-ck');
     if (dnck && dnck.checked) { dnck.checked = false; onDistNuChange(); }
   }
-  // Update sigma card title and note
+
+  // Sigma card title
   const sigTitle = document.getElementById('sigma-card-title');
   const sigNote  = document.getElementById('sigma-card-note');
-  if (MODEL==='gamma') {
-    if(sigTitle) sigTitle.textContent = 'Streuung σ (Variationskoeff.)';
-    if(sigNote)  sigNote.style.display = '';
-  } else {
-    if(sigTitle) sigTitle.textContent = MODEL==='student' ? 'Skalenparameter σ (Student-t)' : 'Residualstreuung σ';
-    if(sigNote)  sigNote.style.display = 'none';
+  if (sigTitle) {
+    if (MODEL==='gamma' || MODEL==='lognormal' || MODEL==='shifted_lognormal')
+      sigTitle.textContent = 'Streuung σ (auf log-Skala)';
+    else if (MODEL==='student')
+      sigTitle.textContent = 'Skalenparameter σ (Student-t)';
+    else
+      sigTitle.textContent = 'Residualstreuung σ';
   }
-  if (MODEL !== 'linear' && MODEL !== 'student' && USE_LMM) {
+  if (sigNote) sigNote.style.display = MODEL==='gamma' ? '' : 'none';
+
+  const lmmOk = MODEL==='linear' || MODEL==='student';
+  if (!lmmOk && USE_LMM) {
     USE_LMM = false;
     document.getElementById('lmm-card').style.display = 'none';
     document.getElementById('btn-lmm').classList.remove('active');
   }
-  const lmmOk = MODEL==='linear'||MODEL==='student';
   document.getElementById('btn-lmm').style.opacity = lmmOk ? '1' : '.35';
+
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
 
@@ -999,6 +1178,49 @@ function rPoisson(lam) {
   return k-1;
 }
 
+// Beta sampler via Gamma ratio
+function rBeta(alpha, beta) {
+  const a = Math.max(1e-4, alpha), b = Math.max(1e-4, beta);
+  const x = rGammaShape(a), y = rGammaShape(b);
+  return x / Math.max(1e-9, x + y);
+}
+// Negative Binomial: mu (mean), phi (shape/overdispersion)
+// Var = mu + mu²/phi  →  as Gamma-Poisson mixture
+function rNegBin(mu, phi) {
+  const lam = rGamma(Math.max(1e-4, phi), Math.max(1e-4, phi) / Math.max(1e-4, mu));
+  return rPoisson(lam);
+}
+// Skew-Normal via centred parameterization (Azzalini 1985)
+// xi=skewness (alpha in Azzalini), mu=location, sigma=scale
+function rSkewNormal(mu, sigma, xi) {
+  const d = xi / Math.sqrt(1 + xi*xi);
+  const u1 = randn(), u2 = randn();
+  const x  = d * Math.abs(u1) + Math.sqrt(1 - d*d) * u2;
+  return mu + sigma * x;
+}
+// Shifted Lognormal: mu/sigma on log scale, delta = shift (lb=0)
+function rShiftedLognormal(mu, sigma, delta) {
+  return Math.max(0, delta) + Math.exp(mu + sigma * randn());
+}
+// Ordinal: sample category index 0..K-1 via cumulative logit
+function rCumulative(eta, thresholds) {
+  const K = thresholds.length + 1;
+  let prev = 0;
+  for (let k = 0; k < thresholds.length; k++) {
+    const p = 1/(1+Math.exp(-(thresholds[k] - eta)));
+    const prob = Math.max(0, p - prev);
+    if (Math.random() < prob / (1 - prev + 1e-9)) return k + 1;
+    prev = p;
+  }
+  return K;
+}
+// Beta regression (mean=mu, precision=phi) — mu in (0,1)
+function rBetaReg(mu, phi) {
+  const a = Math.max(1e-4, mu * phi);
+  const b = Math.max(1e-4, (1 - mu) * phi);
+  return rBeta(a, b);
+}
+
 function drawLoc(fam, mu, sig, nu) {
   // IMPROVED: Error handling for robustness
   try {
@@ -1035,11 +1257,19 @@ function drawScale(fam, p1, p2) {
 //  LINK & SAMPLE
 // ─────────────────────────────────────────────────────────
 function applyLink(eta, model) {
-  if (model==='linear'||model==='student') return eta;
-  if (model==='logistic') return 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
-  return Math.min(Math.exp(Math.min(eta,11.5)), 1e5); // poisson + gamma
+  // Identity link
+  if (model==='linear'||model==='student'||model==='lognormal'||
+      model==='shifted_lognormal'||model==='skew_normal') return eta;
+  // Logit link → probability in (0,1)
+  if (model==='logistic'||model==='beta_reg'||model==='beta_binomial'||
+      model==='zero_inflated_beta'||model==='zero_one_inflated_beta')
+    return 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
+  // Log link → positive mean
+  return Math.min(Math.exp(Math.min(eta,11.5)), 1e5); // poisson, negbinomial, gamma
 }
-function sampleY(mu, sigma, model, nu) {
+
+function sampleY(mu, sigma, model, nu, auxParams) {
+  const aux = auxParams || {};
   if (model==='student')  return rStudT(mu, sigma, Math.max(1, nu||3));
   if (model==='linear')   return rNorm(mu, sigma);
   if (model==='logistic') return Math.random() < mu ? 1 : 0;
@@ -1047,8 +1277,51 @@ function sampleY(mu, sigma, model, nu) {
   if (model==='gamma') {
     const safeMu = Math.max(1e-6, mu);
     const safeSig = Math.max(1e-6, sigma);
-    const sh = 1/(safeSig*safeSig);  // shape = 1/CV²
+    const sh = 1/(safeSig*safeSig);
     return rGamma(sh, sh/safeMu);
+  }
+  if (model==='lognormal') return Math.exp(rNorm(mu, Math.max(1e-6, sigma)));
+  if (model==='shifted_lognormal') {
+    const delta = Math.max(0, aux.delta ?? 0);
+    return rShiftedLognormal(mu, Math.max(1e-6, sigma), delta);
+  }
+  if (model==='skew_normal') return rSkewNormal(mu, Math.max(1e-6, sigma), aux.xi ?? 0);
+  if (model==='negbinomial') return rNegBin(Math.max(1e-6, mu), Math.max(0.1, aux.phi ?? 1));
+  if (model==='beta_reg') {
+    const clampMu = Math.max(0.001, Math.min(0.999, mu));
+    return rBetaReg(clampMu, Math.max(0.1, aux.phi ?? 1));
+  }
+  if (model==='beta_binomial') {
+    const n = Math.max(1, Math.round(aux.trials ?? 10));
+    const clampMu = Math.max(0.001, Math.min(0.999, mu));
+    const phi = Math.max(0.1, aux.phi ?? 1);
+    let count = 0;
+    for (let i=0; i<n; i++) {
+      const p = rBetaReg(clampMu, phi);
+      if (Math.random() < p) count++;
+    }
+    return count / n; // proportion for visualization
+  }
+  if (model==='zero_inflated_beta') {
+    const zi = Math.max(0, Math.min(1, aux.zi ?? 0.1));
+    if (Math.random() < zi) return 0;
+    const clampMu = Math.max(0.001, Math.min(0.999, mu));
+    return rBetaReg(clampMu, Math.max(0.1, aux.phi ?? 1));
+  }
+  if (model==='zero_one_inflated_beta') {
+    const zoi = Math.max(0, Math.min(1, aux.zoi ?? 0.1));
+    const coi = Math.max(0, Math.min(1, aux.coi ?? 0.5));
+    if (Math.random() < zoi) return Math.random() < coi ? 1 : 0;
+    const clampMu = Math.max(0.001, Math.min(0.999, mu));
+    return rBetaReg(clampMu, Math.max(0.1, aux.phi ?? 1));
+  }
+  if (model==='cumulative') {
+    const thresholds = aux.thresholds || [-2,-0.5,0.5,2];
+    return rCumulative(mu, thresholds);
+  }
+  if (model==='categorical') {
+    const K = Math.max(2, Math.round(aux.nCat ?? 5));
+    return Math.floor(Math.random() * K) + 1;
   }
   return mu;
 }
@@ -1294,13 +1567,30 @@ function buildConfigA() {
     reSlpFam:  gv('re-slp-fam') || 'exponential',
     reSlpP1:   gn('re-slp-p1')  || 1,
     lkjEta:    gn('re-lkj')     || 2,
-    nGrp:      Math.round(gn('re-ngrp')) || 20
+    nGrp:      Math.round(gn('re-ngrp')) || 20,
+    // Aux params for new families
+    auxParams: getAuxParams()
   };
 }
 
 // ─────────────────────────────────────────────────────────
 //  SIMULATE
 // ─────────────────────────────────────────────────────────
+function getAuxParams() {
+  const gn2 = id => { const el=document.getElementById(id); return el ? +el.value : 0; };
+  const phi  = gn2('phi-p1');
+  const ndtM = gn2('ndt-mu'), ndtS = Math.max(0.01, gn2('ndt-sig'));
+  const xiM  = gn2('alpha-mu'), xiS = Math.max(0.01, gn2('alpha-sig'));
+  const ziA  = Math.max(0.5, gn2('zi-a')), ziB = Math.max(0.5, gn2('zi-b'));
+  const zoiA = Math.max(0.5, gn2('zoi-a')), zoiB = Math.max(0.5, gn2('zoi-b'));
+  const coiA = Math.max(0.5, gn2('coi-a')), coiB = Math.max(0.5, gn2('coi-b'));
+  const ncat = Math.max(3, Math.round(gn2('ncat')||5));
+  const threshSig = Math.max(0.3, gn2('thresh-sig')||2.5);
+  const trialsN = Math.max(1, Math.round(+(document.getElementById('trials-var-n')?.value||10)));
+  return { phi, ndtMu:ndtM, ndtSig:ndtS, xiMu:xiM, xiSig:xiS,
+           ziA, ziB, zoiA, zoiB, coiA, coiB, ncat, threshSig, trialsN };
+}
+
 function simulate(cfg, model) {
   const N  = Math.max(10, Math.round(gn('sim-n')));
   const draws = [];
@@ -1367,7 +1657,36 @@ function simulate(cfg, model) {
       sigAtX0 = Math.exp(sigAlpha) * sigma;  // combine fixed σ with distributional component
     }
     const mu0 = applyLink(alpha, model);
-    const y0  = sampleY(mu0, sigAtX0, model, nu);
+    // Draw aux params for new families
+    const auxP = cfg.auxParams || {};
+    let drawAux = {};
+    if (model==='negbinomial')           drawAux.phi = Math.max(0.1, auxP.phi||1);
+    if (model==='beta_reg'||model==='beta_binomial'||
+        model==='zero_inflated_beta'||model==='zero_one_inflated_beta')
+      drawAux.phi = Math.max(0.1, auxP.phi||1);
+    if (model==='shifted_lognormal') {
+      const dm = auxP.ndtMu||0, ds = Math.max(0.01, auxP.ndtSig||0.3);
+      drawAux.delta = Math.max(0, rNorm(dm, ds));
+    }
+    if (model==='skew_normal') drawAux.xi = rNorm(auxP.xiMu||0, auxP.xiSig||2);
+    if (model==='zero_inflated_beta') {
+      drawAux.zi = rBeta(Math.max(0.5, auxP.ziA||1), Math.max(0.5, auxP.ziB||1));
+    }
+    if (model==='zero_one_inflated_beta') {
+      drawAux.zoi = rBeta(Math.max(0.5, auxP.zoiA||1), Math.max(0.5, auxP.zoiB||1));
+      drawAux.coi = rBeta(Math.max(0.5, auxP.coiA||1), Math.max(0.5, auxP.coiB||1));
+    }
+    if (model==='cumulative') {
+      const K = Math.max(3, Math.round(auxP.ncat||5));
+      const ts = auxP.threshSig||2.5;
+      // Draw K-1 threshold draws, then sort
+      const raw = Array.from({length:K-1}, () => rNorm(0, ts));
+      raw.sort((a,b)=>a-b);
+      drawAux.thresholds = raw;
+    }
+    if (model==='categorical') drawAux.nCat = Math.max(2, Math.round(auxP.ncat||5));
+    if (model==='beta_binomial') drawAux.trials = Math.max(1, auxP.trialsN||10);
+    const y0  = sampleY(mu0, sigAtX0, model, nu, drawAux);
 
     // LMM
     let tau0=0, tau1=0, groupOffsets=null;
@@ -1397,7 +1716,7 @@ function simulate(cfg, model) {
       }
     }
     draws.push({ alpha, betas, interBetas, sigma, sigAlpha, sigBetas, nu, tau0, tau1,
-                 yhat: yhats[0], yhats, y0, groupOffsets });
+                 yhat: yhats[0], yhats, y0, groupOffsets, auxP: drawAux });
   }
   return { draws, cfg, N };
 }
@@ -1445,10 +1764,26 @@ function assess(draws, model) {
   const pExt = ys.filter(v=>Math.abs(v)>1e4).length/n;
   const rng  = p99-p1;
 
-  if ((model==='gamma'||model==='poisson') && pNeg>0.02)
-    return {lvl:'r', msg:`<b>${(pNeg*100).toFixed(0)}% negative Vorhersagen</b> — ${model} erwartet y>0. α-Prior zu niedrig?`};
-  if (model==='poisson' && med>1e3)
+  // Models that require strictly positive y
+  const posOnly = ['gamma','poisson','negbinomial','lognormal','shifted_lognormal'];
+  if (posOnly.includes(model) && pNeg>0.02)
+    return {lvl:'r', msg:`<b>${(pNeg*100).toFixed(0)}% negative Vorhersagen</b> — ${model} erwartet y>0.`};
+  if ((model==='poisson'||model==='negbinomial') && med>1e3)
     return {lvl:'r', msg:`<b>Median y=${med.toFixed(0)}</b> — log-Link explodiert. α-Prior zu groß?`};
+
+  // Models requiring y ∈ (0,1)
+  const prop01 = ['beta_reg','beta_binomial','zero_inflated_beta','zero_one_inflated_beta'];
+  if (prop01.includes(model)) {
+    const pOut = ys.filter(v=>v<0||v>1).length/n;
+    if (pOut>0.02) return {lvl:'r', msg:`<b>${(pOut*100).toFixed(0)}% Werte außerhalb [0,1]</b> — für ${model} nicht plausibel.`};
+  }
+  // Ordinal: check category distribution
+  if (model==='cumulative' || model==='categorical') {
+    const cats = [...new Set(ys)].length;
+    const p10=s[Math.floor(n*0.1)], p90=s[Math.floor(n*0.9)];
+    return {lvl:'g', msg:`<b>Kategorien gesampelt</b> — ${cats} verschiedene Werte, 80%-PI: [${p10.toFixed(0)}, ${p90.toFixed(0)}]`};
+  }
+
   if (pExt>0.05)
     return {lvl:'r', msg:`<b>${(pExt*100).toFixed(0)}% extreme Werte (|y|>10.000)</b> — Priors viel zu vage.`};
   if (model==='linear' && rng>200)
@@ -1513,7 +1848,7 @@ function plotPP(el, draws, nLines, colVar) {
         }
         // For logistic: use P(y=1) probability (smooth [0,1]) instead of 0/1 draws
         const mu = applyLink(eta, MODEL);
-        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL);
+        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL, d.nu, d.auxP);
         if (isFinite(y)&&Math.abs(y)<1e6) ys.push(y);
       }
     } else {
@@ -1522,7 +1857,7 @@ function plotPP(el, draws, nLines, colVar) {
         let eta=d.alpha;
         for (let k=0;k<d.betas.length;k++) eta+=d.betas[k]*rNorm(0,1);
         const mu = applyLink(eta, MODEL);
-        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL);
+        const y = MODEL==='logistic' ? mu : sampleY(mu, d.sigma, MODEL, d.nu, d.auxP);
         if (isFinite(y)&&Math.abs(y)<1e6) ys.push(y);
       }
     }
@@ -1535,10 +1870,16 @@ function plotPP(el, draws, nLines, colVar) {
   // For logistic: y values are already in [0,1] (Bernoulli 0/1 draws or probabilities).
   // Clamp the KDE domain strictly to [0,1] to avoid misleading tails.
   let xlo, xhi;
-  if (MODEL==='logistic') {
+  const isBounded01 = ['logistic','beta_reg','beta_binomial',
+                        'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
+  const isPositive  = ['gamma','poisson','negbinomial','lognormal','shifted_lognormal'].includes(MODEL);
+  const isOrdCat    = ['cumulative','categorical'].includes(MODEL);
+  if (isBounded01) {
     xlo = 0; xhi = 1;
+  } else if (isOrdCat) {
+    xlo = 0.5; xhi = Math.max(xhi||5, sf[sf.length-1]+0.5);
   } else {
-    xlo = sf[Math.floor(sf.length*0.005)];
+    xlo = isPositive ? Math.max(0, sf[Math.floor(sf.length*0.005)]) : sf[Math.floor(sf.length*0.005)];
     xhi = sf[Math.ceil(sf.length*0.995)-1];
   }
   if (!isFinite(xlo)||!isFinite(xhi)||xhi<=xlo) return;
@@ -1636,8 +1977,14 @@ function plotLines(el, draws, lmm, nGrp, colVar, predIdx, XS_arg) {
   if (!allY.length) return;
   const sy=allY.slice().sort((a,b)=>a-b);
   const n99=sy.length;
-  const p2=sy[Math.max(0,Math.floor(n99*0.02))];
-  const p98=sy[Math.min(n99-1,Math.ceil(n99*0.98)-1)];
+  let p2=sy[Math.max(0,Math.floor(n99*0.02))];
+  let p98=sy[Math.min(n99-1,Math.ceil(n99*0.98)-1)];
+  // Clamp y-range for bounded-outcome models
+  const isBounded01PL=['logistic','beta_reg','beta_binomial',
+    'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
+  const isPosOnlyPL=['gamma','poisson','negbinomial','lognormal','shifted_lognormal'].includes(MODEL);
+  if (isBounded01PL) { p2=0; p98=1; }
+  else if (isPosOnlyPL && p2<0) p2=0;
   if (!isFinite(p2)||!isFinite(p98)||Math.abs(p98-p2)<1e-10) return;
 
   const xSc=d3.scaleLinear().domain([XS[0],XS[XS.length-1]]).range([0,W]);
@@ -2146,11 +2493,26 @@ function plotInterLines(el, draws, interIdx, interTerm, colVar) {
 // ─────────────────────────────────────────────────────────
 function brmsCode(cfg) {
   const fmMap={
-    linear:'gaussian()', student:'student()', logistic:'bernoulli("logit")',
-    poisson:'poisson("log")', gamma:'Gamma("log")'
+    linear:               'gaussian()',
+    student:              'student()',
+    logistic:             'bernoulli("logit")',
+    poisson:              'poisson("log")',
+    gamma:                'Gamma("log")',
+    lognormal:            'lognormal()',
+    shifted_lognormal:    'shifted_lognormal()',
+    skew_normal:          'skew_normal()',
+    negbinomial:          'negbinomial("log")',
+    beta_reg:             'Beta("logit")',
+    beta_binomial:        'beta_binomial("logit")',
+    zero_inflated_beta:   'zero_inflated_beta("logit")',
+    zero_one_inflated_beta:'zero_one_inflated_beta("logit")',
+    cumulative:           'cumulative("logit")',
+    categorical:          'categorical("logistic")',
   };
   const fm=fmMap[MODEL]||'gaussian()';
-  const hasSig=MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const hasSig=['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
+  const hasPhi=['gamma','negbinomial','beta_reg','beta_binomial',
+                'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
   const nP=cfg.preds.length;
   const pNames = nP===1 ? ['x'] : Array.from({length:nP},(_,i)=>`x${i+1}`);
   const xTerms = pNames.join(' + ');
@@ -2180,7 +2542,8 @@ function brmsCode(cfg) {
     }
     formulaRHS = `bf(\n${bfLines}\n)`;
   } else {
-    formulaRHS = `bf(y ~ ${xTerms}${interTermsStr}${lmmPart})`;
+    const trialsV = MODEL==='beta_binomial' ? ` | trials(${(document.getElementById('trials-var')?.value||'trials').trim()})` : '';
+    formulaRHS = `bf(y${trialsV} ~ ${xTerms}${interTermsStr}${lmmPart})`;
   }
 
   // Build prior lines — class without quotes, coef always with quotes (brms convention)
@@ -2245,6 +2608,40 @@ function brmsCode(cfg) {
     });
   }
 
+  // Aux parameter priors for new families
+  const aux = cfg.auxParams || {};
+  if (hasPhi) {
+    const phiV = (aux.phi||1).toFixed(2);
+    const phiClass = ['negbinomial','gamma'].includes(MODEL) ? 'shape' : 'phi';
+    priorLines.push(`  <span class="str">prior(exponential(${phiV}), class = ${phiClass})</span>`);
+  }
+  if (MODEL==='shifted_lognormal') {
+    const ndtM=(aux.ndtMu||0).toFixed(1), ndtS=Math.max(0.01,aux.ndtSig||0.3).toFixed(2);
+    priorLines.push(`  <span class="str">prior(normal(${ndtM}, ${ndtS}), class = ndt)  <span class="cm">// lb=0 automatic</span></span>`);
+  }
+  if (MODEL==='skew_normal') {
+    const axM=(aux.xiMu||0).toFixed(1), axS=Math.max(0.01,aux.xiSig||2).toFixed(1);
+    priorLines.push(`  <span class="str">prior(normal(${axM}, ${axS}), class = alpha)  <span class="cm">// skewness ξ</span></span>`);
+  }
+  if (MODEL==='zero_inflated_beta') {
+    const ziA=(aux.ziA||1).toFixed(2), ziB=(aux.ziB||1).toFixed(2);
+    priorLines.push(`  <span class="str">prior(beta(${ziA}, ${ziB}), class = zi)</span>`);
+  }
+  if (MODEL==='zero_one_inflated_beta') {
+    const zoiA=(aux.zoiA||1).toFixed(2), zoiB=(aux.zoiB||1).toFixed(2);
+    const coiA=(aux.coiA||1).toFixed(2), coiB=(aux.coiB||1).toFixed(2);
+    priorLines.push(`  <span class="str">prior(beta(${zoiA}, ${zoiB}), class = zoi)</span>`);
+    priorLines.push(`  <span class="str">prior(beta(${coiA}, ${coiB}), class = coi)</span>`);
+  }
+  if (MODEL==='beta_binomial') {
+    const tv = (document.getElementById('trials-var')?.value||'trials').trim();
+    // Note in code: add | trials() to formula
+  }
+  if (MODEL==='cumulative' || MODEL==='categorical') {
+    const ts=(aux.threshSig||2.5).toFixed(1);
+    priorLines.push(`  <span class="str">prior(normal(0, ${ts}), class = Intercept)  <span class="cm">// thresholds τ_k</span></span>`);
+  }
+
   // LMM priors
   if (cfg.lmm) {
     // brms adds lb=0 automatically for class = sd; use normal(0,x)/student_t/cauchy (Stan truncates)
@@ -2259,6 +2656,8 @@ function brmsCode(cfg) {
 
   // Output — separate model_formula + priors + brm() objects, parallel to builder
   return `<span class="cm"># Prior Predictive Check in brms</span>
+<span class="cm"># ⚠ Intercept-Prior: y ~ x nimmt zentrierte Prädiktoren an (siehe Button ⚠ Intercept-Prior)</span>
+<span class="cm">#    Eigenen Prior: y ~ 0 + Intercept + x</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> <span class="nm">${formulaRHS.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
 
@@ -2292,7 +2691,12 @@ function render() {
   // Only invalidate B if pred-count changed (structural change)
   if (lastSimB && lastSimB.cfg && lastSimB.cfg.preds.length !== cfg.preds.length) lastSimB = null;
 
-  const hasSig  = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const hasSig  = ['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
+  const hasPhi  = ['gamma','negbinomial','beta_reg','beta_binomial',
+                   'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
+  const hasAux  = hasPhi || MODEL==='shifted_lognormal' || MODEL==='skew_normal' ||
+                  MODEL==='zero_inflated_beta' || MODEL==='zero_one_inflated_beta';
+  const isOrdCat= MODEL==='cumulative' || MODEL==='categorical';
   const lmm     = cfg.lmm;
   const reSlope = cfg.slopeVars && cfg.slopeVars.length > 0;
   const tl      = assess(simA.draws, MODEL);
@@ -2312,7 +2716,16 @@ function render() {
   h+=`<div class="cpanel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
       <div class="plbl">R · brms</div>
-      <button class="copy-btn" onclick="copyCode(this)">📋 kopieren</button>
+      <div style="display:flex;gap:.35rem;align-items:center">
+        <button onclick="ipmOpen()" title="Hinweis: brms Intercept-Prior"
+          style="font-family:'DM Mono',monospace;font-size:.62rem;padding:.14rem .48rem;
+                 border:1.5px solid var(--accent);background:transparent;cursor:pointer;
+                 color:var(--accent);transition:all .15s"
+          onmouseover="this.style.background=cv('--accent');this.style.color='white'"
+          onmouseout="this.style.background='transparent';this.style.color=cv('--accent')"
+        >⚠ Intercept-Prior</button>
+        <button class="copy-btn" onclick="copyCode(this)">📋 kopieren</button>
+      </div>
     </div>
     <div class="codewrap"><div class="codeblk" id="brms-code">${brmsCode(cfg)}</div></div>
   </div>`;
@@ -2392,12 +2805,19 @@ function render() {
       </div>
     </div>`;
   } else {
-    const nExtra = (hasSig?1:0)+(lmm?2:0)+(lmm&&reSlope?1:0);
+    const nExtra = (hasSig?1:0)+(hasPhi?1:0)+(lmm?2:0)+(lmm&&reSlope?1:0)
+                 +(['shifted_lognormal','skew_normal'].includes(MODEL)?1:0)
+                 +(['zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL)?1:0);
     const nKde   = cfg.preds.length + 1 + nExtra; // +1 for alpha
     const gridCls = nKde>3 ? 'three' : 'two';
     h+=`<div class="cpanel">
       <div class="plbl" style="margin-bottom:.28rem">pp_check — Prior Predictive Densities</div>
-      <div class="ptit" style="margin-bottom:.18rem">${MODEL==='logistic'?'KDE der simulierten P(y=1)-Werte je Draw · Skala [0,1] · Rot = Median':'<em>Jede</em> blaue Kurve = KDE der simulierten y-Werte aus einem Prior Draw · Rot = Median der KDEs'}</div>
+      <div class="ptit" style="margin-bottom:.18rem">${
+        MODEL==='logistic'?'KDE der simulierten P(y=1)-Werte je Draw · Skala [0,1] · Rot = Median':
+        ['beta_reg','beta_binomial','zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL)?'KDE der simulierten Proportionen je Draw · Skala [0,1] · Rot = Median':
+        MODEL==='cumulative'||MODEL==='categorical'?'Balkendiagramm der kategorischen y-Draws je Prior Draw · Rot = Median':
+        '<em>Jede</em> blaue Kurve = KDE der simulierten y-Werte aus einem Prior Draw · Rot = Median der KDEs'
+      }</div>
       <div class="infobox" style="margin-bottom:.3rem;font-size:.56rem">
         ${uploadedData?.y?.length >= 4
           ? `<b>📊 Modus: echte x-Daten</b> — x-Werte aus CSV-Datei (${uploadedData.y.length} Beobachtungen), genau wie brms <code>pp_check()</code>`
@@ -2444,15 +2864,25 @@ function render() {
         </div>
         <div id="ln${i}-a"></div>
       </div>`).join('')}
-      <div class="cpanel"><div class="plbl" style="margin-bottom:.28rem;color:var(--accent2)">Prior: Intercept α${MODEL==='logistic'?' (Log-Odds Skala)':MODEL==='poisson'?' (Log-Skala)':MODEL==='gamma'?' (Log-Skala)':''}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">KDE der ${simA.N} gesampelten α-Werte${MODEL==='logistic'?' · logit(P) = α + Xβ, nicht direkt P(y=1)':MODEL==='poisson'||MODEL==='gamma'?' · log(μ) = α + Xβ':''}</div>
+      <div class="cpanel"><div class="plbl" style="margin-bottom:.28rem;color:var(--accent2)">Prior: Intercept α${
+        ['logistic','beta_reg','beta_binomial','zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL)?' (Log-Odds Skala)':
+        ['poisson','negbinomial','gamma','lognormal','shifted_lognormal'].includes(MODEL)?' (Log-Skala)':
+        MODEL==='cumulative'?' (η, ohne Thresholds)':
+        MODEL==='categorical'?' (Log-Odds Kat. 1)':
+        ''}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">KDE der ${simA.N} gesampelten α-Werte</div>
         <div id="al-a"></div>
       </div>
     </div>
     <div class="${gridCls}">
       ${cfg.preds.map((_,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β${i+1}</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten β${i+1}-Werte</div><div id="bt${i}-a"></div></div>`).join('')}
       ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β (${t.name})</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten Interaktionskoeff.</div><div id="ix${i}-a"></div></div>`).join('')}
-      ${hasSig?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent5)">Prior: σ${MODEL==='gamma'?' (CV = SD/μ)':''}</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten σ-Werte${MODEL==='gamma'?' · σ hier = Variationskoeffizient, nicht SD':''}</div><div id="sg-a"></div></div>`:''}
+      ${hasSig?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent5)">Prior: σ${ MODEL==='lognormal'||MODEL==='shifted_lognormal'?' (log-Skala)': MODEL==='skew_normal'?' (Skala)':'' }</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten σ-Werte</div><div id="sg-a"></div></div>`:''}
+      ${hasPhi?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: φ ${ ['negbinomial','gamma'].includes(MODEL)?'(Shape/Overdispersion)':'(Präzision)' }</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten φ-Werte</div><div id="phi-a"></div></div>`:''}
+      ${MODEL==='shifted_lognormal'?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: δ (ndt)</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der Non-Decision-Time-Draws</div><div id="ndt-a"></div></div>`:''}
+      ${MODEL==='skew_normal'?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: ξ (Schiefe)</div><div style="font-family:'DM Mono',monospace;font-size:.53rem;color:var(--ink2);margin-bottom:.22rem">KDE der Schiefe-Draws</div><div id="xi-a"></div></div>`:''}
+      ${MODEL==='zero_inflated_beta'?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: π (Zero-Inflation)</div><div id="zi-a-plot"></div></div>`:''}
+      ${MODEL==='zero_one_inflated_beta'?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: ζ/κ (ZOI/COI)</div><div id="zoicoi-a-plot"></div></div>`:''}
       ${lmm?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)" id="lbl-icc-a">${(cfg.slopeVars&&cfg.slopeVars.length>0)?'Prior: ρ (RE-Korrelation)':'Prior: ICC'}</div><div id="icc-a"></div></div>`:''}
       ${lmm?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: τ₀</div><div id="t0-a"></div></div>`:''}
       ${lmm&&reSlope?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: τ₁</div><div id="t1-a"></div></div>`:''}
@@ -2485,7 +2915,9 @@ function render() {
 function drawAllPlots() {
   if (!lastSimA) return;
   const {draws,cfg}=lastSimA;
-  const hasSig = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const hasSig = ['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
+  const hasPhi  = ['gamma','negbinomial','beta_reg','beta_binomial',
+                   'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
   const lmm    = cfg.lmm;
   const nd     = Math.round(gn('sim-nd'));
   const nGrp   = cfg.nGrp;
@@ -2510,6 +2942,22 @@ function drawAllPlots() {
   });
   // σ = orange (accent5)
   if (hasSig) T('sg-a',el=>plotKDE(el,draws.map(d=>d.sigma).filter(v=>isFinite(v)&&v>0),'--accent5',true));
+  // φ (new families) — accent6 (teal)
+  if (hasPhi) T('phi-a',el=>plotKDE(el,draws.map(d=>d.auxP?.phi).filter(v=>isFinite(v)&&v>0),'--accent6',true));
+  // δ ndt (shifted_lognormal)
+  if (MODEL==='shifted_lognormal') T('ndt-a',el=>plotKDE(el,draws.map(d=>d.auxP?.delta).filter(v=>isFinite(v)&&v>=0),'--accent6',true));
+  // ξ skewness (skew_normal)
+  if (MODEL==='skew_normal') T('xi-a',el=>plotKDE(el,draws.map(d=>d.auxP?.xi).filter(isFinite),'--accent6'));
+  // zi (zero_inflated_beta)
+  if (MODEL==='zero_inflated_beta') T('zi-a-plot',el=>plotKDE(el,draws.map(d=>d.auxP?.zi).filter(v=>isFinite(v)&&v>=0&&v<=1),'--accent6'));
+  // zoi/coi (zero_one_inflated_beta)
+  if (MODEL==='zero_one_inflated_beta') {
+    T('zoicoi-a-plot',el=>{
+      const zoi=draws.map(d=>d.auxP?.zoi).filter(v=>isFinite(v)&&v>=0&&v<=1);
+      const coi=draws.map(d=>d.auxP?.coi).filter(v=>isFinite(v)&&v>=0&&v<=1);
+      plotKDE(el,[...zoi,...coi],'--accent6');
+    });
+  }
   if (lmm) {
     const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
     if (sv.length > 0) {
@@ -3555,7 +4003,9 @@ function _brmsSigToPPC(p) {
 // ── EXPORT: PPC → Builder ─────────────────────────────────
 window.exportToBuilder = function() {
   const cfg = buildConfigA();
-  const hasSig = MODEL==='linear'||MODEL==='gamma'||MODEL==='student';
+  const hasSig = ['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
+  const hasPhi  = ['gamma','negbinomial','beta_reg','beta_binomial',
+                   'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
 
   const intPrior = {
     fam: gv('int-fam') || 'normal',
@@ -3603,7 +4053,7 @@ window.exportToBuilder = function() {
     version:    2,
     source:     'ppc',
     ts:         Date.now(),
-    ppcFamily:  MODEL,
+    ppcFamily:  MODEL,   // kept as-is; importFromBuilder does the reverse mapping
     nPreds:     cfg.preds.length,
     predNames:  cfg.preds.map((p,i) => p.name || `x${i+1}`),
     inters:     (cfg.interTerms||[]).map(t => t.name),
@@ -3681,11 +4131,18 @@ window.importFromBuilder = function() {
   const famMap = {
     linear:'linear', gaussian:'linear', student:'student',
     logistic:'logistic', bernoulli:'logistic',
-    poisson:'poisson', gamma:'gamma', Gamma:'gamma'
+    poisson:'poisson', gamma:'gamma', Gamma:'gamma',
+    lognormal:'lognormal', shifted_lognormal:'shifted_lognormal',
+    skew_normal:'skew_normal', negbinomial:'negbinomial',
+    Beta:'beta_reg', beta_reg:'beta_reg',
+    beta_binomial:'beta_binomial',
+    zero_inflated_beta:'zero_inflated_beta',
+    zero_one_inflated_beta:'zero_one_inflated_beta',
+    cumulative:'cumulative', categorical:'categorical'
   };
   const newModel = famMap[d.ppcFamily] || famMap[d.family] || 'linear';
-  const modelBtn = document.querySelector(`#model-tabs [data-model="${newModel}"]`);
-  if (modelBtn) setModel(modelBtn);
+  // Set model via string (select-based)
+  setModel(newModel);
 
   // Set intercept prior
   if (d.intercept) {
@@ -3966,6 +4423,31 @@ window.addEventListener('load', function() {
     } catch(e) {}
   }, 800);
 });
+
+// ── Intercept-Prior Modal ─────────────────────────────────
+function ipmOpen(){ document.getElementById('ipm-overlay').classList.add('open'); }
+function ipmClose(){ document.getElementById('ipm-overlay').classList.remove('open'); }
+function ipmCloseBg(e){ if(e.target===document.getElementById('ipm-overlay')) ipmClose(); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
 </script>
+
+<!-- ── Intercept-Prior Info Modal ──────────────────────── -->
+<div id="ipm-overlay" onclick="ipmCloseBg(event)">
+  <div id="ipm-modal">
+    <div id="ipm-header">
+      <span>⚠&nbsp; brms Intercept-Prior — Hinweis</span>
+      <button id="ipm-close" onclick="ipmClose()">✕ Schließen</button>
+    </div>
+    <div id="ipm-body">
+      Bei Formeln wie <code>y ~ x</code> oder <code>y ~ 1 + x</code> nimmt brms intern an,
+      dass alle Prädiktoren <b>zentriert</b> sind, und setzt den Intercept-Prior
+      automatisch — eigene Prior-Angaben für das Intercept werden dabei ignoriert.<br><br>
+      Soll das Intercept mit einem eigenen Prior versehen werden, muss es explizit modelliert
+      werden: <code>y ~ 0 + Intercept + x</code><br>
+      Nur in dieser Formulierung greifen eigene Intercept-Priors wie gewünscht.
+      <span class="ipm-strong">→ Prädiktoren vor der Analyse zentrieren wird dringend empfohlen.</span>
+    </div>
+  </div>
+</div>
 </body>
 </html>

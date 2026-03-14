@@ -156,6 +156,37 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
        box-shadow:3px 3px 0 rgba(0,0,0,.25);z-index:9999;
        transition:opacity .35s,transform .35s;opacity:0;transform:translateY(8px);pointer-events:none}
 #toast.show{opacity:1;transform:translateY(0)}
+
+/* ── Intercept-Prior Info Modal ─────────────────────────── */
+#ipm-overlay{
+  position:fixed;inset:0;z-index:9800;
+  background:rgba(0,0,0,.68);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem;
+}
+#ipm-overlay.open{display:flex}
+#ipm-modal{
+  max-width:600px;width:100%;
+  background:var(--paper);border:2px solid var(--accent);
+  box-shadow:0 0 40px rgba(232,97,74,.18),0 16px 48px rgba(0,0,0,.55);
+  position:relative;
+}
+#ipm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.75rem 1.1rem .65rem;background:var(--accent);
+}
+#ipm-header span{font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500;
+  color:white;letter-spacing:.04em;display:flex;align-items:center;gap:.45rem;}
+#ipm-close{font-family:'DM Mono',monospace;font-size:.75rem;
+  border:1.5px solid rgba(255,255,255,.55);background:transparent;
+  cursor:pointer;color:white;padding:.2rem .6rem;transition:all .15s;}
+#ipm-close:hover{background:rgba(255,255,255,.18)}
+#ipm-body{padding:1.1rem 1.3rem 1.25rem;font-family:'DM Mono',monospace;
+  font-size:.67rem;line-height:1.85;color:var(--ink2)}
+#ipm-body b{color:var(--ink)}
+#ipm-body code{background:var(--panel);border:1px solid var(--border);
+  color:var(--accent2);padding:.06rem .38rem;font-size:.72rem;letter-spacing:.01em;}
+#ipm-body .ipm-strong{display:block;margin-top:.85rem;padding:.5rem .75rem;
+  background:var(--accent);color:white;font-weight:500;font-size:.68rem;}
 </style>
 </head>
 <body>
@@ -344,7 +375,14 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
   <div class="codewrap">
     <div class="code-hdr">
       <span class="code-lbl">R · brms</span>
-      <div style="display:flex;gap:.35rem">
+      <div style="display:flex;gap:.35rem;align-items:center">
+        <button onclick="ipmOpen()" title="Hinweis: brms Intercept-Prior"
+          style="font-family:'DM Mono',monospace;font-size:.63rem;padding:.15rem .5rem;
+                 border:1.5px solid var(--accent);background:transparent;cursor:pointer;
+                 color:var(--accent);letter-spacing:.03em;transition:all .15s"
+          onmouseover="this.style.background=getComputedStyle(document.documentElement).getPropertyValue('--accent');this.style.color='white'"
+          onmouseout="this.style.background='transparent';this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent')"
+        >⚠ Intercept-Prior</button>
         <button class="copy-btn" onclick="copyCode()">📋 Kopieren</button>
         <button class="panel-btn" onclick="downloadR()" title="Als .R Datei speichern">↓ .R</button>
       </div>
@@ -738,6 +776,8 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     `${f}()`;
 
   return `<span class="cm"># brms Model Builder v18 — generierter Code</span>
+<span class="cm"># ⚠ Intercept-Prior: y ~ x nimmt zentrierte Prädiktoren an (siehe Button ⚠ Intercept-Prior)</span>
+<span class="cm">#    Eigenen Prior für Intercept: y ~ 0 + Intercept + x</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> ${formCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -1368,6 +1408,31 @@ window.addEventListener('message', function(ev) {
 // 3. Polling — universal fallback, covers Firefox + file://
 //    Runs every 600ms, only triggers import when timestamp changes
 setInterval(_checkForPPCData, 600);
+
+// ── Intercept-Prior Modal ─────────────────────────────────
+function ipmOpen(){ document.getElementById('ipm-overlay').classList.add('open'); }
+function ipmClose(){ document.getElementById('ipm-overlay').classList.remove('open'); }
+function ipmCloseBg(e){ if(e.target===document.getElementById('ipm-overlay')) ipmClose(); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
 </script>
+
+<!-- ── Intercept-Prior Info Modal ──────────────────────── -->
+<div id="ipm-overlay" onclick="ipmCloseBg(event)">
+  <div id="ipm-modal">
+    <div id="ipm-header">
+      <span>⚠&nbsp; brms Intercept-Prior — Hinweis</span>
+      <button id="ipm-close" onclick="ipmClose()">✕ Schließen</button>
+    </div>
+    <div id="ipm-body">
+      Bei Formeln wie <code>y ~ x</code> oder <code>y ~ 1 + x</code> nimmt brms intern an,
+      dass alle Prädiktoren <b>zentriert</b> sind, und setzt den Intercept-Prior
+      automatisch — eigene Prior-Angaben für das Intercept werden dabei ignoriert.<br><br>
+      Soll das Intercept mit einem eigenen Prior versehen werden, muss es explizit modelliert
+      werden: <code>y ~ 0 + Intercept + x</code><br>
+      Nur in dieser Formulierung greifen eigene Intercept-Priors wie gewünscht.
+      <span class="ipm-strong">→ Prädiktoren vor der Analyse zentrieren wird dringend empfohlen.</span>
+    </div>
+  </div>
+</div>
 </body>
 </html>
