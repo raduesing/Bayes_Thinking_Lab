@@ -186,17 +186,41 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
     <h3>1 · Likelihood</h3>
     <div class="pg">
       <span class="lbl">Verteilungsfamilie</span>
-      <div style="display:flex;flex-direction:column;gap:.22rem" id="fam-tabs">
-        <button class="rbtn sel" data-fam="gaussian"  onclick="setFamily(this)">Gaussian  <span style="float:right;opacity:.45;font-size:.56rem">Normal(μ,σ)</span></button>
-        <button class="rbtn"     data-fam="student"   onclick="setFamily(this)">Student-t <span style="float:right;opacity:.45;font-size:.56rem">t(μ,σ,ν)</span></button>
-        <button class="rbtn"     data-fam="bernoulli" onclick="setFamily(this)">Bernoulli <span style="float:right;opacity:.45;font-size:.56rem">logit link</span></button>
-        <button class="rbtn"     data-fam="poisson"   onclick="setFamily(this)">Poisson   <span style="float:right;opacity:.45;font-size:.56rem">log link</span></button>
-        <button class="rbtn"     data-fam="Gamma"     onclick="setFamily(this)">Gamma     <span style="float:right;opacity:.45;font-size:.56rem">log link</span></button>
-      </div>
+      <select id="fam-select" onchange="setFamilyFromSelect()" style="font-size:.67rem">
+        <optgroup label="── Stetig ──────────────────────">
+          <option value="gaussian"  selected>Gaussian — Normal(μ, σ)</option>
+          <option value="student">Student-t — t(ν, μ, σ)</option>
+          <option value="lognormal">Lognormal — LN(μ, σ)</option>
+          <option value="shifted_lognormal">Shifted Lognormal — SLN(μ, σ, δ)</option>
+          <option value="skew_normal">Skew-Normal — SN(μ, σ, ξ)</option>
+        </optgroup>
+        <optgroup label="── Zähldaten ───────────────────">
+          <option value="poisson">Poisson — Poisson(λ)</option>
+          <option value="negbinomial">Neg. Binomial — NB(μ, φ)</option>
+        </optgroup>
+        <optgroup label="── Binär / Proportionen ────────">
+          <option value="bernoulli">Bernoulli — Bernoulli(p)</option>
+          <option value="Beta">Beta — Beta(μ, φ)</option>
+          <option value="beta_binomial">Beta-Binomial — BB(n, μ, φ)</option>
+          <option value="zero_inflated_beta">ZI-Beta — ZIBeta(μ, φ, π)</option>
+          <option value="zero_one_inflated_beta">ZOI-Beta — ZOIB(μ, φ, ζ, κ)</option>
+        </optgroup>
+        <optgroup label="── Gamma ───────────────────────">
+          <option value="Gamma">Gamma — Gamma(μ, φ)</option>
+        </optgroup>
+        <optgroup label="── Ordinal / Nominal ───────────">
+          <option value="cumulative">Kumulativ (ordinal) — logit</option>
+          <option value="categorical">Kategorisch (nominal)</option>
+        </optgroup>
+      </select>
     </div>
     <div class="pg">
       <span class="lbl">Outcome-Variable (y)</span>
       <input type="text" id="outcome" value="y" oninput="update()">
+    </div>
+    <div class="pg" id="trials-row" style="display:none">
+      <span class="lbl" title="Für beta_binomial: Anzahl Trials pro Beobachtung">Trials-Variable (| trials(...))</span>
+      <input type="text" id="trials-var" value="trials" oninput="update()">
     </div>
   </div>
 
@@ -344,34 +368,65 @@ let predictorNames = [];   // empty = intercept-only model by default
 let nextPredId = 1;
 let inters   = [];
 let userPriors = {};
+let trialsVar  = 'trials'; // for beta_binomial
 
 const DEF_PRIORS = {
   Intercept:    'normal(0, 5)',
   b:            'normal(0, 2)',
   sigma:        'exponential(1)',
   nu:           'gamma(2, 0.1)',
-  sd:           'normal(0, 1)',   // brms: normal(0,x) with lb=0 — Stan truncates automatically
+  sd:           'normal(0, 1)',
   cor:          'lkj(2)',
-  // Distributional priors (log-scale)
-  dist_int:     'normal(0, 1)',   // α_σ / α_ν intercept on log scale
-  dist_b:       'normal(0, 0.5)' // β_{σ/ν,k} slopes on log scale
+  dist_int:     'normal(0, 1)',
+  dist_b:       'normal(0, 0.5)',
+  // New families
+  phi:          'exponential(1)',     // Beta, ZI-Beta, ZOIB, beta_binomial
+  shape:        'exponential(1)',     // Gamma, negbinomial
+  ndt:          'normal(0, 0.3)',     // shifted_lognormal (lb=0)
+  alpha_skew:   'normal(0, 2)',       // skew_normal skewness (dpar=alpha)
+  zi:           'beta(1, 1)',         // zero_inflated_beta
+  zoi:          'beta(1, 1)',         // zero_one_inflated_beta
+  coi:          'beta(1, 1)',         // zero_one_inflated_beta
 };
 
 // family → PPC model name
-const FAM2PPC  = { gaussian:'linear', student:'student', bernoulli:'logistic', poisson:'poisson', Gamma:'gamma' };
-const PPC2FAM  = { 
-  linear:'gaussian',
-  student:'student',
-  logistic:'bernoulli',
-  poisson:'poisson',
-  gamma:'Gamma',
-  gaussian:'gaussian'
+const FAM2PPC = {
+  gaussian:'linear', student:'student', bernoulli:'logistic', poisson:'poisson', Gamma:'gamma',
+  lognormal:'linear', shifted_lognormal:'linear', skew_normal:'linear',
+  negbinomial:'poisson', beta_binomial:'logistic', Beta:'logistic',
+  zero_inflated_beta:'linear', zero_one_inflated_beta:'linear',
+  cumulative:'linear', categorical:'linear'
+};
+const PPC2FAM = {
+  linear:'gaussian', student:'student', logistic:'bernoulli',
+  poisson:'poisson', gamma:'Gamma', gaussian:'gaussian'
 };
 
-// families that have sigma in brms
-const HAS_SIGMA = new Set(['gaussian','student','Gamma']);
-// families with nu fixed parameter
-const HAS_NU    = new Set(['student']);
+// Parameter set membership — drives prior rows + distributional card
+const HAS_SIGMA      = new Set(['gaussian','student','lognormal','shifted_lognormal','skew_normal']);
+const HAS_NU         = new Set(['student']);
+const HAS_SHAPE      = new Set(['Gamma','negbinomial']);         // class=shape in brms
+const HAS_PHI        = new Set(['Beta','beta_binomial','zero_inflated_beta','zero_one_inflated_beta']); // class=phi
+const HAS_NDT        = new Set(['shifted_lognormal']);           // class=ndt
+const HAS_ALPHA_SKEW = new Set(['skew_normal']);                 // class=alpha (skewness)
+const HAS_ZI         = new Set(['zero_inflated_beta']);          // class=zi
+const HAS_ZOI        = new Set(['zero_one_inflated_beta']);      // class=zoi
+const HAS_COI        = new Set(['zero_one_inflated_beta']);      // class=coi
+const IS_ORDINAL     = new Set(['cumulative']);
+const IS_CATEGORICAL = new Set(['categorical']);
+
+// Distributional link info per parameter
+const DIST_LINK = {
+  sigma:'log', phi:'log', shape:'log', ndt:'log',
+  alpha:'id', nu:'id',
+  zi:'logit', zoi:'logit', coi:'logit'
+};
+// Math display symbols for distributional parameters
+const DIST_SYM = {
+  sigma:'\\sigma', phi:'\\phi', shape:'\\phi',
+  ndt:'\\delta', alpha:'\\xi', nu:'\\nu',
+  zi:'\\pi', zoi:'\\zeta', coi:'\\kappa'
+};
 
 // ═══════════════════════════════════════════════════════════
 //  THEME
@@ -385,10 +440,16 @@ function toggleTheme() {
 // ═══════════════════════════════════════════════════════════
 //  FAMILY
 // ═══════════════════════════════════════════════════════════
-function setFamily(btn) {
-  FAMILY = btn.dataset.fam;
-  document.querySelectorAll('#fam-tabs .rbtn').forEach(b => b.classList.remove('sel'));
-  btn.classList.add('sel');
+function setFamilyFromSelect() {
+  FAMILY = document.getElementById('fam-select').value;
+  rebuildDistArea();
+  update();
+}
+function setFamily(val) {
+  // Called programmatically (e.g. from importFromPPC)
+  FAMILY = val;
+  const sel = document.getElementById('fam-select');
+  if (sel) sel.value = val;
   rebuildDistArea();
   update();
 }
@@ -446,10 +507,32 @@ function renderInterTags() {
 // ═══════════════════════════════════════════════════════════
 function rebuildDistArea() {
   const f = gFamily();
-  const params = [];
-  if (HAS_SIGMA.has(f)) params.push({ id:'sigma', label:'σ vorhersagen?' });
-  if (HAS_NU.has(f))    params.push({ id:'nu',    label:'ν vorhersagen?' });
-  const area = document.getElementById('dist-area');
+
+  // All distributional params per family
+  const DIST_PARAMS = {
+    gaussian:              [{id:'sigma',  label:'σ vorhersagen? (log-link)'}],
+    student:               [{id:'sigma',  label:'σ vorhersagen? (log-link)'}, {id:'nu', label:'ν vorhersagen? (identity)'}],
+    lognormal:             [{id:'sigma',  label:'σ vorhersagen? (log-link)'}],
+    shifted_lognormal:     [{id:'sigma',  label:'σ vorhersagen? (log-link)'}, {id:'ndt', label:'δ (ndt) vorhersagen? (log-link)'}],
+    skew_normal:           [{id:'sigma',  label:'σ vorhersagen? (log-link)'}, {id:'alpha', label:'ξ (Schiefe) vorhersagen? (identity)'}],
+    Gamma:                 [{id:'shape',  label:'φ (shape) vorhersagen? (log-link)'}],
+    negbinomial:           [{id:'shape',  label:'φ (shape) vorhersagen? (log-link)'}],
+    Beta:                  [{id:'phi',    label:'φ (Präzision) vorhersagen? (log-link)'}],
+    beta_binomial:         [{id:'phi',    label:'φ (Präzision) vorhersagen? (log-link)'}],
+    zero_inflated_beta:    [{id:'phi',    label:'φ (Präzision) vorhersagen? (log-link)'}, {id:'zi',  label:'π (Zero-Inflation) vorhersagen? (logit)'}],
+    zero_one_inflated_beta:[{id:'phi',    label:'φ (Präzision) vorhersagen? (log-link)'}, {id:'zoi', label:'ζ (ZOI) vorhersagen? (logit)'}, {id:'coi', label:'κ (COI) vorhersagen? (logit)'}],
+    poisson:    [], bernoulli: [], cumulative: [], categorical: [],
+  };
+
+  const params = DIST_PARAMS[f] || [];
+  const area   = document.getElementById('dist-area');
+  const card   = document.getElementById('dist-card');
+  card.style.display = params.length === 0 ? 'none' : '';
+
+  // Trials row for beta_binomial
+  const trow = document.getElementById('trials-row');
+  if (trow) trow.style.display = (f === 'beta_binomial') ? '' : 'none';
+
   area.innerHTML = params.map(p => `
     <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.69rem;margin-bottom:.5rem">
       <input type="checkbox" class="d-ck" data-p="${p.id}" onchange="update()" > ${p.label}
@@ -458,8 +541,6 @@ function rebuildDistArea() {
       <span class="lbl">Prädiktoren für ${p.id} (kommagetrennt)</span>
       <input type="text" class="d-pre" data-p="${p.id}" placeholder="z.B. x1, x2" oninput="update()">
     </div>`).join('');
-  document.getElementById('dist-card').style.display =
-    (f === 'poisson' || f === 'bernoulli') ? 'none' : '';
 }
 
 function getActiveDistParams() {
@@ -508,7 +589,9 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
 
   // Distributional priors (log-scale) — use tighter defaults
   activeD.forEach(d => {
-    addRow(d.n + '_int', 'α\u2009' + d.n + ' (log)', 'Intercept', null, d.n,
+    const dLink = ['zi','zoi','coi'].includes(d.n) ? '(logit)'
+                : ['alpha','nu'].includes(d.n)     ? '(id)'   : '(log)';
+    addRow(d.n + '_int', 'α\u2009' + d.n + ' ' + dLink, 'Intercept', null, d.n,
            '\\alpha_{' + d.n + '}', DEF_PRIORS.dist_int);
     d.preds.forEach(p =>
       addRow(d.n + '_b_' + p, 'β\u2009' + d.n + '\u200B·\u200B' + p, 'b', p, d.n,
@@ -520,6 +603,26 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     addRow('fixed_sigma', 'σ', 'sigma', null, null, '\\sigma');
   if (HAS_NU.has(f) && !activeD.find(d => d.n === 'nu'))
     addRow('fixed_nu', 'ν', 'nu', null, null, '\\nu');
+  // New family parameters
+  if (HAS_SHAPE.has(f) && !activeD.find(d => d.n === 'shape'))
+    addRow('fixed_shape', 'φ · Shape', 'shape', null, null, '\\phi', DEF_PRIORS.shape);
+  if (HAS_PHI.has(f) && !activeD.find(d => d.n === 'phi'))
+    addRow('fixed_phi', 'φ · Präzision', 'phi', null, null, '\\phi', DEF_PRIORS.phi);
+  if (HAS_NDT.has(f) && !activeD.find(d => d.n === 'ndt'))
+    addRow('fixed_ndt', 'δ · ndt (lb=0)', 'ndt', null, null, '\\delta', DEF_PRIORS.ndt);
+  if (HAS_ALPHA_SKEW.has(f) && !activeD.find(d => d.n === 'alpha'))
+    addRow('fixed_alpha_skew', 'ξ · Schiefe (alpha)', 'alpha', null, null, '\\xi', DEF_PRIORS.alpha_skew);
+  if (HAS_ZI.has(f) && !activeD.find(d => d.n === 'zi'))
+    addRow('fixed_zi', 'π · Zero-Inflation (zi)', 'zi', null, null, '\\pi_0', DEF_PRIORS.zi);
+  if (HAS_ZOI.has(f) && !activeD.find(d => d.n === 'zoi'))
+    addRow('fixed_zoi', 'ζ · ZOI (zoi)', 'zoi', null, null, '\\zeta_0', DEF_PRIORS.zoi);
+  if (HAS_COI.has(f) && !activeD.find(d => d.n === 'coi'))
+    addRow('fixed_coi', 'κ · COI (coi)', 'coi', null, null, '\\kappa_0', DEF_PRIORS.coi);
+  // Notes for special families
+  if (IS_ORDINAL.has(f)) {
+    // Intercept class = K-1 thresholds in cumulative
+    // No extra params needed — the Intercept prior above covers thresholds
+  }
 
   // Random effects priors
   if (hasRE) {
@@ -541,7 +644,8 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     if (dpar === 'sigma') badgeCls = 'pc-s';
     else if (dpar === 'nu') badgeCls = 'pc-n';
     else {
-      const map = { Intercept:'pc-i', b:'pc-b', sigma:'pc-s', nu:'pc-n', sd:'pc-sd', cor:'pc-sd' };
+      const map = { Intercept:'pc-i', b:'pc-b', sigma:'pc-s', nu:'pc-n', sd:'pc-sd', cor:'pc-sd',
+                  shape:'pc-s', phi:'pc-s', ndt:'pc-n', alpha:'pc-n', zi:'pc-n', zoi:'pc-n', coi:'pc-n' };
       badgeCls = map[cls] || 'pc-b';
     }
     return `<span class="prior-class ${badgeCls}">${dpar ? dpar+'·'+cls : cls}</span>`;
@@ -582,6 +686,8 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     : '';
 
   // formula always in bf() to avoid errors
+  const trialsV  = (document.getElementById('trials-var')?.value || 'trials').trim() || 'trials';
+  const trailsExpr = f === 'beta_binomial' ? ` | trials(${trialsV})` : '';
   const muTerms = [...preds, ...inters].join(' + ') || '1';
   let reC = '';
   if (hasRE && g) {
@@ -594,14 +700,14 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
 
   let formCode;
   if (activeD.length > 0) {
-    let lines = `bf(\n  ${y} ~ ${muTerms}${reC}`;
+    let lines = `bf(\n  ${y}${trailsExpr} ~ ${muTerms}${reC}`;
     activeD.forEach(d => {
       lines += `,\n  ${d.n} ~ ${d.preds.join(' + ') || '1'}`;
     });
     lines += '\n)';
     formCode = lines;
   } else {
-    formCode = `bf(${y} ~ ${muTerms}${reC})`;
+    formCode = `bf(${y}${trailsExpr} ~ ${muTerms}${reC})`;
   }
 
   // priors array — class without quotes (R convention), coef always with quotes
@@ -613,11 +719,23 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     return `  <span class="str">prior(${gPrior(r.id, r.cls, r.defOverride)}, ${cls}${coef}${dpar})</span>`;
   });
 
-  const famStr = f === 'gaussian' ? 'gaussian()' :
-                 f === 'student'  ? 'student()' :
-                 f === 'bernoulli'? 'bernoulli("logit")' :
-                 f === 'poisson'  ? 'poisson("log")' :
-                 f === 'Gamma'    ? 'Gamma("log")' : `${f}()`;
+  const famStr =
+    f === 'gaussian'             ? 'gaussian()' :
+    f === 'student'              ? 'student()' :
+    f === 'bernoulli'            ? 'bernoulli("logit")' :
+    f === 'poisson'              ? 'poisson("log")' :
+    f === 'Gamma'                ? 'Gamma("log")' :
+    f === 'lognormal'            ? 'lognormal()' :
+    f === 'shifted_lognormal'    ? 'shifted_lognormal()' :
+    f === 'skew_normal'          ? 'skew_normal()' :
+    f === 'negbinomial'          ? 'negbinomial("log")' :
+    f === 'Beta'                 ? 'Beta("logit")' :
+    f === 'beta_binomial'        ? 'beta_binomial("logit")' :
+    f === 'zero_inflated_beta'   ? 'zero_inflated_beta("logit")' :
+    f === 'zero_one_inflated_beta' ? 'zero_one_inflated_beta("logit")' :
+    f === 'cumulative'           ? 'cumulative("logit")' :
+    f === 'categorical'          ? 'categorical("logistic")' :
+    `${f}()`;
 
   return `<span class="cm"># brms Model Builder v18 — generierter Code</span>
 
@@ -648,27 +766,62 @@ function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRow
   const y  = document.getElementById('outcome').value || 'y';
   const f  = gFamily();
 
-  // Link info per family
+  // Family distribution notation
   const famTex = {
-    gaussian:  `\\text{Normal}(\\mu_i,\\, \\sigma)`,
-    student:   `\\text{Student-t}(\\nu,\\, \\mu_i,\\, \\sigma)`,
-    bernoulli: `\\text{Bernoulli}(p_i)`,
-    poisson:   `\\text{Poisson}(\\lambda_i)`,
-    Gamma:     `\\text{Gamma}(\\mu_i,\\, \\phi)`
+    gaussian:              `\\text{Normal}(\\mu_i,\\, \\sigma)`,
+    student:               `\\text{Student-t}(\\nu,\\, \\mu_i,\\, \\sigma)`,
+    bernoulli:             `\\text{Bernoulli}(p_i)`,
+    poisson:               `\\text{Poisson}(\\lambda_i)`,
+    Gamma:                 `\\text{Gamma}(\\mu_i,\\, \\phi)`,
+    lognormal:             `\\text{Lognormal}(\\mu_i,\\, \\sigma)`,
+    shifted_lognormal:     `\\text{ShiftedLognormal}(\\mu_i,\\, \\sigma,\\, \\delta)`,
+    skew_normal:           `\\text{SkewNormal}(\\mu_i,\\, \\sigma,\\, \\xi)`,
+    negbinomial:           `\\text{NegBinomial}(\\mu_i,\\, \\phi)`,
+    Beta:                  `\\text{Beta}(\\mu_i,\\, \\phi)`,
+    beta_binomial:         `\\text{BetaBinomial}(n_i,\\, \\mu_i,\\, \\phi)`,
+    zero_inflated_beta:    `\\text{ZI-Beta}(\\mu_i,\\, \\phi,\\, \\pi_0)`,
+    zero_one_inflated_beta:`\\text{ZOIB}(\\mu_i,\\, \\phi,\\, \\zeta_0,\\, \\kappa_0)`,
+    cumulative:            `\\text{Cumulative}(K)`,
+    categorical:           `\\text{Categorical}(K)`,
   };
+  // Link function notation for linear predictor
   const muLinkTex = {
-    gaussian:  `\\mu_i`,
-    student:   `\\mu_i`,
-    bernoulli: `\\text{logit}(p_i)`,
-    poisson:   `\\log(\\lambda_i)`,
-    Gamma:     `\\log(\\mu_i)`
+    gaussian:              `\\mu_i`,
+    student:               `\\mu_i`,
+    bernoulli:             `\\text{logit}(p_i)`,
+    poisson:               `\\log(\\lambda_i)`,
+    Gamma:                 `\\log(\\mu_i)`,
+    lognormal:             `\\mu_i`,
+    shifted_lognormal:     `\\mu_i`,
+    skew_normal:           `\\mu_i`,
+    negbinomial:           `\\log(\\mu_i)`,
+    Beta:                  `\\text{logit}(\\mu_i)`,
+    beta_binomial:         `\\text{logit}(\\mu_i)`,
+    zero_inflated_beta:    `\\text{logit}(\\mu_i)`,
+    zero_one_inflated_beta:`\\text{logit}(\\mu_i)`,
+    cumulative:            `\\eta_i`,
+    categorical:           `\\eta_{ik}`,
   };
 
   const muTex = muLinkTex[f] || '\\mu_i';
 
-  // Build μ linear predictor
-  let muLine = `${muTex} &= \\alpha`;
-  preds.forEach(p => { muLine += ` + \\beta_{${p}}\\, ${p}_i`; });
+  // Build linear predictor — cumulative omits intercept (thresholds are intercepts)
+  const isCumulative   = IS_ORDINAL.has(f);
+  const isCategorical  = IS_CATEGORICAL.has(f);
+
+  let muLine = isCumulative
+    ? `${muTex} &= ` + (preds.length === 0 ? '0' : '')
+    : `${muTex} &= \\alpha`;
+
+  if (!isCumulative || preds.length > 0) {
+    preds.forEach((p, i) => {
+      if (isCumulative) {
+        muLine += (i === 0 ? '' : ' + ') + `\\beta_{${p}}\\, ${p}_i`;
+      } else {
+        muLine += ` + \\beta_{${p}}\\, ${p}_i`;
+      }
+    });
+  }
   inters.forEach(ix => {
     const parts = ix.split(':');
     muLine += ` + \\beta_{${ix.replace(/:/g, '\\!:\\!')}}\\,(${parts.join(' \\cdot ')})_i`;
@@ -680,13 +833,48 @@ function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRow
     }
   }
 
-  let tex = `\\[\\begin{aligned}\n${y}_i &\\sim ${famTex[f] || '\\cdot'} \\\\[6pt]\n${muLine} \\\\`;
+  // Special first-line for ordinal/categorical models
+  let extraLinesAfterDist = '';
+  if (isCumulative) {
+    // P(y≤k|i) = logit⁻¹(τ_k − η_i)
+    extraLinesAfterDist =
+      `\\[\\begin{aligned}\n` +
+      `P(${y}_i \\leq k) &= \\text{logit}^{-1}(\\tau_k - \\eta_i) \\quad k=1,\\ldots,K{-}1 \\\\[3pt]\n` +
+      `\\eta_i &= ${muLine.split('&= ')[1] || '0'} \\\\[3pt]\n` +
+      `\\tau_k &\\sim \\text{thresholds (class = Intercept)}\n\\end{aligned}\\]`;
+  } else if (isCategorical) {
+    const bPart = preds.map(p => ` + \\beta_{k,${p}}\\, ${p}_i`).join('') +
+                  inters.map(ix => { const pts=ix.split(':'); return ` + \\beta_{k,${ix.replace(/:/g,'\\!:\\!')}}(${pts.join('\\cdot')})_i`; }).join('');
+    extraLinesAfterDist =
+      `\\[\\begin{aligned}\n` +
+      `\\log\\!\\left(\\frac{p_{ik}}{p_{iK}}\\right) &= \\alpha_k${bPart} \\quad k=1,\\ldots,K{-}1\n` +
+      `\\end{aligned}\\]`;
+  }
 
-  // Distributional lines
+  // Main equation block
+  let tex;
+  if (isCumulative || isCategorical) {
+    // Show distribution line + special linear predictor block
+    tex = `\\[\\begin{aligned}\n${y}_i &\\sim ${famTex[f] || '\\cdot'}\n\\end{aligned}\\]` +
+          extraLinesAfterDist;
+    // Skip the main aligned block continuation for these families
+    tex += `<div class="math-sec cg" style="margin-top:1rem">Priors</div>`;
+    tex += `\\[\\begin{aligned}\n`;
+    const priorLines = priorRows.map(r => `${r.sym} &\\sim ${fmtPriorTex(gPrior(r.id, r.cls))}`)
+    tex += priorLines.join(' \\\\[3pt]\n');
+    tex += `\n\\end{aligned}\\]`;
+    return tex;
+  }
+
+  tex = `\\[\\begin{aligned}\n${y}_i &\\sim ${famTex[f] || '\\cdot'} \\\\[6pt]\n${muLine} \\\\`;
+
+  // Distributional lines — use correct link per parameter
   activeD.forEach(d => {
-    const link = d.n === 'nu' ? '' : '\\log(';
-    const close = d.n === 'nu' ? '' : ')';
-    let dLine = `${link}${d.n}_i${close} &= \\alpha_{${d.n}}`;
+    const lk    = DIST_LINK[d.n] || 'log';
+    const sym   = DIST_SYM[d.n]  || d.n;
+    const open  = lk === 'logit' ? '\\text{logit}(' : lk === 'log' ? '\\log(' : '';
+    const close = lk === 'id'    ? '' : ')';
+    let dLine = `${open}${sym}_i${close} &= \\alpha_{${d.n}}`;
     d.preds.forEach(p => { dLine += ` + \\beta_{${d.n},${p}}\\, ${p}_i`; });
     tex += `\\\\[4pt]\n${dLine} \\\\`;
   });
@@ -743,7 +931,8 @@ function fmtPriorTex(str) {
     normal:'Normal', exponential:'Exponential', student_t:'Student\\text{-}t',
     cauchy:'Cauchy', gamma:'Gamma', lkj:'LKJ',
     half_normal:'Half\\text{-}Normal', half_student:'Half\\text{-}t',
-    half_cauchy:'Half\\text{-}Cauchy'
+    half_cauchy:'Half\\text{-}Cauchy',
+    beta:'Beta'
   };
   const n = famTex[fam] || fam;
   return `\\operatorname{${n}}(${args})`;
@@ -898,6 +1087,7 @@ function parsePriorStr(str) {
     case 'exponential': return { fam:'exponential',  p1:args[0]??1,   p2:1,             nu:3 };
     case 'gamma':       return { fam:'gamma',        p1:args[0]??2,   p2:args[1]??1,    nu:3 };
     case 'lkj':         return { fam:'lkj',          eta:args[0]??2 };
+    case 'beta':        return { fam:'beta',         p1:args[0]??1,  p2:args[1]??1 };
     default:            return null;
   }
 }
@@ -1083,9 +1273,8 @@ function importFromPPC() {
   // Set family
   const newFam = PPC2FAM[d.ppcFamily] || PPC2FAM[d.family] || 'gaussian';
   FAMILY = newFam;
-  document.querySelectorAll('#fam-tabs .rbtn').forEach(b => {
-    b.classList.toggle('sel', b.dataset.fam === newFam);
-  });
+  const famSel = document.getElementById('fam-select');
+  if (famSel) famSel.value = newFam;
   rebuildDistArea();
 
   // Predictor count + names
