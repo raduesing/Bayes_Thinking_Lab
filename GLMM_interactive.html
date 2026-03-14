@@ -154,6 +154,11 @@
   <div>
     <h1>(G)<em>LMM</em> — Mixed Models Interaktiv</h1>
     <p class="subtitle">Gaussian · Poisson · Gamma · Logistisch &nbsp;|&nbsp; Partial / No / Complete Pooling &nbsp;|&nbsp; Shrinkage · ICC · Simpson</p>
+    <p class="subtitle" style="margin-top:.28rem;color:var(--warn);font-size:.58rem;max-width:700px;line-height:1.55">
+      ⚠ Illustrations-Tool: Parameterschätzungen basieren auf IRLS + Method-of-Moments — <em>keine</em> Laplace-Approximation wie lme4/glmmTMB.
+      Richtung und Größenordnung der Effekte stimmen, exakte Werte weichen ab.
+      Für inferenzstatistisch valide Ergebnisse bitte R verwenden (↓ CSV).
+    </p>
   </div>
   <div class="hbtns">
     <button class="icon-btn"       id="btn-outlier" onclick="toggleOutlier()" title="Ausreißer-Gruppe mit kleinem n hinzufügen">⚡ Ausreißer-Gruppe</button>
@@ -247,6 +252,7 @@
       </div>
       <div class="data-row">
         <button class="regen-btn" onclick="regen()">⟳ Neue Daten</button>
+        <button class="regen-btn" onclick="downloadCSV()" title="Simulierte Daten als CSV herunterladen" style="border-color:var(--accent3);color:var(--accent3)">↓ CSV</button>
         <button class="regen-btn" id="btn-simpson" onclick="setSimpson()" style="border-color:var(--warn);color:var(--warn)" title="Simpson-Szenario laden">⚠ Simpson</button>
         <span class="nlabel" id="v-N">N = 60</span>
       </div>
@@ -560,12 +566,15 @@ function genData() {
   }
   if (showOutlier) {
     const j   = p.J;
-    // Extreme outlier to demonstrate strong shrinkage
-    const u0o = Math.max(p.tau0, 1.0) * 4.0; 
-    trueGrp.push({u0: u0o, u1: 0, nj: 3, isOutlier: true});
-    for (let i = 0; i < 3; i++) {
+    // Outlier group: extreme intercept + counter-trend slope → strong shrinkage in both
+    const u0o = Math.max(p.tau0, 1.0) * 4.0;
+    // Slope deviation: opposite to fixed slope (if g10>0, outlier goes negative, and vice versa)
+    const slopeSign = p.g10 >= 0 ? -1 : 1;
+    const u1o = slopeSign * (Math.abs(p.g10) + 0.4);  // reverses AND amplifies slope
+    trueGrp.push({u0: u0o, u1: u1o, nj: 4, isOutlier: true});
+    for (let i = 0; i < 4; i++) {
       const x   = (rng() * 2 - 1) * p.xr;
-      const eta = (p.g00 + u0o) + p.g10 * x;
+      const eta = (p.g00 + u0o) + (p.g10 + u1o) * x;
       const mu  = m.invLink(eta);
       data.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
     }
@@ -574,6 +583,66 @@ function genData() {
 }
 
 function regen() { seed = Math.random() * 1e8 | 0; genData(); renderAll(); }
+
+function downloadCSV() {
+  if (!data || data.length === 0) return;
+  const m = MODELS[modelKey];
+  // Column names depend on model
+  const yName = modelKey === 'logistic' ? 'y_binary'
+              : modelKey === 'poisson'  ? 'y_count'
+              : modelKey === 'gamma'    ? 'y_positive'
+              : 'y';
+  const modelName = { gauss:'lmm_gaussian', poisson:'glmm_poisson',
+                      gamma:'glmm_gamma', logistic:'glmm_logistic' }[modelKey];
+  // Header
+  const lines = ['group,x,' + yName + ',group_intercept_true,group_slope_true'];
+  data.forEach(d => {
+    const tg = trueGrp[d.gid] || {u0:0, u1:0};
+    const p2  = {
+      g00:  +document.getElementById('g00').value,
+      g10:  +document.getElementById('g10').value,
+    };
+    const true_int   = (p2.g00 + tg.u0).toFixed(4);
+    const true_slope = (p2.g10 + (tg.u1||0)).toFixed(4);
+    lines.push(`${d.gid+1},${d.x.toFixed(4)},${modelKey==='logistic'||modelKey==='poisson'?d.y:d.y.toFixed(4)},${true_int},${true_slope}`);
+  });
+  // R comment header
+  const pars = {
+    g00:  +document.getElementById('g00').value,
+    g10:  +document.getElementById('g10').value,
+    tau0: +document.getElementById('tau0').value,
+    tau1: +document.getElementById('tau1').value,
+    sig:  +document.getElementById('sigma').value,
+    J:    +document.getElementById('J').value,
+    n:    +document.getElementById('n').value,
+  };
+  const comment = [
+    '# Simulierte Daten aus GLMM Interactive Tool',
+    '# Modell: ' + modelName,
+    '# Datengenerator: ' + m.formulaLink,
+    '# Parameter: gamma00=' + pars.g00 + ', gamma10=' + pars.g10 +
+      ', tau0=' + pars.tau0 + ', tau1=' + pars.tau1 +
+      (MODELS[modelKey].hasSigma ? ', sigma=' + pars.sig : '') +
+      ', J=' + pars.J + ', n_per_group=' + pars.n,
+    '# R-Code-Vorlage:',
+    '# library(lme4)',
+    '# d <- read.csv("' + modelName + '_data.csv", comment.char="#")',
+    modelKey === 'gauss'    ? '# m <- lmer(' + yName + ' ~ x + (1|group), data=d, REML=FALSE)' :
+    modelKey === 'logistic' ? '# m <- glmer(' + yName + ' ~ x + (1|group), data=d, family=binomial)' :
+    modelKey === 'poisson'  ? '# m <- glmer(' + yName + ' ~ x + (1|group), data=d, family=poisson)' :
+                              '# m <- glmer(' + yName + ' ~ x + (1|group), data=d, family=Gamma(link="log"))',
+    '# summary(m)',
+    '',
+  ].join('\n');
+
+  const blob = new Blob([comment + lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = modelName + '_data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function setSimpson() {
   document.getElementById('g00').value   = '3.0';
@@ -678,32 +747,111 @@ function fitGLM(pts) {
 // ═══════════════════════════════════════════════════════════════
 // LMM/GLMM EMPIRICAL BAYES ESTIMATES
 // ═══════════════════════════════════════════════════════════════
+// ── 1-D IRLS: estimate intercept for a group given fixed slope b ──────
+function fitIntercept(pts, b, invLink, linkDeriv, varFn, startA) {
+  let a = startA;
+  for (let iter = 0; iter < 12; iter++) {
+    let sw = 0, sz = 0;
+    for (const pt of pts) {
+      const eta = a + b * pt.x;
+      const mu  = invLink(eta);
+      const dmu = linkDeriv(eta);
+      const v   = varFn(mu);
+      const w   = Math.max((dmu * dmu) / Math.max(v, 1e-10), 1e-12);
+      const z   = eta + (pt.y - mu) / Math.max(dmu, 1e-10);
+      sw += w; sz += w * (z - b * pt.x);
+    }
+    const na = sw > 1e-12 ? sz / sw : a;
+    if (Math.abs(na - a) < 1e-7) { a = na; break; }
+    a = na;
+  }
+  return a;
+}
+
+// ── Shared-slope IRLS: estimate common slope across all groups ──────────
+// Groups have separate intercepts (fixed via current estimates), slope is common.
+// Iterates: given current {a_j}, update b; then update each a_j given b.
+function fitCommonSlope(grpPts, initAs, initB, invLink, linkDeriv, varFn) {
+  let b = initB;
+  let as = [...initAs];
+  const J = grpPts.length;
+
+  for (let outer = 0; outer < 10; outer++) {
+    // ── Update b given current {a_j} ──
+    let sw = 0, sz = 0;
+    for (let j = 0; j < J; j++) {
+      for (const pt of grpPts[j]) {
+        const eta = as[j] + b * pt.x;
+        const mu  = invLink(eta);
+        const dmu = linkDeriv(eta);
+        const v   = varFn(mu);
+        const w   = Math.max((dmu * dmu) / Math.max(v, 1e-10), 1e-12);
+        const z   = eta + (pt.y - mu) / Math.max(dmu, 1e-10);
+        sw += w * pt.x * pt.x;
+        sz += w * pt.x * (z - as[j]);
+      }
+    }
+    const nb = sw > 1e-12 ? sz / sw : b;
+    const db = Math.abs(nb - b); b = nb;
+
+    // ── Update each a_j given b ──
+    let maxDA = 0;
+    for (let j = 0; j < J; j++) {
+      const na = fitIntercept(grpPts[j], b, invLink, linkDeriv, varFn, as[j]);
+      maxDA = Math.max(maxDA, Math.abs(na - as[j]));
+      as[j] = na;
+    }
+    if (db < 1e-7 && maxDA < 1e-7) break;
+  }
+  return {b, as};
+}
+
 function mmEst(p) {
   const totalJ = trueGrp.length;
   const m = MODELS[modelKey];
 
+  // Per-group free fits (used for no-pooling with random slopes, and for initialisation)
   const grpFit = Array.from({length:totalJ}, (_,j) => fitGLM(data.filter(d=>d.gid===j)));
   const cpFit  = fitGLM(data);
-  let npFit;
+  const grpPts = Array.from({length:totalJ}, (_,j) => data.filter(d=>d.gid===j));
 
-  if (reMode === 'int') {
-    const totalN = data.length;
-    const bPooled = grpFit.reduce((s,g,j) => s + g.b * trueGrp[j].nj, 0) / totalN;
-    npFit = grpFit.map((g, j) => {
-      const pts = data.filter(d => d.gid === j);
-      const mx  = pts.reduce((s,d)=>s+d.x,0)/pts.length;
-      const my  = modelKey === 'gauss'
-        ? pts.reduce((s,d)=>s+d.y,0)/pts.length
-        : pts.reduce((s,d)=>s+m.link(Math.max(d.y,1e-9)),0)/pts.length;
-      return { a: my - bPooled * mx, b: bPooled };
-    });
-  } else {
-    npFit = grpFit;
+  // ── Get link function details ──────────────────────────────────────
+  let invLink, linkDeriv, varFn;
+  if (modelKey === 'gauss') {
+    invLink = η => η; linkDeriv = η => 1; varFn = μ => 1;
+  } else if (modelKey === 'poisson') {
+    invLink = η => Math.exp(η); linkDeriv = η => Math.exp(η); varFn = μ => Math.max(μ,1e-9);
+  } else if (modelKey === 'gamma') {
+    invLink = η => Math.exp(η); linkDeriv = η => Math.exp(η); varFn = μ => Math.max(μ*μ,1e-9);
+  } else { // logistic
+    invLink = η => 1/(1+Math.exp(-η));
+    linkDeriv = η => { const s=1/(1+Math.exp(-η)); return Math.max(s*(1-s),1e-9); };
+    varFn = μ => Math.max(μ*(1-μ),1e-9);
   }
 
-  const totalN = data.length;
-  const feA = grpFit.reduce((s,g,j) => s + g.a * trueGrp[j].nj, 0) / totalN;
-  const feB = grpFit.reduce((s,g,j) => s + g.b * trueGrp[j].nj, 0) / totalN;
+  let npFit, feA, feB;
+
+  if (reMode === 'int') {
+    // ── Estimate common slope + per-group intercepts (within estimator) ──
+    // This is the closest JavaScript approximation to lme4's Laplace MLE for γ₁₀.
+    // Gaussian: exact (OLS within). GLMMs: PQL-like approximation.
+    const initAs = grpFit.map(g => g.a);
+    const initB  = grpFit.reduce((s,g,j)=>s+g.b*trueGrp[j].nj,0)/data.length;
+
+    const {b: commonB, as: groupAs} = fitCommonSlope(
+      grpPts, initAs, initB, invLink, linkDeriv, varFn
+    );
+
+    npFit = groupAs.map((a, j) => ({a, b: commonB}));
+    feB = commonB;
+    feA = npFit.reduce((s,g,j)=>s+g.a*trueGrp[j].nj,0)/data.length;
+
+  } else {
+    // ── Random slopes: use per-group free fits ──────────────────────
+    npFit = grpFit;
+    feA = grpFit.reduce((s,g,j)=>s+g.a*trueGrp[j].nj,0)/data.length;
+    feB = grpFit.reduce((s,g,j)=>s+g.b*trueGrp[j].nj,0)/data.length;
+  }
 
   // ── Theoretical Level-1 Variance for Shrinkage λ and ICC/R² ──
   // For Gaussian: Level-1 variance = σ² (free parameter, from slider)
@@ -718,9 +866,22 @@ function mmEst(p) {
   if (modelKey === 'logistic') {
     v_lvl1_est = Math.PI * Math.PI / 3;                           // ≈ 3.290
   } else if (modelKey === 'poisson') {
-    v_lvl1_est = Math.log(1 + 1/Math.max(Math.exp(feA), 0.01)); // Nakagawa approx
+    // Use actual data mean count for Nakagawa approximation (more stable than exp(feA))
+    const lambdaBarEst = Math.max(data.reduce((s,d)=>s+d.y,0)/Math.max(data.length,1), 0.1);
+    v_lvl1_est = Math.log(1 + 1 / lambdaBarEst);
   } else if (modelKey === 'gamma') {
-    v_lvl1_est = Math.log(1 + p.sig * p.sig);                   // log(1+φ) on log-scale
+    // Estimate dispersion φ from within-group CV² (data-driven, changes with new data)
+    let sv2 = 0, nc = 0;
+    for (let j = 0; j < trueGrp.length; j++) {
+      const pts = data.filter(d => d.gid === j);
+      if (pts.length < 3) continue;
+      const my = pts.reduce((s,d)=>s+d.y,0)/pts.length;
+      if (my < 1e-6) continue;
+      const vy = pts.reduce((s,d)=>s+(d.y-my)**2,0)/(pts.length-1);
+      sv2 += vy/(my*my); nc++;
+    }
+    const phi_hat = nc > 0 ? Math.max(sv2/nc, 1e-4) : p.sig**2;
+    v_lvl1_est = Math.log(1 + phi_hat);   // data-driven Nakagawa approximation
   }
 
   const ppFit = npFit.map((g, j) => {
@@ -751,9 +912,10 @@ function setModel(k) {
 
   const cfg = {
     gauss:    { g00min:'-2',  g00max:'6',   g00val:'2.0',  g10min:'-2',   g10max:'2',    g10val:'0.6',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
-    poisson:  { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.3', g10max:'0.3',  g10val:'0.12', g10step:'0.02', sigmax:'2.5', sigval:'0.6'  },
-    // Fix: Reduzierter g10max Bereich bei Gamma für bessere Lesbarkeit
-    gamma:    { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.15',g10max:'0.15', g10val:'0.10', g10step:'0.01', sigmax:'1.2', sigval:'0.4'  },
+    // Poisson: larger g10 and xr defaults so curves show visible shape
+    poisson:  { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.5', g10max:'0.5',  g10val:'0.25', g10step:'0.02', sigmax:'2.5', sigval:'0.6', xrval:'2.5' },
+    // Gamma: same — larger slope and range for visible curves
+    gamma:    { g00min:'0',   g00max:'3',   g00val:'1.0',  g10min:'-0.5', g10max:'0.5',  g10val:'0.30', g10step:'0.02', sigmax:'1.2', sigval:'0.4', xrval:'2.5' },
     logistic: { g00min:'-2',  g00max:'2',   g00val:'0.0',  g10min:'-1.0', g10max:'1.0',  g10val:'0.4',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
   }[k];
   const sl = id => document.getElementById(id);
@@ -771,6 +933,12 @@ function setModel(k) {
     sl('tau1').max = '1.5';
   }
 
+  // Set x-range slider default if model provides one
+  if (cfg.xrval) {
+    const xrEl = document.getElementById('xr');
+    xrEl.value = cfg.xrval;
+    document.getElementById('v-xr').textContent = '±' + (+cfg.xrval).toFixed(1);
+  }
   ['mdl-gauss','mdl-poisson','mdl-gamma','mdl-logistic'].forEach(id =>
     document.getElementById(id).classList.toggle('mdl-on', id==='mdl-'+k));
   genData(); renderAll();
@@ -1036,10 +1204,26 @@ function modelFitStats(p, est) {
         ll += d.y * Math.log(mu) - mu;
       });
     } else if (modelKey === 'gamma') {
+      // Gamma LL with shape parameter k = 1/sig² (CV parameterization)
+      // LL = k*(log(k)-log(mu)) - lgamma(k) + (k-1)*log(y) - k*y/mu
+      const k = Math.max(1/(p.sig*p.sig), 0.1);
+      // lgamma approximation (Stirling)
+      function lgamma(x) {
+        if (x <= 0) return 0;
+        // Lanczos approximation
+        const g = 7, c = [0.99999999999980993,676.5203681218851,-1259.1392167224028,
+          771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,
+          9.9843695780195716e-6,1.5056327351493116e-7];
+        let x2=x, s=c[0];
+        for(let i=1;i<=g+1;i++) s+=c[i]/(x2+i);
+        const t=x2+g+0.5;
+        return 0.5*Math.log(2*Math.PI)+(x2+0.5)*Math.log(t)-t+Math.log(s/x2);
+      }
       data.forEach(d => {
         const g = Array.isArray(fits) ? fits[d.gid] : fits;
         const mu = Math.max(m.invLink(g.a + g.b*d.x), 1e-9);
-        ll += -Math.log(mu) - d.y/mu;
+        const y  = Math.max(d.y, 1e-9);
+        ll += k*(Math.log(k)-Math.log(mu)) - lgamma(k) + (k-1)*Math.log(y) - k*y/mu;
       });
     } else if (modelKey === 'logistic') {
       data.forEach(d => {
@@ -1056,50 +1240,86 @@ function modelFitStats(p, est) {
   const k_np = reMode === 'int' ? (totalJ + 1 + hasSig) : (2*totalJ + hasSig);
   const k_pp = reMode === 'int' ? (3 + hasSig) : (5 + hasSig);
 
-  let ssWithin = 0, sxxWithin = 0, dfRes = 0;
+  // ── Collect group-level stats: intercepts, x²-sums, Gaussian residuals ──
+  let sxxWithin = 0, ssGaussResid = 0, dfRes = 0;
   const grpMeanA = [];
+  // For Gamma: estimate dispersion from within-group CV
+  let sumCV2 = 0, nCV = 0;
+
   for (let j = 0; j < totalJ; j++) {
     const pts = data.filter(d => d.gid === j);
+    if (pts.length < 2) { grpMeanA.push(grpFit[j].a); continue; }
     const g   = grpFit[j];
     const mx  = pts.reduce((s,d)=>s+d.x,0)/pts.length;
+    let ssRes = 0;
     pts.forEach(d => {
       const eta_hat = g.a + g.b * d.x;
-      let r_link;
-      if (modelKey === 'gauss') {
-        r_link = d.y - eta_hat;
-      } else if (modelKey === 'poisson' || modelKey === 'gamma') {
-        r_link = Math.log(Math.max(d.y, 1e-9)) - eta_hat;
-      } else if (modelKey === 'logistic') {
-        const mu_hat = m.invLink(eta_hat);
-        const v_hat  = Math.max(mu_hat * (1 - mu_hat), 1e-6);
-        r_link = (d.y - mu_hat) / Math.sqrt(v_hat);
-      } else {
-        r_link = d.y - eta_hat;
-      }
-      ssWithin  += r_link ** 2;
+      const mu_hat  = m.invLink(eta_hat);
+      // Gaussian residual for sigma estimation
+      const r = d.y - mu_hat;
+      ssRes += r * r;
       sxxWithin += (d.x - mx) ** 2;
     });
     dfRes += pts.length - 2;
+    ssGaussResid += ssRes;
     grpMeanA.push(g.a);
+
+    // Gamma: within-group CV² = Var(y)/mean(y)² ≈ 1/k = σ²
+    if (modelKey === 'gamma') {
+      const meanY = pts.reduce((s,d)=>s+d.y,0)/pts.length;
+      if (meanY > 1e-6) {
+        const varY = pts.reduce((s,d)=>s+(d.y-meanY)**2,0)/(pts.length-1);
+        sumCV2 += varY / (meanY * meanY);
+        nCV++;
+      }
+    }
   }
-  const sig2hat = dfRes > 0 ? ssWithin / dfRes : 1e-6;
-  const sighat  = Math.sqrt(sig2hat);
+
+  // ── Level-1 variance: use correct theoretical value per model ──
+  // This is the key quantity for MoM τ₀ estimation (Nakagawa & Schielzeth 2013).
+  // For Gaussian: σ² from OLS residuals (free parameter, data-driven)
+  // For Logistic: π²/3 ≈ 3.290 (theoretical logistic distribution variance)
+  // For Poisson:  log(1+1/λ̄) where λ̄ = mean count (Nakagawa log-normal approx)
+  // For Gamma:    log(1+CV²̂) where CV² is estimated from within-group variation
+  let v_lvl1; // level-1 variance on link scale
+  let sighat_display; // for UI display
+  if (modelKey === 'gauss') {
+    v_lvl1 = dfRes > 0 ? ssGaussResid / dfRes : p.sig**2;
+    sighat_display = Math.sqrt(v_lvl1);
+  } else if (modelKey === 'logistic') {
+    v_lvl1 = Math.PI * Math.PI / 3;   // ≈ 3.290, fixed theoretical value
+    sighat_display = null;             // no σ parameter in Bernoulli
+  } else if (modelKey === 'poisson') {
+    // Grand mean count from data
+    const lambdaBar = Math.max(data.reduce((s,d)=>s+d.y,0)/data.length, 0.1);
+    v_lvl1 = Math.log(1 + 1 / lambdaBar);  // Nakagawa log-normal approximation
+    sighat_display = null;
+  } else if (modelKey === 'gamma') {
+    // Estimate dispersion φ̂ = mean(CV²_j) from within-group variation
+    const phi_hat = nCV > 0 ? Math.max(sumCV2 / nCV, 1e-4) : p.sig**2;
+    v_lvl1 = Math.log(1 + phi_hat);   // Nakagawa approximation for Gamma on log-scale
+    sighat_display = Math.sqrt(phi_hat);  // estimated CV (dispersion parameter)
+  }
 
   const nbar = data.length / totalJ;
   const meanA = grpMeanA.reduce((s,v)=>s+v,0) / totalJ;
   const varA  = grpMeanA.reduce((s,v)=>s+(v-meanA)**2,0) / Math.max(totalJ-1, 1);
-  const tau0hat2 = Math.max(0, varA - sig2hat / nbar);
+  // MoM: τ̂₀² = Var(â_j) - V_level1/n̄  (correct for all GLMMs)
+  const tau0hat2 = Math.max(0, varA - v_lvl1 / nbar);
   const tau0hat  = Math.sqrt(tau0hat2);
 
   const grpSlopeB = grpFit.map(g => g.b);
   const meanB2 = grpSlopeB.reduce((s,v)=>s+v,0) / totalJ;
   const varB   = grpSlopeB.reduce((s,v)=>s+(v-meanB2)**2,0) / Math.max(totalJ-1, 1);
-  const sxxMean = sxxWithin / totalJ;
-  const tau1hat2 = reMode === 'both' ? Math.max(0, varB - sig2hat / Math.max(sxxMean, 1e-9)) : 0;
+  const sxxMean = sxxWithin / Math.max(totalJ, 1);
+  // MoM for random slope: τ̂₁² = Var(b̂_j) - V_level1/sxx̄
+  const tau1hat2 = reMode === 'both' ? Math.max(0, varB - v_lvl1 / Math.max(sxxMean, 1e-9)) : 0;
   const tau1hat  = Math.sqrt(tau1hat2);
 
-  const se_feB = sxxWithin > 0 ? Math.sqrt(sig2hat / sxxWithin) : 0;
-  const se_feA = Math.sqrt((tau0hat2 + sig2hat / nbar) / Math.max(totalJ, 1));
+  // SE formulas: use v_lvl1 (not OLS sig²) for all GLMM models
+  const se_feB = sxxWithin > 0 ? Math.sqrt(v_lvl1 / sxxWithin) : 0;
+  const se_feA = Math.sqrt((tau0hat2 + v_lvl1 / nbar) / Math.max(totalJ, 1));
+  const sig2hat = v_lvl1;   // alias for downstream use
   const z95 = 1.96;
   const ci_feA = [feA - z95*se_feA, feA + z95*se_feA];
   const ci_feB = [feB - z95*se_feB, feB + z95*se_feB];
@@ -1129,8 +1349,8 @@ function modelFitStats(p, est) {
     pp_stats: approxLogLik(ppFit, k_pp),
     k_cp, k_np, k_pp, R2m, R2c, varResid,
     se_feA, se_feB, ci_feA, ci_feB,
-    tau0hat, tau1hat, sig2hat, sighat,
-    ci_tau0, ci_tau1
+    tau0hat, tau1hat, sig2hat, sighat: sighat_display,
+    ci_tau0, ci_tau1, v_lvl1
   };
 }
 
@@ -1198,13 +1418,57 @@ function updateResults(p, est) {
       + '</div>';
   }
 
+  // ── Link-scale labels & exponentiated effects ──────────────
+  const isLogistic = modelKey === 'logistic';
+  const isPoisson  = modelKey === 'poisson';
+  const isGamma    = modelKey === 'gamma';
+  const isLog      = isPoisson || isGamma;
+  // p_base = baseline probability when x=0 (for logistic)
+  const pBase = isLogistic ? (1/(1+Math.exp(-feA))) : null;
+  const intLabel   = isLogistic ? 'γ̂₀₀ · Intercept auf Log-Odds-Skala (x=0)'
+                   : isLog      ? 'γ̂₀₀ · Intercept (log-Skala)'
+                   :              'γ̂₀₀ · Grand Intercept';
+  const slopeLabel = isLogistic ? 'γ̂₁₀ · Slope auf Log-Odds-Skala'
+                   : isLog      ? 'γ̂₁₀ · Slope (log-Skala)'
+                   :              'γ̂₁₀ · Fixed Slope';
+  const expIntRow = isLogistic
+    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">' +
+      'exp(γ̂₀₀) = Baseline-Odds = ' + Math.exp(feA).toFixed(3) +
+      ' → Baseline-Wkt. = ' + (pBase*100).toFixed(1) + '%' +
+      '</span></div>'
+    : isLog
+    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">exp(γ̂₀₀) = Baseline-Mittelwert = ' + Math.exp(feA).toFixed(3) + '</span></div>'
+    : '';
+  const expSlopeRow = isLogistic
+    ? '<div class="res-row" style="margin-top:-.1rem">' +
+      '<span style="color:var(--accent2)">Odds Ratio (OR) = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span class="res-val" style="color:var(--accent2)">OR</span></div>' +
+      '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.58rem">' +
+      'Pro Einheit ↑x multiplizieren sich die Odds um ' + Math.exp(feB).toFixed(3) +
+      (Math.exp(feB) > 1 ? ' (positiver Effekt)' : ' (negativer Effekt)') +
+      '</span></div>'
+    : isPoisson
+    ? '<div class="res-row" style="margin-top:-.1rem">' +
+      '<span style="color:var(--accent2)">Incidence Rate Ratio (IRR) = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span class="res-val" style="color:var(--accent2)">IRR</span></div>' +
+      '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.58rem">' +
+      'Pro Einheit ↑x ändert sich die Rate um Faktor ' + Math.exp(feB).toFixed(3) +
+      '</span></div>'
+    : isGamma
+    ? '<div class="res-row" style="margin-top:-.1rem">' +
+      '<span style="color:var(--accent2)">Multiplikativer Effekt = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span class="res-val" style="color:var(--accent2)">×μ</span></div>'
+    : '';
+
   var feBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.57rem;color:var(--ink2);margin-bottom:.3rem">'
     + 'SE aus Within-Group-Residuen · <span style="color:var(--accent3)">■ geschätzt</span> &nbsp;<span style="color:var(--ink2)">· wahr = Datengenerator</span></div>'
-    + '<div class="res-row"><span>γ̂₀₀ · Grand Intercept</span>'
+    + '<div class="res-row"><span>' + intLabel + '</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + feA.toFixed(3) + '</span></div>'
+    + expIntRow
     + subrow('SE=' + fit.se_feA.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₀₀=' + p.g00.toFixed(3), fmtCI(fit.ci_feA[0], fit.ci_feA[1]))
-    + '<div class="res-row" style="margin-top:.3rem"><span>γ̂₁₀ · Fixed Slope</span>'
+    + '<div class="res-row" style="margin-top:.3rem"><span>' + slopeLabel + '</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + feB.toFixed(3) + '</span></div>'
+    + expSlopeRow
     + subrow('SE=' + fit.se_feB.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₁₀=' + p.g10.toFixed(3), fmtCI(fit.ci_feB[0], fit.ci_feB[1]));
   if (simpsonRisk) {
     feBody += '<div class="res-row" style="margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--grid)">'
@@ -1227,10 +1491,25 @@ function updateResults(p, est) {
       + '<div class="res-row" style="margin-top:.3rem"><span>ρ · Korrelation u₀↔u₁ <span style="font-size:.6rem;color:var(--ink2)">(wahr)</span></span>'
       + '<span class="res-val" style="color:var(--ink2)">' + p.rho.toFixed(2) + '</span></div>';
   }
-  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Residual SD (auf Link-Skala)</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + Math.sqrt(fit.varResid).toFixed(3) + '</span></div>'
-    + (MODELS[modelKey].hasSigma ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + '</span></div>' : '')
-    + '<div class="res-row" style="margin-top:.3rem"><span>ICC = τ̂₀²/(τ̂₀²+σ̂²)</span>'
+  // σ row: context-sensitive per likelihood
+  if (modelKey === 'gauss') {
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Residual SD (aus Daten)</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + '</span></div>';
+  } else if (modelKey === 'gamma') {
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Disp.-Param. CV (aus Daten)</span>'
+    + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + ' · V₁=' + (fit.v_lvl1||0).toFixed(3) + '</span></div>';
+  } else if (modelKey === 'logistic') {
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ theoretisch (Logit-Var.)</span>'
+    + '<span class="res-val" style="color:var(--ink2)">π²/3 ≈ 3.290</span></div>'
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.58rem">Kein freier σ-Parameter — Bernoulli-Varianz = p(1−p)</span></div>';
+  } else if (modelKey === 'poisson') {
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ Nakagawa-Näherung</span>'
+    + '<span class="res-val" style="color:var(--ink2)">' + (fit.v_lvl1||0).toFixed(3) + '</span></div>'
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.58rem">log(1+1/λ̄) — ändert sich mit den Daten</span></div>';
+  }
+  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>ICC = τ̂₀²/(τ̂₀²+σ̂²)</span>'
     + '<span class="res-val" style="color:var(--accent2)">' + (vpc*100).toFixed(1) + '%</span></div>'
     + '<div class="vpc-track" style="margin:.28rem 0">'
     + '<div class="vpc-between" style="width:' + Math.min(vpc*100,100).toFixed(0) + '%"></div>'
@@ -1268,9 +1547,14 @@ function updateResults(p, est) {
 
   var outlierRow = '';
   if (showOutlier && ppFit[trueGrp.length-1]) {
-    var lamOut = (ppFit[trueGrp.length-1].lam0 || 0) * 100;
-    outlierRow = '<div class="res-row"><span>λ Ausreißer-Gruppe (n=3) ⚡</span>'
-      + '<span class="res-val" style="color:var(--accent)">' + lamOut.toFixed(0) + '%</span></div>';
+    var lamOut0 = (ppFit[trueGrp.length-1].lam0 || 0) * 100;
+    var lamOut1 = (ppFit[trueGrp.length-1].lam1 || 0) * 100;
+    outlierRow = '<div class="res-row"><span>λ₀ Ausreißer-Intercept (n=4) ⚡</span>'
+      + '<span class="res-val" style="color:var(--accent)">' + lamOut0.toFixed(0) + '%</span></div>';
+    if (reMode === 'both') {
+      outlierRow += '<div class="res-row"><span>λ₁ Ausreißer-Slope ⚡</span>'
+        + '<span class="res-val" style="color:var(--accent)">' + lamOut1.toFixed(0) + '%</span></div>';
+    }
   }
   var shrinkBody = '<div class="res-row"><span>λ für Standardgruppen (n=' + p.n + ')</span>'
     + '<span class="res-val" style="color:var(--accent2)">' + (λ0*100).toFixed(0) + '%</span></div>'
