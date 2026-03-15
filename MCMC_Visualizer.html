@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCMC Visualizer — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--shadow:rgba(0,0,0,.07);
+  --warm:#e07830;--cool:#4ab0d8;--accept:#80cb52;--reject:#e8614a;
+}
+[data-theme="dark"]{
+  --bg:#0d1018;--paper:#141820;--ink:#ebe5d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;--shadow:rgba(0,0,0,.4);
+  --warm:#e07830;--cool:#4ab0d8;--accept:#80cb52;--reject:#e8614a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     min-height:100vh;transition:background .25s,color .25s;overflow-x:hidden}
+
+/* ── TOPBAR ── */
+#topbar{position:sticky;top:0;z-index:200;background:var(--paper);
+        border-bottom:1.5px solid var(--border);padding:.45rem 1.4rem;
+        display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.topbar-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em}
+.topbar-title em{font-style:italic;color:var(--a2)}
+.topbar-sub{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);letter-spacing:.04em}
+.tbtn{font-family:'DM Mono',monospace;font-size:.64rem;padding:.22rem .6rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--a2);color:var(--a2)}
+
+/* ── INTRO SECTION ── */
+#intro{max-width:1060px;margin:1.6rem auto 0;padding:0 1.2rem}
+#intro h1{font-size:1.9rem;font-weight:300;letter-spacing:-.03em;line-height:1.2;
+          margin-bottom:.7rem}
+#intro h1 em{font-style:italic;color:var(--a2)}
+
+.intro-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid);
+            margin-top:.9rem}
+.icard{background:var(--paper);padding:.9rem 1.1rem}
+.icard-h{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+         text-transform:uppercase;margin-bottom:.45rem;padding-bottom:.2rem;
+         border-bottom:1px solid var(--grid)}
+.icard-h.ca{color:var(--a2)}.icard-h.cg{color:var(--a3)}
+.icard-h.co{color:var(--a5)}.icard-h.cr{color:var(--a1)}
+.icard-body{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);line-height:1.78}
+.icard-body b{color:var(--ink)}
+.icard-body code{background:var(--panel);border:1px solid var(--border);
+                 color:var(--a2);padding:.02rem .28rem;font-size:.67rem}
+
+/* The fog callout */
+.fog-box{background:var(--panel);border-left:4px solid var(--a5);padding:.75rem 1rem;
+         margin:.9rem 0 0;font-family:'DM Mono',monospace;font-size:.64rem;
+         color:var(--ink2);line-height:1.8}
+.fog-box b{color:var(--ink)}.fog-box em{color:var(--a5);font-style:normal}
+
+/* ── STAGE SELECTOR ── */
+#stage-wrap{max-width:1060px;margin:1.2rem auto 0;padding:0 1.2rem}
+.stage-tabs{display:flex;gap:1px;background:var(--grid);margin-bottom:1px}
+.stab{flex:1;font-family:'DM Mono',monospace;font-size:.66rem;padding:.55rem .8rem;
+      background:var(--paper);cursor:pointer;text-align:left;border:none;
+      color:var(--ink2);transition:all .13s;position:relative;letter-spacing:.02em}
+.stab:hover{background:var(--panel);color:var(--ink)}
+.stab.sel{background:var(--panel);color:var(--ink)}
+.stab.sel::after{content:'';position:absolute;bottom:0;left:0;right:0;
+                 height:2.5px;background:var(--a2)}
+.stab .st-num{font-size:.55rem;opacity:.5;display:block;margin-bottom:.12rem;letter-spacing:.1em}
+.stab .st-lbl{font-weight:500}
+.stab .st-sub{font-size:.55rem;opacity:.55;display:block;margin-top:.1rem}
+
+/* Stage description strip */
+#stage-desc{background:var(--paper);border-bottom:1px solid var(--grid);
+            padding:.6rem 1rem;font-family:'DM Mono',monospace;font-size:.63rem;
+            color:var(--ink2);line-height:1.7;min-height:2.6rem}
+#stage-desc b{color:var(--ink)}
+
+/* ── LANDSCAPE ── */
+.stage-grid{display:grid;grid-template-columns:1fr 260px;gap:1px;background:var(--grid)}
+#landscape-wrap{background:var(--paper);position:relative;grid-column:1;grid-row:1}
+#landscape{display:block;width:100%;height:340px}
+/* single canvas for all stages */
+
+/* ── INSPECTOR ── */
+#inspector{background:var(--paper);padding:.85rem .9rem;display:flex;
+           flex-direction:column;gap:.6rem}
+.insp-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+            text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--grid);
+            padding-bottom:.28rem;margin-bottom:.05rem}
+.insp-row{display:flex;justify-content:space-between;align-items:baseline;
+          font-family:'DM Mono',monospace;font-size:.64rem}
+.insp-lbl{color:var(--ink2)}.insp-val{font-weight:500;color:var(--ink)}
+.insp-val.acc{color:var(--accept)}.insp-val.rej{color:var(--reject)}
+.insp-val.warm{color:var(--warm)}.insp-val.cool{color:var(--cool)}
+.decision-box{background:var(--panel);border:1px solid var(--grid);padding:.45rem .6rem;
+              font-family:'DM Mono',monospace;font-size:.61rem;line-height:1.7;color:var(--ink2)}
+.decision-box b{color:var(--ink)}
+.decision-box .big{font-size:.74rem;font-weight:500;display:block;margin-top:.28rem}
+.decision-box .big.acc{color:var(--accept)}.decision-box .big.rej{color:var(--reject)}
+
+/* Acceptance meter */
+.acc-meter-label{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);
+                 display:flex;justify-content:space-between;margin-bottom:.3rem}
+.acc-bar-bg{height:5px;background:var(--grid);position:relative}
+.acc-bar-fill{height:100%;transition:width .3s;position:absolute;top:0;left:0}
+.acc-zone{position:absolute;top:-3px;height:11px;background:rgba(128,203,82,.13);
+          border-left:1px dashed var(--accept);border-right:1px dashed var(--accept)}
+
+/* Narrative banner */
+#narrative{background:var(--paper);border-bottom:1px solid var(--grid);
+           padding:.65rem .95rem;min-height:3.4rem;display:flex;align-items:flex-start;gap:.75rem}
+.narr-phase{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+            text-transform:uppercase;padding:.15rem .42rem;border:1px solid;
+            white-space:nowrap;flex-shrink:0;margin-top:.06rem;height:fit-content}
+.narr-phase.p0{border-color:var(--a2);color:var(--a2)}
+.narr-phase.p1{border-color:var(--warm);color:var(--warm)}
+.narr-phase.p2{border-color:var(--cool);color:var(--cool)}
+.narr-phase.p3{border-color:var(--accept);color:var(--accept)}
+.narr-text{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink2);line-height:1.75;flex:1}
+.narr-text b{color:var(--ink)}.narr-text .hlw{color:var(--warm);font-weight:500}
+.narr-text .hlc{color:var(--cool);font-weight:500}.narr-text .hlg{color:var(--accept);font-weight:500}
+.narr-text .hlr{color:var(--reject);font-weight:500}
+.narr-text code{background:var(--panel);border:1px solid var(--border);
+                color:var(--a2);padding:.02rem .28rem;font-size:.67rem}
+
+/* ── CONTROLS ── */
+#controls{background:var(--paper);border-top:1px solid var(--grid);
+          padding:.65rem .95rem;display:flex;flex-wrap:wrap;align-items:center;gap:.55rem}
+.ctrl-group{display:flex;align-items:center;gap:.38rem}
+.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);white-space:nowrap}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);
+                  outline:none;cursor:pointer;border-radius:2px;width:82px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--a2);border-radius:50%;cursor:pointer}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.68rem;font-weight:500;
+          color:var(--a2);min-width:2.5rem;text-align:right}
+.run-btn{font-family:'DM Mono',monospace;font-size:.7rem;padding:.35rem 1rem;
+         border:1.5px solid var(--a2);background:transparent;cursor:pointer;
+         color:var(--a2);transition:all .15s}
+.run-btn:hover,.run-btn.running{background:var(--a2);color:var(--paper)}
+.step-btn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.33rem .68rem;
+          border:1.5px solid var(--border);background:transparent;cursor:pointer;
+          color:var(--ink2);transition:all .15s}
+.step-btn:hover{border-color:var(--ink);color:var(--ink)}
+.reset-btn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.33rem .65rem;
+           border:1.5px solid var(--a1);background:transparent;cursor:pointer;
+           color:var(--a1);transition:all .15s}
+.reset-btn:hover{background:var(--a1);color:white}
+.ctrl-sep{width:1px;height:20px;background:var(--grid);margin:0 .15rem}
+
+/* Stats bar */
+#stats-bar{background:var(--panel);border-top:1px solid var(--grid);
+           padding:.35rem .95rem;display:flex;gap:1.2rem;flex-wrap:wrap}
+.stat-item{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);
+           display:flex;align-items:center;gap:.28rem}
+.sv{font-weight:500;color:var(--ink);font-size:.67rem}
+.sv.warm{color:var(--warm)}.sv.cool{color:var(--cool)}.sv.good{color:var(--accept)}.sv.bad{color:var(--reject)}
+
+/* ── LOWER PLOTS ── */
+#lower{max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem;
+       display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+.lower-panel{background:var(--paper);padding:.75rem .9rem}
+.panel-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+             text-transform:uppercase;color:var(--ink2);margin-bottom:.5rem;
+             padding-bottom:.2rem;border-bottom:1px solid var(--grid);
+             display:flex;justify-content:space-between;align-items:baseline}
+.panel-title .pt-note{font-size:.54rem;opacity:.55;text-transform:none;letter-spacing:0}
+canvas.plot{display:block;width:100%;border:1px solid var(--grid)}
+
+/* ── TECHNICAL LEARN CARDS (bottom) ── */
+#tech-cards{max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem 3rem;
+            display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+
+/* toast */
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a2);color:white;
+       font-family:'DM Mono',monospace;font-size:.7rem;padding:.45rem .9rem;
+       box-shadow:3px 3px 0 var(--shadow);z-index:999;opacity:0;
+       transform:translateY(8px);transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+/* ── MH Modal ── */
+#mhm-ov{position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem}
+#mhm-ov.open{display:flex}
+#mhm-box{max-width:555px;width:100%;background:var(--paper);border:2px solid var(--a3);
+  box-shadow:0 0 40px rgba(128,203,82,.15),0 16px 48px rgba(0,0,0,.5)}
+#mhm-hd{display:flex;align-items:center;justify-content:space-between;
+  padding:.68rem 1.1rem .6rem;background:var(--a3)}
+#mhm-hd span{font-family:'DM Mono',monospace;font-size:.74rem;font-weight:500;color:white;letter-spacing:.03em}
+#mhm-cl{font-family:'DM Mono',monospace;font-size:.7rem;border:1.5px solid rgba(255,255,255,.5);
+  background:transparent;cursor:pointer;color:white;padding:.17rem .52rem;transition:all .15s}
+#mhm-cl:hover{background:rgba(255,255,255,.18)}
+#mhm-bd{padding:1rem 1.2rem 1.2rem;font-family:'DM Mono',monospace;font-size:.65rem;
+  line-height:1.85;color:var(--ink2)}
+#mhm-bd b{color:var(--ink)}
+#mhm-bd code{background:var(--panel);border:1px solid var(--border);color:var(--a2);padding:.02rem .3rem;font-size:.68rem}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div style="display:flex;align-items:baseline;gap:.7rem">
+    <div class="topbar-title">MCMC <em>Visualizer</em></div>
+    <div class="topbar-sub">Metropolis-Hastings · Posterior Sampling · Konvergenz · v1</div>
+  </div>
+  <div style="display:flex;gap:.35rem">
+    <button class="tbtn" onclick="window.open('index.html','_self')">← Übersicht</button>
+    <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<!-- ═══ INTRO ══════════════════════════════════════════════ -->
+<div id="intro">
+  <h1>Wie findet der Computer den <em>Posterior</em>?</h1>
+
+  <div class="fog-box">
+    <b>Die Metapher:</b> Stell dir vor, du stehst im dichten <em>Nebel</em> auf einer Hügellandschaft und sollst herausfinden, wie die Landschaft aussieht. Du kannst nicht fliegen und nichts sehen — aber du kannst den Boden unter deinen Füßen ertasten. Wenn du schlau spazierst und aufschreibst, wo du warst, entsteht nach vielen Schritten eine Karte der Landschaft. Genau das ist MCMC. Die Landschaft ist der Posterior — und deine Karte ist die Sammlung von Samples.
+  </div>
+
+  <div class="intro-grid">
+    <div class="icard">
+      <div class="icard-h ca">Warum kann man den Posterior nicht einfach berechnen?</div>
+      <div class="icard-body">
+        Im frequentistischen Denken gibt es eine Formel: Daten rein, Schätzer raus. Im Bayesianischen Rahmen ist das Ziel eine <b>ganze Verteilung</b> über alle plausiblen Parameterwerte — der Posterior P(θ | Daten).<br><br>
+        Das Bayes-Theorem sagt: <b>P(θ|D) ∝ P(D|θ) · P(θ)</b>. Das Proportionalzeichen versteckt ein Integral im Nenner, das in realistischen Modellen nicht lösbar ist. Bei 5 Parametern und 100 Gitterpunkten pro Parameter wären das 100⁵ = 10¹⁰ Berechnungen. Unmöglich.<br><br>
+        MCMC löst das, indem es den Posterior <em>beprobt</em> statt ihn vollständig auszurechnen.
+      </div>
+    </div>
+    <div class="icard">
+      <div class="icard-h cg">Wie bewegt sich der Wanderer?</div>
+      <div class="icard-body">
+        An jeder Position macht der Wanderer einen <b>zufälligen Vorschlag</b>: „Was wäre, wenn ich einen Schritt dorthin machte?"<br><br>
+        Ist der neue Ort <b>wahrscheinlicher</b>? → immer hingehen.<br>
+        Ist er <b>weniger wahrscheinlich</b>? → manchmal trotzdem hingehen — <em>proportional zum Unterschied</em>. Ein Ort, der halb so wahrscheinlich ist, wird in 50% der Fälle besucht.<br><br>
+        So bleibt der Wanderer nicht in einer Ecke stecken und erkundet die ganze Landschaft.<br><br>
+        <button onclick="mhModal()" style="font-family:'DM Mono',monospace;font-size:.61rem;
+          padding:.25rem .65rem;border:1px solid var(--a3);background:transparent;cursor:pointer;
+          color:var(--a3);transition:all .15s"
+          onmouseover="this.style.background=cv('--a3');this.style.color='white'"
+          onmouseout="this.style.background='transparent';this.style.color=cv('--a3')"
+        >▸ Für Interessierte: die Mathematik dahinter</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STAGE SELECTOR ═══════════════════════════════════════ -->
+<div id="stage-wrap">
+
+  <div class="stage-tabs">
+    <button class="stab sel" id="stab-0" onclick="setStage(0)">
+      <span class="st-num">Stufe 1</span>
+      <span class="st-lbl">Unimodaler Posterior</span>
+      <span class="st-sub">Das Grundprinzip verstehen</span>
+    </button>
+    <button class="stab" id="stab-1" onclick="setStage(1)">
+      <span class="st-num">Stufe 2</span>
+      <span class="st-lbl">Bimodaler Posterior</span>
+      <span class="st-sub">Wo analytische Methoden scheitern</span>
+    </button>
+    <button class="stab" id="stab-2" onclick="setStage(2)">
+      <span class="st-num">Stufe 3</span>
+      <span class="st-lbl">2D-Posterior: μ und s</span>
+      <span class="st-sub">Gemeinsam schätzen — wie brms es macht</span>
+    </button>
+  </div>
+
+  <div id="stage-desc"></div>
+
+  <!-- Narrative -->
+  <div id="narrative">
+    <span class="narr-phase p0" id="narr-phase">Start</span>
+    <div class="narr-text" id="narr-text">Wähle eine Stufe oben und klicke <b>▶ Starten</b> oder <b>→ Ein Schritt</b>.</div>
+  </div>
+
+  <!-- Canvas area -->
+  <div class="stage-grid">
+    <div id="landscape-wrap">
+      <canvas id="landscape" height="340"></canvas>
+    </div>
+    
+
+    <!-- Inspector -->
+    <div id="inspector">
+      <div>
+        <div class="insp-title">Letzter Schritt</div>
+        <div id="insp-rows">
+          <div class="insp-row"><span class="insp-lbl">Position aktuell</span><span class="insp-val" id="i-cur">—</span></div>
+          <div class="insp-row"><span class="insp-lbl">Vorschlag</span><span class="insp-val" id="i-prop">—</span></div>
+          <div class="insp-row"><span class="insp-lbl">P(Vorschlag)</span><span class="insp-val" id="i-pp">—</span></div>
+          <div class="insp-row"><span class="insp-lbl">P(Aktuell)</span><span class="insp-val" id="i-pc">—</span></div>
+          <div class="insp-row"><span class="insp-lbl">Verhältnis α</span><span class="insp-val" id="i-ratio">—</span></div>
+          <div class="insp-row"><span class="insp-lbl">Zufallszahl u</span><span class="insp-val" id="i-u">—</span></div>
+          <div class="decision-box" id="i-decision">Noch kein Schritt.</div>
+        </div>
+      </div>
+      <div>
+        <div class="insp-title">Akzeptanzrate</div>
+        <div class="acc-meter-label">
+          <span id="acc-pct">0 %</span>
+          <span style="color:var(--accept);font-size:.57rem">Gut: 20–50 %</span>
+        </div>
+        <div class="acc-bar-bg">
+          <div class="acc-zone" style="left:20%;width:30%"></div>
+          <div class="acc-bar-fill" id="acc-fill" style="width:0%"></div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);
+                    margin-top:.5rem;line-height:1.6" id="acc-hint">
+          Schrittweite anpassen, um Exploration zu optimieren.
+        </div>
+      </div>
+      <div>
+        <div class="insp-title">Legende</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);line-height:1.7">
+          <span style="color:var(--warm)">●</span> Warmup (verworfen)<br>
+          <span style="color:var(--cool)">●</span> Sampling (aufgezeichnet)<br>
+          <span style="color:var(--accept)">○</span> Vorschlag angenommen<br>
+          <span style="color:var(--reject)">○</span> Vorschlag abgelehnt<br>
+          <span style="color:var(--a4)">- -</span> Sprungverteilung N(θ, s)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <button class="run-btn" id="run-btn" onclick="toggleRun()">▶ Starten</button>
+    <button class="step-btn" onclick="doStep()">→ 1 Schritt</button>
+    <button class="step-btn" onclick="doNSteps(10)">→ 10 Schritte</button>
+    <button class="reset-btn" onclick="resetSampler()">↺ Reset</button>
+    <div class="ctrl-sep"></div>
+    <div class="ctrl-group">
+      <span class="ctrl-lbl">Schrittweite s</span>
+      <input type="range" id="step-slider" min="0.05" max="4" step="0.05" value="0.8"
+             oninput="updCtrl('step-slider','v-step',2);drawFrame()">
+      <span class="ctrl-val" id="v-step">0.80</span>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-lbl">Warmup</span>
+      <input type="range" id="warmup-slider" min="10" max="400" step="10" value="150"
+             oninput="updCtrl('warmup-slider','v-warmup',0);redrawTrace()">
+      <span class="ctrl-val" id="v-warmup">150</span>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-lbl">Tempo</span>
+      <input type="range" id="speed-slider" min="1" max="40" step="1" value="6"
+             oninput="updCtrl('speed-slider','v-speed',0)">
+      <span class="ctrl-val" id="v-speed">6</span>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div id="stats-bar">
+    <div class="stat-item">Schritte: <span class="sv" id="s-steps">0</span></div>
+    <div class="stat-item">Phase: <span class="sv" id="s-phase">—</span></div>
+    <div class="stat-item">Position: <span class="sv" id="s-cur">—</span></div>
+    <div class="stat-item">Samples: <span class="sv" id="s-samples">0</span></div>
+    <div class="stat-item">Akzeptanzrate: <span class="sv" id="s-acc">—</span></div>
+  </div>
+
+</div><!-- /stage-wrap -->
+
+<!-- ═══ LOWER PLOTS ═════════════════════════════════════════ -->
+<div id="lower-1d">
+  <div style="max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem;
+       display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)">
+    <div class="lower-panel">
+      <div class="panel-title">Histogramm<span class="pt-note" id="hist-note">Annäherung an Posterior</span></div>
+      <canvas class="plot" id="hist-canvas" height="130"></canvas>
+    </div>
+    <div class="lower-panel">
+      <div class="panel-title">Trace — θ über Schritte<span class="pt-note">Gut: «Raupe» ohne Trend</span></div>
+      <canvas class="plot" id="trace-canvas" height="130"></canvas>
+    </div>
+  </div>
+</div>
+<div id="lower-2d" style="display:none">
+  <!-- Histogramme zuerst -->
+  <div style="max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem;
+              display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)">
+    <div class="lower-panel">
+      <div class="panel-title">Histogramm: μ (Intercept)<span class="pt-note">Marginaler Posterior für μ</span></div>
+      <canvas class="plot" id="hist-mu" height="120"></canvas>
+    </div>
+    <div class="lower-panel">
+      <div class="panel-title">Histogramm: s (Streuung)<span class="pt-note">Marginaler Posterior für s</span></div>
+      <canvas class="plot" id="hist-sig" height="120"></canvas>
+    </div>
+  </div>
+  <!-- Trace Plots darunter -->
+  <div style="max-width:1060px;margin:1px auto 0;padding:0 1.2rem;
+              display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)">
+    <div class="lower-panel">
+      <div class="panel-title">Trace: μ<span class="pt-note">Stabile «Raupe»?</span></div>
+      <canvas class="plot" id="trace-mu" height="110"></canvas>
+    </div>
+    <div class="lower-panel">
+      <div class="panel-title">Trace: s<span class="pt-note">Konvergiert s stabil?</span></div>
+      <canvas class="plot" id="trace-sig" height="110"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TECHNICAL CARDS (bottom) ═══════════════════════════ -->
+<div id="tech-cards">
+  <div class="icard">
+    <div class="icard-h co">Schrittweite s — was wirklich passiert</div>
+    <div class="icard-body">
+      Die Schrittweite s bestimmt, wie weit der Wanderer bei jedem Schritt springen kann.<br><br>
+      <b>s sehr klein:</b> Fast jeder Vorschlag liegt dicht am aktuellen Ort — wird fast immer akzeptiert. <em>Aber:</em> Der Wanderer trippelt nur, erkundet kaum. Selbst bei 90% Akzeptanz kann die Exploration schlecht sein.<br><br>
+      <b>s sehr groß:</b> Vorschläge landen weit weg, oft in sehr flachen Bereichen — werden oft abgelehnt. Der Wanderer steht häufig still.<br><br>
+      <b>Die optimale Schrittweite</b> ist diejenige, die <em>gute Exploration</em> bei <em>vernünftiger Akzeptanzrate</em> ergibt. Als Richtwert gilt 20–50 % — aber entscheidend ist der Trace Plot, nicht die Rate allein. brms passt s automatisch im Warmup an (<em>adaptive sampling</em>).
+    </div>
+  </div>
+  <div class="icard">
+    <div class="icard-h cr">Warmup, Trace Plot & Konvergenz</div>
+    <div class="icard-body">
+      <b>Warmup (burn-in):</b> Die Kette startet irgendwo und braucht Zeit, um in den hochwahrscheinlichen Bereich zu finden. Diese ersten Schritte werden verworfen — sie repräsentieren den Posterior noch nicht.<br><br>
+      <b>Trace Plot lesen:</b> Eine konvergierte Kette sieht aus wie eine «flauschige Raupe» — zufällig springend um ein stabiles Niveau. Sichtbarer Aufwärtstrend oder lange Plateaus → Warmup nicht lang genug oder s nicht optimal.<br><br>
+      <b>R̂ (Gelman-Rubin):</b> In brms laufen mehrere Ketten parallel. Wenn alle dieselbe Verteilung erkunden, konvergieren sie. R̂ &lt; 1.01 = gut. Divergenzen → oft ein Hinweis auf schlecht gewählte Priors oder schwierige Posterior-Geometrie — dann hilft <code>adapt_delta</code> erhöhen.
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="mhm-ov" onclick="if(event.target===this)mhClose()">
+  <div id="mhm-box">
+    <div id="mhm-hd">
+      <span>▸ Metropolis-Hastings — die Mathematik</span>
+      <button id="mhm-cl" onclick="mhClose()">✕ Schließen</button>
+    </div>
+    <div id="mhm-bd">
+      An jedem Schritt gelten drei Regeln:<br><br>
+      <b>1. Vorschlag:</b> Neuer Wert <code>θ* = θ + ε</code>, ε ~ Normal(0, s).<br><br>
+      <b>2. Verhältnis:</b> <code>α = P(θ*|Daten) / P(θ|Daten)</code>. Wie viel plausibler ist der Vorschlag?<br><br>
+      <b>3. Entscheidung:</b> α ≥ 1 → immer annehmen. α &lt; 1 → mit Wahrscheinlichkeit α annehmen.<br><br>
+      <b>Der Trick:</b> Nur Verhältnisse werden gebraucht — die unlösbare Normierungskonstante kürzt sich heraus.<br><br>
+      <b>Warum konvergiert das?</b> Die Übergangsregel erfüllt <em>detailed balance</em>: bei unendlich vielen Schritten entspricht die Besuchshäufigkeit exakt der Posterior-Verteilung. Mathematisch beweisbar.
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+
+// ── Theme ───────────────────────────────────────────────────
+let DARK = true;
+function toggleTheme(){
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK?'dark':'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  drawFrame(); redrawTrace(); redrawHist();
+}
+function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ── RNG ─────────────────────────────────────────────────────
+function randn(){
+  let u,v;
+  do{u=Math.random();}while(u===0);
+  do{v=Math.random();}while(v===0);
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+// ══════════════════════════════════════════════════════════
+//  POSTERIORS
+// ══════════════════════════════════════════════════════════
+const X_MIN=-6, X_MAX=6;
+
+// Stage 0: unimodal — clean Gaussian posterior
+function post0(x){ return Math.exp(-0.5*((x-1.8)/1.1)**2)/(1.1*Math.sqrt(2*Math.PI)); }
+const POST0_MAX = post0(1.8);
+const POST0_TRUE_LABEL = 'Normal(μ=1.8, s=1.1)';
+
+// Stage 1: bimodal mixture
+function post1(x){
+  const g1=0.58/(1.0*Math.sqrt(2*Math.PI))*Math.exp(-0.5*((x-2.2)/1.0)**2);
+  const g2=0.42/(0.7*Math.sqrt(2*Math.PI))*Math.exp(-0.5*((x+1.4)/0.7)**2);
+  return g1+g2;
+}
+const POST1_MAX=(()=>{ let m=0; for(let x=X_MIN;x<=X_MAX;x+=0.01)m=Math.max(m,post1(x)); return m; })();
+const POST1_TRUE_LABEL = '0.58·N(2.2,1) + 0.42·N(−1.4,0.7)';
+
+// Stage 2: 2D posterior over (mu, sigma) for y ~ Normal(mu, sigma)
+// Data: 18 synthetic observations from Normal(2.3, 1.6)
+const DATA2D = [2.1,0.5,3.8,2.9,1.2,4.1,2.3,1.7,3.2,0.9,2.8,3.6,1.5,2.4,0.7,3.1,2.6,1.9];
+const MU_MIN=-1, MU_MAX=6, SIG_MIN=0.2, SIG_MAX=4.5;
+
+function logPost2d(mu, sig){
+  if(sig<=0) return -Infinity;
+  // Prior: Normal(0,5) for mu, Half-Normal(0,3) for sig
+  let lp = -0.5*(mu/5)**2 - 0.5*(sig/3)**2;
+  // Likelihood
+  for(const y of DATA2D){
+    lp += -Math.log(sig) - 0.5*((y-mu)/sig)**2;
+  }
+  return lp;
+}
+// Pre-compute contour grid
+let CONTOUR_GRID = null;
+let CONTOUR_MAX = -Infinity;
+function buildContour(){
+  const Ng=80;
+  CONTOUR_GRID=Array.from({length:Ng},()=>new Float32Array(Ng));
+  CONTOUR_MAX=-Infinity;
+  for(let i=0;i<Ng;i++){
+    for(let j=0;j<Ng;j++){
+      const mu=MU_MIN+i/(Ng-1)*(MU_MAX-MU_MIN);
+      const sig=SIG_MIN+j/(Ng-1)*(SIG_MAX-SIG_MIN);
+      const v=logPost2d(mu,sig);
+      CONTOUR_GRID[i][j]=v;
+      if(v>CONTOUR_MAX) CONTOUR_MAX=v;
+    }
+  }
+}
+
+// ── Sampler State ───────────────────────────────────────────
+let STAGE = 0;
+let curX  = 0;   // 1D current
+let curMu = 0, curSig = 1.5;  // 2D current
+let stepCount=0, acceptCount=0;
+let samples=[]; // 1D samples or [{mu,sig}] for 2D
+let trail=[];   // recent positions
+let traceData=[];
+let lastProposed=null, lastAccepted=null, lastRatio=null;
+let lastU=null, lastPropP=null, lastCurP=null;
+let proposalFlash=0;
+let startX=0, startMu=0, startSig=0;
+let isRunning=false, animId=null, frameCount=0;
+const TRAIL_LEN=60;
+
+function warmupN(){ return +document.getElementById('warmup-slider').value; }
+function stepS(){   return +document.getElementById('step-slider').value; }
+function speedN(){  return +document.getElementById('speed-slider').value; }
+function isWarmup(){ return stepCount<=warmupN(); }
+
+// ── MH Step ─────────────────────────────────────────────────
+function mhStep(){
+  const s=stepS();
+  if(STAGE<2){
+    // 1D
+    const postFn = STAGE===0 ? post0 : post1;
+    const proposed=curX+randn()*s;
+    const cp=postFn(curX);
+    const pp=postFn(proposed);
+    const ratio=pp/Math.max(cp,1e-300);
+    const u=Math.random();
+    const acc=u<ratio;
+    lastProposed=proposed; lastAccepted=acc;
+    lastRatio=ratio; lastU=u; lastPropP=pp; lastCurP=cp;
+    proposalFlash=20;
+    if(acc){ curX=proposed; acceptCount++; }
+    stepCount++;
+    const warm=isWarmup();
+    if(!warm) samples.push(curX);
+    trail.push({x:curX, warmup:warm, acc});
+    if(trail.length>TRAIL_LEN) trail.shift();
+    traceData.push({step:stepCount, x:curX, warmup:warm});
+  } else {
+    // 2D: propose mu and sig separately with shared s
+    const pMu  = curMu  + randn()*s;
+    const pSig = curSig + randn()*s*0.5; // sig needs smaller steps
+    const cp = logPost2d(curMu,  curSig);
+    const pp = logPost2d(pMu,    pSig);
+    const logRatio = pp-cp;
+    const ratio = Math.exp(Math.min(0,logRatio));
+    const u=Math.random();
+    const acc = u<ratio && pSig>SIG_MIN;
+    lastRatio=ratio; lastU=u;
+    lastPropP=pp; lastCurP=cp;
+    lastAccepted=acc;
+    lastProposed={mu:pMu, sig:pSig};
+    proposalFlash=20;
+    if(acc){ curMu=pMu; curSig=pSig; acceptCount++; }
+    stepCount++;
+    const warm=isWarmup();
+    if(!warm) samples.push({mu:curMu, sig:curSig});
+    trail.push({mu:curMu, sig:curSig, warmup:warm, acc});
+    if(trail.length>TRAIL_LEN) trail.shift();
+    traceData.push({step:stepCount, x:curMu, x2:curSig, warmup:warm});
+  }
+}
+
+// ── Set Stage ────────────────────────────────────────────────
+const STAGE_DESCS = [
+  '<b>Stufe 1: Unimodaler Posterior</b> — Der einfachste Fall: ein Parameter, eine Spitze. Du siehst das Grundprinzip des Wanderers. Hier könnte man den Posterior auch analytisch lösen — aber die Mechanik ist dieselbe wie bei allen komplexeren Modellen. Benutze <b>→ 1 Schritt</b> um jeden Vorschlag einzeln nachzuvollziehen.',
+  '<b>Stufe 2: Bimodaler Posterior</b> — Zwei Gipfel: z.B. zwei plausible Parameterbereiche, die die Daten gleich gut erklären. Analytisch nicht mehr lösbar. Gradientenverfahren würden im nächsten Gipfel steckenbleiben. MCMC kann zwischen beiden Gipfeln springen — wenn die Schrittweite groß genug ist.',
+  '<b>Stufe 3: 2D-Posterior μ und s</b> — Das einfachste echte Regressionsmodell: <code>y ~ 1</code> (nur Intercept). Zwei Parameter werden gleichzeitig geschätzt: der Mittelwert μ und die Residualstreuung s. Die Konturlinien zeigen die gemeinsame Wahrscheinlichkeit. Ab 3 Parametern kann man das nicht mehr sinnvoll visualisieren — brms arbeitet dann in einem k-dimensionalen Raum.',
+];
+
+function setStage(s){
+  STAGE=s;
+  document.querySelectorAll('.stab').forEach((b,i)=>b.classList.toggle('sel',i===s));
+  document.getElementById('stage-desc').innerHTML = STAGE_DESCS[s];
+  // Show correct canvas
+  // single canvas — no show/hide needed
+  // Update inspector labels for 2D
+  const rows = document.getElementById('insp-rows');
+  if(s===2){
+    rows.innerHTML=`
+      <div class="insp-row"><span class="insp-lbl">μ aktuell</span><span class="insp-val" id="i-cur">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">s aktuell</span><span class="insp-val" id="i-cur2">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">Verhältnis α</span><span class="insp-val" id="i-ratio">—</span></div>
+      <div class="decision-box" id="i-decision">Noch kein Schritt.</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.59rem;color:var(--ink2);line-height:1.65;margin-top:.42rem">
+        Wie Stufe 1 — aber μ und s werden <b>gemeinsam</b> vorgeschlagen und akzeptiert/abgelehnt.
+        Beide Trace Plots und Histogramme unten.
+      </div>`;
+  } else {
+    rows.innerHTML=`
+      <div class="insp-row"><span class="insp-lbl">θ aktuell</span><span class="insp-val" id="i-cur">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">θ Vorschlag</span><span class="insp-val" id="i-prop">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">P(Vorschlag)</span><span class="insp-val" id="i-pp">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">P(Aktuell)</span><span class="insp-val" id="i-pc">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">Verhältnis α</span><span class="insp-val" id="i-ratio">—</span></div>
+      <div class="insp-row"><span class="insp-lbl">Zufallszahl u</span><span class="insp-val" id="i-u">—</span></div>
+      <div class="decision-box" id="i-decision">Noch kein Schritt.</div>`;
+  }
+  document.getElementById('lower-1d').style.display = s<2 ? '' : 'none';
+  document.getElementById('lower-2d').style.display = s===2 ? '' : 'none';
+  resetSampler(false);
+  // Single rAF — canvas uses fixed size so no layout dependency
+  requestAnimationFrame(()=>{
+    drawFrame();
+    redrawTrace();
+    redrawHist();
+  });
+}
+
+// ── Narrative ────────────────────────────────────────────────
+const NARRATIVES = [
+  // Stage 0
+  [{cond:()=>stepCount===0&&STAGE===0, phase:'p0', lbl:'Bereit',
+    txt:'<b>Die blaue Kurve ist der Posterior</b> — die Plausibilität jedes Parameterwertes θ nach Betrachtung der Daten. Der Wanderer startet zufällig. Klicke <b>→ 1 Schritt</b> um Schritt für Schritt zu sehen, was passiert.'},
+   {cond:()=>stepCount>0&&stepCount<=5&&STAGE===0, phase:'p0', lbl:'Erste Schritte',
+    txt:'Schau auf den <b>Inspector rechts</b>: P(Vorschlag) / P(Aktuell) = Verhältnis α. Ist α ≥ 1, wird der Vorschlag immer angenommen. Ist α &lt; 1, nur manchmal. Mache langsam Schritt für Schritt um das zu verinnerlichen.'},
+   {cond:()=>stepCount>5&&isWarmup()&&STAGE===0, phase:'p1', lbl:'Warmup',
+    txt:'<span class="hlw">Warmup-Phase</span>: Der Wanderer findet sich zurecht. Diese Schritte werden später verworfen. Beobachte, wie er sich allmählich Richtung Zentrum der Kurve bewegt — weg von unwahrscheinlichen Randbereichen.'},
+   {cond:()=>!isWarmup()&&samples.length<30&&STAGE===0, phase:'p2', lbl:'Sampling',
+    txt:'<span class="hlc">Sampling startet!</span> Ab jetzt werden alle Positionen aufgezeichnet (blau). Das Histogramm unten baut sich auf. <b>Verändere jetzt die Schrittweite s</b>: klein = er trippelt, groß = er springt weit aber wird oft abgelehnt. Beobachte den Trace Plot.'},
+   {cond:()=>!isWarmup()&&samples.length>=30&&STAGE===0, phase:'p3', lbl:'Ergebnis',
+    txt:'<span class="hlg">Gut!</span> Das Histogramm nähert sich der wahren Kurve. Wechsle jetzt zu <b>Stufe 2</b> — dort sehen wir, warum MCMC bei bimodalen Posteriors unentbehrlich ist, wo analytische Methoden scheitern.'}],
+  // Stage 1
+  [{cond:()=>stepCount===0&&STAGE===1, phase:'p0', lbl:'Zwei Gipfel',
+    txt:'<b>Zwei Gipfel</b> — z.B. zwei sehr verschiedene Parameterbereiche erklären die Daten gleich gut. Analytisch nicht mehr lösbar. Ein Gradientenverfahren würde im nächsten Gipfel hängenbleiben. MCMC kann <em>zufällig springen</em> und beide Bereiche erkunden.'},
+   {cond:()=>stepCount>0&&isWarmup()&&STAGE===1, phase:'p1', lbl:'Warmup',
+    txt:'<span class="hlw">Warmup.</span> Der Wanderer muss das Tal zwischen den Gipfeln überqueren. Das gelingt nur, wenn die Schrittweite s groß genug ist. <b>Teste:</b> Stelle s sehr klein ein — beobachte, wie der Wanderer in einem Gipfel eingeschlossen bleibt. Dann s größer stellen.'},
+   {cond:()=>!isWarmup()&&STAGE===1, phase:'p2', lbl:'Sampling',
+    txt:'<span class="hlc">Sampling.</span> Springt der Wanderer zwischen beiden Gipfeln? Das Histogramm sollte <em>beide Häufungen</em> zeigen. Wenn nicht: die Schrittweite s ist zu klein — der Wanderer sieht das andere Tal nicht. Das ist das bekannte <b>Mixing-Problem</b>.'}],
+  // Stage 2
+  [{cond:()=>stepCount===0&&STAGE===2, phase:'p0', lbl:'2D Raum',
+    txt:'<b>2D-Posterior</b> für das Modell <code>y ~ 1</code>: μ (Mittelwert, x-Achse) und s (Streuung, y-Achse). Die Konturlinien zeigen gleichwahrscheinliche Kombinationen von μ und s. Der Wanderer bewegt sich jetzt in zwei Dimensionen gleichzeitig.'},
+   {cond:()=>stepCount>0&&isWarmup()&&STAGE===2, phase:'p1', lbl:'Warmup',
+    txt:'<span class="hlw">Warmup</span> im 2D-Raum. Beachte, dass hohe μ-Werte mit hohen s-Werten zusammenhängen können — die Parameter sind <em>korreliert</em>. brms berücksichtigt diese Korrelation automatisch. Der Wanderer muss die gesamte Struktur erkunden.'},
+   {cond:()=>!isWarmup()&&STAGE===2, phase:'p2', lbl:'Sampling',
+    txt:'<span class="hlc">Sampling.</span> Die gesammelten Punkte (blau) füllen langsam die hochwahrscheinliche Region aus. Das Histogramm zeigt die <em>Marginale</em> für μ — also den Posterior für μ unabhängig von s. Genau das liefert brms als Posterior-Summary.'}],
+];
+
+function updateNarrative(){
+  const set = NARRATIVES[STAGE] || [];
+  const active = set.slice().reverse().find(n=>n.cond());
+  if(!active) return;
+  document.getElementById('narr-phase').textContent=active.lbl;
+  document.getElementById('narr-phase').className='narr-phase '+active.phase;
+  document.getElementById('narr-text').innerHTML=active.txt;
+}
+
+// ── 1D draw ──────────────────────────────────────────────────
+function draw1D(){
+  const canvas=document.getElementById('landscape');
+  if(!canvas) return;
+  const W=canvas.parentElement.offsetWidth||760;
+  canvas.width=W; canvas.height=340;
+  const H=340; const groundY=H-40;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  const postFn=STAGE===0?post0:post1;
+  const postMax=STAGE===0?POST0_MAX:POST1_MAX;
+  const sky=ctx.createLinearGradient(0,0,0,groundY);
+  sky.addColorStop(0,DARK?'#060912':'#e8eef5');
+  sky.addColorStop(1,DARK?'#0d1525':'#f0f5fa');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle=DARK?'rgba(30,42,64,.5)':'rgba(200,210,225,.7)'; ctx.lineWidth=1;
+  for(let x=X_MIN;x<=X_MAX;x+=1){
+    const px=(x-X_MIN)/(X_MAX-X_MIN)*W;
+    ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,groundY);ctx.stroke();
+  }
+
+  const toX=x=>(x-X_MIN)/(X_MAX-X_MIN)*W;
+  const toY=(y,scale)=>groundY-(y/scale)*(groundY-38);
+  const N=W;
+  const pts=[];
+  for(let i=0;i<=N;i++){
+    const x=X_MIN+i*(X_MAX-X_MIN)/N;
+    pts.push({px:i*W/N, py:toY(postFn(x),postMax*1.15)});
+  }
+
+  // fill
+  const fill=ctx.createLinearGradient(0,0,0,groundY);
+  fill.addColorStop(0,DARK?'rgba(74,176,216,.4)':'rgba(42,110,138,.3)');
+  fill.addColorStop(1,DARK?'rgba(74,176,216,.04)':'rgba(42,110,138,.03)');
+  ctx.beginPath();
+  ctx.moveTo(0,groundY);ctx.lineTo(pts[0].px,pts[0].py);
+  pts.forEach(p=>ctx.lineTo(p.px,p.py));
+  ctx.lineTo(W,groundY);ctx.closePath();
+  ctx.fillStyle=fill;ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach((p,i)=>i?ctx.lineTo(p.px,p.py):ctx.moveTo(p.px,p.py));
+  ctx.strokeStyle=DARK?'#4ab0d8':'#2a6e8a';ctx.lineWidth=2;ctx.stroke();
+
+  // ground
+  ctx.beginPath();ctx.moveTo(0,groundY);ctx.lineTo(W,groundY);
+  ctx.strokeStyle=DARK?'#1e2a40':'#c5bba8';ctx.lineWidth=1.5;ctx.stroke();
+
+  // x-axis labels
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';
+  ctx.font='10px DM Mono,monospace';ctx.textAlign='center';
+  for(let x=X_MIN;x<=X_MAX;x+=1) ctx.fillText(x,toX(x),groundY+14);
+  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
+  ctx.fillText('Parameter θ',W/2,H-4);
+
+  // proposal bell
+  if(document.getElementById('st-propvis')?.checked!==false && stepCount>0){
+    const s=stepS();
+    ctx.beginPath();let started=false;
+    for(let i=0;i<=N;i++){
+      const x=X_MIN+i*(X_MAX-X_MIN)/N;
+      const d=Math.exp(-0.5*((x-curX)/s)**2)/(s*Math.sqrt(2*Math.PI));
+      const py=toY(d*0.3,postMax*1.15);
+      if(!started){ctx.moveTo(i*W/N,py);started=true;}else ctx.lineTo(i*W/N,py);
+    }
+    ctx.strokeStyle=DARK?'rgba(200,122,216,.5)':'rgba(122,58,138,.4)';
+    ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // trail
+  for(let i=Math.max(0,trail.length-TRAIL_LEN);i<trail.length-1;i++){
+    const frac=(i-(trail.length-TRAIL_LEN))/TRAIL_LEN;
+    const t=trail[i];
+    const px=toX(t.x),py=toY(postFn(t.x),postMax*1.15);
+    ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);
+    ctx.fillStyle=t.warmup?`rgba(224,120,48,${frac*.7})`:`rgba(74,176,216,${frac*.65})`;
+    ctx.fill();
+  }
+
+  // proposal ghost
+  if(proposalFlash>0&&lastProposed!==null){
+    const alpha=proposalFlash/20;
+    const gpx=toX(lastProposed),gpy=toY(Math.max(0,postFn(lastProposed)),postMax*1.15);
+    ctx.beginPath();
+    ctx.moveTo(toX(curX),toY(postFn(curX),postMax*1.15));
+    ctx.lineTo(gpx,gpy);
+    ctx.strokeStyle=DARK?`rgba(60,80,110,${alpha})`:`rgba(150,160,180,${alpha})`;
+    ctx.lineWidth=1.2;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(gpx,gpy,7,0,Math.PI*2);
+    ctx.strokeStyle=lastAccepted?`rgba(128,203,82,${alpha})`:`rgba(232,97,74,${alpha})`;
+    ctx.lineWidth=2;ctx.stroke();
+    proposalFlash--;
+  }
+
+  // hiker dot
+  const warm=isWarmup()&&stepCount>0;
+  const hikerC=stepCount===0?cv('--ink2'):warm?cv('--warm'):cv('--cool');
+  const hx=toX(curX),hy=toY(postFn(curX),postMax*1.15);
+  const glow=ctx.createRadialGradient(hx,hy,0,hx,hy,18);
+  glow.addColorStop(0,warm?'rgba(224,120,48,.4)':'rgba(74,176,216,.35)');
+  glow.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(hx,hy,18,0,Math.PI*2);ctx.fillStyle=glow;ctx.fill();
+  ctx.beginPath();ctx.arc(hx,hy,5.5,0,Math.PI*2);ctx.fillStyle=hikerC;ctx.fill();
+  ctx.beginPath();ctx.arc(hx,hy,5.5,0,Math.PI*2);
+  ctx.strokeStyle=DARK?'rgba(255,255,255,.8)':'rgba(0,0,0,.35)';ctx.lineWidth=1.5;ctx.stroke();
+  // drop line
+  ctx.beginPath();ctx.moveTo(hx,hy+6);ctx.lineTo(hx,groundY);
+  ctx.strokeStyle=warm?'rgba(224,120,48,.25)':'rgba(74,176,216,.22)';
+  ctx.lineWidth=1;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
+
+  if(stepCount>0){
+    ctx.fillStyle=hikerC;ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText(`p=${postFn(curX).toFixed(4)}`,hx+9,hy-2);
+  }
+}
+
+// ── 2D draw ──────────────────────────────────────────────────
+function draw2D(){
+  const canvas=document.getElementById('landscape');
+  if(!canvas) return;
+  const W=canvas.parentElement.offsetWidth||760, H=420;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  const m={l:48,r:18,t:18,b:38};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+
+  ctx.fillStyle=DARK?'#060912':'#e8eef5';ctx.fillRect(0,0,W,H);
+
+  if(!CONTOUR_GRID) buildContour();
+  const Ng=CONTOUR_GRID.length;
+
+  // Draw heatmap
+  const cellW=Wp/Ng, cellH=Hp/Ng;
+  for(let i=0;i<Ng;i++){
+    for(let j=0;j<Ng;j++){
+      const v=CONTOUR_GRID[i][j];
+      const norm=Math.max(0,(v-CONTOUR_MAX+12)/12);
+      const alpha=norm*0.7;
+      ctx.fillStyle=DARK?`rgba(74,176,216,${alpha})`:`rgba(42,110,138,${alpha})`;
+      ctx.fillRect(m.l+i*cellW, m.t+(Ng-1-j)*cellH, cellW+0.5, cellH+0.5);
+    }
+  }
+
+  const toX=mu=>m.l+(mu-MU_MIN)/(MU_MAX-MU_MIN)*Wp;
+  const toY=sig=>m.t+(1-(sig-SIG_MIN)/(SIG_MAX-SIG_MIN))*Hp;
+
+  // Axes
+  ctx.strokeStyle=DARK?'#1e2a40':'#c5bba8';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,m.t+Hp);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(m.l,m.t+Hp);ctx.lineTo(m.l+Wp,m.t+Hp);ctx.stroke();
+
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';
+  for(let mu=0;mu<=5;mu++){
+    const px=toX(mu);
+    ctx.fillText(mu,px,m.t+Hp+15);
+  }
+  ctx.textAlign='right';
+  [0.5,1,1.5,2,2.5,3,3.5].forEach(s=>{
+    const py=toY(s);
+    ctx.fillText(s.toFixed(1),m.l-4,py+3);
+  });
+  ctx.textAlign='center';
+  ctx.fillText('μ (Intercept)',m.l+Wp/2,H-5);
+  ctx.save();ctx.translate(12,m.t+Hp/2);ctx.rotate(-Math.PI/2);
+  ctx.fillText('s (Streuung)',0,0);ctx.restore();
+
+  // Trail
+  for(let i=Math.max(0,trail.length-TRAIL_LEN);i<trail.length-1;i++){
+    const frac=(i-(trail.length-TRAIL_LEN))/TRAIL_LEN;
+    const t=trail[i];
+    if(t.mu===undefined)continue;
+    const px=toX(t.mu),py=toY(t.sig);
+    ctx.beginPath();ctx.arc(px,py,2.2,0,Math.PI*2);
+    ctx.fillStyle=t.warmup?`rgba(224,120,48,${frac*.7})`:`rgba(128,203,82,${frac*.65})`;
+    ctx.fill();
+  }
+
+  // Proposal ghost
+  if(proposalFlash>0&&lastProposed&&lastProposed.mu!==undefined){
+    const alpha=proposalFlash/20;
+    const gpx=toX(lastProposed.mu),gpy=toY(lastProposed.sig);
+    ctx.beginPath();ctx.moveTo(toX(curMu),toY(curSig));ctx.lineTo(gpx,gpy);
+    ctx.strokeStyle=DARK?`rgba(60,80,110,${alpha})`:`rgba(150,160,180,${alpha})`;
+    ctx.lineWidth=1.2;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(gpx,gpy,7,0,Math.PI*2);
+    ctx.strokeStyle=lastAccepted?`rgba(128,203,82,${alpha})`:`rgba(232,97,74,${alpha})`;
+    ctx.lineWidth=2;ctx.stroke();
+    proposalFlash--;
+  }
+
+  // Current position
+  const warm2=isWarmup()&&stepCount>0;
+  const hx=toX(curMu),hy=toY(curSig);
+  const glow=ctx.createRadialGradient(hx,hy,0,hx,hy,14);
+  glow.addColorStop(0,warm2?'rgba(224,120,48,.45)':'rgba(128,203,82,.4)');
+  glow.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(hx,hy,14,0,Math.PI*2);ctx.fillStyle=glow;ctx.fill();
+  const hc=stepCount===0?cv('--ink2'):warm2?cv('--warm'):cv('--accept');
+  ctx.beginPath();ctx.arc(hx,hy,5.5,0,Math.PI*2);ctx.fillStyle=hc;ctx.fill();
+  ctx.beginPath();ctx.arc(hx,hy,5.5,0,Math.PI*2);
+  ctx.strokeStyle=DARK?'rgba(255,255,255,.8)':'rgba(0,0,0,.35)';ctx.lineWidth=1.5;ctx.stroke();
+  if(stepCount>0){
+    ctx.fillStyle=hc;ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText(`(${curMu.toFixed(2)}, ${curSig.toFixed(2)})`,hx+8,hy-2);
+  }
+}
+
+function drawFrame(){
+  if(STAGE<2) draw1D(); else draw2D();
+}
+
+// ── Trace & Histogram ────────────────────────────────────────
+
+function drawTrace(cId,data,yMin,yMax,yLabel,getY){
+  const cv2=id=>{const el=document.getElementById(id);if(!el)return;
+    const W=el.clientWidth||480;el.width=W;
+    const H=parseInt(el.getAttribute('height'))||120;
+    const ctx=el.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=DARK?'#0d1018':'#faf6ee';ctx.fillRect(0,0,W,H);
+    const m={l:36,r:10,t:8,b:22};const Wp=W-m.l-m.r,Hp=H-m.t-m.b;
+    const wm=warmupN();
+    if(data.length<2){ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';ctx.font='10px DM Mono,monospace';
+      ctx.textAlign='center';ctx.fillText('Starte…',W/2,H/2);return;}
+    const vis=data.slice(-400);
+    const sr=vis[vis.length-1].step-vis[0].step||1;
+    const toTX=d=>m.l+(d.step-vis[0].step)/sr*Wp;
+    const toTY=v=>m.t+(1-(v-yMin)/(yMax-yMin))*Hp;
+    const wE=vis.findIndex(d=>d.step>wm);
+    if(wE>0&&wE<vis.length){
+      ctx.fillStyle=DARK?'rgba(224,120,48,.07)':'rgba(224,120,48,.06)';
+      ctx.fillRect(m.l,m.t,toTX(vis[wE])-m.l,Hp);}
+    ctx.strokeStyle=DARK?'#1a2030':'#e0d8cc';ctx.lineWidth=1;
+    [yMin,(yMin+yMax)/2,yMax].forEach(yv=>{const py=toTY(yv);
+      ctx.beginPath();ctx.moveTo(m.l,py);ctx.lineTo(W-m.r,py);ctx.stroke();
+      ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';
+      ctx.textAlign='right';ctx.fillText(yv.toFixed(1),m.l-3,py+3);});
+    ctx.beginPath();let ss=false;
+    vis.forEach(d=>{if(d.warmup){ss=false;return;}
+      const x=toTX(d),y=toTY(getY(d));if(!ss){ctx.moveTo(x,y);ss=true;}else ctx.lineTo(x,y);});
+    ctx.strokeStyle=DARK?'rgba(74,176,216,.75)':'rgba(42,110,138,.65)';ctx.lineWidth=1.4;ctx.stroke();
+    ctx.beginPath();let ws=false;
+    vis.forEach(d=>{if(!d.warmup){ws=false;return;}
+      const x=toTX(d),y=toTY(getY(d));if(!ws){ctx.moveTo(x,y);ws=true;}else ctx.lineTo(x,y);});
+    ctx.strokeStyle='rgba(224,120,48,.8)';ctx.lineWidth=1.3;ctx.stroke();
+    ctx.save();ctx.translate(11,H/2);ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';
+    ctx.textAlign='center';ctx.fillText(yLabel,0,0);ctx.restore();
+  };cv2(cId);
+}
+
+function drawHist1D(cId,vals,xMin,xMax,xLabel,refFn){
+  const el=document.getElementById(cId);if(!el)return;
+  const W=el.clientWidth||480;el.width=W;
+  const H=parseInt(el.getAttribute('height'))||120;
+  const ctx=el.getContext('2d');
+  ctx.clearRect(0,0,W,H);ctx.fillStyle=DARK?'#0d1018':'#faf6ee';ctx.fillRect(0,0,W,H);
+  const m={l:36,r:10,t:10,b:22};const Wp=W-m.l-m.r,Hp=H-m.t-m.b;
+  if(vals.length<5){ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';ctx.font='10px DM Mono,monospace';
+    ctx.textAlign='center';ctx.fillText('Warte auf Sampling…',W/2,H/2);return;}
+  const nB=36,bw=(xMax-xMin)/nB;
+  const bins=Array(nB).fill(0);
+  vals.forEach(v=>{const bi=Math.floor((v-xMin)/bw);if(bi>=0&&bi<nB)bins[bi]++;});
+  const mxB=Math.max(...bins)||1;
+  for(let i=0;i<nB;i++){const bh=bins[i]/mxB*Hp;
+    ctx.fillStyle=DARK?'rgba(74,176,216,.55)':'rgba(42,110,138,.45)';
+    ctx.fillRect(m.l+i*Wp/nB,m.t+Hp-bh,Wp/nB-0.5,bh);}
+  if(refFn) refFn(ctx,m,Wp,Hp,xMin,xMax,vals,mxB,bw);
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
+  const st=Math.max(1,Math.ceil((xMax-xMin)/5));
+  for(let x=Math.ceil(xMin);x<=xMax;x+=st)
+    ctx.fillText(x,m.l+(x-xMin)/(xMax-xMin)*Wp,m.t+Hp+15);
+  ctx.fillStyle=DARK?'#4ab0d8':'#2a6e8a';ctx.textAlign='right';
+  ctx.fillText('n='+vals.length,W-m.r-2,m.t+13);
+  ctx.save();ctx.translate(11,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';ctx.fillText(xLabel,0,0);ctx.restore();
+}
+function redrawTrace(){
+  if(STAGE===2){
+    drawTrace('trace-mu',traceData,MU_MIN,MU_MAX,'μ',d=>d.x);
+    drawTrace('trace-sig',traceData,SIG_MIN,SIG_MAX,'s',d=>d.x2!==undefined?d.x2:SIG_MIN);
+    return;
+  }
+  const canvas=document.getElementById('trace-canvas');
+  const W=canvas.clientWidth||480; canvas.width=W;
+  const H=130; const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=DARK?'#0d1018':'#faf6ee';ctx.fillRect(0,0,W,H);
+  const m={l:38,r:12,t:8,b:24};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+  const data=traceData.slice(-400);
+  if(data.length<2){
+    ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
+    ctx.font='10px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('Starte den Sampler…',W/2,H/2);return;
+  }
+  const wm=warmupN();
+  const stepRange=data[data.length-1].step-data[0].step||1;
+  const yRange=STAGE===2?[MU_MIN,MU_MAX]:[X_MIN,X_MAX];
+  const toTX=d=>m.l+(d.step-data[0].step)/stepRange*Wp;
+  const toTY=d=>m.t+(1-(d.x-yRange[0])/(yRange[1]-yRange[0]))*Hp;
+
+  // warmup shade
+  const wEnd=data.findIndex(d=>d.step>wm);
+  if(wEnd>0&&wEnd<data.length){
+    const shadeW=toTX(data[wEnd])-m.l;
+    ctx.fillStyle=DARK?'rgba(224,120,48,.07)':'rgba(224,120,48,.06)';
+    ctx.fillRect(m.l,m.t,shadeW,Hp);
+    ctx.fillStyle=DARK?'rgba(224,120,48,.5)':'rgba(224,120,48,.6)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('Warmup',m.l+shadeW/2,m.t+10);
+  }
+
+  ctx.strokeStyle=DARK?'#1a2030':'#e0d8cc';ctx.lineWidth=1;
+  [yRange[0],0,yRange[1]].filter((v,i,a)=>a.indexOf(v)===i).forEach(yv=>{
+    const py=m.t+(1-(yv-yRange[0])/(yRange[1]-yRange[0]))*Hp;
+    ctx.beginPath();ctx.moveTo(m.l,py);ctx.lineTo(W-m.r,py);ctx.stroke();
+    ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';
+    ctx.font='9px DM Mono,monospace';ctx.textAlign='right';
+    ctx.fillText(yv.toFixed(0),m.l-4,py+3);
+  });
+
+  // sampling trace
+  ctx.beginPath();
+  data.forEach((d,i)=>{if(!d.warmup)i?ctx.lineTo(toTX(d),toTY(d)):ctx.moveTo(toTX(d),toTY(d));});
+  ctx.strokeStyle=DARK?'rgba(74,176,216,.7)':'rgba(42,110,138,.65)';ctx.lineWidth=1.3;ctx.stroke();
+  // warmup trace
+  ctx.beginPath();let ws=false;
+  data.forEach(d=>{if(!d.warmup){ws=false;return;}
+    const x=toTX(d),y=toTY(d);
+    if(!ws){ctx.moveTo(x,y);ws=true;}else ctx.lineTo(x,y);});
+  ctx.strokeStyle='rgba(224,120,48,.8)';ctx.lineWidth=1.3;ctx.stroke();
+
+  ctx.save();ctx.translate(11,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
+  ctx.fillText(STAGE===2?'μ':'θ',0,0);ctx.restore();
+}
+
+function redrawHist(){
+  if(STAGE===2){
+    const mV=samples.map(s=>s.mu), sV=samples.map(s=>s.sig);
+    const mLn=(lbl)=>(ctx,m,Wp,Hp,xMin,xMax,vals)=>{
+      if(!vals.length)return;
+      const mn=vals.reduce((a,v)=>a+v,0)/vals.length;
+      const px=m.l+(mn-xMin)/(xMax-xMin)*Wp;
+      ctx.beginPath();ctx.moveTo(px,m.t);ctx.lineTo(px,m.t+Hp);
+      ctx.strokeStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.6)';
+      ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=DARK?'rgba(232,97,74,.8)':'rgba(201,74,42,.7)';
+      ctx.font='8px DM Mono,monospace';ctx.textAlign='left';
+      ctx.fillText(lbl+'='+mn.toFixed(2),px+4,m.t+12);
+    };
+    drawHist1D('hist-mu', mV, MU_MIN, MU_MAX, 'μ', mLn('E[μ]'));
+    drawHist1D('hist-sig',sV, SIG_MIN,SIG_MAX,'s', mLn('E[s]'));
+    return;
+  }
+  const canvas=document.getElementById('hist-canvas');
+  const W=canvas.clientWidth||480; canvas.width=W;
+  const H=130; const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=DARK?'#0d1018':'#faf6ee';ctx.fillRect(0,0,W,H);
+  const m={l:38,r:12,t:10,b:24};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+
+  // Extract 1D samples
+  const vals=STAGE===2 ? samples.map(s=>s.mu) : samples;
+  if(vals.length<5){
+    ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
+    ctx.font='10px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('Warte auf Sampling-Phase…',W/2,H/2);return;
+  }
+  const nBins=38;
+  const xMin=STAGE===2?MU_MIN:X_MIN, xMax=STAGE===2?MU_MAX:X_MAX;
+  const bw=(xMax-xMin)/nBins;
+  const bins=Array(nBins).fill(0);
+  vals.forEach(v=>{const bi=Math.floor((v-xMin)/bw);if(bi>=0&&bi<nBins)bins[bi]++;});
+  const maxBin=Math.max(...bins)||1;
+
+  for(let i=0;i<nBins;i++){
+    const bh=bins[i]/maxBin*Hp;
+    const bx=m.l+i*Wp/nBins;
+    ctx.fillStyle=DARK?'rgba(74,176,216,.55)':'rgba(42,110,138,.45)';
+    ctx.fillRect(bx,m.t+Hp-bh,Wp/nBins-0.5,bh);
+  }
+
+  // True posterior overlay
+  const postFn=STAGE===0?post0:STAGE===1?post1:null;
+  if(postFn){
+    const postScale=(maxBin/vals.length)/(
+      STAGE===0?POST0_MAX:POST1_MAX)*bw;
+    ctx.beginPath();
+    for(let i=0;i<=Wp;i++){
+      const x=xMin+i/Wp*(xMax-xMin);
+      const py=m.t+Hp-postFn(x)*postScale*Hp;
+      i?ctx.lineTo(m.l+i,py):ctx.moveTo(m.l+i,py);
+    }
+    ctx.strokeStyle=DARK?'rgba(232,97,74,.85)':'rgba(201,74,42,.75)';
+    ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=DARK?'rgba(232,97,74,.8)':'rgba(201,74,42,.7)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText('wahrer Posterior',m.l+4,m.t+11);
+  } else {
+    // Stage 2: show data mean as vertical line
+    const dataMean=DATA2D.reduce((a,v)=>a+v,0)/DATA2D.length;
+    const dmx=m.l+(dataMean-xMin)/(xMax-xMin)*Wp;
+    ctx.beginPath();ctx.moveTo(dmx,m.t);ctx.lineTo(dmx,m.t+Hp);
+    ctx.strokeStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.6)';
+    ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=DARK?'rgba(232,97,74,.8)':'rgba(201,74,42,.7)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText(`ȳ=${dataMean.toFixed(2)}`,dmx+4,m.t+11);
+  }
+
+  // x-axis
+  ctx.fillStyle=DARK?'#3a4a60':'#8a7f72';ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
+  for(let x=Math.ceil(xMin);x<=xMax;x+=STAGE===2?1:2)
+    ctx.fillText(x,m.l+(x-xMin)/(xMax-xMin)*Wp,m.t+Hp+15);
+  ctx.fillStyle=DARK?'#4ab0d8':'#2a6e8a';ctx.textAlign='right';
+  ctx.fillText(`n=${vals.length}`,W-m.r-2,m.t+13);
+}
+
+// ── Stats & Inspector update ─────────────────────────────────
+function updateStats(){
+  const warm=isWarmup();
+  const phase=stepCount===0?'—':warm?'Warmup':'Sampling';
+  const accRate=stepCount>0?acceptCount/stepCount:0;
+  const acc=(accRate*100).toFixed(1)+'%';
+
+  document.getElementById('s-steps').textContent=stepCount;
+  document.getElementById('s-phase').textContent=phase;
+  document.getElementById('s-phase').className='sv '+(stepCount===0?'':warm?'warm':'cool');
+  document.getElementById('s-cur').textContent=
+    stepCount===0?'—':STAGE===2?`μ=${curMu.toFixed(2)} s=${curSig.toFixed(2)}`
+    :curX.toFixed(3);
+  document.getElementById('s-samples').textContent=samples.length;
+  document.getElementById('s-acc').textContent=stepCount>0?acc:'—';
+  document.getElementById('s-acc').className='sv '+(
+    accRate>0.55||accRate<0.05?'bad':accRate>0.18&&accRate<0.55?'good':'');
+
+  // Inspector
+  if(stepCount>0&&lastRatio!==null){
+    const curEl=document.getElementById('i-cur');
+    if(curEl) curEl.textContent=STAGE===2?curMu.toFixed(3):curX.toFixed(4);
+    const cur2El=document.getElementById('i-cur2');
+    if(cur2El) cur2El.textContent=curSig.toFixed(3);
+    if(STAGE<2){
+      const propEl=document.getElementById('i-prop');
+      if(propEl) propEl.textContent=lastProposed!==null?lastProposed.toFixed(4):'—';
+      const ppEl=document.getElementById('i-pp'); if(ppEl) ppEl.textContent=lastPropP.toFixed(6);
+      const pcEl=document.getElementById('i-pc'); if(pcEl) pcEl.textContent=lastCurP.toFixed(6);
+      const uEl=document.getElementById('i-u');   if(uEl)  uEl.textContent=lastU.toFixed(4);
+    }
+    const ratioStr=lastRatio>10?'>10':lastRatio.toFixed(4);
+    const rEl=document.getElementById('i-ratio'); if(rEl) rEl.textContent=ratioStr;
+    const dec=document.getElementById('i-decision');
+    if(dec){
+      const uStr=STAGE<2?' u='+lastU.toFixed(4):'';
+      if(lastAccepted)
+        dec.innerHTML=`<b>α=${ratioStr}</b>${uStr}<br>u &lt; α <span class="big acc">✓ Angenommen</span>`;
+      else
+        dec.innerHTML=`<b>α=${ratioStr}</b>${uStr}<br>u ≥ α <span class="big rej">✗ Abgelehnt</span>`;
+    }
+  }
+
+  // Acceptance bar
+  const accPct=(accRate*100).toFixed(1);
+  document.getElementById('acc-pct').textContent=stepCount>0?accPct+'%':'0%';
+  const fill=document.getElementById('acc-fill');
+  fill.style.width=(accRate*100)+'%';
+  fill.style.background=accRate>0.6||accRate<0.04?cv('--reject'):
+                         accRate>0.18&&accRate<0.55?cv('--accept'):cv('--warm');
+
+  // Acceptance hint
+  const hint=document.getElementById('acc-hint');
+  if(accRate>0.6){
+    hint.innerHTML='<span style="color:var(--warm)">Schrittweite s zu <b>klein</b>:</span> Hohe Akzeptanzrate, aber schlechte Exploration — der Wanderer trippelt. Trace Plot: kriecht.';
+  } else if(accRate<0.1&&stepCount>20){
+    hint.innerHTML='<span style="color:var(--reject)">Schrittweite s zu <b>groß</b>:</span> Fast alles wird abgelehnt — der Wanderer steht oft still. Trace Plot: lange Plateaus.';
+  } else if(accRate>=0.18&&accRate<=0.55){
+    hint.innerHTML='<span style="color:var(--accept)">Gute Schrittweite</span> — Akzeptanzrate im Zielbereich. Der Wanderer exploriert effizient.';
+  } else {
+    hint.innerHTML='Schrittweite s anpassen, um Exploration zu optimieren.';
+  }
+
+  updateNarrative();
+}
+
+// ── Controls ─────────────────────────────────────────────────
+function updCtrl(sId,vId,dec){
+  document.getElementById(vId).textContent=(+document.getElementById(sId).value).toFixed(dec);
+}
+
+function initPosition(){
+  if(STAGE<2){
+    curX=(Math.random()*(X_MAX-X_MIN)+X_MIN)*0.9;
+    startX=curX;
+  } else {
+    const dM2=DATA2D.reduce((a,v)=>a+v,0)/DATA2D.length;
+    curMu  = dM2*0.3+(Math.random()-0.5)*3;
+    curSig = 0.3+Math.random()*1.2;
+    curMu  = Math.max(MU_MIN+0.1,Math.min(MU_MAX-0.1,curMu));
+    curSig = Math.max(SIG_MIN+0.05,Math.min(SIG_MAX-0.1,curSig));
+    startMu=curMu; startSig=curSig;
+  }
+}
+
+function doStep(){
+  if(stepCount===0) initPosition();
+  mhStep();
+  drawFrame();redrawTrace();redrawHist();updateStats();
+}
+function doNSteps(n){
+  if(stepCount===0) initPosition();
+  for(let i=0;i<n;i++) mhStep();
+  proposalFlash=20;
+  drawFrame();redrawTrace();redrawHist();updateStats();
+}
+function toggleRun(){
+  if(isRunning){
+    isRunning=false;cancelAnimationFrame(animId);
+    document.getElementById('run-btn').textContent='▶ Fortsetzen';
+    document.getElementById('run-btn').classList.remove('running');
+  } else {
+    if(stepCount===0) initPosition();
+    isRunning=true;
+    document.getElementById('run-btn').textContent='⏸ Pause';
+    document.getElementById('run-btn').classList.add('running');
+    animate();
+  }
+}
+function animate(){
+  if(!isRunning)return;
+  const s=speedN();
+  for(let i=0;i<s;i++) mhStep();
+  frameCount++;
+  drawFrame();
+  if(frameCount%3===0){redrawTrace();redrawHist();}
+  if(frameCount%8===0) updateStats();
+  animId=requestAnimationFrame(animate);
+}
+function resetSampler(redraw=true){
+  isRunning=false;cancelAnimationFrame(animId);
+  curX=0;curMu=0;curSig=1.5;
+  stepCount=0;acceptCount=0;samples=[];trail=[];traceData=[];
+  lastProposed=null;lastAccepted=null;lastRatio=null;
+  lastU=null;lastPropP=null;lastCurP=null;
+  proposalFlash=0;frameCount=0;
+  document.getElementById('run-btn').textContent='▶ Starten';
+  document.getElementById('run-btn').classList.remove('running');
+  const dec=document.getElementById('i-decision');
+  if(dec) dec.innerHTML='Noch kein Schritt.';
+  document.getElementById('acc-fill').style.width='0%';
+  ['i-cur','i-prop','i-pp','i-pc','i-ratio','i-u'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent='—';
+  });
+  if(redraw){updateStats();drawFrame();redrawTrace();redrawHist();}
+}
+
+// ── Resize ───────────────────────────────────────────────────
+window.addEventListener('resize',()=>{drawFrame();redrawTrace();redrawHist();});
+
+// ── Init ─────────────────────────────────────────────────────
+function init(){
+  updCtrl('step-slider','v-step',2);
+  updCtrl('warmup-slider','v-warmup',0);
+  updCtrl('speed-slider','v-speed',0);
+  buildContour();
+  setStage(0);
+  // Watch for resize to redraw all canvases correctly
+  if(typeof ResizeObserver !== 'undefined'){
+    const ro = new ResizeObserver(()=>{ drawFrame(); redrawTrace(); redrawHist(); });
+    const wrap1 = document.getElementById('landscape-wrap');
+    const wrap2 = document.getElementById('landscape2d-wrap');
+    if(wrap1) ro.observe(wrap1);
+    if(wrap2) ro.observe(wrap2);
+  }
+}
+function mhModal(){document.getElementById('mhm-ov').classList.add('open');}
+function mhClose(){document.getElementById('mhm-ov').classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')mhClose();});
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
