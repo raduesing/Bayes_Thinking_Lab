@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lineares Modell — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--accept:#5a8a2a;--reject:#c94a2a;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--accept:#80cb52;--reject:#e8614a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     min-height:100vh;transition:background .25s,color .25s}
+
+/* ── TOPBAR ── */
+#topbar{position:sticky;top:0;z-index:200;background:var(--paper);
+        border-bottom:1.5px solid var(--border);padding:.5rem 1.4rem;
+        display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.tb-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.tb-title em{font-style:italic;color:var(--a2)}
+.tb-sub{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);
+        margin-top:.18rem;letter-spacing:.04em}
+.tb-auth{font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);
+         opacity:.5;margin-top:.08rem}
+.tbtn{font-family:'DM Mono',monospace;font-size:.64rem;padding:.22rem .6rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--a2);color:var(--a2)}
+
+/* ── LAYOUT ── */
+#wrap{max-width:1060px;margin:0 auto;padding:1rem 1.2rem 3rem}
+
+/* ── NARRATIVE CARDS ── */
+.narr{background:var(--paper);border:1px solid var(--border);
+      padding:.8rem 1.1rem;margin-bottom:1px;font-family:'DM Mono',monospace;
+      font-size:.65rem;color:var(--ink2);line-height:1.8}
+.narr b{color:var(--ink)}.narr em{color:var(--a2);font-style:normal}
+.narr code{background:var(--panel);border:1px solid var(--border);
+           color:var(--a2);padding:.02rem .3rem}
+.narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
+.narr-phase{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.1em;
+            text-transform:uppercase;padding:.12rem .4rem;border:1px solid;
+            white-space:nowrap}
+.narr-phase.p1{border-color:var(--a2);color:var(--a2)}
+.narr-phase.p2{border-color:var(--a5);color:var(--a5)}
+.narr-phase.p3{border-color:var(--a3);color:var(--a3)}
+
+/* ── STAGE ── */
+.stage-grid{display:grid;grid-template-columns:1fr 300px;gap:1px;background:var(--grid);margin-bottom:1px}
+#canvas-wrap{background:var(--paper);position:relative;cursor:crosshair}
+#canvas{display:block;width:100%}
+
+/* ── PANEL ── */
+#panel{background:var(--paper);padding:.9rem;display:flex;flex-direction:column;gap:.7rem}
+.p-title{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.1em;
+         text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--grid);
+         padding-bottom:.25rem;margin-bottom:.1rem}
+.p-row{display:flex;justify-content:space-between;align-items:baseline;
+       font-family:'DM Mono',monospace;font-size:.64rem;gap:.3rem}
+.p-lbl{color:var(--ink2)}.p-val{font-weight:500;color:var(--ink)}
+.p-val.good{color:var(--accept)}.p-val.bad{color:var(--reject)}
+.p-val.neutral{color:var(--a2)}
+
+/* rss bar */
+.rss-bar-bg{height:8px;background:var(--grid);margin-top:.3rem;position:relative}
+.rss-bar-fill{height:100%;transition:width .3s;position:absolute;top:0;left:0}
+.rss-label{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);
+           display:flex;justify-content:space-between;margin-bottom:.2rem}
+
+/* ── CONTROLS ── */
+#controls{background:var(--paper);border-top:1px solid var(--grid);
+          padding:.65rem .95rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.cbtn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.32rem .8rem;
+      border:1.5px solid var(--border);background:transparent;cursor:pointer;
+      color:var(--ink2);transition:all .15s;white-space:nowrap}
+.cbtn:hover{border-color:var(--a2);color:var(--a2)}
+.cbtn.active{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.cbtn.danger{border-color:var(--a1);color:var(--a1)}
+.cbtn.danger:hover{background:var(--a1);color:white}
+.cbtn.go{border-color:var(--a3);color:var(--a3)}
+.cbtn.go:hover{background:var(--a3);color:var(--paper)}
+.csep{width:1px;height:22px;background:var(--grid)}
+.ctrl-group{display:flex;align-items:center;gap:.35rem}
+.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2)}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);
+                  outline:none;cursor:pointer;border-radius:2px;width:80px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--a2);border-radius:50%;cursor:pointer}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.68rem;font-weight:500;
+          color:var(--a2);min-width:2.2rem;text-align:right}
+
+/* ── LEARN CARDS ── */
+#learn{max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem 3rem;
+       display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+.lcard{background:var(--paper);padding:.85rem 1rem}
+.lcard-h{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.1em;
+         text-transform:uppercase;margin-bottom:.4rem;padding-bottom:.18rem;
+         border-bottom:1px solid var(--grid);color:var(--a2)}
+.lcard-h.cg{color:var(--a3)}.lcard-h.co{color:var(--a5)}.lcard-h.cr{color:var(--a1)}
+.lcard-body{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);line-height:1.78}
+.lcard-body b{color:var(--ink)}
+
+/* mode toggle */
+.mode-tabs{display:flex;gap:1px;background:var(--grid);margin-bottom:1px}
+.mtab{flex:1;font-family:'DM Mono',monospace;font-size:.64rem;padding:.45rem .6rem;
+      background:var(--paper);cursor:pointer;text-align:center;border:none;
+      color:var(--ink2);transition:all .13s}
+.mtab:hover{background:var(--panel);color:var(--ink)}
+.mtab.sel{background:var(--panel);color:var(--a2);
+          box-shadow:inset 0 -2.5px 0 var(--a2)}
+
+/* toast */
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a2);color:white;
+       font-family:'DM Mono',monospace;font-size:.7rem;padding:.4rem .85rem;
+       z-index:999;opacity:0;transform:translateY(8px);
+       transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div>
+    <div class="tb-title">Lineares Modell <em>interaktiv</em></div>
+    <div class="tb-sub">Regression · Residuen · OLS · Bedingte Verteilungen</div>
+    <div class="tb-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div style="display:flex;gap:.35rem;align-items:flex-start">
+    <button class="tbtn" onclick="window.open('index.html','_self')" style="border-color:var(--a2);color:var(--a2)">← Übersicht</button>
+    <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<div id="wrap">
+
+  <!-- MODE TABS -->
+  <div class="mode-tabs">
+    <button class="mtab sel" id="tab-draw"  onclick="setMode('draw')">
+      ✏ Datenpunkte einzeichnen
+    </button>
+    <button class="mtab" id="tab-manual" onclick="setMode('manual')">
+      ⟵⟶ Gerade manuell einstellen
+    </button>
+    <button class="mtab" id="tab-ols"    onclick="setMode('ols')">
+      ★ OLS-Gerade zeigen
+    </button>
+  </div>
+
+  <!-- NARRATIVE -->
+  <div class="narr" id="narr-box">
+    <div class="narr-h">
+      <span class="narr-phase p1" id="narr-phase">Schritt 1</span>
+    </div>
+    <div id="narr-text">
+      <b>Zeichne Datenpunkte</b> — klicke in das Feld unten, um Datenpunkte zu setzen.
+      Stell dir vor, du misst den Zusammenhang zwischen zwei Variablen:
+      z.B. Lernstunden (x) und Testergebnis (y). Setze 8–15 Punkte.
+    </div>
+  </div>
+
+  <!-- CANVAS + PANEL -->
+  <div class="stage-grid">
+    <div id="canvas-wrap">
+      <canvas id="canvas" height="520"></canvas>
+    </div>
+    <div id="panel">
+      <div>
+        <div class="p-title">Datenpunkte</div>
+        <div class="p-row"><span class="p-lbl">Anzahl</span><span class="p-val" id="p-n">0</span></div>
+        <div class="p-row"><span class="p-lbl">x-Bereich</span><span class="p-val" id="p-xr">—</span></div>
+        <div class="p-row"><span class="p-lbl">y-Bereich</span><span class="p-val" id="p-yr">—</span></div>
+      </div>
+
+      <div id="panel-line" style="display:none">
+        <div class="p-title">Deine Gerade</div>
+        <div class="p-row"><span class="p-lbl">Achsenabschnitt (a)</span><span class="p-val neutral" id="p-a">—</span></div>
+        <div class="p-row"><span class="p-lbl">Steigung (b)</span><span class="p-val neutral" id="p-b">—</span></div>
+        <div class="p-row"><span class="p-lbl">Formel</span><span class="p-val" id="p-formula" style="font-size:.6rem">—</span></div>
+      </div>
+
+      <div id="panel-rss" style="display:none">
+        <div class="p-title">Modellgüte</div>
+        <div class="p-row"><span class="p-lbl">Dein RSS</span><span class="p-val" id="p-rss-user" style="color:var(--a5)">—</span></div>
+        <div class="p-row"><span class="p-lbl">OLS RSS</span><span class="p-val good" id="p-rss-ols">—</span></div>
+        <div class="p-row"><span class="p-lbl">Dein R²</span><span class="p-val" id="p-r2-user">—</span></div>
+        <div class="p-row"><span class="p-lbl">OLS R²</span><span class="p-val good" id="p-r2-ols">—</span></div>
+        <div style="margin-top:.5rem">
+          <div class="rss-label">
+            <span style="color:var(--a5)">Dein RSS</span>
+            <span style="color:var(--a3)">OLS RSS</span>
+          </div>
+          <div class="rss-bar-bg">
+            <div class="rss-bar-fill" id="rss-bar-user" style="background:var(--a5)"></div>
+          </div>
+          <div class="rss-bar-bg" style="margin-top:2px">
+            <div class="rss-bar-fill" id="rss-bar-ols" style="background:var(--a3)"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-ols" style="display:none">
+        <div class="p-title">OLS-Schätzer</div>
+        <div class="p-row"><span class="p-lbl">Achsenabschnitt (a)</span><span class="p-val good" id="p-ols-a">—</span></div>
+        <div class="p-row"><span class="p-lbl">Steigung (b)</span><span class="p-val good" id="p-ols-b">—</span></div>
+        <div class="p-row"><span class="p-lbl">σ (Streuung)</span><span class="p-val neutral" id="p-ols-s">—</span></div>
+      </div>
+
+      <div>
+        <div class="p-title">Anzeige</div>
+        <label style="display:flex;gap:.35rem;align-items:center;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);cursor:pointer;margin-bottom:.3rem">
+          <input type="checkbox" id="show-resid" checked onchange="redraw()" style="accent-color:var(--a5)"> Residuen anzeigen
+        </label>
+        <label style="display:flex;gap:.35rem;align-items:center;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);cursor:pointer;margin-bottom:.3rem">
+          <input type="checkbox" id="show-bells" onchange="redraw()" style="accent-color:var(--a2)"> Bedingte Verteilungen
+        </label>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div id="controls">
+    <button class="cbtn active" id="btn-draw" onclick="setBrush('draw')">✏ Zeichnen</button>
+    <button class="cbtn" id="btn-erase" onclick="setBrush('erase')">✕ Löschen</button>
+    <button class="cbtn danger" onclick="clearPoints()">↺ Alle löschen</button>
+    <div class="csep"></div>
+
+    <div id="ctrl-manual" style="display:none;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <div class="ctrl-group">
+        <span class="ctrl-lbl">Achsenabschnitt a</span>
+        <input type="range" id="sl-a" min="-3" max="3" step="0.02" value="0"
+               oninput="updSlider();redraw()">
+        <span class="ctrl-val" id="v-a">0.00</span>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-lbl">Steigung b</span>
+        <input type="range" id="sl-b" min="-3" max="3" step="0.02" value="0.5"
+               oninput="updSlider();redraw()">
+        <span class="ctrl-val" id="v-b">0.50</span>
+      </div>
+    </div>
+
+    <button class="cbtn go" id="btn-show-ols" onclick="toggleOLS()" style="margin-left:auto">
+      ★ Beste OLS-Gerade zeigen
+    </button>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- LEARN CARDS -->
+<div id="learn">
+  <div class="lcard">
+    <div class="lcard-h cg">Was ist eine Regressionsgerade?</div>
+    <div class="lcard-body">
+      Eine Regressionsgerade beschreibt den <b>linearen Zusammenhang</b> zwischen zwei Variablen.
+      Sie beantwortet: Wenn x um 1 steigt — wie viel ändert sich y im Durchschnitt?<br><br>
+      Die Gerade hat zwei Parameter: den <b>Achsenabschnitt a</b> (wo schneidet die Gerade die y-Achse, wenn x=0?)
+      und die <b>Steigung b</b> (wie steil ist die Linie?). Formel: <b>ŷ = a + b · x</b><br><br>
+      <b>Warum ist sie nützlich?</b> Weil sie erlaubt, für jeden x-Wert einen
+      <em>Vorhersagewert ŷ</em> zu berechnen — auch für x-Werte die nicht in den Daten vorkommen.
+      Außerdem fasst sie den Zusammenhang in zwei interpretierbare Zahlen zusammen:
+      Gibt es überhaupt einen Zusammenhang (b ≠ 0)? Und wie stark ist er?<br><br>
+      <b>Warum die „beste" Gerade?</b> Es gibt unendlich viele mögliche Geraden — die OLS-Gerade
+      ist diejenige, die im Durchschnitt am nächsten an allen Datenpunkten liegt.
+      Versuche selbst, sie zu finden: Jede andere Gerade hat einen höheren RSS-Wert.
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h cr">Was sind Residuen?</div>
+    <div class="lcard-body">
+      Kein Datenpunkt liegt exakt auf der Geraden — die <b>Abweichung</b> zwischen dem
+      vorhergesagten Wert (Punkt auf der Gerade) und dem echten Wert heißt <b>Residuum</b>.<br><br>
+      Residuen sind das „was das Modell nicht erklärt". Eine gute Gerade hat
+      kleine Residuen — sie liegt möglichst nahe an allen Punkten.<br><br>
+      Residuen werden mit den roten senkrechten Linien visualisiert.
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h co">RSS — wie misst man die Güte?</div>
+    <div class="lcard-body">
+      Um alle Residuen zu einem einzigen Gütemaß zusammenzufassen, werden sie
+      <b>quadriert und aufsummiert</b>: <b>RSS = Σ(y − ŷ)²</b><br><br>
+      Warum quadrieren? Damit sich positive und negative Residuen nicht aufheben.
+      Große Abweichungen werden dabei stärker bestraft als kleine.<br><br>
+      Die OLS-Gerade ist genau <b>diejenige Gerade, die RSS minimiert</b> —
+      das ist der Sinn von „Ordinary Least Squares".
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h cg">Bedingte Normalverteilungen — warum das wichtig ist</div>
+    <div class="lcard-body">
+      Das lineare Modell nimmt an: Die y-Werte <b>um jeden x-Wert herum</b> sind
+      normalverteilt — mit Mittelwert auf der Regressionsgerade und konstanter Streuung σ.<br><br>
+      <b>Nicht</b> die gesamte Verteilung von y muss normal sein — nur die Streuung
+      <em>um die Gerade</em>. Das ist ein häufiges Missverständnis.<br><br>
+      Schalte „Bedingte Verteilungen" ein — du siehst kleine Glockenkurven an
+      verschiedenen x-Stellen, alle zentriert auf der Geraden.
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Theme ──────────────────────────────────────────────────
+let DARK = true;
+function toggleTheme(){
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK?'dark':'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  redraw();
+}
+function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ── State ──────────────────────────────────────────────────
+let points = [];          // [{x,y}] in data space
+let brush  = 'draw';
+let mode   = 'draw';      // draw | manual | ols
+let olsShown = false;
+
+// Viewport: data space [-1, 1] x [-1, 1] (normalized)
+// We'll use a 0–10 data range and rescale
+const DX = [0, 10], DY = [0, 10];
+
+// Manual line params (in data space)
+let manA = 3, manB = 0.5;  // y = manA + manB*x
+
+// OLS result
+let olsA = null, olsB = null, olsSigma = null;
+
+// ── Canvas setup ───────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+let W, H, margin;
+
+function resize(){
+  const wrap = document.getElementById('canvas-wrap');
+  W = wrap.clientWidth;
+  canvas.width  = W;
+  canvas.height = 520;
+  H = 520;
+  margin = { l: 48, r: 18, t: 18, b: 38 };
+  redraw();
+}
+
+// Data ↔ canvas coordinates
+function toCanX(dx){ return margin.l + (dx - DX[0])/(DX[1]-DX[0]) * (W - margin.l - margin.r); }
+function toCanY(dy){ return H - margin.b - (dy - DY[0])/(DY[1]-DY[0]) * (H - margin.t - margin.b); }
+function toDataX(cx){ return DX[0] + (cx - margin.l)/(W - margin.l - margin.r) * (DX[1]-DX[0]); }
+function toDataY(cy){ return DY[0] + (H - margin.b - cy)/(H - margin.t - margin.b) * (DY[1]-DY[0]); }
+
+// ── OLS ────────────────────────────────────────────────────
+function computeOLS(){
+  if(points.length < 2) return;
+  const n  = points.length;
+  const mx = points.reduce((s,p)=>s+p.x,0)/n;
+  const my = points.reduce((s,p)=>s+p.y,0)/n;
+  const ss = points.reduce((s,p)=>s+(p.x-mx)**2,0);
+  const sp = points.reduce((s,p)=>s+(p.x-mx)*(p.y-my),0);
+  olsB = sp/ss;
+  olsA = my - olsB*mx;
+  const resid = points.map(p=>(p.y - (olsA + olsB*p.x))**2);
+  olsSigma = Math.sqrt(resid.reduce((a,v)=>a+v,0)/n);
+}
+
+function rss(a, b){
+  return points.reduce((s,p)=>s+(p.y-(a+b*p.x))**2, 0);
+}
+function r2(a, b){
+  if(points.length<2)return 0;
+  const my = points.reduce((s,p)=>s+p.y,0)/points.length;
+  const sst = points.reduce((s,p)=>s+(p.y-my)**2,0);
+  if(sst===0)return 1;
+  return 1 - rss(a,b)/sst;
+}
+
+// ── Draw ───────────────────────────────────────────────────
+function redraw(){
+  const Wp = W - margin.l - margin.r;
+  const Hp = H - margin.t - margin.b;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Background
+  ctx.fillStyle = DARK ? '#0c0f14' : '#faf6ee';
+  ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle = DARK ? '#1e242e' : '#ddd5c6';
+  ctx.lineWidth = 1;
+  for(let v = 0; v <= 10; v += 2){
+    const px = toCanX(v), py = toCanY(v);
+    ctx.beginPath(); ctx.moveTo(px, margin.t); ctx.lineTo(px, H-margin.b); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(margin.l, py); ctx.lineTo(W-margin.r, py); ctx.stroke();
+  }
+
+  // Axes labels
+  ctx.fillStyle = DARK ? '#2a3a55' : '#8a7f72';
+  ctx.font = '10px DM Mono, monospace'; ctx.textAlign = 'center';
+  for(let v = 0; v <= 10; v += 2){
+    ctx.fillText(v, toCanX(v), H - margin.b + 15);
+  }
+  ctx.textAlign = 'right';
+  for(let v = 0; v <= 10; v += 2){
+    ctx.fillText(v, margin.l - 5, toCanY(v) + 3);
+  }
+  ctx.fillStyle = DARK ? '#1e2a40' : '#8a7f72';
+  ctx.textAlign = 'center';
+  ctx.fillText('x', W/2, H - 4);
+  ctx.save(); ctx.translate(11, H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('y', 0, 0); ctx.restore();
+
+  // Determine active line
+  const useA = mode === 'ols' ? olsA : manA;
+  const useB = mode === 'ols' ? olsB : manB;
+  const hasLine = mode !== 'draw';
+  const showBells = document.getElementById('show-bells').checked;
+  const showResid = document.getElementById('show-resid').checked;
+  const showOlsComp = olsShown && mode !== 'ols';
+
+  // Bedingte Verteilungen — kleine Normalverteilungs-Kurven entlang der Geraden
+  // Horizontal gezeichnet (x-Achse = Dichte, y-Achse = y-Wert)
+  if(showBells && olsShown && olsA !== null && points.length > 1){
+    const sigma = olsSigma || 1;
+    const pxPerUnit = (H - margin.t - margin.b) / (DY[1] - DY[0]);
+    const xPositions = [1.5, 3.5, 5.5, 7.5];
+    // Scale: bell width in pixels = 40px for 1σ height difference
+    const bellWidthPx = 38;
+    xPositions.forEach(dx => {
+      const cx   = toCanX(dx);
+      const yMu  = olsA + olsB * dx;  // always OLS line
+      const cyMu = toCanY(yMu);
+      // Draw filled bell horizontally: x=density (right), y=y-value
+      ctx.beginPath();
+      const steps = 60;
+      const range = 3 * sigma;
+      // right side of bell
+      for(let i = 0; i <= steps; i++){
+        const yOff   = -range + i * 2*range/steps;         // y offset from mean
+        const density = Math.exp(-0.5*(yOff/sigma)**2);     // unnormalized (peak=1)
+        const bx = cx + density * bellWidthPx;
+        const by = cyMu - yOff * pxPerUnit;
+        i === 0 ? ctx.moveTo(bx, by) : ctx.lineTo(bx, by);
+      }
+      // close back along center line
+      for(let i = steps; i >= 0; i--){
+        const yOff = -range + i * 2*range/steps;
+        const by   = cyMu - yOff * pxPerUnit;
+        ctx.lineTo(cx, by);
+      }
+      ctx.closePath();
+      ctx.fillStyle   = DARK ? 'rgba(74,176,216,.18)' : 'rgba(42,110,138,.14)';
+      ctx.fill();
+      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)';
+      ctx.lineWidth = 1.2; ctx.stroke();
+      // μ tick on line
+      ctx.beginPath();
+      ctx.moveTo(cx-4, cyMu); ctx.lineTo(cx+4, cyMu);
+      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.8)' : 'rgba(42,110,138,.7)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      // ±1σ dashed lines
+      [-1,1].forEach(sign => {
+        const pyS = cyMu - sign*sigma*pxPerUnit;
+        ctx.beginPath();
+        ctx.moveTo(cx, pyS); ctx.lineTo(cx + Math.exp(-0.5)*bellWidthPx, pyS);
+        ctx.strokeStyle = DARK ? 'rgba(74,176,216,.3)' : 'rgba(42,110,138,.25)';
+        ctx.lineWidth = 1; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
+      });
+    });
+    // Label
+    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.6)';
+    ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText('N(ŷ, σ)', toCanX(xPositions[0]) + bellWidthPx + 4,
+                 toCanY(useA + useB*xPositions[0]) - 4);
+  }
+
+  // OLS comparison line (dashed)
+  if(showOlsComp && olsA !== null && mode !== 'ols'){
+    const x0 = DX[0], x1 = DX[1];
+    ctx.beginPath();
+    ctx.moveTo(toCanX(x0), toCanY(olsA + olsB*x0));
+    ctx.lineTo(toCanX(x1), toCanY(olsA + olsB*x1));
+    ctx.strokeStyle = DARK ? 'rgba(128,203,82,.6)' : 'rgba(90,138,42,.55)';
+    ctx.lineWidth = 1.5; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = DARK ? 'rgba(128,203,82,.7)' : 'rgba(90,138,42,.6)';
+    ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText('OLS', toCanX(x1)+4, toCanY(olsA+olsB*x1));
+  }
+
+  // Residuals
+  if(showResid && hasLine && useA !== null){
+    points.forEach(p => {
+      const ypred = useA + useB * p.x;
+      ctx.beginPath();
+      ctx.moveTo(toCanX(p.x), toCanY(p.y));
+      ctx.lineTo(toCanX(p.x), toCanY(ypred));
+      ctx.strokeStyle = DARK ? 'rgba(232,97,74,.55)' : 'rgba(201,74,42,.45)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      // small square
+      const sz = 3;
+      ctx.fillStyle = DARK ? 'rgba(232,97,74,.2)' : 'rgba(201,74,42,.15)';
+      const cy1 = toCanY(p.y), cy2 = toCanY(ypred);
+      const h = Math.abs(cy1-cy2), top = Math.min(cy1,cy2);
+      const cx = toCanX(p.x);
+      ctx.fillRect(cx, top, Math.min(h,sz*3), h);
+    });
+  }
+
+  // Active line (OLS = green, manual = blue)
+  if(hasLine && useA !== null){
+    const x0 = DX[0], x1 = DX[1];
+    const lineColor = mode === 'ols'
+      ? (DARK ? '#80cb52' : '#5a8a2a')
+      : (DARK ? '#4ab0d8' : '#2a6e8a');
+    ctx.beginPath();
+    ctx.moveTo(toCanX(x0), toCanY(useA + useB*x0));
+    ctx.lineTo(toCanX(x1), toCanY(useA + useB*x1));
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = lineColor;
+    ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`${mode==='ols'?'OLS:':''} ŷ = ${useA.toFixed(2)} + ${useB.toFixed(2)}x`,
+                 toCanX(8.5) + 5, toCanY(useA + useB*8.5) - 6);
+  }
+  // In OLS mode: also draw manual line (blue, dashed) so user can compare & adjust
+  if(mode === 'ols' && manA !== null){
+    const x0 = DX[0], x1 = DX[1];
+    ctx.beginPath();
+    ctx.moveTo(toCanX(x0), toCanY(manA + manB*x0));
+    ctx.lineTo(toCanX(x1), toCanY(manA + manB*x1));
+    ctx.strokeStyle = DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)';
+    ctx.lineWidth = 1.8; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.65)';
+    ctx.font = '9px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`deine: ŷ = ${manA.toFixed(2)} + ${manB.toFixed(2)}x`,
+                 toCanX(1) + 4, toCanY(manA + manB*1) - 6);
+  }
+
+  // Points
+  points.forEach(p => {
+    const cx = toCanX(p.x), cy = toCanY(p.y);
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
+    ctx.fillStyle = DARK ? '#ece6d8' : '#18130e';
+    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
+    ctx.strokeStyle = DARK ? 'rgba(74,176,216,.6)' : 'rgba(42,110,138,.5)';
+    ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  updatePanel();
+}
+
+// ── Panel update ───────────────────────────────────────────
+function updatePanel(){
+  const n = points.length;
+  document.getElementById('p-n').textContent = n;
+  if(n > 0){
+    const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+    document.getElementById('p-xr').textContent =
+      `${Math.min(...xs).toFixed(1)} – ${Math.max(...xs).toFixed(1)}`;
+    document.getElementById('p-yr').textContent =
+      `${Math.min(...ys).toFixed(1)} – ${Math.max(...ys).toFixed(1)}`;
+  } else {
+    document.getElementById('p-xr').textContent = '—';
+    document.getElementById('p-yr').textContent = '—';
+  }
+
+  const hasManual = mode === 'manual' || mode === 'ols';
+  document.getElementById('panel-line').style.display = hasManual ? '' : 'none';
+  document.getElementById('panel-rss').style.display  = ((mode === 'manual' || mode === 'ols') && n>=2) ? '' : 'none';
+  document.getElementById('panel-ols').style.display  = (mode === 'ols' && olsA!==null) ? '' : 'none';
+
+  if(mode === 'manual'){
+    document.getElementById('p-a').textContent = manA.toFixed(2);
+    document.getElementById('p-b').textContent = manB.toFixed(2);
+    document.getElementById('p-formula').textContent =
+      `ŷ = ${manA.toFixed(2)} + ${manB.toFixed(2)}·x`;
+    if(n >= 2){
+      const rssU = rss(manA, manB);
+      computeOLS(); // ensure ols is fresh
+      const rssO = olsA !== null ? rss(olsA, olsB) : rssU;
+      const r2U  = r2(manA, manB);
+      const r2O  = olsA !== null ? r2(olsA, olsB) : r2U;
+      document.getElementById('p-rss-user').textContent = rssU.toFixed(2);
+      document.getElementById('p-rss-ols').textContent  = olsA!==null ? rssO.toFixed(2) : '—';
+      document.getElementById('p-r2-user').textContent  = r2U.toFixed(3);
+      document.getElementById('p-r2-ols').textContent   = olsA!==null ? r2O.toFixed(3) : '—';
+      // Bars — normalize to max RSS
+      const maxRss = Math.max(rssU, rssO, 0.01);
+      document.getElementById('rss-bar-user').style.width = (rssU/maxRss*100) + '%';
+      document.getElementById('rss-bar-ols').style.width  = (rssO/maxRss*100) + '%';
+    }
+  }
+  if(mode === 'ols' && olsA !== null){
+    document.getElementById('p-ols-a').textContent = olsA.toFixed(3);
+    document.getElementById('p-ols-b').textContent = olsB.toFixed(3);
+    document.getElementById('p-ols-s').textContent = olsSigma.toFixed(3);
+  }
+}
+
+// ── Mode switching ─────────────────────────────────────────
+const NARRATIVES = {
+  draw: {
+    phase: 'p1', label: 'Schritt 1 — Daten einzeichnen',
+    text: '<b>Klicke in das Feld</b>, um Datenpunkte zu setzen. Stell dir vor, du misst den Zusammenhang zwischen zwei Variablen — z.B. Lernzeit und Testergebnis. Setze 8–15 Punkte. Mit ✕ Löschen kannst du einzelne Punkte entfernen.'
+  },
+  manual: {
+    phase: 'p2', label: 'Schritt 2 — Gerade selbst einpassen',
+    text: 'Versuche, <b>selbst die beste Gerade zu finden</b> — stelle Achsenabschnitt und Steigung über die Slider ein. Die <b>roten Linien</b> zeigen die Residuen: Abweichungen zwischen deinen Datenpunkten und der Geraden. Ziel: RSS (Summe der quadrierten Residuen) minimieren. Wann passt die Gerade gut?'
+  },
+  ols: {
+    phase: 'p3', label: 'Schritt 3 — OLS vs. deine Gerade',
+    text: 'Die <b>grüne OLS-Gerade</b> minimiert den RSS — kein anderes a und b ergibt einen kleineren Wert. Deine gestrichelte <b>blaue Gerade</b> bleibt sichtbar: Benutze die Slider, um sie an die grüne anzupassen — spüre, wie sich Achsenabschnitt und Steigung auswirken. Die <b>bedingten Normalverteilungen</b> zeigen: Das LM nimmt an, die y-Werte streuen um die Gerade normalverteilt mit konstanter Streuung σ — nicht die gesamte y-Verteilung muss normal sein.'
+  }
+};
+
+function setMode(m){
+  mode = m;
+  ['draw','manual','ols'].forEach(id =>
+    document.getElementById('tab-'+id).classList.toggle('sel', id===m));
+  // Show/hide manual controls
+  document.getElementById('ctrl-manual').style.display = (m==='manual'||m==='ols') ? 'flex' : 'none';
+  document.getElementById('btn-draw').style.display    = m==='draw' ? '' : 'none';
+  document.getElementById('btn-erase').style.display   = m==='draw' ? '' : 'none';
+  // Narrative
+  const n = NARRATIVES[m];
+  document.getElementById('narr-phase').textContent = n.label;
+  document.getElementById('narr-phase').className   = 'narr-phase ' + n.phase;
+  document.getElementById('narr-text').innerHTML    = n.text;
+  // If switching to manual/ols, compute OLS now
+  if(m !== 'draw' && points.length >= 2) computeOLS();
+  if(m === 'ols'){
+    olsShown = true;
+    document.getElementById('show-bells').checked = true;
+    document.getElementById('show-ols-line').checked = false;
+  }
+  redraw();
+}
+
+function toggleOLS(){
+  if(points.length < 2){ toast('Bitte zuerst mindestens 2 Punkte einzeichnen.'); return; }
+  if(olsShown){
+    olsShown = false;
+    document.getElementById('btn-show-ols').textContent = '★ Beste OLS-Gerade zeigen';
+    document.getElementById('btn-show-ols').classList.remove('active');
+    document.getElementById('show-bells').checked = false;
+    document.getElementById('show-bells').disabled = true;
+    // Stay in current mode, just hide OLS line
+  } else {
+    olsShown = true;
+    computeOLS();
+    document.getElementById('btn-show-ols').textContent = '✕ OLS-Gerade ausblenden';
+    document.getElementById('btn-show-ols').classList.add('active');
+    document.getElementById('show-bells').disabled = false;
+  }
+  redraw();
+}
+
+// ── Brush & interaction ────────────────────────────────────
+function setBrush(b){
+  brush = b;
+  document.getElementById('btn-draw').classList.toggle('active', b==='draw');
+  document.getElementById('btn-erase').classList.toggle('active', b==='erase');
+  canvas.style.cursor = b==='draw' ? 'crosshair' : 'not-allowed';
+}
+
+function getCanvasPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const ex = e.touches ? e.touches[0].clientX : e.clientX;
+  const ey = e.touches ? e.touches[0].clientY : e.clientY;
+  return { cx: ex - rect.left, cy: ey - rect.top };
+}
+
+let isPointerDown = false;
+canvas.addEventListener('mousedown', e => {
+  isPointerDown = true;
+  handlePointer(e);
+});
+canvas.addEventListener('mousemove', e => {
+  if(isPointerDown && mode==='draw') handlePointer(e);
+});
+canvas.addEventListener('mouseup', () => { isPointerDown = false; });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); handlePointer(e); }, {passive:false});
+
+function handlePointer(e){
+  if(mode !== 'draw') return;
+  const {cx, cy} = getCanvasPos(e);
+  const dx = toDataX(cx), dy = toDataY(cy);
+  if(dx < DX[0] || dx > DX[1] || dy < DY[0] || dy > DY[1]) return;
+
+  if(brush === 'draw'){
+    // Avoid very close points
+    const tooClose = points.some(p => Math.hypot(p.x-dx, p.y-dy) < 0.4);
+    if(!tooClose) points.push({x:dx, y:dy});
+  } else {
+    // Erase closest
+    const THRESH = 0.6;
+    const idx = points.reduce((best, p, i) => {
+      const d = Math.hypot(p.x-dx, p.y-dy);
+      return d < best.d ? {i, d} : best;
+    }, {i:-1, d:THRESH});
+    if(idx.i >= 0) points.splice(idx.i, 1);
+  }
+  redraw();
+}
+
+function clearPoints(){
+  points = [];
+  olsA = olsB = olsSigma = null;
+  olsShown = false;
+  redraw();
+}
+
+// ── Slider update ──────────────────────────────────────────
+function updSlider(){
+  manA = +document.getElementById('sl-a').value;
+  manB = +document.getElementById('sl-b').value;
+  document.getElementById('v-a').textContent = manA.toFixed(2);
+  document.getElementById('v-b').textContent = manB.toFixed(2);
+}
+
+// ── Toast ──────────────────────────────────────────────────
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ──────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+document.addEventListener('DOMContentLoaded', () => {
+  resize();
+  setBrush('draw');
+  document.getElementById('show-bells').disabled = true;
+  // Pre-populate a few example points so it's not blank
+  points = [
+    {x:1.2, y:2.1},{x:2.0, y:2.8},{x:2.8, y:3.5},{x:3.5, y:4.2},
+    {x:4.2, y:4.0},{x:5.0, y:5.3},{x:5.8, y:5.8},{x:6.5, y:6.4},
+    {x:7.2, y:6.9},{x:8.0, y:7.8},{x:8.8, y:8.1}
+  ];
+  // Add some scatter
+  points = points.map(p => ({x: p.x, y: Math.max(0.2, Math.min(9.8, p.y + (Math.random()-0.5)*1.2))}));
+  computeOLS();
+  manA = +(olsA - 1.5).toFixed(2);
+  manB = +(olsB + 0.3).toFixed(2);
+  document.getElementById('sl-a').value = manA;
+  document.getElementById('sl-b').value = manB;
+  updSlider();
+  redraw();
+  toast('Tipp: Starte mit Schritt 1 — zeichne eigene Punkte!');
+});
+</script>
+</body>
+</html>

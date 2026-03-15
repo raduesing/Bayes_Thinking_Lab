@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vom LM zum GLM — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     min-height:100vh;transition:background .25s,color .25s}
+
+/* TOPBAR */
+#topbar{position:sticky;top:0;z-index:200;background:var(--paper);
+  border-bottom:1.5px solid var(--border);padding:.5rem 1.4rem;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.tb-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em}
+.tb-title em{font-style:italic;color:var(--a6)}
+.tb-sub{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);margin-top:.18rem;letter-spacing:.04em}
+.tb-auth{font-family:'DM Mono',monospace;font-size:.57rem;color:var(--ink2);opacity:.5;margin-top:.08rem}
+.tbtn{font-family:'DM Mono',monospace;font-size:.64rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--a6);color:var(--a6)}
+
+/* LAYOUT */
+#wrap{max-width:1060px;margin:0 auto;padding:1rem 1.2rem 3rem}
+
+/* SCENARIO TABS */
+.scen-tabs{display:flex;gap:2px;background:var(--border);margin-bottom:1px}
+.sctab{flex:1;font-family:'DM Mono',monospace;font-size:.68rem;font-weight:500;
+  padding:.65rem .9rem;background:var(--panel);cursor:pointer;text-align:left;
+  border:none;color:var(--ink2);transition:all .15s;position:relative;
+  border-bottom:3px solid transparent}
+.sctab:hover{background:var(--paper);color:var(--ink);
+  border-bottom-color:var(--border)}
+.sctab.sel{background:var(--paper);color:var(--a6);
+  border-bottom:3px solid var(--a6);
+  box-shadow:0 2px 8px rgba(43,199,196,.15)}
+.sctab .sct-n{font-size:.56rem;opacity:.6;display:block;margin-bottom:.18rem;
+  letter-spacing:.1em;text-transform:uppercase}
+.sctab.sel .sct-n{opacity:.85;color:var(--a6)}
+.sctab .sct-warn{position:absolute;top:.4rem;right:.6rem;
+  color:var(--a1);font-size:.7rem}
+
+/* NARRATIVE */
+.narr{background:var(--paper);border:1px solid var(--border);
+  padding:.7rem 1.1rem;margin-bottom:1px;font-family:'DM Mono',monospace;
+  font-size:.65rem;color:var(--ink2);line-height:1.8}
+.narr b{color:var(--ink)}.narr em{color:var(--a6);font-style:normal}
+.narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.35rem}
+.ntag{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.1rem .38rem;border:1px solid;white-space:nowrap}
+.ntag.c6{border-color:var(--a6);color:var(--a6)}
+.ntag.c1{border-color:var(--a1);color:var(--a1)}
+.ntag.c3{border-color:var(--a3);color:var(--a3)}
+.ntag.c5{border-color:var(--a5);color:var(--a5)}
+
+/* GRID LAYOUTS */
+.s-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+.s-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--grid)}
+.s-panel{background:var(--paper);padding:.8rem .9rem}
+.s-title{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--grid);
+  padding-bottom:.22rem;margin-bottom:.6rem;display:flex;justify-content:space-between}
+.s-title .st-badge{font-size:.55rem;padding:.06rem .3rem;border:1px solid;white-space:nowrap}
+.st-bad{border-color:var(--a1);color:var(--a1)}
+.st-good{border-color:var(--a3);color:var(--a3)}
+
+/* CONTROLS */
+.ctrl-bar{background:var(--paper);border-top:1px solid var(--grid);
+  padding:.6rem .9rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.ctrl-group{display:flex;align-items:center;gap:.38rem}
+.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink2);white-space:nowrap}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);
+  outline:none;cursor:pointer;border-radius:2px;width:90px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  background:var(--a6);border-radius:50%;cursor:pointer}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.68rem;font-weight:500;
+  color:var(--a6);min-width:2.5rem;text-align:right}
+.cbtn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.3rem .75rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;white-space:nowrap}
+.cbtn:hover{border-color:var(--a6);color:var(--a6)}
+.cbtn.go{border-color:var(--a6);color:var(--a6)}
+.cbtn.go:hover{background:var(--a6);color:var(--paper)}
+.csep{width:1px;height:22px;background:var(--grid)}
+
+/* STATS */
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:'DM Mono',monospace;font-size:.63rem;padding:.2rem 0;
+  border-bottom:1px solid var(--grid)}
+.stat-row:last-child{border-bottom:none}
+.stat-lbl{color:var(--ink2)}.stat-val{font-weight:500;color:var(--ink)}
+.stat-good{color:var(--a3)}.stat-bad{color:var(--a1)}.stat-mid{color:var(--a6)}
+
+/* FIT COMPARE BAR */
+.fit-bar-wrap{margin:.4rem 0}
+.fit-bar-label{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);
+  display:flex;justify-content:space-between;margin-bottom:.18rem}
+.fit-bar-bg{height:6px;background:var(--grid);position:relative}
+.fit-bar-fill{height:100%;position:absolute;top:0;left:0;transition:width .4s}
+
+/* LINK TO GLM */
+.glm-link-box{background:var(--panel);border:1.5px solid var(--a6);
+  padding:.65rem 1rem;font-family:'DM Mono',monospace;font-size:.64rem;
+  color:var(--ink2);line-height:1.75;margin-top:1px}
+.glm-link-box b{color:var(--ink)}
+.glm-link-box a{color:var(--a6);text-decoration:none;border-bottom:1px dotted var(--a6)}
+.glm-link-box a:hover{color:var(--a6);border-bottom-style:solid}
+
+/* LEARN CARDS */
+#learn{max-width:1060px;margin:.75rem auto 0;padding:0 1.2rem 3rem;
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+.lcard{background:var(--paper);padding:.85rem 1rem}
+.lcard-h{font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:.4rem;padding-bottom:.18rem;
+  border-bottom:1px solid var(--grid);color:var(--a6)}
+.lcard-h.cr{color:var(--a1)}.lcard-h.cg{color:var(--a3)}.lcard-h.co{color:var(--a5)}
+.lcard-body{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink2);line-height:1.78}
+.lcard-body b{color:var(--ink)}
+.lcard-body code{background:var(--panel);border:1px solid var(--border);
+  color:var(--a6);padding:.02rem .3rem}
+
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a6);color:white;
+  font-family:'DM Mono',monospace;font-size:.7rem;padding:.4rem .85rem;
+  z-index:999;opacity:0;transform:translateY(8px);
+  transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <div class="tb-title">Vom LM zum <em>GLM</em></div>
+    <div class="tb-sub">Falsche Likelihood · Passung vergleichen · Linkfunktion · Verteilungswahl</div>
+    <div class="tb-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div style="display:flex;gap:.35rem;align-items:flex-start">
+    <button class="tbtn" onclick="window.open('index.html','_self')" style="border-color:var(--a6);color:var(--a6)">← Übersicht</button>
+    <button class="tbtn" onclick="window.open('GLM_cond_dist.html','_blank')" style="border-color:var(--a6);color:var(--a6)" title="Weiter zu bedingten Verteilungen im GLM">⬡ GLM Verteilungen →</button>
+    <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<div id="wrap">
+
+<!-- SHORT INTRO -->
+<div class="narr" style="margin-bottom:1px;border-color:var(--a6)">
+  <b>Das Problem:</b> Ein lineares Modell nimmt immer normalverteilte Residuen an.
+  Was wenn die Daten <em>binär</em>, <em>Zähldaten</em> oder <em>positiv-schief</em> sind?
+  Drei Szenarien zeigen, was passiert wenn man trotzdem ein LM erzwingt —
+  und wie ein GLM mit passender Verteilung die Situation löst.
+</div>
+
+<!-- SCENARIO TABS -->
+<div class="scen-tabs">
+  <button class="sctab sel" id="sctab-0" onclick="setScen(0)">
+    <span class="sct-n">Szenario 1</span>
+    Binäre Daten (0/1)
+    <span class="sct-warn">⚠</span>
+  </button>
+  <button class="sctab" id="sctab-1" onclick="setScen(1)">
+    <span class="sct-n">Szenario 2</span>
+    Zähldaten (0, 1, 2, …)
+    <span class="sct-warn">⚠</span>
+  </button>
+  <button class="sctab" id="sctab-2" onclick="setScen(2)">
+    <span class="sct-n">Szenario 3</span>
+    Positive, schiefe Daten
+    <span class="sct-warn">⚠</span>
+  </button>
+</div>
+
+<!-- NARRATIVE -->
+<div class="narr" id="narr-box">
+  <div class="narr-h"><span class="ntag c1" id="narr-tag">Problem</span></div>
+  <span id="narr-text"></span>
+</div>
+
+<!-- MAIN STAGE -->
+<div id="stage-main">
+  <div class="s-grid-3">
+    <!-- Left: LM fit (wrong) -->
+    <div class="s-panel">
+      <div class="s-title">
+        LM mit Normalverteilung
+        <span class="st-badge st-bad" id="lm-badge">⚠ Problematisch</span>
+      </div>
+      <canvas id="c-lm" height="280"></canvas>
+      <div style="margin-top:.5rem">
+        <div class="stat-row"><span class="stat-lbl">Log-Likelihood (LM)</span><span class="stat-val stat-bad" id="s-lm-ll">—</span></div>
+        <div class="stat-row"><span class="stat-lbl">AIC (LM)</span><span class="stat-val stat-bad" id="s-lm-aic">—</span></div>
+        <div id="lm-problems" style="font-family:'DM Mono',monospace;font-size:.6rem;
+             color:var(--a1);line-height:1.65;margin-top:.4rem;
+             border-left:3px solid var(--a1);padding-left:.5rem"></div>
+      </div>
+    </div>
+
+    <!-- Middle: GLM fit (correct) -->
+    <div class="s-panel">
+      <div class="s-title">
+        GLM mit passender Verteilung
+        <span class="st-badge st-good" id="glm-badge">✓ Besser</span>
+      </div>
+      <canvas id="c-glm" height="280"></canvas>
+      <div style="margin-top:.5rem">
+        <div class="stat-row"><span class="stat-lbl">Log-Likelihood (GLM)</span><span class="stat-val stat-good" id="s-glm-ll">—</span></div>
+        <div class="stat-row"><span class="stat-lbl">AIC (GLM)</span><span class="stat-val stat-good" id="s-glm-aic">—</span></div>
+        <div id="glm-explain" style="font-family:'DM Mono',monospace;font-size:.6rem;
+             color:var(--ink2);line-height:1.65;margin-top:.4rem;
+             border-left:3px solid var(--a6);padding-left:.5rem"></div>
+      </div>
+    </div>
+
+    <!-- Right: Residuals comparison -->
+    <div class="s-panel">
+      <div class="s-title">Residuenverteilung &amp; AIC-Vergleich</div>
+      <canvas id="c-resid" height="280"></canvas>
+      <div style="margin-top:.5rem">
+        <div class="stat-row"><span class="stat-lbl">ΔAIC (LM − GLM)</span><span class="stat-val" id="s-daic">—</span></div>
+        <div style="font-family:'DM Mono',monospace;font-size:.6rem;
+             color:var(--ink2);margin-bottom:.35rem;line-height:1.6">
+          <b>Fairer Vergleich:</b> Beide Modelle werden mit derselben
+          Likelihood-Funktion bewertet (Bernoulli/Poisson/Gamma).
+          Kleinerer AIC = besserer Fit.
+        </div>
+        <div class="fit-bar-wrap">
+          <div class="fit-bar-label">
+            <span style="color:var(--a1)">■ LM-AIC</span>
+            <span id="lm-aic-bar-val" style="color:var(--a1)">—</span>
+          </div>
+          <div class="fit-bar-bg" style="height:9px;margin-bottom:4px">
+            <div class="fit-bar-fill" id="bar-lm" style="background:var(--a1)"></div>
+          </div>
+          <div class="fit-bar-label">
+            <span style="color:var(--a3)">■ GLM-AIC</span>
+            <span id="glm-aic-bar-val" style="color:var(--a3)">—</span>
+          </div>
+          <div class="fit-bar-bg" style="height:9px">
+            <div class="fit-bar-fill" id="bar-glm" style="background:var(--a3)"></div>
+          </div>
+        </div>
+        <div id="verdict" style="font-family:'DM Mono',monospace;font-size:.62rem;
+             color:var(--ink2);margin-top:.5rem;line-height:1.65"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctrl-bar">
+    <div class="ctrl-group">
+      <span class="ctrl-lbl">Stichprobengröße n</span>
+      <input type="range" id="sl-n" min="20" max="120" step="5" value="50" oninput="updCtrl();drawAll()">
+      <span class="ctrl-val" id="v-n">50</span>
+    </div>
+
+    <button class="cbtn go" onclick="newSeed()">↺ Neue Daten</button>
+  </div>
+</div>
+
+<!-- LINK FUNCTION VISUAL -->
+<div style="background:var(--paper);border:1px solid var(--border);margin-bottom:1px;padding:.7rem 1rem">
+  <div style="font-family:'DM Mono',monospace;font-size:.57rem;letter-spacing:.08em;
+       text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--grid);
+       padding-bottom:.22rem;margin-bottom:.6rem">
+    Was die Linkfunktion macht — visuell
+  </div>
+  <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.5rem;align-items:center">
+    <div>
+      <canvas id="c-link-left" height="120" style="display:block;width:100%"></canvas>
+      <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);
+           text-align:center;margin-top:.25rem">
+        Linearer Prädiktor η = a + b·x<br>
+        <span style="color:var(--ink2);opacity:.65">Wertebereich: −∞ bis +∞</span>
+      </div>
+    </div>
+    <div style="text-align:center;font-family:'DM Mono',monospace;font-size:.75rem">
+      <div style="color:var(--a6);font-size:1rem">→</div>
+      <div id="link-fn-label" style="font-size:.58rem;color:var(--a6);line-height:1.5;
+           border:1px solid var(--a6);padding:.15rem .35rem;white-space:nowrap"></div>
+    </div>
+    <div>
+      <canvas id="c-link-right" height="120" style="display:block;width:100%"></canvas>
+      <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--ink2);
+           text-align:center;margin-top:.25rem" id="link-right-label">
+        E[y] = g⁻¹(η)<br>
+        <span style="color:var(--ink2);opacity:.65">Wertebereich: eingeschränkt</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LINK TO GLM TOOLS -->
+<div class="glm-link-box">
+  <b>Weiter erkunden:</b> Diese drei Szenarien sind der konzeptuelle Einstieg.
+  Das nächste Tool in Section I zeigt, wie GLMs die bedingten Verteilungen korrekt modellieren —
+  für jede Familie und jeden x-Wert separat.<br>
+  → <a href="GLM_cond_dist.html" target="_blank">Bedingte Verteilungen im GLM</a>
+  &nbsp;·&nbsp;
+  → <a href="GLM_3D_visual.html" target="_blank">GLM in 3D</a>
+  &nbsp;·&nbsp;
+  → <a href="GLMM_interactive.html" target="_blank">GLMM interaktiv</a>
+</div>
+
+</div><!-- /wrap -->
+
+<!-- LEARN CARDS -->
+<div id="learn">
+  <div class="lcard">
+    <div class="lcard-h cr">Was passiert wenn man die falsche Likelihood wählt?</div>
+    <div class="lcard-body">
+      Das LM minimiert RSS — was äquivalent zur Maximum-Likelihood-Schätzung unter
+      <b>Normalverteilungsannahme</b> ist. Wenn diese Annahme verletzt ist, sind die
+      Schätzer zwar noch berechenbar, aber:<br><br>
+      • Vorhersagen landen außerhalb des gültigen Wertebereichs (p &lt; 0 oder p &gt; 1)<br>
+      • Die Log-Likelihood ist suboptimal — AIC/BIC schlechter<br>
+      • Residuen sind systematisch nicht normalverteilt<br>
+      • Inferenz (Konfidenzintervalle, Tests) ist verzerrt
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h">Was ist eine Linkfunktion — und warum braucht man sie?</div>
+    <div class="lcard-body">
+      <b>Das Problem:</b> Der lineare Prädiktor η = a + b·x kann jeden Wert annehmen
+      (−∞ bis +∞). Aber viele Outcome-Variablen haben einen eingeschränkten Wertebereich:
+      Wahrscheinlichkeiten liegen in (0,1), Zählraten müssen positiv sein.<br><br>
+      <b>Die Lösung:</b> Eine <em>Linkfunktion</em> transformiert den Erwartungswert
+      in einen Bereich, für den lineare Modellierung sinnvoll ist:<br><br>
+      <b>Logit-Link</b> (Bernoulli): <code>log(p/(1-p)) = η</code><br>
+      Der Logit bildet p ∈ (0,1) auf (−∞,+∞) ab. Umgekehrt: jedes η ergibt
+      ein p = 1/(1+e^(−η)) ∈ (0,1). <em>Die S-Kurve im Plot.</em><br><br>
+      <b>Log-Link</b> (Poisson, Gamma): <code>log(λ) = η</code><br>
+      Logarithmus bildet λ &gt; 0 auf (−∞,+∞) ab. Umgekehrt: λ = e^η ist immer
+      positiv. <em>Die exponentielle Kurve im Plot.</em><br><br>
+      <b>Identitäts-Link</b> (Normal): <code>E[y] = η</code><br>
+      Keine Transformation — das LM ist ein GLM-Spezialfall mit Normalverteilung
+      und Identitätslink.
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h cg">Wie wählt man die richtige Familie — mit Beispielen</div>
+    <div class="lcard-body">
+      <b>Schaue auf die Natur der Outcome-Variable:</b><br><br>
+      <b>Bernoulli:</b> Hat jemand bestanden? (0=nein, 1=ja). Hat eine Maus
+      den Stimulus gehört? Überlebt der Patient das erste Jahr?<br><br>
+      <b>Poisson:</b> Wie oft hat jemand den Arzt besucht? Wie viele Fehler
+      in einem Text? Wie viele Ereignisse in einem Zeitfenster?
+      (Cave: Bei Überdispersion → Negativ-Binomial.)<br><br>
+      <b>Gamma:</b> Wie lange dauerte eine Reaktion (ms)? Wie teuer war
+      eine Behandlung? Wie lange bis zum Rückfall?
+      Immer positiv, rechtsschief.<br><br>
+      <b>Normal/LM:</b> Körpergröße, IQ-Werte, z-standardisierte Maße —
+      stetig, symmetrisch, kein natürlicher Nullpunkt als Grenze.<br><br>
+      Residuen prüfen via Posterior Predictive Check — AIC/BIC für Vergleich
+      alternativer Familien auf denselben Daten.
+    </div>
+  </div>
+  <div class="lcard">
+    <div class="lcard-h co">ΔAIC als Entscheidungshilfe</div>
+    <div class="lcard-body">
+      AIC bestraft schlechten Fit und Parameteranzahl: <b>AIC = −2ℓ̂ + 2k</b><br><br>
+      Faustregel für ΔAIC = AIC(LM) − AIC(GLM):<br>
+      • ΔAIC &lt; 2: kaum Unterschied<br>
+      • ΔAIC 2–6: moderater Vorteil für GLM<br>
+      • ΔAIC &gt; 10: starker Vorteil, LM klar schlechter<br><br>
+      Hier siehst du den ΔAIC live. Bei binären Daten und Zähldaten
+      ist der Vorteil des GLM typischerweise groß — bei stetigen,
+      symmetrischen Daten kann das LM ausreichend sein.
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Theme ──────────────────────────────────────────────
+let DARK = true;
+function toggleTheme(){
+  DARK=!DARK;
+  document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
+  document.getElementById('btn-theme').textContent=DARK?'☀ Light':'🌙 Dark';
+  drawAll();
+}
+function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function col(n){return cv('--'+n);}
+
+// ── RNG with seed ──────────────────────────────────────
+let seed=42;
+function setSeed(s){seed=s;}
+function rand(){seed=(seed*1664525+1013904223)&0xffffffff;return((seed>>>0)/4294967296);}
+function randNorm(){
+  const u=Math.max(1e-10,rand()), v=rand();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function randPoisson(lam){
+  const L=Math.exp(-lam); let k=0,p=1;
+  do{k++;p*=rand();}while(p>L);
+  return k-1;
+}
+// Gamma random: Marsaglia-Tsang method (shape >= 1)
+function randGamma(shape, scale){
+  if(shape < 1) return randGamma(1+shape, scale) * Math.pow(rand(), 1/shape);
+  const d=shape-1/3, c=1/Math.sqrt(9*d);
+  while(true){
+    let x, v;
+    do{ x=randNorm(); v=1+c*x; }while(v<=0);
+    v=v*v*v;
+    const u=rand();
+    if(u < 1-0.0331*(x*x)*(x*x)) return d*v*scale;
+    if(Math.log(u) < 0.5*x*x+d*(1-v+Math.log(v))) return d*v*scale;
+  }
+}
+function newSeed(){ setSeed(Math.floor(Math.random()*1e6)); drawAll(); }
+
+// ── Scenarios config ───────────────────────────────────
+const SCENARIOS = [
+  {
+    id:0, name:'Binär (0/1)',
+    glmName:'Logistisches Modell (Bernoulli + Logit)',
+    lmProblem:'LM-Vorhersagen außerhalb [0,1] — unmöglich als Wahrscheinlichkeit',
+    glmSolution:'Logit-Link: log(p/(1-p)) = a + b·x → p immer in (0,1)',
+    residLabel:'Residuen sollen normalverteilt sein — hier unmöglich (nur 0/1)',
+    narr:{tag:'c1',
+      text:'<b>Das Problem:</b> Die Outcome-Variable ist binär (0=nein, 1=ja). Das LM zieht eine Gerade durch 0/1-Daten — <em>und die Gerade verlässt den Bereich [0,1]</em> für extreme x-Werte. Vorhersagen von 1.3 oder −0.2 sind als Wahrscheinlichkeiten sinnlos.<br><br><b>Die Lösung:</b> Logistisches Modell (Bernoulli + Logit-Link). Die Kurve bleibt immer in (0,1). MLE unter Bernoulli-Likelihood ergibt viel besseren AIC.'},
+  },
+  {
+    id:1, name:'Zähldaten',
+    glmName:'Poisson-Modell (Log-Link)',
+    lmProblem:'LM-Vorhersagen können negativ werden — für Zähldaten unmöglich',
+    glmSolution:'Log-Link: log(λ) = a + b·x → λ immer > 0, ganzzahlige Daten korrekt modelliert',
+    residLabel:'Residuen oft rechtsskief — Normalverteilungsannahme verletzt',
+    narr:{tag:'c1',
+      text:'<b>Das Problem:</b> Zähldaten (0, 1, 2, ...) können nicht negativ sein — das LM kann aber negative Vorhersagen produzieren, besonders bei kleinen Mittelwerten. Außerdem sind die Residuen typisch rechtsschief, nicht normalverteilt.<br><br><b>Die Lösung:</b> Poisson-Modell mit Log-Link. Log-Transformation stellt sicher dass λ = e^(a+b·x) immer positiv ist. Poisson-Likelihood passt zur ganzzahligen Natur der Daten.'},
+  },
+  {
+    id:2, name:'Positive, schiefe Daten',
+    glmName:'Gamma-Modell (Log-Link)',
+    lmProblem:'LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt nicht',
+    glmSolution:'Gamma mit Log-Link modelliert rechtsschiefe positive Daten korrekt',
+    residLabel:'Rechtsschiefe Residuen beim LM — Gamma-Residuen symmetrischer',
+    narr:{tag:'c5',
+      text:'<b>Das Problem:</b> Positive, rechtsschiefe Daten (z.B. Reaktionszeiten, Kosten, Wartezeiten). Das LM kann wieder negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch.<br><br><b>Die Lösung:</b> Gamma-Verteilung mit Log-Link. Die Gamma-Verteilung ist per Definition auf positive Werte beschränkt und kann starke Rechtschiefe modellieren. Der AIC-Vergleich zeigt den Vorteil.'},
+  }
+];
+
+let currentScen = 0;
+let N=50;
+
+// ── Generate data per scenario ─────────────────────────
+function genData(){
+  const n=N;
+  const xs=[], ys=[];
+  for(let i=0;i<n;i++){
+    const x=-2+i*(4/(n-1));
+    xs.push(x);
+    if(currentScen===0){
+      // Strong logistic effect: β=2.5 → clear S-curve
+      const p=1/(1+Math.exp(-(0+2.5*x)));
+      ys.push(rand()<p?1:0);
+    } else if(currentScen===1){
+      // Poisson with strong rate increase: λ = exp(0.3 + 1.0*x) → 0.4 to 8
+      const lam=Math.exp(0.3+1.0*x);
+      ys.push(randPoisson(lam));
+    } else {
+      // Gamma(shape=2, scale=mu/2): proper generation via Marsaglia-Tsang
+      // shape=2 means clear right skew, mean=mu, variance=mu²/2
+      const mu=Math.exp(0.4+0.9*x); // mu: ~0.5 to ~5
+      ys.push(randGamma(2, mu/2));
+    }
+  }
+  return {xs, ys};
+}
+
+// ── LM fit (OLS) ───────────────────────────────────────
+function fitLM(xs, ys){
+  const n=xs.length;
+  const mx=xs.reduce((a,v)=>a+v,0)/n, my=ys.reduce((a,v)=>a+v,0)/n;
+  const b=(xs.reduce((a,v,i)=>a+(v-mx)*(ys[i]-my),0))/(xs.reduce((a,v)=>a+(v-mx)**2,0));
+  const a=my-b*mx;
+  const resid=ys.map((y,i)=>y-(a+b*xs[i]));
+  const sigma=Math.sqrt(resid.reduce((s,r)=>s+r*r,0)/n);
+  // Log-likelihood under normal
+  const ll=resid.reduce((s,r)=>s-0.5*(r/sigma)**2-Math.log(sigma)-0.5*Math.log(2*Math.PI),0);
+  return {a,b,sigma,resid,ll,aic:-2*ll+2*3}; // 3 params: a,b,sigma
+}
+
+// ── GLM fits ───────────────────────────────────────────
+// Logistic: Newton-Raphson
+function fitLogistic(xs, ys){
+  let a=0, b=0;
+  for(let iter=0;iter<20;iter++){
+    let ga=0,gb=0,haa=0,hab=0,hbb=0;
+    xs.forEach((x,i)=>{
+      const p=1/(1+Math.exp(-(a+b*x)));
+      const r=ys[i]-p, w=p*(1-p);
+      ga+=r; gb+=r*x;
+      haa-=w; hab-=w*x; hbb-=w*x*x;
+    });
+    const det=haa*hbb-hab*hab;
+    if(Math.abs(det)<1e-12) break;
+    a-=(hbb*ga-hab*gb)/det;
+    b-=(haa*gb-hab*ga)/det;
+  }
+  const ll=xs.reduce((s,x,i)=>{
+    const p=Math.min(1-1e-10,Math.max(1e-10,1/(1+Math.exp(-(a+b*x)))));
+    return s+(ys[i]===1?Math.log(p):Math.log(1-p));
+  },0);
+  const pred=xs.map(x=>1/(1+Math.exp(-(a+b*x))));
+  const resid=ys.map((y,i)=>y-pred[i]);
+  return {a,b,ll,pred,resid,aic:-2*ll+2*2};
+}
+
+// Poisson: Newton-Raphson
+function fitPoisson(xs, ys){
+  let a=Math.log(Math.max(0.01,ys.reduce((s,v)=>s+v,0)/ys.length)), b=0;
+  for(let iter=0;iter<30;iter++){
+    let ga=0,gb=0,haa=0,hab=0,hbb=0;
+    xs.forEach((x,i)=>{
+      const mu=Math.exp(a+b*x);
+      const r=ys[i]-mu;
+      ga+=r; gb+=r*x;
+      haa-=mu; hab-=mu*x; hbb-=mu*x*x;
+    });
+    const det=haa*hbb-hab*hab;
+    if(Math.abs(det)<1e-12) break;
+    a-=(hbb*ga-hab*gb)/det;
+    b-=(haa*gb-hab*ga)/det;
+  }
+  const ll=xs.reduce((s,x,i)=>{
+    const mu=Math.exp(a+b*x);
+    let logFact=0; for(let k=2;k<=ys[i];k++) logFact+=Math.log(k);
+    return s+ys[i]*Math.log(mu)-mu-logFact;
+  },0);
+  const pred=xs.map(x=>Math.exp(a+b*x));
+  const resid=ys.map((y,i)=>y-pred[i]);
+  return {a,b,ll,pred,resid,aic:-2*ll+2*2};
+}
+
+// Gamma: IRLS approximation
+function fitGamma(xs, ys){
+  let a=Math.log(Math.max(0.01,ys.reduce((s,v)=>s+v,0)/ys.length)), b=0;
+  for(let iter=0;iter<30;iter++){
+    let ga=0,gb=0,haa=0,hab=0,hbb=0;
+    xs.forEach((x,i)=>{
+      const mu=Math.exp(a+b*x);
+      const r=ys[i]/mu-1; // working residual for gamma log-link
+      ga+=r; gb+=r*x;
+      haa-=1; hab-=x; hbb-=x*x;
+    });
+    const det=haa*hbb-hab*hab;
+    if(Math.abs(det)<1e-12) break;
+    a-=(hbb*ga-hab*gb)/det;
+    b-=(haa*gb-hab*ga)/det;
+  }
+  // Gamma LL with shape=2 (matching data generation)
+  // LL = (shape-1)*log(y) - y/scale - shape*log(scale) - lgamma(shape)
+  // shape=2: lgamma(2)=0, so: log(y) - y*2/mu - 2*log(mu/2)
+  const ll=xs.reduce((s,x,i)=>{
+    const mu=Math.exp(a+b*x);
+    const shape=2, scale=mu/shape;
+    return s+(shape-1)*Math.log(Math.max(1e-10,ys[i]))-ys[i]/scale
+             -shape*Math.log(scale)-0; // lgamma(2)=log(1!)=0
+  },0);
+  const pred=xs.map(x=>Math.exp(a+b*x));
+  const resid=ys.map((y,i)=>y-pred[i]);
+  return {a,b,ll,pred,resid,aic:-2*ll+2*2};
+}
+
+// ── Canvas helpers ─────────────────────────────────────
+// Store panel width once at resize time
+let _panelW = 300;
+function cachePanelWidth(){
+  const panels=document.querySelectorAll('.s-panel');
+  if(panels.length) _panelW=Math.max(200, panels[0].clientWidth-18);
+}
+function setupCanvas(id,h){
+  const c=document.getElementById(id);
+  c.width=_panelW; c.height=h;
+  return {c,ctx:c.getContext('2d'),W:_panelW,H:h};
+}
+
+function fillBg(ctx,W,H){
+  ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
+}
+
+function drawAxisLines(ctx,W,H,m,xr,yr,xStep,yStep){
+  ctx.strokeStyle=DARK?'#1e242e':'#ddd5c6'; ctx.lineWidth=1;
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+  const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
+  const toY=v=>H-m.b-(v-yr[0])/(yr[1]-yr[0])*Hp;
+  for(let v=xr[0];v<=xr[1]+1e-9;v+=xStep){
+    ctx.beginPath();ctx.moveTo(toX(v),m.t);ctx.lineTo(toX(v),H-m.b);ctx.stroke();
+  }
+  for(let v=yr[0];v<=yr[1]+1e-9;v+=yStep){
+    const py=toY(v); if(py<m.t||py>H-m.b) continue;
+    ctx.beginPath();ctx.moveTo(m.l,py);ctx.lineTo(W-m.r,py);ctx.stroke();
+  }
+  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';
+  for(let v=xr[0];v<=xr[1]+1e-9;v+=xStep*2)
+    ctx.fillText(v.toFixed(v%1?1:0), toX(v), H-m.b+13);
+  ctx.textAlign='right';
+  for(let v=yr[0];v<=yr[1]+1e-9;v+=yStep*2){
+    const py=toY(v); if(py<m.t+4||py>H-m.b) continue;
+    ctx.fillText(v.toFixed(v%1?1:0),m.l-4,py+3);
+  }
+}
+
+// ── Main draw ──────────────────────────────────────────
+let cachedData=null, cachedLM=null, cachedGLM=null;
+
+function drawAll(){
+  N=+document.getElementById('sl-n').value;
+  document.getElementById('v-n').textContent=N;
+
+  // Generate data
+  cachedData = genData();
+  const {xs, ys} = cachedData;
+
+  // Fit models
+  cachedLM = fitLM(xs, ys);
+  if(currentScen===0)      cachedGLM=fitLogistic(xs,ys);
+  else if(currentScen===1) cachedGLM=fitPoisson(xs,ys);
+  else                     cachedGLM=fitGamma(xs,ys);
+
+  drawLM(xs, ys, cachedLM);
+  drawGLM(xs, ys, cachedLM, cachedGLM);
+  drawResid(cachedLM, cachedGLM);
+  updateStats(cachedLM, cachedGLM);
+  drawLinkFn();
+}
+
+function drawLinkFn(){
+  // Left: linear predictor space (eta, unbounded)
+  // Right: response space (transformed, bounded)
+  const etaRange=[-4,4];
+  const linkFns={
+    0:{name:'Logit',  inv:e=>1/(1+Math.exp(-e)), yRange:[0,1], yLabel:'p ∈ (0,1)',
+       formula:'g⁻¹(η) = 1/(1+e⁻η)'},
+    1:{name:'Log',    inv:e=>Math.exp(e),          yRange:[0, Math.exp(4)], yLabel:'λ > 0',
+       formula:'g⁻¹(η) = eη'},
+    2:{name:'Log',    inv:e=>Math.exp(e),           yRange:[0, Math.exp(4)], yLabel:'μ > 0',
+       formula:'g⁻¹(η) = eη'},
+  };
+  const lf=linkFns[currentScen];
+  document.getElementById('link-fn-label').textContent=lf.formula;
+  document.getElementById('link-right-label').innerHTML=
+    'E[y] = g⁻¹(η)<br><span style="color:var(--ink2);opacity:.65">'+lf.yLabel+'</span>';
+
+  // ── Left panel: linear predictor ──
+  {
+    const c=document.getElementById('c-link-left');
+    c.width=Math.max(100,c.parentElement.clientWidth-4); c.height=120;
+    const ctx=c.getContext('2d'), W=c.width, H=120;
+    ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
+    const m={l:8,r:8,t:8,b:20};
+    const Wp=W-m.l-m.r;
+    const toX=v=>m.l+(v-etaRange[0])/(etaRange[1]-etaRange[0])*Wp;
+    const cy=H-m.b-((H-m.t-m.b)/2);
+
+    // Axis line
+    ctx.beginPath(); ctx.moveTo(m.l,cy); ctx.lineTo(W-m.r,cy);
+    ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1.5; ctx.stroke();
+
+    // Arrows at ends indicating unbounded
+    [m.l, W-m.r].forEach((x,i)=>{
+      ctx.beginPath();
+      if(i===0){ ctx.moveTo(x+12,cy-5);ctx.lineTo(x,cy);ctx.lineTo(x+12,cy+5); }
+      else { ctx.moveTo(x-12,cy-5);ctx.lineTo(x,cy);ctx.lineTo(x-12,cy+5); }
+      ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1.5; ctx.stroke();
+    });
+
+    // Tick marks and labels
+    ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='8px DM Mono,monospace';
+    ctx.textAlign='center';
+    [-4,-2,0,2,4].forEach(v=>{
+      ctx.beginPath(); ctx.moveTo(toX(v),cy-3); ctx.lineTo(toX(v),cy+3);
+      ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillText(v, toX(v), cy+12);
+    });
+    ctx.fillText('−∞', m.l+4, cy+12);
+    ctx.fillText('+∞', W-m.r-4, cy+12);
+
+    // GLM's linear predictor dots (sample x values mapped through a+b*x)
+    if(cachedGLM){
+      const sampleX=[-2,-1,0,1,2];
+      sampleX.forEach(x=>{
+        const eta=cachedGLM.a+cachedGLM.b*x;
+        const etaC=Math.max(etaRange[0], Math.min(etaRange[1], eta));
+        ctx.beginPath(); ctx.arc(toX(etaC),cy,5,0,Math.PI*2);
+        ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+      });
+    }
+    ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
+    ctx.font='8px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('η = a + b·x  (unbegrenzt)', W/2, m.t+10);
+  }
+
+  // ── Right panel: transformed space ──
+  {
+    const c=document.getElementById('c-link-right');
+    c.width=Math.max(100,c.parentElement.clientWidth-4); c.height=120;
+    const ctx=c.getContext('2d'), W=c.width, H=120;
+    ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
+    const m={l:8,r:8,t:8,b:20};
+    const Wp=W-m.l-m.r;
+
+    if(currentScen===0){
+      // Probability space [0,1] as bar
+      const barY=H-m.b-12, barH=14;
+      // Full bar background
+      ctx.fillStyle=DARK?'#1e242e':'#ddd5c6';
+      ctx.fillRect(m.l, barY, Wp, barH);
+      // Valid zone (0,1) = full width
+      ctx.fillStyle=DARK?'rgba(43,199,196,.25)':'rgba(14,124,123,.2)';
+      ctx.fillRect(m.l, barY, Wp, barH);
+      ctx.strokeStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.lineWidth=1.5;
+      ctx.strokeRect(m.l, barY, Wp, barH);
+      // Labels
+      ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.font='8px DM Mono,monospace';
+      ctx.textAlign='left'; ctx.fillText('0', m.l+2, barY-3);
+      ctx.textAlign='right'; ctx.fillText('1', W-m.r-2, barY-3);
+      // Sample points (same x values)
+      if(cachedGLM){
+        const sampleX=[-2,-1,0,1,2];
+        sampleX.forEach(x=>{
+          const p=1/(1+Math.exp(-(cachedGLM.a+cachedGLM.b*x)));
+          const px=m.l+p*Wp;
+          ctx.beginPath(); ctx.arc(px, barY+barH/2, 5, 0, Math.PI*2);
+          ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+        });
+      }
+      ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
+      ctx.textAlign='center'; ctx.fillText('p = 1/(1+e⁻η)  ∈ (0,1)', W/2, m.t+10);
+    } else {
+      // Positive space (0, ∞)
+      const axis_y=H-m.b-8;
+      ctx.beginPath(); ctx.moveTo(m.l,axis_y); ctx.lineTo(W-m.r,axis_y);
+      ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1.5; ctx.stroke();
+      // Arrow right indicating +∞
+      ctx.beginPath();
+      ctx.moveTo(W-m.r-12,axis_y-5);ctx.lineTo(W-m.r,axis_y);ctx.lineTo(W-m.r-12,axis_y+5);
+      ctx.stroke();
+      // Hard stop at 0
+      ctx.beginPath(); ctx.moveTo(m.l,axis_y-12); ctx.lineTo(m.l,axis_y+4);
+      ctx.strokeStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
+      ctx.lineWidth=2; ctx.stroke();
+      // Sample dots
+      const maxVal=Math.exp(4);
+      if(cachedGLM){
+        const sampleX=[-2,-1,0,1,2];
+        sampleX.forEach(x=>{
+          const mu=Math.exp(cachedGLM.a+cachedGLM.b*x);
+          const px=m.l+Math.min(Wp, mu/maxVal*Wp);
+          ctx.beginPath(); ctx.arc(px, axis_y, 5,0,Math.PI*2);
+          ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+        });
+      }
+      ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
+      ctx.font='8px DM Mono,monospace'; ctx.textAlign='center';
+      ctx.fillText('μ = eη  > 0  (nie negativ)', W/2, m.t+10);
+      ctx.fillStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
+      ctx.textAlign='left';
+      ctx.fillText('0 ←Grenze', m.l+3, axis_y-15);
+    }
+  }
+}
+
+function drawLM(xs, ys, lm){
+  const sc=SCENARIOS[currentScen];
+  const {ctx,W,H}=setupCanvas('c-lm',280);
+  const m={l:42,r:12,t:16,b:32};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+  fillBg(ctx,W,H);
+
+  const xr=[-2.2,2.2];
+  const yMin=Math.min(...ys)-0.5, yMax=Math.max(...ys)+0.5;
+  const yr=[Math.min(yMin, lm.a+lm.b*xr[0], lm.a+lm.b*xr[1])-0.2,
+            Math.max(yMax, lm.a+lm.b*xr[0], lm.a+lm.b*xr[1])+0.2];
+
+  // Clamp yr sensibly
+  const yrFinal=[Math.max(yr[0],-1.5), Math.min(yr[1], currentScen===0?1.8:Math.max(yMax*1.3,yr[1]))];
+  const yStep=+(Math.max(0.5,(yrFinal[1]-yrFinal[0])/5)).toFixed(1);
+  drawAxisLines(ctx,W,H,m,xr,yrFinal,1,yStep);
+
+  const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
+  const toY=v=>H-m.b-(v-yrFinal[0])/(yrFinal[1]-yrFinal[0])*Hp;
+
+  // Reference lines for binary/count
+  if(currentScen===0){
+    // y=0 and y=1 boundaries
+    [0,1].forEach(y=>{
+      ctx.beginPath();ctx.moveTo(m.l,toY(y));ctx.lineTo(W-m.r,toY(y));
+      ctx.strokeStyle=DARK?'rgba(128,203,82,.35)':'rgba(90,138,42,.3)';
+      ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    });
+    ctx.fillStyle=DARK?'rgba(128,203,82,.5)':'rgba(90,138,42,.45)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText('Gültig: [0, 1]',m.l+4,toY(0.5));
+  }
+
+  // Out-of-range zone (red)
+  if(currentScen===0){
+    const yAbove=toY(1), yBelow=toY(0);
+    if(yAbove>m.t){
+      ctx.fillStyle=DARK?'rgba(232,97,74,.07)':'rgba(201,74,42,.06)';
+      ctx.fillRect(m.l,m.t,Wp,yAbove-m.t);
+    }
+    if(yBelow<H-m.b){
+      ctx.fillStyle=DARK?'rgba(232,97,74,.07)':'rgba(201,74,42,.06)';
+      ctx.fillRect(m.l,yBelow,Wp,H-m.b-yBelow);
+    }
+  }
+
+  // LM regression line
+  const lmColor=DARK?'#e8614a':'#c94a2a';
+  ctx.beginPath();
+  ctx.moveTo(toX(xr[0]),toY(lm.a+lm.b*xr[0]));
+  ctx.lineTo(toX(xr[1]),toY(lm.a+lm.b*xr[1]));
+  ctx.strokeStyle=lmColor; ctx.lineWidth=2.2; ctx.stroke();
+
+  // Warn if line exits valid range
+  const predMin=lm.a+lm.b*xr[0], predMax=lm.a+lm.b*xr[1];
+  if(currentScen===0 && (predMin<0||predMax>1||predMin>1||predMax<0)){
+    ctx.fillStyle=DARK?'rgba(232,97,74,.85)':'rgba(201,74,42,.8)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('⚠ Vorhersagen außerhalb [0,1]',W/2,m.t+10);
+  }
+  if(currentScen>=1 && (predMin<0||predMax<0)){
+    ctx.fillStyle=DARK?'rgba(232,97,74,.85)':'rgba(201,74,42,.8)';
+    ctx.font='8px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText('⚠ Negative Vorhersagen möglich',W/2,m.t+10);
+  }
+
+  // Data points
+  const isJitter=currentScen===0;
+  xs.forEach((x,i)=>{
+    const jitter=isJitter?(rand()-0.5)*0.05:0;
+    const cy=toY(ys[i]+jitter);
+    if(cy<m.t-5||cy>H-m.b+5) return;
+    ctx.beginPath();ctx.arc(toX(x),cy,3.5,0,Math.PI*2);
+    ctx.fillStyle=ys[i]===1&&currentScen===0
+      ?(DARK?'rgba(74,176,216,.7)':'rgba(42,110,138,.6)')
+      :(DARK?'rgba(236,230,216,.55)':'rgba(24,19,14,.45)');
+    ctx.fill();
+  });
+
+  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';ctx.fillText('x',W/2,H-2);
+}
+
+function drawGLM(xs, ys, lm, glm){
+  const sc=SCENARIOS[currentScen];
+  const {ctx,W,H}=setupCanvas('c-glm',280);
+  const m={l:42,r:12,t:16,b:32};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+  fillBg(ctx,W,H);
+
+  const xr=[-2.2,2.2];
+  const yMax=Math.max(...ys)*1.15+0.5;
+  const yMin=currentScen===0?-0.1:0;
+  const yr=[yMin, Math.max(1.1, yMax)];
+  const yStep=+(Math.max(0.2,(yr[1]-yr[0])/5)).toFixed(1);
+  drawAxisLines(ctx,W,H,m,xr,yr,1,yStep);
+
+  const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
+  const toY=v=>H-m.b-(v-yr[0])/(yr[1]-yr[0])*Hp;
+
+  // Valid range shading for binary
+  if(currentScen===0){
+    [0,1].forEach(y=>{
+      ctx.beginPath();ctx.moveTo(m.l,toY(y));ctx.lineTo(W-m.r,toY(y));
+      ctx.strokeStyle=DARK?'rgba(128,203,82,.35)':'rgba(90,138,42,.3)';
+      ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    });
+  }
+
+  // Also draw LM line faded for comparison
+  ctx.beginPath();
+  ctx.moveTo(toX(xr[0]),toY(lm.a+lm.b*xr[0]));
+  ctx.lineTo(toX(xr[1]),toY(lm.a+lm.b*xr[1]));
+  ctx.strokeStyle=DARK?'rgba(232,97,74,.3)':'rgba(201,74,42,.25)';
+  ctx.lineWidth=1.5;ctx.setLineDash([5,3]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=DARK?'rgba(232,97,74,.45)':'rgba(201,74,42,.4)';
+  ctx.font='8px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillText('LM (zum Vergleich)',toX(-2.1),toY(lm.a+lm.b*-2.1)-5);
+
+  // GLM curve
+  const glmColor=DARK?'#2bc7c4':'#0e7c7b';
+  ctx.beginPath();
+  const steps=200;
+  for(let i=0;i<=steps;i++){
+    const x=xr[0]+i/steps*(xr[1]-xr[0]);
+    let yp;
+    if(currentScen===0) yp=1/(1+Math.exp(-(glm.a+glm.b*x)));
+    else yp=Math.exp(glm.a+glm.b*x);
+    const py=toY(yp);
+    if(py<m.t-5||py>H-m.b+5){if(i>0)ctx.stroke();ctx.beginPath();continue;}
+    i===0?ctx.moveTo(toX(x),py):ctx.lineTo(toX(x),py);
+  }
+  ctx.strokeStyle=glmColor; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.fillStyle=glmColor;ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillText(currentScen===0?'Logistische Kurve':currentScen===1?'Poisson-Kurve':'Gamma-Kurve',
+               toX(-2.1), m.t+12);
+
+  // Data points
+  xs.forEach((x,i)=>{
+    const jitter=currentScen===0?(rand()-0.5)*0.05:0;
+    const cy=toY(ys[i]+jitter);
+    if(cy<m.t-5||cy>H-m.b+5) return;
+    ctx.beginPath();ctx.arc(toX(x),cy,3.5,0,Math.PI*2);
+    ctx.fillStyle=ys[i]===1&&currentScen===0
+      ?(DARK?'rgba(74,176,216,.7)':'rgba(42,110,138,.6)')
+      :(DARK?'rgba(236,230,216,.55)':'rgba(24,19,14,.45)');
+    ctx.fill();
+  });
+
+  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';ctx.fillText('x',W/2,H-2);
+}
+
+function drawResid(lm, glm){
+  const {ctx,W,H}=setupCanvas('c-resid',280);
+  const m={l:42,r:12,t:20,b:32};
+  const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+  fillBg(ctx,W,H);
+
+  const allR=[...lm.resid,...glm.resid];
+  const rMin=Math.min(...allR), rMax=Math.max(...allR);
+  const xr=[Math.min(rMin,-0.5)*1.1, Math.max(rMax,0.5)*1.1];
+  const xStep=+(Math.max(0.5,(xr[1]-xr[0])/4)).toFixed(1);
+
+  // Histogram for LM residuals
+  const nBins=20;
+  const bw=(xr[1]-xr[0])/nBins;
+  const binsLM=Array(nBins).fill(0);
+  const binsGLM=Array(nBins).fill(0);
+  lm.resid.forEach(r=>{const b=Math.floor((r-xr[0])/bw);if(b>=0&&b<nBins)binsLM[b]++;});
+  glm.resid.forEach(r=>{const b=Math.floor((r-xr[0])/bw);if(b>=0&&b<nBins)binsGLM[b]++;});
+  const maxBin=Math.max(...binsLM,...binsGLM,1);
+  const yr=[0, maxBin*1.3];
+
+  drawAxisLines(ctx,W,H,m,xr,yr,xStep,+(maxBin/4).toFixed(0)||1);
+  const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
+  const toY=v=>H-m.b-(v/yr[1])*Hp;
+
+  // LM bars (red, behind)
+  for(let i=0;i<nBins;i++){
+    const bh=binsLM[i]/maxBin*Hp;
+    ctx.fillStyle=DARK?'rgba(232,97,74,.55)':'rgba(201,74,42,.45)';
+    ctx.fillRect(toX(xr[0]+i*bw),H-m.b-bh,Wp/nBins-0.5,bh);
+  }
+  // GLM bars (teal, in front, slightly offset)
+  for(let i=0;i<nBins;i++){
+    const bh=binsGLM[i]/maxBin*Hp;
+    ctx.fillStyle=DARK?'rgba(43,199,196,.6)':'rgba(14,124,123,.5)';
+    ctx.fillRect(toX(xr[0]+i*bw+bw*0.08),H-m.b-bh,Wp/nBins*0.84,bh);
+  }
+
+  // Zero line
+  ctx.beginPath();ctx.moveTo(toX(0),m.t);ctx.lineTo(toX(0),H-m.b);
+  ctx.strokeStyle=DARK?'rgba(236,230,216,.3)':'rgba(24,19,14,.2)';
+  ctx.lineWidth=1.5;ctx.stroke();
+
+  // Normal PDF overlay for reference
+  const lmSig=lm.sigma;
+  const maxNorm=1/(lmSig*Math.sqrt(2*Math.PI))*lm.resid.length*bw;
+  ctx.beginPath();
+  for(let i=0;i<=Wp;i++){
+    const r=xr[0]+i/Wp*(xr[1]-xr[0]);
+    const d=Math.exp(-0.5*(r/lmSig)**2)/(lmSig*Math.sqrt(2*Math.PI))*lm.resid.length*bw;
+    i?ctx.lineTo(m.l+i,toY(d)):ctx.moveTo(m.l+i,toY(d));
+  }
+  ctx.strokeStyle=DARK?'rgba(232,97,74,.6)':'rgba(201,74,42,.55)';
+  ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+
+  // Legend
+  ctx.font='8px DM Mono,monospace';
+  ctx.fillStyle=DARK?'rgba(232,97,74,.85)':'rgba(201,74,42,.8)';ctx.textAlign='left';
+  ctx.fillText('■ LM-Residuen',m.l+4,m.t+11);
+  ctx.fillStyle=DARK?'rgba(43,199,196,.85)':'rgba(14,124,123,.8)';
+  ctx.fillText('■ GLM-Residuen',m.l+4,m.t+22);
+
+  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';ctx.font='9px DM Mono,monospace';
+  ctx.textAlign='center';ctx.fillText('Residuum',W/2,H-2);
+}
+
+// ── Update stats panel ─────────────────────────────────
+function updateStats(lm, glm){
+  // AIC comparison must use the SAME likelihood family for both models
+  // Otherwise Normal-LL and Bernoulli-LL are on incomparable scales
+  const {xs, ys} = cachedData;
+
+  // Compute LM predictions' LL under the GLM family (fair comparison)
+  let llLM_fair, llGLM_fair, kLM, kGLM;
+  const eps=1e-8;
+
+  if(currentScen===0){
+    // Binary: evaluate both under Bernoulli LL (clip LM predictions to (0,1))
+    llLM_fair = xs.reduce((s,x,i)=>{
+      const p=Math.min(1-eps,Math.max(eps, lm.a+lm.b*x));
+      return s+(ys[i]===1?Math.log(p):Math.log(1-p));
+    },0);
+    llGLM_fair = glm.ll; // already Bernoulli
+    kLM=2; kGLM=2; // both have 2 free params (σ is structural in LM, not counted)
+  } else if(currentScen===1){
+    // Count: evaluate both under Poisson LL (clip LM predictions to >0)
+    llLM_fair = xs.reduce((s,x,i)=>{
+      const lam=Math.max(eps, lm.a+lm.b*x);
+      let logFact=0; for(let k=2;k<=ys[i];k++) logFact+=Math.log(k);
+      return s+ys[i]*Math.log(lam)-lam-logFact;
+    },0);
+    llGLM_fair = glm.ll; // already Poisson
+    kLM=2; kGLM=2;
+  } else {
+    // Positive skewed: evaluate both under Gamma LL (shape=2, clip LM to >0)
+    // For Gamma LL: LM can predict negative values → clamp to min valid value
+    // Using 5% of data mean as floor prevents catastrophic LL blowup
+    const minMu=0.05*ys.reduce((a,v)=>a+v,0)/ys.length;
+    llLM_fair = xs.reduce((s,x,i)=>{
+      const mu=Math.max(minMu, lm.a+lm.b*x);
+      const shape=2, scale=mu/shape;
+      return s+(shape-1)*Math.log(Math.max(eps,ys[i])) - ys[i]/scale
+               - shape*Math.log(scale); // lgamma(2)=0
+    },0);
+    llGLM_fair = glm.ll; // already Gamma
+    kLM=2; kGLM=2;
+  }
+
+  const n=ys.length;
+  const aicLM_fair=-2*llLM_fair+2*kLM;
+  const aicGLM_fair=-2*llGLM_fair+2*kGLM;
+  const dAIC=(aicLM_fair-aicGLM_fair).toFixed(2);
+
+  document.getElementById('s-lm-ll').textContent=llLM_fair.toFixed(2);
+  document.getElementById('s-lm-aic').textContent=aicLM_fair.toFixed(2);
+  document.getElementById('s-glm-ll').textContent=llGLM_fair.toFixed(2);
+  document.getElementById('s-glm-aic').textContent=aicGLM_fair.toFixed(2);
+  document.getElementById('s-daic').textContent=dAIC+' → '+
+    (+dAIC>10?'starker Vorteil GLM':+dAIC>2?'moderater Vorteil GLM':'geringer Unterschied');
+
+  // Update bar values
+  const aicL=aicLM_fair, aicG=aicGLM_fair;
+
+  // Bars: scale proportional to AIC values (bigger bar = worse)
+  const maxAIC=Math.max(aicL,aicG)*1.05;
+  const minAIC=Math.min(aicL,aicG)*0.92;
+  const barLM=Math.max(12,Math.min(98,(aicL-minAIC)/(maxAIC-minAIC)*80+15));
+  const barGLM=Math.max(12,Math.min(98,(aicG-minAIC)/(maxAIC-minAIC)*80+15));
+  document.getElementById('bar-lm').style.width=barLM+'%';
+  document.getElementById('bar-glm').style.width=barGLM+'%';
+  document.getElementById('lm-aic-bar-val').textContent=aicLM_fair.toFixed(2);
+  document.getElementById('glm-aic-bar-val').textContent=aicGLM_fair.toFixed(2);
+
+  const sc=SCENARIOS[currentScen];
+  document.getElementById('lm-problems').innerHTML=sc.lmProblem;
+  document.getElementById('glm-explain').innerHTML=sc.glmSolution;
+
+  // Verdict
+  const daic=+dAIC;
+  let verdict,vcolor;
+  if(daic>10){
+    verdict='ΔAIC = '+dAIC+': Starker Vorteil für GLM. Das LM ist ungeeignet — die Normalverteilung passt strukturell nicht zu diesen Daten. Der Unterschied im AIC entspricht einem sehr viel schlechteren Fit.';
+    vcolor=col('a3');
+  } else if(daic>2){
+    verdict='ΔAIC = '+dAIC+': Moderater Vorteil für GLM. Die Annahmen des LM sind verletzt, GLM passt deutlich besser.';
+    vcolor=col('a5');
+  } else {
+    verdict='ΔAIC = '+dAIC+': Geringer Unterschied. Bei diesen spezifischen Daten ist der LM-Fehler klein — das ändert aber nichts daran, dass die Annahmen falsch sind.';
+    vcolor=col('a2');
+  }
+  const vEl=document.getElementById('verdict');
+  vEl.textContent=verdict; vEl.style.color=vcolor;
+  vEl.style.borderLeft='3px solid '+vcolor;
+  vEl.style.paddingLeft='.4rem';
+}
+
+// ── Scenario switching ─────────────────────────────────
+const SCENARIO_NARR = SCENARIOS.map(s=>s.narr);
+
+function setScen(i){
+  currentScen=i;
+  [0,1,2].forEach(j=>document.getElementById('sctab-'+j).classList.toggle('sel',j===i));
+  const n=SCENARIO_NARR[i];
+  document.getElementById('narr-tag').textContent=SCENARIOS[i].glmName;
+  document.getElementById('narr-tag').className='ntag '+(i===0?'c1':i===1?'c1':'c5');
+  document.getElementById('narr-text').innerHTML=n.text;
+
+  // Regenerate data
+  drawAll();
+}
+
+// ── Controls ───────────────────────────────────────────
+function updCtrl(){
+  N=+document.getElementById('sl-n').value;
+  document.getElementById('v-n').textContent=N;
+}
+
+// ── Init ──────────────────────────────────────────────
+window.addEventListener('resize',()=>{cachePanelWidth();drawAll();});
+document.addEventListener('DOMContentLoaded',()=>{
+  cachePanelWidth();
+  setScen(0);
+});
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+</script>
+</body>
+</html>
