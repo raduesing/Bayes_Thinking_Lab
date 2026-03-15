@@ -77,6 +77,15 @@ p{font-size:.95rem;line-height:1.65;color:var(--ink2)}
 .btn-ghost:hover{border-color:var(--ink2);color:var(--ink)}
 .btn-commit{width:100%;padding:.85rem;font-size:.98rem;font-weight:600;background:var(--prior);color:#fff;border:2px solid var(--prior);cursor:pointer;transition:all .2s;font-family:'Lora',serif;font-style:italic}
 .btn-commit:hover{background:#1A5A9A;border-color:#1A5A9A}
+/* Dark mode button overrides */
+[data-theme="dark"] .btn-primary{background:var(--prior);color:#fff;border-color:var(--prior)}
+[data-theme="dark"] .btn-primary:hover{background:var(--prior);opacity:.85;border-color:var(--prior)}
+[data-theme="dark"] .btn-next{background:var(--prior);color:#fff;border-color:var(--prior)}
+[data-theme="dark"] .btn-next:hover{opacity:.85}
+[data-theme="dark"] .btn-commit:hover{background:var(--prior);filter:brightness(1.15);border-color:var(--prior)}
+[data-theme="dark"] .unc-btn{color:var(--ink);background:var(--card);border-color:var(--border)}
+[data-theme="dark"] .unc-btn:hover{border-color:var(--prior);background:var(--prior-f);color:var(--ink)}
+[data-theme="dark"] .unc-btn.selected{border-color:var(--prior);background:var(--prior-f);color:var(--ink)}
 .btn-commit:disabled{background:var(--border2);border-color:var(--border2);cursor:not-allowed;font-style:normal}
 .btn-next{display:flex;align-items:center;gap:.45rem;font-family:'Source Sans 3',sans-serif;font-weight:600;font-size:.92rem;padding:.68rem 1.6rem;background:var(--ink);color:#fff;border:2px solid var(--ink);cursor:pointer;transition:all .17s;margin-top:1.4rem}
 .btn-next:hover{background:var(--prior);border-color:var(--prior)}
@@ -648,11 +657,19 @@ function htmlPrior(){
   }
 
   const vizVisible=diff==='einsteiger'||(diff==='fortgeschritten'&&S._muTouched&&S._sigTouched)||(diff==='experte'&&S._muTouched&&S._sigTouched);
+  const previewHtml=`<div id="prior-preview-wrap"${vizVisible?' vis':''}>
+  <div class="sec-label" style="margin-top:.9rem">Dein Prior — so sieht deine Annahme als Verteilung aus</div>
+  <div id="prior-preview"></div>
+  <div class="ci-note" id="ci-note"></div>
+  <div class="prior-verbal" id="prior-verbal-summary"></div>
+  <div class="prior-extreme" id="prior-extreme-warn"></div>
+</div>`;
   return`
 <h2>Formuliere deinen Prior</h2>
 <p class="phase-sub">Bevor du die Daten siehst: Was glaubst du, wie groß der Effekt ist?</p>
 <div class="study-recap"><strong>${sc().emoji} ${sc().title}</strong><br><em>${sc().question}</em></div>
 ${inputHtml}
+${diff==='einsteiger'?previewHtml:''}
 <div class="sigma-explainer">
   <strong>Was bedeutet σ (Sigma) hier?</strong>
   σ beschreibt deine <em>Unsicherheit über den mittleren Effekt</em> — also: Wie weit könnte der wahre Durchschnittseffekt von deiner Schätzung entfernt sein?
@@ -660,13 +677,7 @@ ${inputHtml}
   Wir nehmen vereinfachend an, dass die Streuung der Rohdaten bekannt und konstant ist — so können wir uns auf die Frage konzentrieren:
   <strong>Wie sicher bin ich, wo der Effekt in dieser Studie liegt?</strong>
 </div>
-<div id="prior-preview-wrap"${vizVisible?'':' style="opacity:0;pointer-events:none"'}>
-  <div class="sec-label">Dein Prior</div>
-  <div id="prior-preview"></div>
-  <div class="ci-note" id="ci-note"></div>
-  <div class="prior-verbal" id="prior-verbal-summary"></div>
-  <div class="prior-extreme" id="prior-extreme-warn"></div>
-</div>
+${diff!=='einsteiger'?previewHtml:''}
 <div class="mt2">
   <button class="btn-commit" id="commit-btn" onclick="commitPrior()"${vizVisible?'':' disabled'}>
     Das ist mein Prior — zeig mir was er vorhersagt →
@@ -698,11 +709,22 @@ function bindPrior(){
     if(sl){sl.addEventListener('input',()=>{
       S.priorMu=parseFloat(sl.value);
       document.getElementById('sd-val').innerHTML=`${fmt(S.priorMu,scenario.dataDec)} <span>${scenario.unit}</span>`;
+      const wrap=document.getElementById('prior-preview-wrap');
+      if(wrap) wrap.classList.add('vis');
       updatePriorViz()
     })}
   }
-  initPriorSvg();
-  if(diff==='einsteiger'){S.priorMu=S.priorMu??scenario.sliderDefault;updatePriorViz()}
+  // Defer SVG init so DOM is fully laid out before reading clientWidth
+  requestAnimationFrame(()=>{
+    initPriorSvg();
+    if(diff==='einsteiger'){
+      // For beginners: always show preview immediately
+      const wrap=document.getElementById('prior-preview-wrap');
+      if(wrap) wrap.classList.add('vis');
+      S.priorMu=S.priorMu??scenario.sliderDefault;
+      updatePriorViz();
+    }
+  });
 }
 function updateSigSlider(){
   const el=document.getElementById('sig-slider');
@@ -742,7 +764,13 @@ function updateExpert(){
 function selUnc(i){
   S.uncIdx=i;S.priorSig=sc().sigmaLevels[i];
   document.querySelectorAll('.unc-btn').forEach((el,j)=>el.classList.toggle('selected',j===i));
-  updatePriorViz()
+  // Ensure preview is visible (has .vis class)
+  const wrap=document.getElementById('prior-preview-wrap');
+  if(wrap) wrap.classList.add('vis');
+  // Enable commit button
+  const btn=document.getElementById('commit-btn');
+  if(btn) btn.disabled=false;
+  updatePriorViz();
 }
 function commitPrior(){
   if(S.priorMu==null||S.priorSig==null)return;
@@ -752,7 +780,7 @@ function commitPrior(){
 
 function initPriorSvg(){
   const con=document.getElementById('prior-preview');if(!con)return;
-  const W=con.clientWidth-8,H=130,m={l:34,r:12,t:10,b:26};
+  const W=con.clientWidth-8,H=160,m={l:34,r:12,t:10,b:26};
   d3.select(con).selectAll('svg').remove();
   const s=sc();
   const xSc=d3.scaleLinear().domain([s.scaleMin,s.scaleMax]).range([0,W-m.l-m.r]);
