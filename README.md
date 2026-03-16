@@ -47,16 +47,17 @@ The lab is structured into four logical modules that guide users from undergradu
 
 ### II. Bayesian Intuition
 *Learning to think in probability distributions.*
-* **Thinking Simulator:** 8 psychological scenarios to build qualitative updating skills.
+* **Thinking Simulator:** 8 psychological scenarios to build qualitative updating skills without math.
 * **Prior Lab:** Translate verbal uncertainty into mathematical parameters with a real-time CI-solver.
 * **MCMC Visualizer:** Watch the "animated hiker" (Metropolis-Hastings) sample from the posterior.
 * **Bayes Interactive:** Watch how priors, sample size togehter with the data form the posterior.
 
 ### III. Bayesian Workflow
 *Tools for the professional scientist.*
-* **Model Architect:** Visually build complex hierarchical structures.
-* **brms Model Builder:** A powerful R-code generator with integrated prior visualization.
-* **Predictive Checks:** Validate models via Prior and Posterior Predictive Distributions.
+* **Model Architect:** Visually build hierarchical structures Kruschke and McElreath style.
+* **brms Model Builder:** A powerful R-code generator to build complex hierarchical models and transfer to prior checks.
+* **Prior Predictive Checks:** Import and Validate your models via Prior Predictive Checking.
+* **Posterior Predictive Checks:** Specialized ShinyApp to check your brms results and get feedback.
 
 ---
 
@@ -66,7 +67,8 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/raduesing/Bayes_Thinking_Lab.git](https://github.com/raduesing/Bayes_Thinking_Lab.git)
+    git clone [https://github.com/raduesing/Bayes_Thinking_Lab.git]
+    (https://github.com/raduesing/Bayes_Thinking_Lab.git)
     ```
 2.  **Open `index.html`** in any modern web browser.
 3.  **Start Building:** Design your model, configure your priors, and copy the generated `brms` code into your R script.
