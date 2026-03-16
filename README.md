@@ -93,6 +93,23 @@ Built with focus on clarity and scientific rigour. Inspired by *Doing Bayesian D
 
 **Open Source under the MIT License.**
 
+---
 
+## 🎓 Citation
+
+If you use the **Bayes Thinking Lab** for your research, teaching, or software development, please cite it as follows:
+
+### APA Style
+> Düsing, R. (2024). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 1.0). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
+
+### BibTeX (for LaTeX users)
+```latex
+@software{Duesing_Bayes_Thinking_Lab_2024,
+  author = {Düsing, Rainer},
+  title = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
+  url = {[https://github.com/raduesing/Bayes_Thinking_Lab](https://github.com/raduesing/Bayes_Thinking_Lab)},
+  version = {1.0.0},
+  year = {2026}
+}
 
 </div>
