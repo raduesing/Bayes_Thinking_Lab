@@ -54,7 +54,7 @@ The lab is structured into four logical modules that guide users from undergradu
 
 ### III. Bayesian Workflow
 *Tools for the professional scientist.*
-* **Model Architect:** Visually build hierarchical structures Kruschke and McElreath style.
+* **Model Architect:** Visually build hierarchical structures in Kruschke style and with McElreath notation.
 * **brms Model Builder:** A powerful R-code generator to build complex hierarchical models and transfer to prior checks.
 * **Prior Predictive Checks:** Import and Validate your models via Prior Predictive Checking.
 * **Posterior Predictive Checks:** Specialized ShinyApp to check your brms results and get feedback.
