@@ -5,7 +5,7 @@ Educational Project
 # Bayes Thinking Lab
 
 <p align="center">
-  <img src="ChatGPT Image 17. März 2026, 00_12_14.png" width="900">
+  <img src="images/ChatGPT Image 17. März 2026, 00_12_14.png" width="900">
 </p>
 
 **Interactive tools for understanding, visualizing, and applying Bayesian statistics.**
