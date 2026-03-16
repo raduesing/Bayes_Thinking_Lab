@@ -212,6 +212,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     <button class="hbtn" onclick="window.open('index.html','_self')" style="border-color:var(--a4);color:var(--a4)">← Übersicht</button>
     <button class="hbtn" id="btn-guide" onclick="toggleGuide()">📖 Guide</button>
     <button class="hbtn" id="btn-ex"    onclick="toggleEx()" title="Klicke auf einen Knoten oder Formelzeile für Erklärungen — Infopanel ein/aus">💡 Erklärungen</button>
+    <button class="hbtn" onclick="showSimCode()" style="border-color:var(--a3);color:var(--a3)" title="R-Simulationscode generieren (Prior Predictive Simulation)">⬡ Golem light</button>
     <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
@@ -329,6 +330,29 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 </div>
 
 </div><!-- /main -->
+<div id="sim-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+  z-index:500;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--paper);border:1.5px solid var(--border);
+    max-width:780px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;
+      padding:.65rem 1rem;border-bottom:1.5px solid var(--border);flex-shrink:0">
+      <div>
+        <div style="font-family:'Fraunces',Georgia,serif;font-size:1rem;font-weight:300">
+          Golem light — <em style="color:var(--a3)">Prior Predictive Simulation</em>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--ink2);margin-top:.1rem" id="sim-explain"></div>
+      </div>
+      <div style="display:flex;gap:.35rem">
+        <button class="hbtn" onclick="copySimCode()" style="border-color:var(--a3);color:var(--a3)">↓ Kopieren</button>
+        <button class="hbtn" onclick="closeSimModal()">✕ Schließen</button>
+      </div>
+    </div>
+    <pre id="sim-code" style="font-family:'DM Mono',monospace;font-size:.67rem;
+      color:var(--ink);background:var(--bg);padding:1rem;overflow-y:auto;
+      flex:1;margin:0;line-height:1.7;white-space:pre"></pre>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- MathJax for formula rendering -->
@@ -355,15 +379,218 @@ const M = {
   preds:[],
   ml:false, gv:'j', ret:'int',
   pr:{
-    alpha: {fam:'normal',      mu:0,  sig:10 },
+    alpha: {fam:'normal',      mu:0,  sig:2.5},  // McElreath: Normal(0,2.5) für z-std.
     sigma: {fam:'exponential', p1:1          },
     nu:    {fam:'gamma',       p1:2,  p2:0.1 },
-    mu_a:  {fam:'normal',      mu:0,  sig:5  },
+    mu_a:  {fam:'normal',      mu:0,  sig:2.5},
     sig_a: {fam:'exponential', p1:1          },
-    mu_b:  {fam:'normal',      mu:0,  sig:2.5},
+    mu_b:  {fam:'normal',      mu:0,  sig:0.5},  // McElreath: Normal(0,0.5) für z-std.
     sig_b: {fam:'exponential', p1:1          },
   }
 };
+
+// ═══════════════════════════════════════════════════════
+//  GOLEM LIGHT — SIMULATION CODE GENERATOR
+// ═══════════════════════════════════════════════════════
+
+const FAM_LABEL = {
+  normal:'Normal (Gaussian)', student:'Student-t', bernoulli:'Bernoulli (Logistisch)',
+  poisson:'Poisson', gamma:'Gamma'
+};
+const FAM_BRMS = {
+  normal:'gaussian', student:'student', bernoulli:'bernoulli', poisson:'poisson', gamma:'Gamma'
+};
+
+function priorToR(pr, cls){
+  if(!pr) return '';
+  const {fam,mu,sig,p1,p2}=pr;
+  if(fam==='normal')      return `prior(normal(${mu||0}, ${sig||1}), class = "${cls}")`;
+  if(fam==='exponential') return `prior(exponential(${p1||1}), class = "${cls}")`;
+  if(fam==='gamma')       return `prior(gamma(${p1||2}, ${p2||0.1}), class = "${cls}")`;
+  if(fam==='student_t')   return `prior(student_t(3, ${mu||0}, ${sig||1}), class = "${cls}")`;
+  return `prior(${fam}(${p1||1}), class = "${cls}")`;
+}
+
+function genSimCode(){
+  const y=M.out||'y', K=M.preds.length, isML=M.ml, gv=M.gv||'j', fam=M.fam;
+  const a_mu=M.pr.alpha.mu??0, a_sig=M.pr.alpha.sig??2.5;
+  const s_lam=M.pr.sigma.p1??1;
+  const nu_sh=M.pr.nu.p1??2, nu_rt=M.pr.nu.p2??0.1;
+  const L=[];
+
+  L.push('# ══════════════════════════════════════════════════════');
+  L.push('# Golem light — Prior Predictive Simulation');
+  L.push('# Bayesian Model Architect · ' + (FAM_LABEL[fam]||fam) + (isML?' · Hierarchisch':''));
+  L.push('# Parameter werden aus Priors gezogen (McElreath World Building)');
+  L.push('# ══════════════════════════════════════════════════════');
+  L.push('');
+  L.push('library(tidyverse)');
+  L.push('library(brms)');
+  L.push('');
+  L.push('set.seed(42)');
+  L.push('n <- 100   # Stichprobengröße — anpassen');
+  L.push('');
+
+  L.push('# ── Prädiktoren ────────────────────────────────────────');
+  L.push('# Für z-standardisierte Variablen: rnorm(n, 0, 1)');
+  L.push('# Für andere Skalen auskommentierte Variante verwenden:');
+  if(K===0){
+    L.push('# (Intercept-only)');
+  } else {
+    M.preds.forEach((p,i)=>{
+      const pn=p.name||`x${i+1}`;
+      L.push(`${pn} <- rnorm(n, mean = 0, sd = 1)       # z-standardisiert`);
+      L.push(`# ${pn} <- runif(n, min = 0, max = 1)     # Alternative: uniform`);
+    });
+  }
+  L.push('');
+
+  L.push('# ── Parameter aus Priors ziehen ────────────────────────');
+  L.push('# Jeder Parameter wird EINMAL aus seinem Prior gezogen.');
+  L.push('# Priorwerte entsprechen den aktuellen Slider-Einstellungen.');
+  L.push(`alpha <- rnorm(1, mean = ${a_mu}, sd = ${a_sig})   # Prior: Normal(${a_mu}, ${a_sig})`);
+  M.preds.forEach((p,i)=>{
+    const pn=p.name||`x${i+1}`, bn=K>1?`beta_${pn}`:'beta';
+    const bmu=p.pr?.mu??0, bsg=p.pr?.sig??0.5;
+    L.push(`${bn} <- rnorm(1, mean = ${bmu}, sd = ${bsg})   # Prior: Normal(${bmu}, ${bsg})`);
+  });
+  if(fam==='normal'){
+    L.push(`sigma <- rexp(1, rate = ${s_lam})   # Prior: Exponential(${s_lam}), E[σ] = ${(1/s_lam).toFixed(2)}`);
+  } else if(fam==='student'){
+    L.push(`sigma <- rexp(1, rate = ${s_lam})   # Prior: Exponential(${s_lam})`);
+    L.push(`nu    <- rgamma(1, shape = ${nu_sh}, rate = ${nu_rt})   # Prior: Gamma(${nu_sh}, ${nu_rt})`);
+  }
+  L.push('');
+
+  if(isML){
+    const sa_lam=M.pr.sig_a?.p1??1;
+    L.push('# ── Gruppeneffekte ─────────────────────────────────────');
+    L.push('n_groups <- 10   # Anzahl Gruppen — anpassen');
+    L.push(`${gv}       <- sample(1:n_groups, n, replace = TRUE)`);
+    L.push(`sigma_a  <- rexp(1, rate = ${sa_lam})   # Prior: Exponential(${sa_lam})`);
+    L.push(`a_j      <- rnorm(n_groups, mean = 0, sd = sigma_a)`);
+    if(M.ret==='slope'&&K>0){
+      const sb_lam=M.pr.sig_b?.p1??1;
+      const p0n=M.preds[0].name||'x1', bn0=K>1?`beta_${p0n}`:'beta';
+      L.push(`sigma_b  <- rexp(1, rate = ${sb_lam})   # Prior: Exponential(${sb_lam})`);
+      L.push(`b_j      <- rnorm(n_groups, mean = ${bn0}, sd = sigma_b)`);
+    }
+    L.push('');
+  }
+
+  L.push('# ── Linearer Prädiktor η ───────────────────────────────');
+  if(K===0){
+    L.push('eta <- rep(alpha, n)');
+  } else {
+    const terms=M.preds.map((p,i)=>{
+      const pn=p.name||`x${i+1}`, bn=K>1?`beta_${pn}`:'beta';
+      return `${bn} * ${pn}`;
+    });
+    L.push(`eta <- alpha + ${terms.join(' + ')}`);
+  }
+  if(isML){
+    L.push(`eta <- eta + a_j[${gv}]`);
+    if(M.ret==='slope'&&K>0){
+      const p0n=M.preds[0].name||'x1', bn0=K>1?`beta_${p0n}`:'beta';
+      L.push(`eta <- alpha + b_j[${gv}] * ${p0n} + a_j[${gv}]`);
+    }
+  }
+  L.push('');
+
+  L.push('# ── Outcome y simulieren ───────────────────────────────');
+  if(fam==='normal'){
+    L.push(`${y} <- rnorm(n, mean = eta, sd = sigma)`);
+  } else if(fam==='student'){
+    L.push(`${y} <- eta + sigma * rt(n, df = nu)`);
+  } else if(fam==='bernoulli'){
+    L.push(`p  <- plogis(eta)   # Logit-Inverse → p ∈ (0,1)`);
+    L.push(`${y} <- rbinom(n, size = 1, prob = p)`);
+  } else if(fam==='poisson'){
+    L.push(`lam <- exp(eta)     # Log-Link-Inverse → λ > 0`);
+    L.push(`${y}   <- rpois(n, lambda = lam)`);
+  } else if(fam==='gamma'){
+    L.push(`mu    <- exp(eta)   # Log-Link-Inverse → μ > 0`);
+    L.push(`shape <- 2          # Formparameter — anpassen`);
+    L.push(`${y}   <- rgamma(n, shape = shape, rate = shape / mu)`);
+  }
+  L.push('');
+
+  L.push('# ── Datensatz ──────────────────────────────────────────');
+  const cols=[y,...M.preds.map((p,i)=>p.name||'x'+(i+1))];
+  if(isML) cols.push(gv);
+  L.push('d <- data.frame(');
+  cols.forEach((c,i)=>L.push(`  ${c}${i<cols.length-1?',':''}`));
+  L.push(')');
+  L.push('glimpse(d)');
+  L.push('# write.csv(d, "simulierte_daten.csv", row.names = FALSE)');
+  L.push('');
+
+  if(K>0){
+    const p0=M.preds[0].name||'x1';
+    L.push('# ── Grafische Inspektion ───────────────────────────────');
+    L.push(`ggplot(d, aes(x = ${p0}, y = ${y})) +`);
+    L.push('  geom_point(alpha = .4) +');
+    const sm=fam==='bernoulli'?'  geom_smooth(method="glm",method.args=list(family=binomial)) +'
+             :fam==='poisson'?'  geom_smooth(method="glm",method.args=list(family=poisson)) +'
+             :'  geom_smooth(method = "lm") +';
+    L.push(sm);
+    L.push(`  labs(title = "Golem light — ${FAM_LABEL[fam]||fam}")`);
+    L.push('');
+  }
+
+  L.push('# ── brms-Modell fitten ─────────────────────────────────');
+  const pstr=K===0?'1':M.preds.map((p,i)=>p.name||'x'+(i+1)).join(' + ');
+  const restr=isML?` + (1${M.ret==='slope'&&K>0?' + '+(M.preds[0].name||'x1'):''}|${gv})`:'';
+  L.push('fit <- brm(');
+  L.push(`  formula = ${y} ~ ${pstr}${restr},`);
+  L.push(`  data    = d,`);
+  L.push(`  family  = ${FAM_BRMS[fam]||fam}(),`);
+  L.push('  prior   = c(');
+  const pl=[
+    '    '+priorToR(M.pr.alpha,'Intercept'),
+    ...(fam==='normal'||fam==='student'?['    '+priorToR(M.pr.sigma,'sigma')]:[]),
+    ...(fam==='student'?['    '+priorToR(M.pr.nu,'nu')]:[]),
+    ...M.preds.map(p=>'    '+priorToR(p.pr,'b')),
+    ...(isML?['    '+priorToR(M.pr.sig_a,'sd')]:[])
+  ];
+  L.push(pl.join(',\n'));
+  L.push('  ),');
+  L.push('  chains = 4, iter = 2000, warmup = 1000, cores = 4, seed = 42');
+  L.push(')');
+  L.push('summary(fit)');
+  L.push('pp_check(fit)   # Posterior Predictive Check');
+  return L.join('\n');
+}
+
+function genSimExplain(){
+  const fam=M.fam, K=M.preds.length, isML=M.ml;
+  const famSim={normal:'rnorm(n,η,σ)',student:'η+σ·rt(n,ν)',
+    bernoulli:'rbinom(n,1,plogis(η))',poisson:'rpois(n,exp(η))',gamma:'rgamma(n,shape,shape/exp(η))'};
+  return 'Prior Predictive · '+(isML?'Hierarchisch · ':'')+(FAM_LABEL[fam]||fam)
+        +' · '+(K===0?'Intercept-Only':K+' Prädiktor'+(K>1?'en':''))
+        +' · Simulation: '+(famSim[fam]||'rnorm(n,η,σ)')
+        +' | Priorwerte aus aktuellen Sliders';
+}
+
+function showSimCode(){
+  document.getElementById('sim-code').textContent = genSimCode();
+  document.getElementById('sim-explain').textContent = genSimExplain();
+  document.getElementById('sim-overlay').style.display = 'flex';
+}
+function closeSimModal(){
+  document.getElementById('sim-overlay').style.display='none';
+}
+function copySimCode(){
+  navigator.clipboard.writeText(document.getElementById('sim-code').textContent)
+    .then(()=>{
+      const b=event.target, t=b.textContent;
+      b.textContent='✓ Kopiert!';
+      setTimeout(()=>{b.textContent=t;},2000);
+    });
+}
+document.addEventListener('click',e=>{
+  if(e.target===document.getElementById('sim-overlay')) closeSimModal();
+});
 
 // ═══════════════════════════════════════════════════════
 //  GUIDE
@@ -388,7 +615,7 @@ const STEPS=[
    tx:'Jeder Parameter braucht einen <b>Prior</b> — eine Verteilung über seinen plausiblen Wertebereich. Die kleinen Kurven in den Kreisen zeigen die Prior-Form live! Ändere die Slider links und beobachte, wie sich die Kurve anpasst. Klicke auf ▸ bei einem Prior-Block für eine Erklärung. <b>Klicke auf Knoten im Diagramm</b> (💡 Knoten-Info aktiv) für kontextuelle Hinweise zu jedem Parameter.',
    hl:'sc-pr'},
   {t:'Fertig — Dein Modell verstehen und weiterdenken',
-   tx:'Das Diagramm zeigt dein vollständiges Modell in Kruschke-Notation. Rechts siehst du die McElreath-Notation. <b>Der Architect ist bewusst didaktisch gehalten</b> — er hilft dir, die Struktur Bayesianischer Modelle zu verstehen: Welche Verteilung? Welche Parameter brauchen Priors? Wie hängt alles zusammen? <br><br>Für komplexere Modelle und tatsächlichen R-Code empfiehlt sich der <b>brms Model Builder</b> — dort baust du das Modell Schritt für Schritt selbst und erzeugst direkt ausführbaren brms-Code. Architect und Builder teilen dieselbe Logik, aber sind eigenständige Werkzeuge.<br><br><a href="Brms_model_builder.html" target="_blank" class="g-link-btn">→ brms Model Builder</a>',
+   tx:'Das Diagramm zeigt dein vollständiges Modell in Kruschke-Notation. Rechts siehst du die McElreath-Notation. <b>Der Architect ist bewusst didaktisch gehalten</b> — er hilft dir, die Struktur Bayesianischer Modelle zu verstehen: Welche Verteilung? Welche Parameter brauchen Priors? Wie hängt alles zusammen? <br><br>Für komplexere Modelle und tatsächlichen R-Code empfiehlt sich der <b>brms Model Builder</b> — dort baust du das Modell Schritt für Schritt selbst und erzeugst direkt ausführbaren brms-Code. <br><br><b style="color:var(--a3)">⬡ Golem light</b>: Klicke den Button oben rechts um R-Simulationscode zu generieren — Parameter werden aus den Priors gezogen (Prior Predictive Simulation nach McElreath). Ideal um zu testen ob das Modell plausible Daten erzeugt, bevor du echte Daten siehst.<br><br><b style="color:var(--a4)">⬡ Golem Builder</b> (demnächst): DAGs zeichnen, kausale Adjustment-Sets berechnen, Effekte quantifizieren, Daten simulieren. <a href="Golem_builder.html" target="_blank" style="color:var(--a4);border-bottom:1px dotted var(--a4);text-decoration:none">Golem Builder ↗</a>Architect und Builder teilen dieselbe Logik, aber sind eigenständige Werkzeuge.<br><br><a href="Brms_model_builder.html" target="_blank" class="g-link-btn">→ brms Model Builder</a>',
    hl:null},
 ];
 function renderGuide(){
@@ -1068,7 +1295,7 @@ function buildPriorUI(){
     sls([
       {l:'μ',mn:-20,mx:20,st:0.5,dp:1,v:M.pr.alpha.mu??0,
        fn:"M.pr.alpha.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-      {l:'σ',mn:0.1,mx:20,st:0.2,dp:1,v:M.pr.alpha.sig??10,
+      {l:'σ',mn:0.1,mx:20,st:0.2,dp:1,v:M.pr.alpha.sig??2.5,
        fn:"M.pr.alpha.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
     ])
   );
@@ -1146,7 +1373,7 @@ function renderPreds(){
 }
 function addPred(){
   if(M.preds.length>=4){showToast('Maximal 4 Prädiktoren');return;}
-  M.preds.push({name:`x${M.preds.length+1}`,pr:{fam:'normal',mu:0,sig:2.5}});update();
+  M.preds.push({name:`x${M.preds.length+1}`,pr:{fam:'normal',mu:0,sig:0.5}});update();
 }
 function removePred(i){M.preds.splice(i,1);update();}
 
