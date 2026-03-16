@@ -4,7 +4,7 @@
 
 <div align="center">
 
-# Bayes Thinking Lab `v1.0`
+# Bayes Thinking Lab `v0.6`
 ### Statistical Intuition, Reimagined.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -102,7 +102,7 @@ If you use the **Bayes Thinking Lab** for your research, teaching, or software d
 <div align="left">
 
 ### APA Style
-> Düsing, R. (2024). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 1.0). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
+> Düsing, R. (2024). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.6). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
 
  
 ### BibTeX (for LaTeX users)
@@ -111,7 +111,7 @@ If you use the **Bayes Thinking Lab** for your research, teaching, or software d
   author = {Düsing, Rainer},
   title = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
   url = {[https://github.com/raduesing/Bayes_Thinking_Lab](https://github.com/raduesing/Bayes_Thinking_Lab)},
-  version = {1.0.0},
+  version = {0.6.0},
   year = {2026}
 }
 
