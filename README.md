@@ -4,6 +4,10 @@ Educational Project
 
 # Bayes Thinking Lab
 
+<p align="center">
+  <img src="ChatGPT Image 17. März 2026, 00_12_14.png" width="900">
+</p>
+
 **Interactive tools for understanding, visualizing, and applying Bayesian statistics.**
 
 The **Bayes Thinking Lab** is a collection of interactive web tools designed to make statistical concepts visually intuitive and conceptually clear. The project is intended for students, teachers, and researchers who want to **understand Bayesian models rather than just apply them**.
