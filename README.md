@@ -107,7 +107,7 @@ If you use the **Bayes Thinking Lab** for your research, teaching, or software d
 <div align="left">
 
 ### APA Style
-> Düsing, R. (2024). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.6). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
+> Düsing, R. (2026). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.6). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
 
  
 ### BibTeX (for LaTeX users)
