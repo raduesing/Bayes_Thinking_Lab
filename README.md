@@ -50,7 +50,7 @@ The lab is structured into four logical modules that guide users from undergradu
 * **Thinking Simulator:** 8 psychological scenarios to build qualitative updating skills without math.
 * **Prior Lab:** Translate verbal uncertainty into mathematical parameters with a real-time CI-solver.
 * **MCMC Visualizer:** Watch the "animated hiker" (Metropolis-Hastings) sample from the posterior.
-* **Bayes Interactive:** Watch how priors, sample size togehter with the data form the posterior.
+* **Bayes Interactive:** Watch how priors and data (and sample size) form the posterior.
 
 ### III. Bayesian Workflow
 *Tools for the professional scientist.*
