@@ -85,8 +85,6 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 ---
 
-<div align="center">
-
 <div id="credits" style="padding: 40px; background: #f8f3e8; color: #18130e; border: 1px solid #d1c9b8; border-radius: 4px; font-family: 'Segoe UI', Helvetica, Arial, sans-serif;">
     
     <h2 style="text-align: center; border-bottom: 1.5px solid #18130e; padding-bottom: 10px; margin-bottom: 25px; color: #18130e; font-weight: 600;">Scientific Acknowledgments</h2>
@@ -127,6 +125,7 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
         Licensing: MIT License. All references belong to their respective copyright holders.
     </div>
 </div>
+
 ---
 
 ## 🎓 Citation
