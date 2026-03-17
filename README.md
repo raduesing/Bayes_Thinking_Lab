@@ -112,7 +112,7 @@ If you use the **Bayes Thinking Lab** for your research, teaching, or software d
  
 ### BibTeX (for LaTeX users)
 ```latex
-@software{Duesing_Bayes_Thinking_Lab_2024,
+@software{Duesing_Bayes_Thinking_Lab_2026,
   author = {Düsing, Rainer},
   title = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
   url = {[https://github.com/raduesing/Bayes_Thinking_Lab](https://github.com/raduesing/Bayes_Thinking_Lab)},
