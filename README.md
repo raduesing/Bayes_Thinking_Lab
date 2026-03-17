@@ -81,7 +81,7 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 | :--- | :--- |
 | **BSc. Students** | e.g. Interactive LM, Thinking Simulator, Bayes Simulator |
 | **MSc. Students** | e.g. Interactive GLMM, Prior Lab, Model Architect |
-| **PhD / Researchers** | e.g. brms Builder, Prior Predictive Check, Posterior PC |
+| **PhD / Researchers** | e.g. brms Model Builder, Prior P. Check, Posterior P. Check |
 
 ---
 
