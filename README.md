@@ -85,46 +85,18 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 ---
 
-<div id="credits" style="padding: 40px; background: #f8f3e8; color: #18130e; border: 1px solid #d1c9b8; border-radius: 4px; font-family: 'Segoe UI', Helvetica, Arial, sans-serif;">
-    
-    <h2 style="text-align: center; border-bottom: 1.5px solid #18130e; padding-bottom: 10px; margin-bottom: 25px; color: #18130e; font-weight: 600;">Scientific Acknowledgments</h2>
-    
-    <p style="text-align: center; color: #5a4f42; margin-bottom: 35px; font-size: 0.95em;">
-        The development of the Bayes Thinking Lab is based on the pedagogical and methodological frameworks established by the following authors and researchers:
-    </p>
+## 🖋 Scientific Acknowledgments
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; line-height: 1.5;">
-        
-        <div style="padding: 20px; border: 1px solid #e0d8c0; background: #ffffff;">
-            <strong style="display: block; margin-bottom: 8px; font-size: 1.05em; color: #18130e;">John K. Kruschke</strong>
-            <span style="font-size: 0.9em; color: #18130e;">The visual representation of models in this lab is based on the "Kruschke Diagrams" introduced in <em>Doing Bayesian Data Analysis</em>.</span><br>
-            <a href="https://doingbayesiandataanalysis.blogspot.com/" style="color: #2a6e8a; text-decoration: underline; font-size: 0.85em; display: inline-block; margin-top: 10px;">Institutional Page</a>
-        </div>
+The development of the **Bayes Thinking Lab** is based on the pedagogical and methodological frameworks established by the following researchers. Their work has been instrumental in shaping the conceptual logic of this suite:
 
-        <div style="padding: 20px; border: 1px solid #e0d8c0; background: #ffffff;">
-            <strong style="display: block; margin-bottom: 8px; font-size: 1.05em; color: #18130e;">Richard McElreath</strong>
-            <span style="font-size: 0.9em; color: #18130e;">The integration of model architectures and the <em>brms</em>-workflow is informed by the principles outlined in <em>Statistical Rethinking</em>.</span><br>
-            <a href="https://github.com/rmcelreath" style="color: #2a6e8a; text-decoration: underline; font-size: 0.85em; display: inline-block; margin-top: 10px;">Institutional Page</a>
-        </div>
+| Author | Framework / Contribution | Resource |
+| :--- | :--- | :--- |
+| **John K. Kruschke** | The visual model representations are based on the "Kruschke Diagrams" introduced in *Doing Bayesian Data Analysis*. | [Institutional Page](https://doingbayesiandataanalysis.blogspot.com/) |
+| **Richard McElreath** | The integration of model architectures and the Bayesian workflow is informed by the principles in *Statistical Rethinking*. | [Institutional Page](https://github.com/rmcelreath) |
+| **A. Solomon Kurz** | Acknowledgment is given to his comprehensive translations of statistical textbooks into the *brms* and *tidyverse* framework. | [Project Documentation](https://solomonkurz.netlify.app/) |
+| **Paul-Christian Bürkner** | Computational compatibility is maintained with the R package *brms*, developed for high-level Bayesian regression modeling. | [brms Project Site](https://paul-buerkner.github.io/) |
 
-        <div style="padding: 20px; border: 1px solid #e0d8c0; background: #ffffff;">
-            <strong style="display: block; margin-bottom: 8px; font-size: 1.05em; color: #18130e;">A. Solomon Kurz</strong>
-            <span style="font-size: 0.9em; color: #18130e;">Credit is given to his comprehensive translations of statistical textbooks into the <em>brms</em> and tidyverse computational framework.</span><br>
-            <a href="https://solomonkurz.netlify.app/" style="color: #2a6e8a; text-decoration: underline; font-size: 0.85em; display: inline-block; margin-top: 10px;">Project Documentation</a>
-        </div>
-
-        <div style="padding: 20px; border: 1px solid #e0d8c0; background: #ffffff;">
-            <strong style="display: block; margin-bottom: 8px; font-size: 1.05em; color: #18130e;">Paul-Christian Bürkner</strong>
-            <span style="font-size: 0.9em; color: #18130e;">Computational compatibility is maintained with the R package <em>brms</em>, developed for high-level Bayesian regression modeling.</span><br>
-            <a href="https://paul-buerkner.github.io/" style="color: #2a6e8a; text-decoration: underline; font-size: 0.85em; display: inline-block; margin-top: 10px;">brms Project Site</a>
-        </div>
-
-    </div>
-
-    <div style="margin-top: 30px; text-align: center; font-size: 0.8em; color: #8a7f72; border-top: 1px solid #e0d8c0; padding-top: 15px;">
-        Licensing: MIT License. All references belong to their respective copyright holders.
-    </div>
-</div>
+> **Note on Licensing:** This project is released under the MIT License. All external references and conceptual frameworks belong to their respective copyright holders.
 
 ---
 
