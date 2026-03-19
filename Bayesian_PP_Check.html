@@ -230,6 +230,7 @@ svg text{font-family:'DM Mono',monospace}
         <option value="lognormal">Lognormal — LN(μ, σ)</option>
         <option value="shifted_lognormal">Shifted Lognormal — SLN(μ, σ, δ)</option>
         <option value="skew_normal">Skew-Normal — SN(μ, σ, ξ)</option>
+        <option value="gamma">Gamma — Gamma(μ, φ)</option>
       </optgroup>
       <optgroup label="── Zähldaten ───────────────────">
         <option value="poisson">Poisson — Poisson(λ)</option>
@@ -238,12 +239,10 @@ svg text{font-family:'DM Mono',monospace}
       <optgroup label="── Binär / Proportionen ────────">
         <option value="logistic">Bernoulli — Bernoulli(p)</option>
         <option value="beta_reg">Beta — Beta(μ, φ)</option>
+        <option value="binomial">Binomial — Binomial(n, p)</option>
         <option value="beta_binomial">Beta-Binomial — BB(n, μ, φ)</option>
         <option value="zero_inflated_beta">ZI-Beta — ZIBeta(μ, φ, π)</option>
         <option value="zero_one_inflated_beta">ZOI-Beta — ZOIB(μ, φ, ζ, κ)</option>
-      </optgroup>
-      <optgroup label="── Gamma ───────────────────────">
-        <option value="gamma">Gamma — Gamma(μ, φ)</option>
       </optgroup>
       <optgroup label="── Ordinal / Nominal ───────────">
         <option value="cumulative">Kumulativ (ordinal) — logit</option>
@@ -285,6 +284,7 @@ svg text{font-family:'DM Mono',monospace}
         <option value="normal">Normal(μ, σ)</option>
         <option value="student_t">Student-t(ν, μ, σ)</option>
         <option value="cauchy">Cauchy(μ, σ)</option>
+        <option value="lognormal">Lognormal(μ, σ) — strikt positiv</option>
       </select>
     </div>
     <div class="pg">
@@ -760,6 +760,7 @@ function setSigRange() {
     document.getElementById('d-sp2').textContent = parseFloat(p2.value).toFixed(2);
   }
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 
 function updDispInt(id, dispId) {
@@ -889,7 +890,7 @@ function applyModelUI() {
 
   // Trials row
   const tr = document.getElementById('trials-row');
-  if (tr) tr.style.display = MODEL === 'beta_binomial' ? '' : 'none';
+  if (tr) tr.style.display = (MODEL === 'beta_binomial' || MODEL === 'binomial') ? '' : 'none';
 
   // Distributional sigma toggle
   const dstRow = document.getElementById('dist-sig-toggle-row');
@@ -925,6 +926,25 @@ function applyModelUI() {
   document.getElementById('btn-lmm').style.opacity = lmmOk ? '1' : '.35';
 
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
+  // Sinnvolle Prior-Defaults je nach Link-Funktion (nur beim Modellwechsel)
+  const _logLink   = ['poisson','negbinomial','gamma'].includes(MODEL);
+  const _logitLink = ['logistic','binomial','beta_reg','beta_binomial',
+                      'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
+  if (_logLink) {
+    setSlider('int-mu',  0,   'd-imu', 1);
+    setSlider('int-sig', 1.0, 'd-isg', 1);
+  } else if (_logitLink) {
+    setSlider('int-mu',  0,   'd-imu', 1);
+    setSlider('int-sig', 1.5, 'd-isg', 1);
+  } else {
+    setSlider('int-mu',  0,   'd-imu', 1);
+    setSlider('int-sig', 2.5, 'd-isg', 1);
+  }
+  // Update beta sigma defaults for existing predictors
+  const _defBSig = _logitLink ? 1.0 : 0.5;
+  predictors.forEach(p => { p.sig = _defBSig; });
+  renderPredictors();
 }
 
 // ─────────────────────────────────────────────────────────
@@ -941,11 +961,13 @@ function toggleLMM() {
   document.getElementById('lmm-card').style.display = USE_LMM ? '' : 'none';
   document.getElementById('btn-lmm').classList.toggle('active', USE_LMM);
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function onFamChange() {
   const fam = gv('int-fam');
   document.getElementById('int-nu-row').style.display = fam==='student_t' ? '' : 'none';
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 // Bug 1 fix: use a dedicated <span id="sig-lbl-txt"> for the changeable text
 function onSigFamChange() {
@@ -998,6 +1020,7 @@ function onReStructChange() {
   document.getElementById('re-slope-vars').style.display  = isSlope ? '' : 'none';
   if (isSlope) updateSlopeChks();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 
 function updateSlopeChks() {
@@ -1045,6 +1068,7 @@ function renderPredictors() {
           <option value="normal"    ${p.fam==='normal'?'selected':''}>Normal(μ, σ)</option>
           <option value="student_t" ${p.fam==='student_t'?'selected':''}>Student-t(ν, μ, σ)</option>
           <option value="cauchy"    ${p.fam==='cauchy'?'selected':''}>Cauchy(μ, σ)</option>
+          <option value="lognormal" ${p.fam==='lognormal'?'selected':''}>Lognormal(μ, σ) — positiv</option>
         </select>
       </div>
       <div class="pg">
@@ -1077,7 +1101,11 @@ function renderPredictors() {
   if (gv('re-struct')==='slope') updateSlopeChks();
 }
 function addPredictor() {
-  predictors.push({ id:nextPredId++, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3 });
+  // Link-aware default sigma for the new predictor only
+  const logitLink = ['logistic','binomial','beta_reg','beta_binomial',
+                     'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
+  const defSig = logitLink ? 1.0 : 0.5;
+  predictors.push({ id:nextPredId++, fam:'normal', mu:0, sig:defSig, nu:3, xMin:-3, xMax:3 });
   renderPredictors();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
@@ -1086,6 +1114,7 @@ function removePredictor(id) {
   predictors = predictors.filter(p => p.id!==id);
   renderPredictors();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function setPredFam(id, fam) {
   const p = predictors.find(x=>x.id===id); if (!p) return;
@@ -1093,6 +1122,7 @@ function setPredFam(id, fam) {
   const row = document.getElementById(`pnr-${id}`);
   if (row) row.style.display = fam==='student_t' ? '' : 'none';
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function setPredVal(id, key, val, dispId, dec) {
   const p = predictors.find(x=>x.id===id); if (!p) return;
@@ -1104,6 +1134,7 @@ function setPredVal(id, key, val, dispId, dec) {
     p.xMax = p.mu + 3 * Math.max(p.sig, 0.01);
   }
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1227,6 +1258,7 @@ function drawLoc(fam, mu, sig, nu) {
   try {
     if (fam==='student_t') return rStudT(mu, sig, nu);
     if (fam==='cauchy')    return rCauchy(mu, sig);
+    if (fam==='lognormal') return Math.exp(rNorm(mu, Math.max(1e-6, sig)));
     return rNorm(mu, sig);
   } catch(e) {
     console.warn('drawLoc error:', e);
@@ -1262,7 +1294,7 @@ function applyLink(eta, model) {
   if (model==='linear'||model==='student'||model==='lognormal'||
       model==='shifted_lognormal'||model==='skew_normal') return eta;
   // Logit link → probability in (0,1)
-  if (model==='logistic'||model==='beta_reg'||model==='beta_binomial'||
+  if (model==='logistic'||model==='binomial'||model==='beta_reg'||model==='beta_binomial'||
       model==='zero_inflated_beta'||model==='zero_one_inflated_beta')
     return 1/(1+Math.exp(-Math.max(-50,Math.min(50,eta))));
   // Log link → positive mean
@@ -1291,6 +1323,13 @@ function sampleY(mu, sigma, model, nu, auxParams) {
   if (model==='beta_reg') {
     const clampMu = Math.max(0.001, Math.min(0.999, mu));
     return rBetaReg(clampMu, Math.max(0.1, aux.phi ?? 1));
+  }
+  if (model==='binomial') {
+    const n = Math.max(1, Math.round(aux.trials ?? 10));
+    const clampP = Math.max(0.001, Math.min(0.999, mu));
+    let cnt = 0;
+    for (let i=0; i<n; i++) { if (Math.random() < clampP) cnt++; }
+    return cnt / n;
   }
   if (model==='beta_binomial') {
     const n = Math.max(1, Math.round(aux.trials ?? 10));
@@ -1340,6 +1379,7 @@ function onNuFamChange() {
   const lbl1 = document.getElementById('nu-lbl1');
   if (lbl1) lbl1.textContent = isExp ? 'λ (Rate)' : 'α (Form)';
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function drawNu() {
   const fam = gv('nu-fam');
@@ -1367,12 +1407,14 @@ function removeInterTerm(id) {
   interTerms = interTerms.filter(t => t.id !== id);
   renderInterTerms();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function setInterVal(id, key, val, dispId, dec) {
   const t = interTerms.find(t => t.id === id); if (!t) return;
   t[key] = val;
   if (dispId) { const dp = document.getElementById(dispId); if (dp) dp.textContent = parseFloat(val).toFixed(dec); }
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function renderInterTerms() {
   // Tags
@@ -1408,6 +1450,7 @@ function renderInterTerms() {
     c.appendChild(d);
   });
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1419,6 +1462,7 @@ function onDistSigChange() {
   document.getElementById('dist-sig-ui').style.display     = on ? '' : 'none';
   if (on) renderDistSigBetas();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function renderDistSigBetas() {
   const c = document.getElementById('dist-sig-betas'); if (!c) return;
@@ -1475,6 +1519,7 @@ function onDistNuChange() {
   document.getElementById('dist-nu-ui').style.display     = on ? '' : 'none';
   if (on) renderDistNuBetas();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+
 }
 function renderDistNuBetas() {
   const c = document.getElementById('dist-nu-betas'); if (!c) return;
@@ -2503,6 +2548,7 @@ function brmsCode(cfg) {
     shifted_lognormal:    'shifted_lognormal()',
     skew_normal:          'skew_normal()',
     negbinomial:          'negbinomial("log")',
+    binomial:             'binomial("logit")',
     beta_reg:             'Beta("logit")',
     beta_binomial:        'beta_binomial("logit")',
     zero_inflated_beta:   'zero_inflated_beta("logit")',
@@ -2543,7 +2589,7 @@ function brmsCode(cfg) {
     }
     formulaRHS = `bf(\n${bfLines}\n)`;
   } else {
-    const trialsV = MODEL==='beta_binomial' ? ` | trials(${(document.getElementById('trials-var')?.value||'trials').trim()})` : '';
+    const trialsV = (MODEL==='beta_binomial'||MODEL==='binomial') ? ` | trials(${(document.getElementById('trials-var')?.value||'trials').trim()||'trials'})` : '';
     formulaRHS = `bf(y${trialsV} ~ ${xTerms}${interTermsStr}${lmmPart})`;
   }
 
@@ -4136,6 +4182,7 @@ window.importFromBuilder = function() {
     lognormal:'lognormal', shifted_lognormal:'shifted_lognormal',
     skew_normal:'skew_normal', negbinomial:'negbinomial',
     Beta:'beta_reg', beta_reg:'beta_reg',
+    binomial:'binomial',
     beta_binomial:'beta_binomial',
     zero_inflated_beta:'zero_inflated_beta',
     zero_one_inflated_beta:'zero_one_inflated_beta',

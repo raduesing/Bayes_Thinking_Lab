@@ -234,6 +234,7 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
           <option value="lognormal">Lognormal — LN(μ, σ)</option>
           <option value="shifted_lognormal">Shifted Lognormal — SLN(μ, σ, δ)</option>
           <option value="skew_normal">Skew-Normal — SN(μ, σ, ξ)</option>
+          <option value="Gamma">Gamma — Gamma(μ, φ)</option>
         </optgroup>
         <optgroup label="── Zähldaten ───────────────────">
           <option value="poisson">Poisson — Poisson(λ)</option>
@@ -242,12 +243,10 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
         <optgroup label="── Binär / Proportionen ────────">
           <option value="bernoulli">Bernoulli — Bernoulli(p)</option>
           <option value="Beta">Beta — Beta(μ, φ)</option>
+          <option value="binomial">Binomial — Binomial(n, p)</option>
           <option value="beta_binomial">Beta-Binomial — BB(n, μ, φ)</option>
           <option value="zero_inflated_beta">ZI-Beta — ZIBeta(μ, φ, π)</option>
           <option value="zero_one_inflated_beta">ZOI-Beta — ZOIB(μ, φ, ζ, κ)</option>
-        </optgroup>
-        <optgroup label="── Gamma ───────────────────────">
-          <option value="Gamma">Gamma — Gamma(μ, φ)</option>
         </optgroup>
         <optgroup label="── Ordinal / Nominal ───────────">
           <option value="cumulative">Kumulativ (ordinal) — logit</option>
@@ -439,15 +438,27 @@ const DEF_PRIORS = {
 
 // family → PPC model name
 const FAM2PPC = {
-  gaussian:'linear', student:'student', bernoulli:'logistic', poisson:'poisson', Gamma:'gamma',
-  lognormal:'linear', shifted_lognormal:'linear', skew_normal:'linear',
-  negbinomial:'poisson', beta_binomial:'logistic', Beta:'logistic',
-  zero_inflated_beta:'linear', zero_one_inflated_beta:'linear',
-  cumulative:'linear', categorical:'linear'
+  gaussian:'linear',                   student:'student',
+  bernoulli:'logistic',                poisson:'poisson',
+  Gamma:'gamma',                       lognormal:'lognormal',
+  shifted_lognormal:'shifted_lognormal', skew_normal:'skew_normal',
+  negbinomial:'negbinomial',           binomial:'binomial',
+  beta_binomial:'beta_binomial',       Beta:'beta_reg',
+  zero_inflated_beta:'zero_inflated_beta',
+  zero_one_inflated_beta:'zero_one_inflated_beta',
+  cumulative:'cumulative',             categorical:'categorical'
 };
 const PPC2FAM = {
-  linear:'gaussian', student:'student', logistic:'bernoulli',
-  poisson:'poisson', gamma:'Gamma', gaussian:'gaussian'
+  linear:'gaussian',                   gaussian:'gaussian',
+  student:'student',                   logistic:'bernoulli',
+  poisson:'poisson',                   gamma:'Gamma',
+  lognormal:'lognormal',               shifted_lognormal:'shifted_lognormal',
+  skew_normal:'skew_normal',           negbinomial:'negbinomial',
+  beta_reg:'Beta',                     binomial:'binomial',
+  beta_binomial:'beta_binomial',
+  zero_inflated_beta:'zero_inflated_beta',
+  zero_one_inflated_beta:'zero_one_inflated_beta',
+  cumulative:'cumulative',             categorical:'categorical'
 };
 
 // Parameter set membership — drives prior rows + distributional card
@@ -490,6 +501,9 @@ function toggleTheme() {
 // ═══════════════════════════════════════════════════════════
 function setFamilyFromSelect() {
   FAMILY = document.getElementById('fam-select').value;
+  // Reset Intercept and b priors so link-aware defaults apply for new family
+  delete userPriors['mu_int'];
+  Object.keys(userPriors).filter(k => k.startsWith('mu_b_')).forEach(k => delete userPriors[k]);
   rebuildDistArea();
   update();
 }
@@ -579,7 +593,7 @@ function rebuildDistArea() {
 
   // Trials row for beta_binomial
   const trow = document.getElementById('trials-row');
-  if (trow) trow.style.display = (f === 'beta_binomial') ? '' : 'none';
+  if (trow) trow.style.display = (f === 'beta_binomial' || f === 'binomial') ? '' : 'none';
 
   area.innerHTML = params.map(p => `
     <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.69rem;margin-bottom:.5rem">
@@ -623,17 +637,28 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     rows.push({ id, label, cls, coef, dpar, sym, defOverride });
   };
 
+  // Link-aware prior defaults
+  const LOG_LINK   = new Set(['poisson','negbinomial','Gamma']);
+  const LOGIT_LINK = new Set(['bernoulli','binomial','Beta','beta_binomial',
+                               'zero_inflated_beta','zero_one_inflated_beta']);
+  const defInt = LOG_LINK.has(f) ? 'normal(0, 1.0)'
+               : LOGIT_LINK.has(f) ? 'normal(0, 1.5)'
+               : 'normal(0, 2.5)';  // identity link
+  const defB   = LOG_LINK.has(f) ? 'normal(0, 0.5)'
+               : LOGIT_LINK.has(f) ? 'normal(0, 1.0)'
+               : 'normal(0, 0.5)';  // identity link
+
   // Intercept
-  addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha');
+  addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha', defInt);
 
   // β per predictor
   preds.forEach(p =>
-    addRow('mu_b_' + p, 'β\u2009' + p, 'b', p, null, '\\beta_{' + p + '}'));
+    addRow('mu_b_' + p, 'β\u2009' + p, 'b', p, null, '\\beta_{' + p + '}', defB));
 
   // β per interaction — coef uses : notation as required by brms
   inters.forEach(ix =>
     addRow('mu_b_' + ix, 'β\u2009' + ix, 'b', ix, null,
-           '\\beta_{' + ix.replace(/:/g, '\\!:\\!') + '}'));
+           '\\beta_{' + ix.replace(/:/g, '\\!:\\!') + '}', defB));
 
   // Distributional priors (log-scale) — use tighter defaults
   activeD.forEach(d => {
@@ -735,7 +760,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
 
   // formula always in bf() to avoid errors
   const trialsV  = (document.getElementById('trials-var')?.value || 'trials').trim() || 'trials';
-  const trailsExpr = f === 'beta_binomial' ? ` | trials(${trialsV})` : '';
+  const trailsExpr = (f === 'beta_binomial' || f === 'binomial') ? ` | trials(${trialsV})` : '';
   const muTerms = [...preds, ...inters].join(' + ') || '1';
   let reC = '';
   if (hasRE && g) {
@@ -777,6 +802,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     f === 'shifted_lognormal'    ? 'shifted_lognormal()' :
     f === 'skew_normal'          ? 'skew_normal()' :
     f === 'negbinomial'          ? 'negbinomial("log")' :
+    f === 'binomial'             ? 'binomial("logit")' :
     f === 'Beta'                 ? 'Beta("logit")' :
     f === 'beta_binomial'        ? 'beta_binomial("logit")' :
     f === 'zero_inflated_beta'   ? 'zero_inflated_beta("logit")' :
@@ -827,6 +853,7 @@ function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRow
     shifted_lognormal:     `\\text{ShiftedLognormal}(\\mu_i,\\, \\sigma,\\, \\delta)`,
     skew_normal:           `\\text{SkewNormal}(\\mu_i,\\, \\sigma,\\, \\xi)`,
     negbinomial:           `\\text{NegBinomial}(\\mu_i,\\, \\phi)`,
+    binomial:              `\\text{Binomial}(n_i,\\, p_i)`,
     Beta:                  `\\text{Beta}(\\mu_i,\\, \\phi)`,
     beta_binomial:         `\\text{BetaBinomial}(n_i,\\, \\mu_i,\\, \\phi)`,
     zero_inflated_beta:    `\\text{ZI-Beta}(\\mu_i,\\, \\phi,\\, \\pi_0)`,
@@ -845,6 +872,7 @@ function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRow
     shifted_lognormal:     `\\mu_i`,
     skew_normal:           `\\mu_i`,
     negbinomial:           `\\log(\\mu_i)`,
+    binomial:              `\\text{logit}(p_i)`,
     Beta:                  `\\text{logit}(\\mu_i)`,
     beta_binomial:         `\\text{logit}(\\mu_i)`,
     zero_inflated_beta:    `\\text{logit}(\\mu_i)`,
