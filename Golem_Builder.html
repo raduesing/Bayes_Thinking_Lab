@@ -760,6 +760,22 @@ canvas {
     </div>
   </div>
 
+  <!-- TESTBARE IMPLIKATIONEN -->
+  <button class="part-b-toggle" id="implToggle" style="margin-bottom:.3rem;border-color:var(--a6);color:var(--a6);">
+    <span class="toggle-arrow" id="implArrow">▶</span>
+    Testbare Implikationen (Unabhängigkeiten im DAG)
+  </button>
+  <div class="part-b-content" id="implContent" style="margin-bottom:.8rem;">
+    <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.65;
+         padding:.55rem .75rem;background:var(--bg);border-left:3px solid var(--a6);margin-bottom:.85rem;">
+      Jede Aussage <strong style="color:var(--ink);">A ⊥⊥ B | Z</strong> muss empirisch überprüfbar sein —
+      sie sagt aus, dass A und B <em>bedingt unabhängig</em> sind, wenn man für Z kontrolliert
+      (z.B. per Partialkorrelation oder Chi-Quadrat-Test). Stimmen die Daten nicht damit überein,
+      ist der DAG falsch spezifiziert.
+    </div>
+    <div id="implList"><div class="empty-note" style="font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem;">Mindestens 3 Knoten benötigt.</div></div>
+  </div>
+
   <!-- PART B: QUANTIFIZIERUNG -->
   <button class="part-b-toggle" id="partBToggle">
     <span class="toggle-arrow" id="toggleArrow">▶</span>
@@ -1008,6 +1024,102 @@ function findAdjustmentSets() {
   }
   const minimal = valid.filter(Z=>!valid.some(Z2=>Z2.length<Z.length&&Z2.every(v=>Z.includes(v))));
   return { allPaths, backdoorPaths, minimal, descX, candidates };
+}
+
+// ============================================================
+// TESTABLE IMPLICATIONS (d-separation based)
+// ============================================================
+function dSeparated(A, B, Z) {
+  const paths = findAllPaths(A, B);
+  if (paths.length === 0) return true;
+  return paths.every(path => !isPathActive(path, Z));
+}
+
+function findTestableImplications() {
+  const nodeIds = state.nodes.map(n => n.id);
+  const total = nodeIds.length;
+  const implications = [];
+
+  for (let i = 0; i < total; i++) {
+    for (let j = i + 1; j < total; j++) {
+      const A = nodeIds[i], B = nodeIds[j];
+      // Adjacent nodes are never d-separated
+      if (state.edges.some(e => (e.from===A&&e.to===B)||(e.from===B&&e.to===A))) continue;
+
+      const others = nodeIds.filter(id => id !== A && id !== B);
+      const m = others.length;
+
+      // Try all subsets in order of increasing size
+      const allMasks = Array.from({length: 1<<m}, (_,k)=>k);
+      allMasks.sort((a,b) => {
+        const ca = a.toString(2).split('').filter(c=>c==='1').length;
+        const cb = b.toString(2).split('').filter(c=>c==='1').length;
+        return ca - cb;
+      });
+
+      let found = false;
+      for (const mask of allMasks) {
+        const Z = others.filter((_,k) => mask & (1<<k));
+        if (dSeparated(A, B, Z)) {
+          implications.push({ A, B, Z });
+          found = true;
+          break;
+        }
+      }
+      // If no separating set found: A and B are d-connected under all conditions
+      // (no implication — skip)
+    }
+  }
+  return implications;
+}
+
+function renderTestableImplications() {
+  const list = document.getElementById('implList');
+  if (state.nodes.length < 2) {
+    list.innerHTML = '<div class="empty-note" style="font-family:\'DM Mono\',monospace;font-size:.75rem;padding:.3rem;">Mindestens 2 Knoten benötigt.</div>';
+    return;
+  }
+
+  const implications = findTestableImplications();
+
+  if (implications.length === 0) {
+    list.innerHTML = '<div class="msg-warn" style="font-family:\'DM Mono\',monospace;font-size:.75rem;">Keine testbaren Implikationen — alle Variablen sind d-verbunden. Füge weitere Knoten oder Strukturen hinzu.</div>';
+    return;
+  }
+
+  // Group by conditioning set size
+  const bySize = {};
+  implications.forEach(imp => {
+    const k = imp.Z.length;
+    if (!bySize[k]) bySize[k] = [];
+    bySize[k].push(imp);
+  });
+
+  let html = '';
+  Object.keys(bySize).sort((a,b)=>a-b).forEach(k => {
+    const label = k == 0 ? 'Unbedingte Unabhängigkeiten (marginal)' : `Konditionale Unabhängigkeiten | ${k} Variable${k>1?'n':''}`;
+    html += `<div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a6);
+                letter-spacing:.07em;text-transform:uppercase;margin:.6rem 0 .3rem;
+                padding-bottom:.2rem;border-bottom:1px solid var(--grid);">${label}</div>`;
+    bySize[k].forEach(imp => {
+      const A = escHtml(getNodeName(imp.A));
+      const B = escHtml(getNodeName(imp.B));
+      const cond = imp.Z.length > 0
+        ? ` | <span style="color:var(--a5);">${imp.Z.map(id=>escHtml(getNodeName(id))).join(', ')}</span>`
+        : '';
+      const testHint = imp.Z.length === 0
+        ? 'Partialkorrelation (r = 0?)'
+        : `Partialkorrelation kontrolliert für ${imp.Z.map(id=>escHtml(getNodeName(id))).join(', ')}`;
+      html += `<div style="display:flex;align-items:baseline;gap:.6rem;padding:.3rem .45rem;
+                    background:var(--bg);border:1px solid var(--border);border-radius:4px;
+                    margin-bottom:.3rem;font-family:'DM Mono',monospace;font-size:.75rem;flex-wrap:wrap;">
+        <span style="color:var(--ink);font-weight:500;">${A} ⊥⊥ ${B}${cond}</span>
+        <span style="color:var(--ink3);font-size:.72rem;">→ Test: ${testHint}</span>
+      </div>`;
+    });
+  });
+
+  list.innerHTML = html;
 }
 
 function getMediators() {
@@ -1530,8 +1642,15 @@ function runAnalysis() {
   if (minimal.length > 0) {
     // Nodes that appear in ALL minimal adjustment sets
     mustControlIds = minimal[0].filter(id => minimal.every(s=>s.includes(id)));
-    // Also highlight first minimal set for canvas
     minimal[0].forEach(id => state.highlightAdjSet.add(id));
+  }
+
+  // Mediators on canvas: green when direct effect selected
+  const effectType = getEffectType();
+  const mediators = getMediators();
+  const mediatorIds = [...mediators].filter(id => id !== X && id !== Y);
+  if (effectType === 'direct') {
+    mediatorIds.forEach(id => state.highlightAdjSet.add(id));
   }
 
   // Find colliders on non-causal backdoor paths
@@ -1556,13 +1675,7 @@ function runAnalysis() {
   // Must not control: colliders that are NOT in mustControlIds
   const mustNotControlIds = [...collidersOnPaths].filter(id => !mustControlIds.includes(id));
 
-  // Mediators
-  const mediators = getMediators();
-  const effectType = getEffectType();
-
-  // For total effect: mediators → warn in "darf nicht" (blockieren würde totalen Effekt entfernen)
-  // For direct effect: mediators → required in "muss" (um indirekten Pfad zu blockieren)
-  const mediatorIds = [...mediators].filter(id => id !== X && id !== Y);
+  // mediators / effectType already computed above for canvas highlighting
 
   // Update sidebar analysis summary
   document.getElementById('sidebarAnalysisWrap').style.display = 'block';
@@ -1636,6 +1749,11 @@ function runAnalysis() {
       else badges += '<span class="path-badge path-blocked">Blockiert</span>';
       return `<div class="path-item">${badges}<span>${escHtml(pathStr)}</span></div>`;
     }).join('');
+  }
+
+  // Refresh implications panel if open
+  if (document.getElementById('implContent').classList.contains('open')) {
+    renderTestableImplications();
   }
 
   drawCanvas();
@@ -2021,6 +2139,15 @@ document.getElementById('btnExample').addEventListener('click', loadExample);
 
 document.querySelectorAll('input[name="effectType"]').forEach(r => {
   r.addEventListener('change', runAnalysis);
+});
+
+// Testable implications toggle
+document.getElementById('implToggle').addEventListener('click', () => {
+  const content = document.getElementById('implContent');
+  const arrow = document.getElementById('implArrow');
+  const open = content.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+  if (open) renderTestableImplications();
 });
 
 document.getElementById('partBToggle').addEventListener('click', () => {
