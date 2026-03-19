@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Golem Builder – Bayes Thinking Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+:root {
+  --bg:#f0ead8; --paper:#f8f3e8; --ink:#18130e; --ink2:#5a4f42; --ink3:#8a7f72;
+  --a1:#c94a2a; --a2:#2a6e8a; --a3:#5a8a2a; --a4:#7a3a8a; --a5:#b85c00; --a6:#0e7c7b;
+  --grid:#ddd5c5; --panel:#e8e0ce; --border:#c8bfaa; --warn:#b85c00; --warn-bg:rgba(184,92,0,.08);
+}
+[data-theme="dark"] {
+  --bg:#0c0f14; --paper:#111520; --ink:#ece6d8; --ink2:#8a8070; --ink3:#5a5448;
+  --a1:#e8614a; --a2:#4ab0d8; --a3:#80cb52; --a4:#c87ad8; --a5:#e07830; --a6:#2bc7c4;
+  --grid:#1e242e; --panel:#171d28; --border:#2a3040; --warn:#e07830; --warn-bg:rgba(224,120,48,.08);
+}
+
+html { font-size: 18px; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Fraunces', Georgia, serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+/* NAV */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--paper);
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.nav-left { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
+.nav-back {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  color: var(--a2);
+  text-decoration: none;
+  border: 1px solid var(--a2);
+  padding: .22rem .55rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.nav-back:hover { background: var(--a2); color: var(--paper); }
+.nav-title { font-weight: 600; font-size: 1.05rem; color: var(--ink); }
+.nav-subtitle { font-size: .78rem; color: var(--ink3); font-family: 'DM Mono', monospace; }
+.theme-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  padding: .3rem .7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.theme-btn:hover { background: var(--border); }
+
+/* MAIN LAYOUT */
+main { padding: 1.2rem 1.2rem 2rem; max-width: 1400px; margin: 0 auto; }
+
+/* SECTION HEADERS */
+.section-title {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: .5rem;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* PART A: DAG BUILDER */
+.dag-builder {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  min-height: 460px;
+}
+
+/* SIDEBAR */
+.dag-sidebar {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .8rem;
+  overflow-y: auto;
+  max-height: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-section { display: flex; flex-direction: column; gap: .4rem; }
+
+.add-node-row {
+  display: flex;
+  gap: .35rem;
+}
+.add-node-row input {
+  flex: 1;
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .3rem .5rem;
+  color: var(--ink);
+  min-width: 0;
+}
+.add-node-row input:focus { outline: none; border-color: var(--a2); }
+
+.btn {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  padding: .28rem .6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s;
+  line-height: 1.3;
+}
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--a2); border-color: var(--a2); color: #fff; }
+.btn-primary:hover { background: var(--a2); filter: brightness(1.15); }
+.btn-danger { background: var(--a1); border-color: var(--a1); color: #fff; }
+.btn-danger:hover { filter: brightness(1.15); }
+.btn-green { background: var(--a3); border-color: var(--a3); color: #fff; }
+.btn-green:hover { filter: brightness(1.1); }
+.btn-example { background: var(--a5); border-color: var(--a5); color: #fff; font-size: .75rem; }
+.btn-example:hover { filter: brightness(1.1); }
+
+.node-list { display: flex; flex-direction: column; gap: .3rem; }
+
+.node-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .3rem .45rem;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  flex-wrap: wrap;
+}
+.node-name {
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  flex: 1;
+  min-width: 30px;
+  font-weight: 500;
+}
+.badge {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  padding: .1rem .3rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.badge-x { background: var(--a2); color: #fff; }
+.badge-y { background: var(--a1); color: #fff; }
+
+.node-btns { display: flex; gap: .2rem; flex-wrap: wrap; }
+.node-btns .btn { font-size: .68rem; padding: .18rem .38rem; }
+
+.edge-status {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  color: var(--ink2);
+  padding: .25rem .4rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 2rem;
+}
+
+.edge-status span { color: var(--a2); font-weight: 500; }
+
+.info-text {
+  font-size: .78rem;
+  color: var(--ink3);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* CANVAS AREA */
+.dag-canvas-wrap {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.canvas-header {
+  padding: .5rem .8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.canvas-header-left { display: flex; align-items: center; gap: .5rem; }
+
+.canvas-container {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+.canvas-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.canvas-hint {
+  text-align: center;
+  color: var(--ink3);
+  font-size: .85rem;
+}
+.canvas-hint strong { display: block; font-size: 1rem; font-weight: 600; margin-bottom: .3rem; }
+
+.canvas-legend {
+  padding: .4rem .8rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .7rem;
+  color: var(--ink2);
+}
+.legend-dot {
+  width: 12px; height: 12px;
+  border-radius: 2px;
+  border: 2px solid;
+}
+
+/* ANALYSIS PANEL */
+.analysis-panel {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .9rem;
+  margin-bottom: 1rem;
+  display: none;
+}
+.analysis-panel.visible { display: block; }
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .8rem;
+  margin: .7rem 0;
+}
+.analysis-col {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .6rem .7rem;
+}
+.analysis-col-title {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: .4rem;
+}
+.col-green .analysis-col-title { color: var(--a3); }
+.col-red .analysis-col-title { color: var(--a1); }
+.col-teal .analysis-col-title { color: var(--a6); }
+
+.analysis-list {
+  list-style: none;
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.analysis-list li {
+  padding: .2rem .4rem;
+  background: var(--panel);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.empty-note {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  color: var(--ink3);
+  font-style: italic;
+}
+
+.paths-section { margin-top: .8rem; }
+.paths-title {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--ink2);
+  margin-bottom: .4rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.path-list { display: flex; flex-direction: column; gap: .3rem; }
+.path-item {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  padding: .3rem .5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.path-badge {
+  font-size: .68rem;
+  padding: .1rem .35rem;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.path-open { background: var(--a3); color: #fff; }
+.path-blocked { background: var(--ink3); color: var(--paper); }
+.path-backdoor { background: var(--a1); color: #fff; }
+.path-causal { background: var(--a2); color: #fff; }
+
+/* ERROR TOAST */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(4rem);
+  background: var(--a1);
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  padding: .5rem 1rem;
+  border-radius: 6px;
+  z-index: 9999;
+  transition: transform .25s ease;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* PART B: QUANTIFIZIERUNG */
+.part-b-toggle {
+  width: 100%;
+  text-align: left;
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .65rem .9rem;
+  cursor: pointer;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  transition: background .12s;
+  margin-bottom: .3rem;
+}
+.part-b-toggle:hover { background: var(--border); }
+.toggle-arrow { transition: transform .2s; }
+.toggle-arrow.open { transform: rotate(90deg); }
+
+.part-b-content {
+  display: none;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.part-b-content.open { display: block; }
+
+.part-b-intro {
+  font-size: .85rem;
+  color: var(--ink2);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+  padding: .6rem .8rem;
+  background: var(--bg);
+  border-left: 3px solid var(--a2);
+  border-radius: 0 4px 4px 0;
+}
+
+.coef-table, .node-dist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+  margin-bottom: 1rem;
+}
+.coef-table th, .node-dist-table th {
+  text-align: left;
+  padding: .35rem .5rem;
+  border-bottom: 2px solid var(--border);
+  color: var(--ink3);
+  font-weight: 500;
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.coef-table td, .node-dist-table td {
+  padding: .3rem .5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.coef-table tr:last-child td, .node-dist-table tr:last-child td { border-bottom: none; }
+
+.coef-input, .dist-select, .mean-input, .sd-input {
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .25rem .45rem;
+  color: var(--ink);
+  width: 80px;
+}
+.dist-select { width: 110px; }
+.coef-input:focus, .dist-select:focus, .mean-input:focus, .sd-input:focus {
+  outline: none; border-color: var(--a2);
+}
+.dist-select option { background: var(--paper); color: var(--ink); }
+
+.sim-settings {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: .6rem .8rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.sim-setting-item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+}
+.sim-setting-item label { color: var(--ink2); }
+.sim-setting-item input {
+  font-family: 'DM Mono', monospace;
+  font-size: .78rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .25rem .45rem;
+  color: var(--ink);
+  width: 70px;
+}
+.sim-setting-item input:focus { outline: none; border-color: var(--a2); }
+
+.gen-btns {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.code-block-wrap { margin-bottom: 1rem; }
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .35rem .6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px 5px 0 0;
+}
+.code-block-label {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.code-area {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  padding: .7rem .9rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 3rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* LEARNING CARDS */
+.cards-section { margin-top: 1.5rem; }
+.cards-title {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  margin-bottom: .7rem;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid var(--border);
+}
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .7rem;
+}
+.card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .8rem 1rem;
+}
+.card-title {
+  font-weight: 600;
+  font-size: .92rem;
+  margin-bottom: .35rem;
+  color: var(--ink);
+}
+.card-body {
+  font-size: .82rem;
+  color: var(--ink2);
+  line-height: 1.5;
+}
+.card-tag {
+  display: inline-block;
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  padding: .1rem .35rem;
+  border-radius: 3px;
+  margin-bottom: .4rem;
+  font-weight: 500;
+}
+.tag-dag { background: var(--a2); color: #fff; }
+.tag-confounder { background: var(--a5); color: #fff; }
+.tag-collider { background: var(--a1); color: #fff; }
+.tag-mediator { background: var(--a4); color: #fff; }
+.tag-backdoor { background: var(--a3); color: #fff; }
+.tag-sim { background: var(--a6); color: #fff; }
+
+/* message boxes */
+.msg-box {
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  padding: .4rem .6rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  margin-top: .3rem;
+}
+.msg-warn { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.msg-ok { background: rgba(90,138,42,.1); border-color: var(--a3); color: var(--a3); }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .dag-builder { grid-template-columns: 1fr; }
+  .dag-sidebar { max-height: 260px; }
+  .analysis-grid { grid-template-columns: 1fr; }
+  .cards-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-left">
+    <a href="index.html" class="nav-back">← Lab</a>
+    <span class="nav-title">Golem Builder</span>
+    <span class="nav-subtitle">DAG · Kausalannahmen · Simulation</span>
+  </div>
+  <button class="theme-btn" id="themeBtn">☀ Light</button>
+</nav>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<main>
+
+  <!-- PART A HEADER -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;flex-wrap:wrap;gap:.5rem;">
+    <div class="section-title" style="margin-bottom:0;border-bottom:none;">Schritt 1: DAG aufbauen</div>
+    <div style="display:flex;gap:.4rem;align-items:center;">
+      <select id="exampleSelect" style="font-family:'DM Mono',monospace;font-size:.75rem;
+              background:var(--panel);border:1px solid var(--border);color:var(--ink);
+              padding:.28rem .5rem;cursor:pointer;border-radius:4px;">
+        <option value="">-- Beispiel wählen --</option>
+        <option value="confounder">Confounder (Gabel): Z→X, Z→Y, X→Y</option>
+        <option value="collider">Collider: X→Y, X→C←Y</option>
+        <option value="mediation">Mediator (Kette): X→M→Y</option>
+        <option value="mediation_confounder">Mediator + Confounder: Z→X, Z→Y, X→M→Y</option>
+      </select>
+      <button class="btn btn-example" id="btnExample">Laden</button>
+    </div>
+  </div>
+
+  <!-- DAG BUILDER -->
+  <div class="dag-builder">
+
+    <!-- SIDEBAR -->
+    <div class="dag-sidebar">
+
+      <!-- VARIABLEN -->
+      <div class="sidebar-section">
+        <div class="section-title">Variablen</div>
+        <div class="add-node-row">
+          <input type="text" id="nodeNameInput" placeholder="Name…" maxlength="20">
+          <button class="btn btn-primary" id="btnAddNode">Hinzufügen</button>
+        </div>
+        <div class="node-list" id="nodeList">
+          <div class="empty-note">Noch keine Variablen.</div>
+        </div>
+      </div>
+
+      <!-- KANTEN -->
+      <div class="sidebar-section">
+        <div class="section-title">Kanten</div>
+        <p class="info-text">Klicke Quell-Knoten, dann Ziel-Knoten auf der Zeichenfläche.</p>
+        <div class="edge-status" id="edgeStatus">Kein Knoten gewählt.</div>
+        <button class="btn btn-danger" id="btnDeleteEdge" style="display:none;margin-top:.2rem;">Kante löschen</button>
+      </div>
+
+      <!-- ANALYSE (only when exposure+outcome set) -->
+      <div class="sidebar-section" id="sidebarAnalysisWrap" style="display:none;">
+        <div class="section-title">Analyse</div>
+        <div id="sidebarAnalysisSummary"></div>
+      </div>
+
+    </div>
+
+    <!-- CANVAS AREA -->
+    <div class="dag-canvas-wrap">
+      <div class="canvas-header">
+        <div class="canvas-header-left">
+          <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3);">DAG-Zeichenfläche</span>
+        </div>
+        <button class="btn" id="btnClearCanvas" style="font-size:.72rem;">Canvas leeren</button>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="dagCanvas"></canvas>
+        <div class="canvas-overlay" id="canvasOverlay">
+          <div class="canvas-hint">
+            <strong>Golem Builder</strong>
+            Füge Variablen in der Seitenleiste hinzu,<br>dann klicke auf Knoten, um Kanten zu ziehen.
+          </div>
+        </div>
+      </div>
+      <div class="canvas-legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--ink);background:var(--paper);"></div>
+          Normal
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--a2);background:var(--paper);"></div>
+          Exposition (X)
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--a1);background:var(--paper);"></div>
+          Outcome (Y)
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--a3);background:rgba(90,138,42,.2);"></div>
+          Adjustierungsset
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--a5);background:rgba(184,92,0,.2);"></div>
+          Collider
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end dag-builder -->
+
+  <!-- ANALYSIS PANEL -->
+  <div class="analysis-panel" id="analysisPanel">
+    <div class="section-title">Kausalanalyse</div>
+
+    <!-- Effekt-Abfrage -->
+    <div style="margin-bottom:.7rem;padding:.5rem .7rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);white-space:nowrap;">Effekt von Interesse:</span>
+      <label style="display:flex;align-items:center;gap:.3rem;font-family:'DM Mono',monospace;font-size:.75rem;cursor:pointer;">
+        <input type="radio" name="effectType" value="total" id="effectTotal" checked>
+        <span>Totaler kausaler Effekt</span>
+        <span style="color:var(--ink3);font-size:.72rem;">(Mediator ≠ kontrollieren)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:.3rem;font-family:'DM Mono',monospace;font-size:.75rem;cursor:pointer;">
+        <input type="radio" name="effectType" value="direct" id="effectDirect">
+        <span>Direkter Effekt von X</span>
+        <span style="color:var(--ink3);font-size:.72rem;">(Mediator kontrollieren)</span>
+      </label>
+    </div>
+
+    <div class="analysis-grid">
+      <div class="analysis-col col-green">
+        <div class="analysis-col-title">MUSS kontrollieren</div>
+        <ul class="analysis-list" id="mustControl"></ul>
+      </div>
+      <div class="analysis-col col-red">
+        <div class="analysis-col-title">DARF NICHT kontrollieren</div>
+        <ul class="analysis-list" id="mustNotControl"></ul>
+      </div>
+      <div class="analysis-col col-teal">
+        <div class="analysis-col-title">KANN kontrollieren</div>
+        <ul class="analysis-list" id="canControl"></ul>
+      </div>
+    </div>
+    <div class="paths-section">
+      <div class="paths-title">Alle Pfade</div>
+      <div class="path-list" id="allPathsList"></div>
+    </div>
+  </div>
+
+  <!-- PART B: QUANTIFIZIERUNG -->
+  <button class="part-b-toggle" id="partBToggle">
+    <span class="toggle-arrow" id="toggleArrow">▶</span>
+    Schritt 2: Beziehungen quantifizieren &amp; Code generieren
+  </button>
+  <div class="part-b-content" id="partBContent">
+    <div class="part-b-intro">
+      Spezifiziere für jede Kante einen Regressionskoeffizienten (β) und für jede Wurzelvariable
+      (ohne Elternknoten) eine Verteilung. Klicke danach auf einen der Code-Generatoren.
+    </div>
+
+    <div id="edgeCoefSection">
+      <div class="section-title">Kantengewichte (β)</div>
+      <table class="coef-table">
+        <thead><tr><th>Von</th><th>→ Nach</th><th>β-Koeffizient</th></tr></thead>
+        <tbody id="edgeCoefBody"></tbody>
+      </table>
+    </div>
+
+    <div id="rootNodeSection">
+      <div class="section-title">Wurzelknoten-Verteilungen</div>
+      <table class="node-dist-table">
+        <thead><tr><th>Variable</th><th>Verteilung</th><th>Mittelwert / p</th><th>SD / –</th></tr></thead>
+        <tbody id="rootNodeBody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Simulationseinstellungen</div>
+    <div class="sim-settings">
+      <div class="sim-setting-item">
+        <label>n (Stichprobengröße):</label>
+        <input type="number" id="simN" value="200" min="10" max="10000">
+      </div>
+      <div class="sim-setting-item">
+        <label>seed:</label>
+        <input type="number" id="simSeed" value="42">
+      </div>
+    </div>
+
+    <!-- Simulations-Hinweis -->
+    <div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:5px;
+         padding:.65rem .85rem;margin-bottom:.9rem;
+         font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.7;color:var(--ink2);">
+      <strong style="color:var(--warn);">💡 Selbst ausprobieren — Bias sichtbar machen:</strong><br>
+      Generiere die simulierten Daten, dann <em>verändere die Modellformel</em> und beobachte was passiert:<br>
+      &nbsp;· <strong>Confounder weglassen</strong> (aus brms/glmmTMB-Code entfernen) → β(X) wird verzerrt (Confounding Bias)<br>
+      &nbsp;· <strong>Collider aufnehmen</strong> (zur Formel hinzufügen) → öffnet Scheinassoziation zwischen X und Y (Berkson Bias)<br>
+      &nbsp;· <strong>Mediator kontrollieren</strong> bei totalem Effekt → unterschätzt β(X), weil der indirekte Pfad blockiert wird<br>
+      Der wahre β steht im Simulationscode — vergleiche ihn mit dem Schätzer im gefitteten Modell!
+    </div>
+
+    <div class="gen-btns">
+      <button class="btn btn-primary" id="btnGenR">R Simulationscode generieren</button>
+      <button class="btn" id="btnGenBrms" style="border-color:var(--a4);color:var(--a4);">brms Code generieren</button>
+      <button class="btn" id="btnGenTMB" style="border-color:var(--a6);color:var(--a6);">glmmTMB Code generieren</button>
+    </div>
+
+    <div id="rCodeWrap" class="code-block-wrap" style="display:none;">
+      <div class="code-block-header">
+        <span class="code-block-label">R Simulationscode</span>
+        <button class="btn" id="copyR" style="font-size:.7rem;">Kopieren</button>
+      </div>
+      <pre class="code-area" id="rCodeArea"></pre>
+    </div>
+
+    <div id="brmsCodeWrap" class="code-block-wrap" style="display:none;">
+      <div class="code-block-header">
+        <span class="code-block-label">brms Code</span>
+        <button class="btn" id="copyBrms" style="font-size:.7rem;">Kopieren</button>
+      </div>
+      <pre class="code-area" id="brmsCodeArea"></pre>
+    </div>
+
+    <div id="tmbCodeWrap" class="code-block-wrap" style="display:none;">
+      <div class="code-block-header">
+        <span class="code-block-label">glmmTMB Code</span>
+        <button class="btn" id="copyTmb" style="font-size:.7rem;">Kopieren</button>
+      </div>
+      <pre class="code-area" id="tmbCodeArea"></pre>
+    </div>
+  </div>
+
+  <!-- LEARNING CARDS -->
+  <div class="cards-section">
+    <div class="cards-title">Konzepte</div>
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-tag tag-dag">DAG</div>
+        <div class="card-title">Was ist ein DAG?</div>
+        <div class="card-body">
+          Ein <em>Directed Acyclic Graph</em> (gerichteter azyklischer Graph) kodiert Kausalannahmen
+          explizit. Pfeile zeigen die Richtung kausaler Einflüsse – kein Pfad darf in sich selbst
+          zurückführen. DAGs zwingen uns, unsere Annahmen offenzulegen, bevor wir Modelle bauen
+          (McElreath 2020, Kap. 5–6).
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tag tag-confounder">Confounder</div>
+        <div class="card-title">Confounder (Gabel / Fork)</div>
+        <div class="card-body">
+          Eine gemeinsame Ursache Z von X und Y erzeugt eine Scheinkorrelation zwischen X und Y.
+          Die Struktur Z → X und Z → Y heißt <em>Fork</em>. Ohne Kontrolle von Z ist der Schätzer
+          für X → Y verzerrt. Das Backdoor-Kriterium verlangt, Z in die Regression aufzunehmen.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tag tag-collider">Collider</div>
+        <div class="card-title">Collider</div>
+        <div class="card-body">
+          Wenn X → C ← Y, ist C ein <em>Collider</em>. Der Pfad X – C – Y ist normalerweise
+          <strong>blockiert</strong>. Wenn wir auf C konditionieren (es kontrollieren oder
+          restringieren), öffnen wir diesen Pfad und erzeugen eine artifizielle Assoziation
+          zwischen X und Y – <em>Berkson's Bias</em>. Collider dürfen NICHT kontrolliert werden.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tag tag-mediator">Mediator</div>
+        <div class="card-title">Mediator (Kette / Chain)</div>
+        <div class="card-body">
+          In einer Kette X → M → Y ist M ein <em>Mediator</em>. Kontrollieren von M blockiert
+          den kausalen Pfad von X nach Y – wir würden den totalen kausalen Effekt unterschätzen.
+          Mediatoren werden meist <em>nicht</em> kontrolliert, außer man möchte explizit
+          den direkten Effekt schätzen.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tag tag-backdoor">Backdoor</div>
+        <div class="card-title">Backdoor-Kriterium (Pearl)</div>
+        <div class="card-body">
+          Ein Adjustierungsset Z erfüllt das Backdoor-Kriterium für X → Y, wenn Z (1) alle
+          Hintertür-Pfade von X nach Y blockiert und (2) keine Nachkommen von X enthält.
+          Ein Hintertür-Pfad beginnt mit einem Pfeil, der in X hineinzeigt.
+          Dieses Kriterium ist die formale Grundlage für valide Kausalschätzung aus Beobachtungsdaten.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-tag tag-sim">Simulation</div>
+        <div class="card-title">Simulierte Daten als Goldstandard</div>
+        <div class="card-body">
+          Wenn wir den datengenerierenden Prozess selbst schreiben, kennen wir die wahren
+          Kausaleffekte. So können wir prüfen: Schätzt unser Modell den richtigen Wert?
+          Bias durch Collider oder fehlende Confounderkontrolle wird sichtbar. Simulation
+          ist das wichtigste Werkzeug zum Verstehen kausaler Modelle.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  nodes: [],
+  edges: [],
+  exposure: null,
+  outcome: null,
+  selectedNode: null,
+  dragging: null,
+  selectedEdge: null,
+  analysisResult: null,
+  highlightAdjSet: new Set(),
+  highlightColliders: new Set(),
+};
+
+let nodeCounter = 0;
+function uuid() { return 'n' + (++nodeCounter) + '_' + Math.random().toString(36).slice(2,7); }
+function edgeUuid() { return 'e' + Math.random().toString(36).slice(2,9); }
+
+// ============================================================
+// GRAPH ALGORITHMS
+// ============================================================
+function getChildren(nodeId) { return state.edges.filter(e=>e.from===nodeId).map(e=>e.to); }
+function getParents(nodeId) { return state.edges.filter(e=>e.to===nodeId).map(e=>e.from); }
+
+function getDescendants(nodeId) {
+  const desc = new Set();
+  const queue = [...getChildren(nodeId)];
+  while (queue.length) {
+    const n = queue.shift();
+    if (!desc.has(n)) { desc.add(n); queue.push(...getChildren(n)); }
+  }
+  return desc;
+}
+
+function findAllPaths(startId, endId) {
+  const adj = {};
+  state.nodes.forEach(n => { adj[n.id] = []; });
+  state.edges.forEach(e => {
+    adj[e.from].push(e.to);
+    adj[e.to].push(e.from);
+  });
+  const paths = [];
+  const dfs = (cur, path, visited) => {
+    if (cur === endId && path.length > 1) { paths.push([...path]); return; }
+    for (const nb of (adj[cur] || [])) {
+      if (!visited.has(nb)) {
+        visited.add(nb); path.push(nb);
+        dfs(nb, path, visited);
+        path.pop(); visited.delete(nb);
+      }
+    }
+  };
+  dfs(startId, [startId], new Set([startId]));
+  return paths;
+}
+
+function isColliderTriple(A, B, C) {
+  return state.edges.some(e=>e.from===A&&e.to===B) &&
+         state.edges.some(e=>e.from===C&&e.to===B);
+}
+
+function isBackdoorPath(path) {
+  if (path.length < 2) return false;
+  return state.edges.some(e=>e.from===path[1]&&e.to===path[0]);
+}
+
+function isPathActive(path, Z) {
+  const zSet = new Set(Z);
+  for (let i=1; i<path.length-1; i++) {
+    const [A,B,C] = [path[i-1], path[i], path[i+1]];
+    if (isColliderTriple(A,B,C)) {
+      const desc = getDescendants(B);
+      if (!zSet.has(B) && ![...desc].some(d=>zSet.has(d))) return false;
+    } else {
+      if (zSet.has(B)) return false;
+    }
+  }
+  return true;
+}
+
+function findAdjustmentSets() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return null;
+  const allPaths = findAllPaths(X, Y);
+  const backdoorPaths = allPaths.filter(isBackdoorPath);
+  const descX = getDescendants(X);
+  const candidates = state.nodes.map(n=>n.id).filter(id=>id!==X&&id!==Y&&!descX.has(id));
+  const n = candidates.length;
+  const valid = [];
+  for (let mask=0; mask<(1<<n); mask++) {
+    const Z = candidates.filter((_,i)=>mask&(1<<i));
+    if (backdoorPaths.every(p=>!isPathActive(p,Z))) valid.push(Z);
+  }
+  const minimal = valid.filter(Z=>!valid.some(Z2=>Z2.length<Z.length&&Z2.every(v=>Z.includes(v))));
+  return { allPaths, backdoorPaths, minimal, descX, candidates };
+}
+
+function getMediators() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return new Set();
+  const allPaths = findAllPaths(X, Y);
+  const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
+  const mediators = new Set();
+  causalPaths.forEach(path => {
+    for (let i = 1; i < path.length - 1; i++) {
+      const [A, B, C] = [path[i-1], path[i], path[i+1]];
+      if (!isColliderTriple(A, B, C)) mediators.add(B);
+    }
+  });
+  return mediators;
+}
+
+function getEffectType() {
+  const el = document.querySelector('input[name="effectType"]:checked');
+  return el ? el.value : 'total';
+}
+
+function hasCycle(fromId, toId) {
+  // Would adding fromId→toId create a cycle? Check if toId can reach fromId
+  const visited = new Set();
+  const stack = [toId];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (cur === fromId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    stack.push(...getChildren(cur));
+  }
+  return false;
+}
+
+function topoSort() {
+  const order = [];
+  const inDeg = {};
+  state.nodes.forEach(n => inDeg[n.id] = 0);
+  state.edges.forEach(e => inDeg[e.to] = (inDeg[e.to]||0)+1);
+  const queue = state.nodes.filter(n=>inDeg[n.id]===0).map(n=>n.id);
+  while (queue.length) {
+    const cur = queue.shift();
+    order.push(cur);
+    getChildren(cur).forEach(c => {
+      inDeg[c]--;
+      if (inDeg[c]===0) queue.push(c);
+    });
+  }
+  return order;
+}
+
+function getNodeName(id) {
+  const n = state.nodes.find(n=>n.id===id);
+  return n ? n.name : id;
+}
+
+// ============================================================
+// CANVAS RENDERING
+// ============================================================
+const canvas = document.getElementById('dagCanvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('canvasContainer');
+
+const NODE_W = 86, NODE_H = 38, NODE_R = 7;
+
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = container.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+  drawCanvas();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);
+  ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r);
+  ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color) {
+  const dx = x2-x1, dy = y2-y1;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  if (len < 1) return;
+  const nx = dx/len, ny = dy/len;
+  const arrowLen = 11, arrowW = 5;
+  // Shorten end to node border
+  const ex = x2 - nx*3, ey = y2 - ny*3;
+  const sx = x1 + nx*3, sy = y1 + ny*3;
+
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  // Arrowhead
+  const ax = ex - nx*arrowLen, ay = ey - ny*arrowLen;
+  const px = -ny*arrowW, py = nx*arrowW;
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ax+px, ay+py);
+  ctx.lineTo(ax-px, ay-py);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function getEdgeEndpoints(fromNode, toNode) {
+  const fx = fromNode.x + NODE_W/2, fy = fromNode.y + NODE_H/2;
+  const tx = toNode.x + NODE_W/2, ty = toNode.y + NODE_H/2;
+  const dx = tx-fx, dy = ty-fy;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  if (len<1) return {x1:fx,y1:fy,x2:tx,y2:ty};
+  const nx = dx/len, ny = dy/len;
+
+  // Clip from fromNode border
+  const hw = NODE_W/2, hh = NODE_H/2;
+  const tx1 = nx>0 ? hw : -hw, ty1 = ny>0 ? hh : -hh;
+  const t1 = Math.min(Math.abs(tx1/nx||Infinity), Math.abs(ty1/ny||Infinity));
+
+  // Clip to toNode border
+  const nx2=-nx, ny2=-ny;
+  const tx2 = nx2>0 ? hw : -hw, ty2 = ny2>0 ? hh : -hh;
+  const t2 = Math.min(Math.abs(tx2/nx2||Infinity), Math.abs(ty2/ny2||Infinity));
+
+  return {
+    x1: fx + nx*t1, y1: fy + ny*t1,
+    x2: tx - nx*t2, y2: ty - ny*t2
+  };
+}
+
+function drawCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width/dpr, H = canvas.height/dpr;
+  const ink = getCSSVar('--ink');
+  const ink2 = getCSSVar('--ink2');
+  const ink3 = getCSSVar('--ink3');
+  const paper = getCSSVar('--paper');
+  const bg = getCSSVar('--bg');
+  const a1 = getCSSVar('--a1');
+  const a2 = getCSSVar('--a2');
+  const a3 = getCSSVar('--a3');
+  const a5 = getCSSVar('--a5');
+  const border = getCSSVar('--border');
+  const grid = getCSSVar('--grid');
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid dots
+  ctx.fillStyle = grid;
+  for (let gx=30; gx<W; gx+=40) {
+    for (let gy=25; gy<H; gy+=40) {
+      ctx.beginPath();
+      ctx.arc(gx, gy, 1.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Edges
+  state.edges.forEach(edge => {
+    const fn = state.nodes.find(n=>n.id===edge.from);
+    const tn = state.nodes.find(n=>n.id===edge.to);
+    if (!fn||!tn) return;
+    const ep = getEdgeEndpoints(fn, tn);
+    const isSelected = state.selectedEdge === edge.id;
+    const color = isSelected ? a1 : ink2;
+    ctx.save();
+    if (isSelected) { ctx.setLineDash([6,3]); }
+    drawArrow(ctx, ep.x1, ep.y1, ep.x2, ep.y2, color);
+    ctx.setLineDash([]);
+    ctx.restore();
+  });
+
+  // Nodes
+  state.nodes.forEach(node => {
+    const x = node.x, y = node.y;
+    const isExposure = state.exposure === node.id;
+    const isOutcome = state.outcome === node.id;
+    const isSelected = state.selectedNode === node.id;
+    const isAdjSet = state.highlightAdjSet.has(node.id);
+    const isCollider = state.highlightColliders.has(node.id);
+
+    // Fill
+    let fillColor = paper;
+    if (isAdjSet) fillColor = 'rgba(90,138,42,0.18)';
+    if (isCollider) fillColor = 'rgba(184,92,0,0.18)';
+
+    // Stroke color
+    let strokeColor = ink;
+    let lineWidth = 1.5;
+    if (isExposure) { strokeColor = a2; lineWidth = 2.5; }
+    if (isOutcome) { strokeColor = a1; lineWidth = 2.5; }
+    if (isAdjSet) { strokeColor = a3; lineWidth = 2; }
+    if (isCollider) { strokeColor = a5; lineWidth = 2; }
+
+    ctx.save();
+    if (isSelected) {
+      // Glow / dashed border
+      ctx.shadowColor = a2;
+      ctx.shadowBlur = 8;
+    }
+    roundRect(ctx, x, y, NODE_W, NODE_H, NODE_R);
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    if (isSelected) {
+      ctx.setLineDash([5, 3]);
+    }
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // Label
+    ctx.font = `500 13px 'DM Mono', monospace`;
+    ctx.fillStyle = ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(node.name, x + NODE_W/2, y + NODE_H/2);
+
+    // Badge
+    if (isExposure) {
+      ctx.font = `bold 9px 'DM Mono', monospace`;
+      ctx.fillStyle = a2;
+      ctx.fillText('X', x + NODE_W - 10, y + 8);
+    }
+    if (isOutcome) {
+      ctx.font = `bold 9px 'DM Mono', monospace`;
+      ctx.fillStyle = a1;
+      ctx.fillText('Y', x + NODE_W - 10, y + 8);
+    }
+  });
+}
+
+// ============================================================
+// CANVAS INTERACTION
+// ============================================================
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function hitNode(pos) {
+  for (let i = state.nodes.length-1; i>=0; i--) {
+    const n = state.nodes[i];
+    if (pos.x >= n.x && pos.x <= n.x+NODE_W && pos.y >= n.y && pos.y <= n.y+NODE_H) {
+      return n;
+    }
+  }
+  return null;
+}
+
+function hitEdge(pos) {
+  for (const edge of state.edges) {
+    const fn = state.nodes.find(n=>n.id===edge.from);
+    const tn = state.nodes.find(n=>n.id===edge.to);
+    if (!fn||!tn) continue;
+    const mx = (fn.x+NODE_W/2 + tn.x+NODE_W/2)/2;
+    const my = (fn.y+NODE_H/2 + tn.y+NODE_H/2)/2;
+    const dx = pos.x-mx, dy = pos.y-my;
+    if (Math.sqrt(dx*dx+dy*dy) < 14) return edge;
+  }
+  return null;
+}
+
+let dragStartPos = null;
+let didDrag = false;
+
+canvas.addEventListener('mousedown', e => {
+  const pos = getCanvasPos(e);
+  const node = hitNode(pos);
+  if (node) {
+    dragStartPos = pos;
+    didDrag = false;
+    state.dragging = { nodeId: node.id, offsetX: pos.x - node.x, offsetY: pos.y - node.y };
+    // Don't set selected yet – wait for mouseup to distinguish drag vs click
+    e.preventDefault();
+    return;
+  }
+  const edge = hitEdge(pos);
+  if (edge) {
+    state.selectedEdge = edge.id;
+    document.getElementById('btnDeleteEdge').style.display = 'block';
+    drawCanvas();
+    return;
+  }
+  // Click on empty canvas – deselect
+  state.selectedEdge = null;
+  document.getElementById('btnDeleteEdge').style.display = 'none';
+  drawCanvas();
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!state.dragging) return;
+  const pos = getCanvasPos(e);
+  const dx = pos.x - dragStartPos.x, dy = pos.y - dragStartPos.y;
+  if (Math.sqrt(dx*dx+dy*dy) > 4) didDrag = true;
+  const node = state.nodes.find(n=>n.id===state.dragging.nodeId);
+  if (node) {
+    const dpr = 1;
+    const W = container.getBoundingClientRect().width;
+    const H = container.getBoundingClientRect().height;
+    node.x = Math.max(0, Math.min(W - NODE_W, pos.x - state.dragging.offsetX));
+    node.y = Math.max(0, Math.min(H - NODE_H, pos.y - state.dragging.offsetY));
+    drawCanvas();
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (state.dragging) {
+    const nodeId = state.dragging.nodeId;
+    state.dragging = null;
+    if (!didDrag) {
+      // It was a click
+      handleNodeClick(nodeId);
+    }
+    drawCanvas();
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  if (state.dragging) {
+    state.dragging = null;
+    drawCanvas();
+  }
+});
+
+function handleNodeClick(nodeId) {
+  if (state.selectedNode === null) {
+    // First click: select as source
+    state.selectedNode = nodeId;
+    updateEdgeStatus();
+    drawCanvas();
+  } else if (state.selectedNode === nodeId) {
+    // Same node: deselect
+    state.selectedNode = null;
+    updateEdgeStatus();
+    drawCanvas();
+  } else {
+    // Second click: try to add edge
+    const fromId = state.selectedNode;
+    const toId = nodeId;
+    addEdge(fromId, toId);
+    state.selectedNode = null;
+    updateEdgeStatus();
+    drawCanvas();
+  }
+}
+
+function updateEdgeStatus() {
+  const el = document.getElementById('edgeStatus');
+  if (state.selectedNode) {
+    const n = state.nodes.find(n=>n.id===state.selectedNode);
+    el.innerHTML = `Quelle: <span>${n ? n.name : '?'}</span> – klicke Zielknoten`;
+  } else {
+    el.textContent = 'Kein Knoten gewählt.';
+  }
+}
+
+// ============================================================
+// STATE MUTATIONS
+// ============================================================
+function addNode(name) {
+  name = name.trim();
+  if (!name) { showToast('Bitte einen Namen eingeben.'); return; }
+  if (state.nodes.some(n=>n.name===name)) { showToast(`Knoten "${name}" existiert bereits.`); return; }
+  const rect = container.getBoundingClientRect();
+  const W = rect.width || 600, H = rect.height || 400;
+  // Spread nodes around, avoid overlap
+  const margin = 20;
+  let x = margin + Math.random() * (W - NODE_W - 2*margin);
+  let y = margin + Math.random() * (H - NODE_H - 2*margin);
+  state.nodes.push({ id: uuid(), name, x: Math.round(x), y: Math.round(y) });
+  renderSidebar();
+  updateOverlay();
+  drawCanvas();
+  updatePartB();
+}
+
+function removeNode(nodeId) {
+  state.nodes = state.nodes.filter(n=>n.id!==nodeId);
+  state.edges = state.edges.filter(e=>e.from!==nodeId&&e.to!==nodeId);
+  if (state.exposure===nodeId) state.exposure=null;
+  if (state.outcome===nodeId) state.outcome=null;
+  if (state.selectedNode===nodeId) state.selectedNode=null;
+  renderSidebar();
+  runAnalysis();
+  drawCanvas();
+  updatePartB();
+  updateOverlay();
+}
+
+function addEdge(fromId, toId) {
+  if (fromId === toId) { showToast('Keine Schleifen erlaubt.'); return; }
+  if (state.edges.some(e=>e.from===fromId&&e.to===toId)) { showToast('Diese Kante existiert bereits.'); return; }
+  if (hasCycle(fromId, toId)) { showToast('Diese Kante würde einen Zyklus erzeugen (DAGs sind azyklisch).'); return; }
+  state.edges.push({ id: edgeUuid(), from: fromId, to: toId });
+  runAnalysis();
+  drawCanvas();
+  updatePartB();
+}
+
+function removeSelectedEdge() {
+  if (!state.selectedEdge) return;
+  state.edges = state.edges.filter(e=>e.id!==state.selectedEdge);
+  state.selectedEdge = null;
+  document.getElementById('btnDeleteEdge').style.display = 'none';
+  runAnalysis();
+  drawCanvas();
+  updatePartB();
+}
+
+function setExposure(nodeId) {
+  if (state.exposure === nodeId) { state.exposure = null; }
+  else { state.exposure = nodeId; }
+  renderSidebar();
+  runAnalysis();
+  drawCanvas();
+}
+
+function setOutcome(nodeId) {
+  if (state.outcome === nodeId) { state.outcome = null; }
+  else { state.outcome = nodeId; }
+  renderSidebar();
+  runAnalysis();
+  drawCanvas();
+}
+
+// ============================================================
+// SIDEBAR RENDERING
+// ============================================================
+function renderSidebar() {
+  const list = document.getElementById('nodeList');
+  if (state.nodes.length === 0) {
+    list.innerHTML = '<div class="empty-note">Noch keine Variablen.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  state.nodes.forEach(node => {
+    const item = document.createElement('div');
+    item.className = 'node-item';
+    const isExp = state.exposure === node.id;
+    const isOut = state.outcome === node.id;
+
+    item.innerHTML = `
+      <span class="node-name">${escHtml(node.name)}</span>
+      ${isExp ? '<span class="badge badge-x">(X)</span>' : ''}
+      ${isOut ? '<span class="badge badge-y">(Y)</span>' : ''}
+      <div class="node-btns">
+        <button class="btn" style="${isExp?'background:var(--a2);color:#fff;border-color:var(--a2);':''}" data-action="exp" data-id="${node.id}">${isExp?'Exposition ✓':'Exposition'}</button>
+        <button class="btn" style="${isOut?'background:var(--a1);color:#fff;border-color:var(--a1);':''}" data-action="out" data-id="${node.id}">${isOut?'Outcome ✓':'Outcome'}</button>
+        <button class="btn btn-danger" data-action="del" data-id="${node.id}">✕</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('[data-action="exp"]').forEach(btn => {
+    btn.addEventListener('click', () => setExposure(btn.dataset.id));
+  });
+  list.querySelectorAll('[data-action="out"]').forEach(btn => {
+    btn.addEventListener('click', () => setOutcome(btn.dataset.id));
+  });
+  list.querySelectorAll('[data-action="del"]').forEach(btn => {
+    btn.addEventListener('click', () => removeNode(btn.dataset.id));
+  });
+}
+
+function updateOverlay() {
+  document.getElementById('canvasOverlay').style.display = state.nodes.length > 0 ? 'none' : 'flex';
+}
+
+// ============================================================
+// ANALYSIS
+// ============================================================
+function runAnalysis() {
+  state.highlightAdjSet = new Set();
+  state.highlightColliders = new Set();
+
+  if (!state.exposure || !state.outcome) {
+    document.getElementById('analysisPanel').classList.remove('visible');
+    document.getElementById('sidebarAnalysisWrap').style.display = 'none';
+    state.analysisResult = null;
+    return;
+  }
+
+  const result = findAdjustmentSets();
+  state.analysisResult = result;
+
+  // Determine must/must-not/can
+  const X = state.exposure, Y = state.outcome;
+  const allPaths = result.allPaths;
+  const minimal = result.minimal;
+  const descX = result.descX;
+
+  // Minimal adjustment set nodes (intersection of all minimal sets = must control)
+  let mustControlIds = [];
+  if (minimal.length > 0) {
+    // Nodes that appear in ALL minimal adjustment sets
+    mustControlIds = minimal[0].filter(id => minimal.every(s=>s.includes(id)));
+    // Also highlight first minimal set for canvas
+    minimal[0].forEach(id => state.highlightAdjSet.add(id));
+  }
+
+  // Find colliders on non-causal backdoor paths
+  const collidersOnPaths = new Set();
+  allPaths.forEach(path => {
+    for (let i=1; i<path.length-1; i++) {
+      if (isColliderTriple(path[i-1], path[i], path[i+1])) {
+        collidersOnPaths.add(path[i]);
+        state.highlightColliders.add(path[i]);
+      }
+    }
+  });
+  // Remove X, Y from colliders display
+  collidersOnPaths.delete(X); collidersOnPaths.delete(Y);
+
+  // "Can control": nodes not in any path from X to Y, not descendants of X, not X, not Y
+  const allPathNodes = new Set(allPaths.flat());
+  const canControlIds = state.nodes.map(n=>n.id).filter(id =>
+    id!==X && id!==Y && !descX.has(id) && !allPathNodes.has(id)
+  );
+
+  // Must not control: colliders that are NOT in mustControlIds
+  const mustNotControlIds = [...collidersOnPaths].filter(id => !mustControlIds.includes(id));
+
+  // Mediators
+  const mediators = getMediators();
+  const effectType = getEffectType();
+
+  // For total effect: mediators → warn in "darf nicht" (blockieren würde totalen Effekt entfernen)
+  // For direct effect: mediators → required in "muss" (um indirekten Pfad zu blockieren)
+  const mediatorIds = [...mediators].filter(id => id !== X && id !== Y);
+
+  // Update sidebar analysis summary
+  document.getElementById('sidebarAnalysisWrap').style.display = 'block';
+  const summaryEl = document.getElementById('sidebarAnalysisSummary');
+  if (minimal.length === 0 && result.backdoorPaths.length === 0) {
+    summaryEl.innerHTML = '<div class="msg-ok">Kein Backdoor-Pfad – keine Adjustierung nötig.</div>';
+  } else if (minimal.length === 0) {
+    summaryEl.innerHTML = '<div class="msg-warn">Kein valides Adjustierungsset gefunden!</div>';
+  } else {
+    summaryEl.innerHTML = `<div class="msg-ok">Valides Adjustierungsset: {${minimal[0].map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
+  }
+
+  // Render analysis panel
+  document.getElementById('analysisPanel').classList.add('visible');
+
+  // Must control — Confounder + (Mediator wenn direkter Effekt)
+  const mustEl = document.getElementById('mustControl');
+  const mustDirectMediators = effectType === 'direct' ? mediatorIds : [];
+  const allMust = [...new Set([...mustControlIds, ...mustDirectMediators])];
+  if (allMust.length === 0) {
+    if (result.backdoorPaths.length === 0 && mustDirectMediators.length === 0) {
+      mustEl.innerHTML = '<li><span class="empty-note">Keine – kein Backdoor-Pfad</span></li>';
+    } else {
+      mustEl.innerHTML = '<li><span class="empty-note">∅ (leeres Set reicht aus)</span></li>';
+    }
+  } else {
+    mustEl.innerHTML = mustControlIds.map(id =>
+      `<li>✓ ${escHtml(getNodeName(id))} <span style="color:var(--ink3);font-size:.72rem;">(Confounder)</span></li>`
+    ).join('') + mustDirectMediators.map(id =>
+      `<li>✓ ${escHtml(getNodeName(id))} <span style="color:var(--a4);font-size:.72rem;">(Mediator – direkter Effekt)</span></li>`
+    ).join('');
+  }
+
+  // Must not control — Collider + (Mediator wenn totaler Effekt)
+  const mustNotEl = document.getElementById('mustNotControl');
+  const mustNotMediators = effectType === 'total' ? mediatorIds : [];
+  const allMustNot = [...new Set([...mustNotControlIds, ...mustNotMediators])];
+  if (allMustNot.length === 0) {
+    mustNotEl.innerHTML = '<li><span class="empty-note">Keine identifiziert</span></li>';
+  } else {
+    mustNotEl.innerHTML = mustNotControlIds.map(id =>
+      `<li>✗ ${escHtml(getNodeName(id))} <span style="color:var(--ink3);font-size:.72rem;">(Collider)</span></li>`
+    ).join('') + mustNotMediators.map(id =>
+      `<li>✗ ${escHtml(getNodeName(id))} <span style="color:var(--a4);font-size:.72rem;">(Mediator – blockiert tot. Effekt)</span></li>`
+    ).join('');
+  }
+
+  // Can control
+  const canEl = document.getElementById('canControl');
+  if (canControlIds.length === 0) {
+    canEl.innerHTML = '<li><span class="empty-note">Keine weiteren Variablen</span></li>';
+  } else {
+    canEl.innerHTML = canControlIds.map(id=>
+      `<li>~ ${escHtml(getNodeName(id))}</li>`
+    ).join('');
+  }
+
+  // All paths
+  const pathsList = document.getElementById('allPathsList');
+  if (allPaths.length === 0) {
+    pathsList.innerHTML = '<div class="empty-note">Kein Pfad zwischen X und Y.</div>';
+  } else {
+    pathsList.innerHTML = allPaths.map(path => {
+      const isBD = isBackdoorPath(path);
+      const isActive = isPathActive(path, minimal[0] || []);
+      const pathStr = buildPathString(path);
+      let badges = '';
+      if (isBD) badges += '<span class="path-badge path-backdoor">Hintertür</span>';
+      else badges += '<span class="path-badge path-causal">Kausal</span>';
+      if (isActive) badges += '<span class="path-badge path-open">Offen</span>';
+      else badges += '<span class="path-badge path-blocked">Blockiert</span>';
+      return `<div class="path-item">${badges}<span>${escHtml(pathStr)}</span></div>`;
+    }).join('');
+  }
+
+  drawCanvas();
+}
+
+function buildPathString(path) {
+  let s = '';
+  for (let i=0; i<path.length; i++) {
+    if (i>0) {
+      const prev = path[i-1], cur = path[i];
+      const forward = state.edges.some(e=>e.from===prev&&e.to===cur);
+      s += forward ? ' → ' : ' ← ';
+    }
+    s += getNodeName(path[i]);
+  }
+  return s;
+}
+
+// ============================================================
+// PART B: CODE GENERATION
+// ============================================================
+function updatePartB() {
+  updateEdgeCoefTable();
+  updateRootNodeTable();
+}
+
+function getEdgeCoef(edgeId) {
+  const input = document.querySelector(`[data-edge-coef="${edgeId}"]`);
+  return input ? parseFloat(input.value) || 0.5 : 0.5;
+}
+
+function getRootDist(nodeId) {
+  const distSel = document.querySelector(`[data-root-dist="${nodeId}"]`);
+  const meanInp = document.querySelector(`[data-root-mean="${nodeId}"]`);
+  const sdInp = document.querySelector(`[data-root-sd="${nodeId}"]`);
+  return {
+    dist: distSel ? distSel.value : 'Normal',
+    mean: meanInp ? parseFloat(meanInp.value)||0 : 0,
+    sd: sdInp ? parseFloat(sdInp.value)||1 : 1,
+  };
+}
+
+function updateEdgeCoefTable() {
+  const tbody = document.getElementById('edgeCoefBody');
+  if (state.edges.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-note" style="padding:.4rem .5rem;">Noch keine Kanten definiert.</td></tr>';
+    return;
+  }
+  // Keep existing values
+  const existing = {};
+  tbody.querySelectorAll('[data-edge-coef]').forEach(inp => {
+    existing[inp.dataset.edgeCoef] = inp.value;
+  });
+  tbody.innerHTML = state.edges.map(e => {
+    const val = existing[e.id] !== undefined ? existing[e.id] : '0.5';
+    return `<tr>
+      <td>${escHtml(getNodeName(e.from))}</td>
+      <td>→ ${escHtml(getNodeName(e.to))}</td>
+      <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1"></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateRootNodeTable() {
+  const tbody = document.getElementById('rootNodeBody');
+  const roots = state.nodes.filter(n=>getParents(n.id).length===0);
+  if (roots.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-note" style="padding:.4rem .5rem;">Keine Wurzelknoten.</td></tr>';
+    return;
+  }
+  const existing = {};
+  tbody.querySelectorAll('[data-root-dist]').forEach(sel => {
+    existing[sel.dataset.rootDist] = { dist: sel.value };
+  });
+  tbody.querySelectorAll('[data-root-mean]').forEach(inp => {
+    if (existing[inp.dataset.rootMean]) existing[inp.dataset.rootMean].mean = inp.value;
+  });
+  tbody.querySelectorAll('[data-root-sd]').forEach(inp => {
+    if (existing[inp.dataset.rootSd]) existing[inp.dataset.rootSd].sd = inp.value;
+  });
+
+  tbody.innerHTML = roots.map(n => {
+    const ex = existing[n.id] || {};
+    const dist = ex.dist || 'Normal';
+    const mean = ex.mean !== undefined ? ex.mean : '0';
+    const sd = ex.sd !== undefined ? ex.sd : '1';
+    return `<tr>
+      <td>${escHtml(n.name)}</td>
+      <td>
+        <select class="dist-select" data-root-dist="${n.id}">
+          <option${dist==='Normal'?' selected':''}>Normal</option>
+          <option${dist==='Bernoulli'?' selected':''}>Bernoulli</option>
+          <option${dist==='Poisson'?' selected':''}>Poisson</option>
+        </select>
+      </td>
+      <td><input type="number" class="mean-input" data-root-mean="${n.id}" value="${mean}" step="0.1"></td>
+      <td><input type="number" class="sd-input" data-root-sd="${n.id}" value="${sd}" step="0.1" min="0.01"></td>
+    </tr>`;
+  }).join('');
+
+  // Toggle SD column based on distribution
+  tbody.querySelectorAll('[data-root-dist]').forEach(sel => {
+    const nodeId = sel.dataset.rootDist;
+    const sdInp = tbody.querySelector(`[data-root-sd="${nodeId}"]`);
+    sel.addEventListener('change', () => {
+      if (sdInp) sdInp.disabled = sel.value !== 'Normal';
+    });
+    if (sdInp) sdInp.disabled = sel.value !== 'Normal';
+  });
+}
+
+function generateRCode() {
+  const n = document.getElementById('simN').value || 200;
+  const seed = document.getElementById('simSeed').value || 42;
+  const order = topoSort();
+  const roots = state.nodes.filter(nd=>getParents(nd.id).length===0);
+  const lines = [
+    '# Golem Builder — Simulierter Datensatz',
+    '# Generiert von Bayes Thinking Lab · Golem Builder',
+    '',
+    `set.seed(${seed})`,
+    `n <- ${n}`,
+    '',
+    '# Wurzelknoten (keine Eltern)',
+  ];
+
+  roots.forEach(nd => {
+    const { dist, mean, sd } = getRootDist(nd.id);
+    if (dist === 'Normal') {
+      lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
+    } else if (dist === 'Bernoulli') {
+      lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
+    } else if (dist === 'Poisson') {
+      lines.push(`${nd.name} <- rpois(n, ${mean})`);
+    }
+  });
+
+  const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
+  if (nonRoots.length > 0) {
+    lines.push('', '# Abhängige Knoten (topologische Reihenfolge)');
+    nonRoots.forEach(nd => {
+      const parents = getParents(nd.id);
+      const terms = parents.map(pid => {
+        const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+        const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+        const pname = getNodeName(pid);
+        return `${coef} * ${pname}`;
+      });
+      const commentParts = parents.map(pid=>{
+        const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+        const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+        return `${getNodeName(pid)} → ${nd.name} (β = ${coef})`;
+      });
+      lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, 1)  # ${commentParts.join(', ')}`);
+    });
+  }
+
+  const allNames = order.map(id=>state.nodes.find(n=>n.id===id)).filter(Boolean).map(n=>n.name);
+  const yName = state.outcome ? getNodeName(state.outcome) : (allNames[allNames.length-1]||'Y');
+  lines.push('', `dat <- data.frame(${allNames.join(', ')})`);
+
+  return lines.join('\n');
+}
+
+function getAdjSetNames() {
+  if (!state.analysisResult) return [];
+  const minimal = state.analysisResult.minimal;
+  const baseSet = (minimal && minimal.length > 0) ? minimal[0].map(id => getNodeName(id)) : [];
+  // For direct effect, also add mediators
+  if (getEffectType() === 'direct') {
+    const mediators = getMediators();
+    const X = state.exposure, Y = state.outcome;
+    const medNames = [...mediators].filter(id => id !== X && id !== Y).map(id => getNodeName(id));
+    return [...new Set([...baseSet, ...medNames])];
+  }
+  return baseSet;
+}
+
+function generateBrmsCode() {
+  const adjNames = getAdjSetNames();
+  const yName = state.outcome ? getNodeName(state.outcome) : 'Y';
+  const xName = state.exposure ? getNodeName(state.exposure) : 'X';
+  const rhs = [xName, ...adjNames].join(' + ');
+  const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
+
+  return [
+    'library(brms)',
+    `# Adjustiert für: ${adjComment}`,
+    '',
+    'fit_brms <- brm(',
+    `  ${yName} ~ ${rhs},`,
+    '  data = dat,',
+    '  family = gaussian(),',
+    '  prior = c(',
+    '    prior(normal(0, 1), class = b),',
+    '    prior(normal(0, 1), class = Intercept),',
+    '    prior(exponential(1), class = sigma)',
+    '  ),',
+    '  chains = 4, iter = 2000, warmup = 1000, cores = 4,',
+    '  seed = 42',
+    ')',
+    'summary(fit_brms)',
+  ].join('\n');
+}
+
+function generateTMBCode() {
+  const adjNames = getAdjSetNames();
+  const yName = state.outcome ? getNodeName(state.outcome) : 'Y';
+  const xName = state.exposure ? getNodeName(state.exposure) : 'X';
+  const rhs = [xName, ...adjNames].join(' + ');
+  const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
+
+  return [
+    'library(glmmTMB)',
+    `# Adjustiert für: ${adjComment}`,
+    '',
+    'fit_tmb <- glmmTMB(',
+    `  ${yName} ~ ${rhs},`,
+    '  data = dat,',
+    '  family = gaussian()',
+    ')',
+    'summary(fit_tmb)',
+  ].join('\n');
+}
+
+// ============================================================
+// EXAMPLES
+// ============================================================
+function clearState() {
+  state.nodes = []; state.edges = [];
+  state.exposure = null; state.outcome = null;
+  state.selectedNode = null; state.dragging = null;
+  state.selectedEdge = null; state.analysisResult = null;
+  state.highlightAdjSet = new Set(); state.highlightColliders = new Set();
+  document.getElementById('btnDeleteEdge').style.display = 'none';
+}
+
+function loadExample() {
+  const scenario = document.getElementById('exampleSelect').value;
+  if (!scenario) { showToast('Bitte zuerst ein Beispiel auswählen.'); return; }
+  clearState();
+
+  const rect = container.getBoundingClientRect();
+  const W = rect.width || 700, H = rect.height || 400;
+  const cx = W / 2, cy = H / 2;
+
+  if (scenario === 'confounder') {
+    // Z → X, Z → Y, X → Y  (Fork / Gabel)
+    const zId = uuid(), xId = uuid(), yId = uuid();
+    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 110 });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 140, y: cy + 50 });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 60,  y: cy + 50 });
+    state.edges.push({ id: edgeUuid(), from: zId, to: xId });
+    state.edges.push({ id: edgeUuid(), from: zId, to: yId });
+    state.edges.push({ id: edgeUuid(), from: xId, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Confounder (Gabel): Z muss kontrolliert werden', 'ok');
+
+  } else if (scenario === 'collider') {
+    // X → Y (direkt), X → C ← Y  (Collider C)
+    const xId = uuid(), yId = uuid(), cId = uuid();
+    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 80,  y: cy });
+    state.nodes.push({ id: cId, name: 'C', x: cx - 40,  y: cy + 120 });
+    state.edges.push({ id: edgeUuid(), from: xId, to: yId });
+    state.edges.push({ id: edgeUuid(), from: xId, to: cId });
+    state.edges.push({ id: edgeUuid(), from: yId, to: cId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Collider: C darf NICHT kontrolliert werden!', 'ok');
+
+  } else if (scenario === 'mediation') {
+    // X → M → Y  (reine Mediation, kein direkter Effekt)
+    const xId = uuid(), mId = uuid(), yId = uuid();
+    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy });
+    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 87,  y: cy });
+    state.edges.push({ id: edgeUuid(), from: xId, to: mId });
+    state.edges.push({ id: edgeUuid(), from: mId, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Mediator (Kette): totaler vs. direkter Effekt wählen', 'ok');
+
+  } else if (scenario === 'mediation_confounder') {
+    // Z → X, Z → Y, X → M → Y  (Mediation + Confounder)
+    const zId = uuid(), xId = uuid(), mId = uuid(), yId = uuid();
+    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 120 });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 165, y: cy + 50 });
+    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy + 50 });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 92,  y: cy + 50 });
+    state.edges.push({ id: edgeUuid(), from: zId, to: xId });
+    state.edges.push({ id: edgeUuid(), from: zId, to: yId });
+    state.edges.push({ id: edgeUuid(), from: xId, to: mId });
+    state.edges.push({ id: edgeUuid(), from: mId, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Mediator + Confounder: Z kontrollieren, M je nach Effekt', 'ok');
+  }
+
+  renderSidebar();
+  runAnalysis();
+  drawCanvas();
+  updatePartB();
+  updateOverlay();
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer = null;
+function showToast(msg, type='err') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = type === 'ok' ? 'var(--a3)' : 'var(--a1)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Kopiert ✓';
+    setTimeout(() => btn.textContent = orig, 1600);
+  }).catch(() => showToast('Kopieren fehlgeschlagen.'));
+}
+
+// ============================================================
+// THEME TOGGLE
+// ============================================================
+function updateThemeBtn() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.getElementById('themeBtn').textContent = dark ? '☀ Light' : '🌙 Dark';
+}
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+  updateThemeBtn();
+  drawCanvas();
+});
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.getElementById('btnAddNode').addEventListener('click', () => {
+  const inp = document.getElementById('nodeNameInput');
+  addNode(inp.value);
+  inp.value = '';
+  inp.focus();
+});
+
+document.getElementById('nodeNameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const inp = document.getElementById('nodeNameInput');
+    addNode(inp.value);
+    inp.value = '';
+  }
+});
+
+document.getElementById('btnDeleteEdge').addEventListener('click', removeSelectedEdge);
+document.getElementById('btnClearCanvas').addEventListener('click', () => {
+  if (!confirm('Alle Knoten und Kanten löschen?')) return;
+  state.nodes = [];
+  state.edges = [];
+  state.exposure = null;
+  state.outcome = null;
+  state.selectedNode = null;
+  state.selectedEdge = null;
+  state.analysisResult = null;
+  state.highlightAdjSet = new Set();
+  state.highlightColliders = new Set();
+  document.getElementById('btnDeleteEdge').style.display = 'none';
+  renderSidebar();
+  runAnalysis();
+  drawCanvas();
+  updatePartB();
+  updateOverlay();
+});
+
+document.getElementById('btnExample').addEventListener('click', loadExample);
+
+document.querySelectorAll('input[name="effectType"]').forEach(r => {
+  r.addEventListener('change', runAnalysis);
+});
+
+document.getElementById('partBToggle').addEventListener('click', () => {
+  const content = document.getElementById('partBContent');
+  const arrow = document.getElementById('toggleArrow');
+  const open = content.classList.toggle('open');
+  arrow.classList.toggle('open', open);
+  if (open) updatePartB();
+});
+
+document.getElementById('btnGenR').addEventListener('click', () => {
+  if (state.nodes.length === 0) { showToast('Bitte zuerst einen DAG erstellen.'); return; }
+  const code = generateRCode();
+  document.getElementById('rCodeArea').textContent = code;
+  document.getElementById('rCodeWrap').style.display = 'block';
+});
+
+document.getElementById('btnGenBrms').addEventListener('click', () => {
+  if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
+  const code = generateBrmsCode();
+  document.getElementById('brmsCodeArea').textContent = code;
+  document.getElementById('brmsCodeWrap').style.display = 'block';
+});
+
+document.getElementById('btnGenTMB').addEventListener('click', () => {
+  if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
+  const code = generateTMBCode();
+  document.getElementById('tmbCodeArea').textContent = code;
+  document.getElementById('tmbCodeWrap').style.display = 'block';
+});
+
+document.getElementById('copyR').addEventListener('click', e => {
+  copyToClipboard(document.getElementById('rCodeArea').textContent, e.currentTarget);
+});
+document.getElementById('copyBrms').addEventListener('click', e => {
+  copyToClipboard(document.getElementById('brmsCodeArea').textContent, e.currentTarget);
+});
+document.getElementById('copyTmb').addEventListener('click', e => {
+  copyToClipboard(document.getElementById('tmbCodeArea').textContent, e.currentTarget);
+});
+
+// ============================================================
+// RESIZE
+// ============================================================
+const ro = new ResizeObserver(() => resizeCanvas());
+ro.observe(container);
+
+// ============================================================
+// INIT
+// ============================================================
+updateThemeBtn();
+renderSidebar();
+updateOverlay();
+// Initial canvas draw happens after first resize
+setTimeout(() => {
+  resizeCanvas();
+  drawCanvas();
+}, 50);
+</script>
+</body>
+</html>
