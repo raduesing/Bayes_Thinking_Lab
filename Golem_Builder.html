@@ -803,6 +803,14 @@ canvas {
       </table>
     </div>
 
+    <div id="nonRootSdSection" style="display:none">
+      <div class="section-title">Residual-SD endogener Knoten</div>
+      <table class="node-dist-table">
+        <thead><tr><th>Variable</th><th>σ_residual</th></tr></thead>
+        <tbody id="nonRootSdBody"></tbody>
+      </table>
+    </div>
+
     <div class="section-title">Simulationseinstellungen</div>
     <div class="sim-settings">
       <div class="sim-setting-item">
@@ -1778,6 +1786,7 @@ function buildPathString(path) {
 function updatePartB() {
   updateEdgeCoefTable();
   updateRootNodeTable();
+  updateNonRootSdTable();
 }
 
 function getEdgeCoef(edgeId) {
@@ -1865,6 +1874,31 @@ function updateRootNodeTable() {
   });
 }
 
+function updateNonRootSdTable() {
+  const section = document.getElementById('nonRootSdSection');
+  const tbody = document.getElementById('nonRootSdBody');
+  const order = topoSort();
+  const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
+  if (nonRoots.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  const existing = {};
+  tbody.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
+    existing[inp.dataset.nonrootSd] = inp.value;
+  });
+  tbody.innerHTML = nonRoots.map(n => {
+    const val = existing[n.id] !== undefined ? existing[n.id] : '1';
+    return `<tr>
+      <td>${escHtml(n.name)}</td>
+      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${val}" step="0.1" min="0.01"></td>
+    </tr>`;
+  }).join('');
+}
+
+function getNonRootSd(nodeId) {
+  const inp = document.querySelector(`[data-nonroot-sd="${nodeId}"]`);
+  return inp ? (parseFloat(inp.value) || 1) : 1;
+}
+
 function generateRCode() {
   const n = document.getElementById('simN').value || 200;
   const seed = document.getElementById('simSeed').value || 42;
@@ -1873,11 +1907,27 @@ function generateRCode() {
   const lines = [
     '# Golem Builder — Simulierter Datensatz',
     '# Generiert von Bayes Thinking Lab · Golem Builder',
+    '#',
+    '# SIMULATIONSLOGIK (Ansatz A — natürliche Skala, nach McElreath):',
+    '#   Endogene Knoten: Y <- rnorm(n, sum(beta_i * X_i), sigma_residual)',
+    '#   sigma_residual ist pro Knoten konfigurierbar (Standard: 1).',
+    '#   beta und sigma liegen auf der Skala der jeweiligen Inputvariablen.',
+    '#',
+    '# ANPASSUNG FÜR EIGENE DATEN:',
+    '#   Wenn Prädiktoren nicht standardisiert sind (SD != 1), beta und sigma',
+    '#   entsprechend skalieren. Anhaltspunkt: R² ~ Var(mu) / (Var(mu) + sigma²)',
+    '#   mit Var(mu) = sum(beta_i² * Var(X_i)) bei unkorrelierten Prädiktoren.',
+    '#',
+    '# ALTERNATIVE (Ansatz B — standardisierte Pfadkoeffizienten, dagitty-Stil):',
+    '#   Alle Variablen Var = 1, beta = standardisierter Pfadkoeffizient.',
+    '#   Dann: sigma_residual = sqrt(1 - sum(beta_i²)), Voraussetzung: sum(beta²) < 1.',
+    '#   Literatur: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
+    '#              dagitty.net/learn; McElreath (2020) Kap. 5-6 (natürliche Skala).',
     '',
     `set.seed(${seed})`,
     `n <- ${n}`,
     '',
-    '# Wurzelknoten (keine Eltern)',
+    '# Wurzelknoten (exogene Variablen, keine Eltern)',
   ];
 
   roots.forEach(nd => {
@@ -1893,21 +1943,22 @@ function generateRCode() {
 
   const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
   if (nonRoots.length > 0) {
-    lines.push('', '# Abhängige Knoten (topologische Reihenfolge)');
+    lines.push('', '# Endogene Knoten (topologische Reihenfolge)');
     nonRoots.forEach(nd => {
       const parents = getParents(nd.id);
+      const sigma = getNonRootSd(nd.id);
       const terms = parents.map(pid => {
         const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
         const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-        const pname = getNodeName(pid);
-        return `${coef} * ${pname}`;
+        return `${coef} * ${getNodeName(pid)}`;
       });
-      const commentParts = parents.map(pid=>{
+      const commentParts = parents.map(pid => {
         const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
         const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-        return `${getNodeName(pid)} → ${nd.name} (β = ${coef})`;
+        return `beta(${getNodeName(pid)})=${coef}`;
       });
-      lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, 1)  # ${commentParts.join(', ')}`);
+      commentParts.push(`sigma=${sigma}`);
+      lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
     });
   }
 
