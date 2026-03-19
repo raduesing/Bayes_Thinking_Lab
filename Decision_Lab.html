@@ -36,8 +36,8 @@ nav{position:sticky;top:0;z-index:100;background:var(--paper);border-bottom:1.5p
 .nav-back:hover{color:var(--accent2)}
 
 /* LAYOUT */
-.wrap{max-width:1100px;margin:0 auto;padding:1.2rem 1.5rem}
-.outer{display:grid;grid-template-columns:240px 1fr;gap:1.2rem;align-items:start}
+.wrap{max-width:none;margin:0;padding:1.2rem 1.5rem}
+.outer{display:grid;grid-template-columns:230px 1fr;gap:1.2rem;align-items:start}
 .sidebar{display:flex;flex-direction:column;gap:.7rem;position:sticky;top:3.5rem;
   max-height:calc(100vh - 4rem);overflow-y:scroll}
 .sidebar::-webkit-scrollbar{width:5px}
@@ -82,7 +82,8 @@ select{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
 select:focus{border-color:var(--accent2)}
 
 /* CANVAS */
-#mainCanvas{width:100%;height:340px;display:block}
+#mainCanvas{display:block}
+#plot-area{overflow:hidden;min-width:0}
 
 /* DECISION PANELS */
 .decisions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-top:.8rem}
@@ -262,21 +263,6 @@ select:focus{border-color:var(--accent2)}
     </div>
   </div>
 
-  <!-- Wertebereich -->
-  <div class="scard">
-    <h3>Wertebereich (Achse)</h3>
-    <div class="pg">
-      <div class="pl"><span>Minimum</span><span class="pv" id="v-xmin" style="color:var(--ink3)">50</span></div>
-      <input type="range" id="sl-xmin" min="0" max="130" step="5" value="50" oninput="update()">
-    </div>
-    <div class="pg">
-      <div class="pl"><span>Maximum</span><span class="pv" id="v-xmax" style="color:var(--ink3)">160</span></div>
-      <input type="range" id="sl-xmax" min="70" max="250" step="5" value="160" oninput="update()">
-    </div>
-    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);line-height:1.7">
-      Default: IQ-Skala (M=100, SD=15). Wertebereich frei einstellbar.
-    </div>
-  </div>
 
 </div><!-- /sidebar -->
 
@@ -292,7 +278,28 @@ select:focus{border-color:var(--accent2)}
       <span id="leg-eti" style="display:none"><span class="ld" style="background:var(--eti-col);height:3px;border-bottom:2px dashed var(--eti-col)"></span>ETI</span>
       <span><span class="ld" style="background:var(--rope-col);opacity:.4;height:10px;border-radius:2px"></span>ROPE</span>
     </div>
-    <canvas id="mainCanvas"></canvas>
+    <div style="display:grid;grid-template-columns:1fr 150px;gap:1rem;align-items:start">
+      <div id="plot-area"><canvas id="mainCanvas"></canvas></div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+             text-transform:uppercase;color:var(--ink3);margin-bottom:.6rem;
+             padding-bottom:.28rem;border-bottom:1px solid var(--grid)">Wertebereich</div>
+        <div class="pg">
+          <div class="pl"><span style="font-family:'DM Mono',monospace;font-size:.68rem">Min</span>
+            <span class="pv" id="v-xmin" style="color:var(--ink3)">50</span></div>
+          <input type="range" id="sl-xmin" min="0" max="130" step="5" value="50" oninput="update()">
+        </div>
+        <div class="pg">
+          <div class="pl"><span style="font-family:'DM Mono',monospace;font-size:.68rem">Max</span>
+            <span class="pv" id="v-xmax" style="color:var(--ink3)">160</span></div>
+          <input type="range" id="sl-xmax" min="0" max="250" step="5" value="160" oninput="update()">
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink3);
+             line-height:1.7;margin-top:.4rem">
+          Default: IQ-Skala.<br>Bei Gamma: ab 0.
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Three decision panels -->
@@ -345,15 +352,15 @@ select:focus{border-color:var(--accent2)}
       <span>Erläuterungen &amp; Hintergrund</span><span class="arr">▶</span>
     </div>
     <div class="collap-body">
-      <p><strong>HDI (Highest Density Interval)</strong> — Das kürzeste Intervall, das X% der Posteriormasse enthält. Bei symmetrischen Posteriors (Normal) identisch mit ETI. Bei schiefen Verteilungen (Gamma, t mit Ort-Parameter) liegt das HDI asymmetrisch — es umfasst den dichtesten Bereich der Verteilung. <em>Nachteil:</em> das HDI kann je nach Modellparametrisierung (z.B. log-Skala vs. Originalskala) zu unterschiedlichen Entscheidungen führen.</p>
-      <p><strong>ETI (Equal-Tailed Interval)</strong> — Schneidet gleich viel Wahrscheinlichkeitsmasse von beiden Rändern ab (bei 95%: je 2.5%). Das ETI ist <em>invariant unter monotonen Transformationen</em>: wenn du den Parameter transformierst, transformiert sich das ETI korrekt mit. Daher liefert es bei derselben Fragestellung immer dieselbe Entscheidung, unabhängig davon wie das Modell parametrisiert wurde.</p>
+      <p><strong>HDI (Highest Density Interval)</strong> — Das kürzeste Intervall, das X% der Posteriormasse enthält. Die entscheidende Eigenschaft: <em>kein Wert außerhalb des HDI hat eine höhere Dichte als irgendein Wert innerhalb.</em> Das bedeutet: das HDI enthält genau die „plausibelsten" Parameterwerte — jene, die am stärksten vom Posterior gestützt werden. Dichte ist proportional zur Wahrscheinlichkeit, sodass ein Wert mit höherer Dichte glaubwürdiger ist als einer mit niedrigerer. Bei einer unimodalen Verteilung ist das HDI stets ein zusammenhängendes Intervall um den Modus (dichtester Punkt). Bei symmetrischen Posteriors (Normal, t) ist HDI = ETI.</p>
+      <p><strong>ETI (Equal-Tailed Interval)</strong> — Schneidet gleich viel Wahrscheinlichkeitsmasse von beiden Rändern ab (bei 95%: je 2.5%). Das ETI entspricht dem, was frequentistische Konfidenzintervalle nachbilden. Wichtige Eigenschaft: <em>invariant unter monotonen Transformationen.</em> Wenn du einen Parameter transformierst (z.B. log(σ) statt σ), gibt das ETI auf der Originalskala dieselbe Entscheidung wie auf der transformierten. Das HDI kann dagegen je nach Parametrisierung zu verschiedenen Entscheidungen führen (HDI auf log-Skala ≠ exp(HDI auf log-Skala)). <strong>Für Normal- und t-Verteilung gilt: HDI = ETI</strong>, da beide Verteilungen symmetrisch sind. Unterschiede entstehen nur bei schiefen Posteriors (hier: Gamma).</p>
       <p><strong>Kruschkes Entscheidungsregel (Ansatz A)</strong> — Trichotom mit dem gewählten Intervall (HDI oder ETI):
-        <span class="formula">HDI/ETI vollständig außerhalb ROPE → Effekt als real akzeptieren</span>
-        <span class="formula">HDI/ETI vollständig innerhalb ROPE → praktische Äquivalenz akzeptieren</span>
-        <span class="formula">HDI/ETI überlappt ROPE → Urteil zurückhalten (withhold)</span>
+        <span class="formula">Intervall vollständig außerhalb ROPE → Effekt als real akzeptieren</span>
+        <span class="formula">Intervall vollständig innerhalb ROPE → praktische Äquivalenz akzeptieren</span>
+        <span class="formula">Intervall überlappt ROPE → Urteil zurückhalten (withhold)</span>
       </p>
       <p><strong>Full-ROPE-Ansatz (Ansatz B, bayestestR)</strong> — Berechnet den Anteil der gesamten Posteriormasse, der im ROPE liegt. Das ist eine graduelle, kontinuierliche Aussage: „37% der Posteriormasse liegt im ROPE" — ohne harten Schwellenwert. Empfohlene Konventionen (Makowski et al. 2019): &lt;1% = signifikanter Effekt, 1–2.5% = unsicher, &gt;97.5% = praktische Äquivalenz.</p>
-      <p><strong>ROPE festlegen</strong> — Idealerweise inhaltlich: Was ist der kleinste Effekt, der für deine Fragestellung noch praktisch bedeutsam wäre? (SESOI = Smallest Effect Size Of Interest). Ohne Vorwissen: Kruschke schlägt ±0.1·SD(y) vor. Auf der IQ-Skala (SD=15): ROPE ≈ [−1.5, +1.5] IQ-Punkte um den Referenzwert.</p>
+      <p><strong>ROPE festlegen: SESOI</strong> — Die ROPE sollte immer inhaltlich bestimmt werden. Der Schlüsselbegriff ist SESOI (Smallest Effect Size Of Interest): <em>Welcher Effekt wäre so klein, dass er für deine Fragestellung keine praktische Bedeutung mehr hat?</em> Das ist eine wissenschaftliche, keine statistische Frage. Beispiel Therapiestudie: Ein IQ-Gewinn von weniger als 3 Punkten ist in der Praxis nicht unterscheidbar — also ROPE = [−3, +3]. Methoden zur SESOI-Bestimmung: (1) Pilotdaten / Erfahrungswerte, (2) Standardisierte Effektgröße (z.B. d=0.2 als „kleiner Effekt"), (3) Was Kliniker als minimalen klinisch bedeutsamen Unterschied (MCID) angeben. Lakens et al. (2018) geben eine ausführliche Einführung: Lakens, D., Scheel, A. M., &amp; Isager, P. M. (2018). Equivalence testing for psychological research: A tutorial. <em>Advances in Methods and Practices in Psychological Science</em>, 1(2), 259–301. — Ohne jedes Vorwissen: Kruschke schlägt ±0.1·SD(y) vor.</p>
       <p><strong>Intervallbreite 89% vs. 95%</strong> — McElreath bevorzugt 89%, weil es kein Sonderrecht für die Zahl 95 gibt — diese Konvention kommt aus der frequentistischen Welt. 89 ist die größte Primzahl unter 90. Das 95%-Intervall ist weit verbreitet und erleichtert die Kommunikation. Wähle bewusst und rechtfertige die Wahl.</p>
     </div>
   </div>
@@ -435,9 +442,9 @@ function setIvType(t){
     if(t==='both') b.classList.add('on');
   });
   const hints = {
-    hdi: 'HDI = kürzestes Intervall mit X% der Masse. Bei Normalverteilung identisch mit ETI.',
+    hdi: 'HDI = kürzestes Intervall mit X% der Masse. Enthält die dichtesten (plausibelsten) Werte.',
     eti: 'ETI = Quantil-basiert, invariant unter Transformationen. Selbe Entscheidung unabhängig von Parametrisierung.',
-    both: 'Beide Intervalle gleichzeitig. Zeigt Unterschiede bei schiefen Posteriors (t, Gamma).'
+    both: 'Beide gleichzeitig. Unterschied sichtbar nur bei schiefen Verteilungen (Gamma). Normal und t sind symmetrisch → HDI = ETI.'
   };
   document.getElementById('iv-hint').textContent = hints[t];
   document.getElementById('leg-hdi').style.display = (t==='eti') ? 'none' : '';
@@ -455,6 +462,27 @@ function onDistChange(){
   document.getElementById('row-rate').style.display = isGamma ? '' : 'none';
   document.getElementById('row-mu').style.display = isGamma ? 'none' : '';
   document.getElementById('row-sigma').style.display = isGamma ? 'none' : '';
+
+  if(isGamma){
+    // Gamma: shape=3, rate=0.3 → mean=10, skewed positive, starts at 0
+    document.getElementById('sl-shape').value = 3;
+    document.getElementById('sl-rate').value = 0.3;
+    document.getElementById('sl-xmin').value = 0;
+    document.getElementById('sl-xmax').value = 50;
+    // ROPE: ±1 um den Nulleffekt-Bereich nahe 0
+    document.getElementById('sl-rl').min = 0; document.getElementById('sl-rl').max = 50;
+    document.getElementById('sl-ru').min = 0; document.getElementById('sl-ru').max = 50;
+    document.getElementById('sl-rl').value = 2;
+    document.getElementById('sl-ru').value = 8;
+  } else {
+    // Normal / t: IQ-Skala defaults
+    document.getElementById('sl-xmin').value = 50;
+    document.getElementById('sl-xmax').value = 160;
+    document.getElementById('sl-rl').min = 50; document.getElementById('sl-rl').max = 160;
+    document.getElementById('sl-ru').min = 50; document.getElementById('sl-ru').max = 160;
+    document.getElementById('sl-rl').value = 97;
+    document.getElementById('sl-ru').value = 113;
+  }
   update();
 }
 
@@ -607,8 +635,11 @@ function update(){
   // ── Draw canvas ────────────────────────────────
   const canvas = document.getElementById('mainCanvas');
   const dpr = window.devicePixelRatio || 1;
-  const W = canvas.parentElement.clientWidth - 40;
-  const H = 340;
+  // Reset canvas first so plot-area can shrink to its natural grid width
+  canvas.style.width = '1px'; canvas.width = 1;
+  const plotArea = document.getElementById('plot-area');
+  const W = Math.max(200, plotArea.clientWidth);
+  const H = 400;
   canvas.width  = W * dpr;
   canvas.height = H * dpr;
   canvas.style.width  = W + 'px';
