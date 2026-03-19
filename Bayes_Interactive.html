@@ -35,7 +35,11 @@ h1 em{font-style:italic;color:var(--accent2)}
 .ibtn:hover{background:var(--ink);color:var(--bg)}
 .ibtn.on{border-color:var(--accent2);color:var(--accent2)}
 .outer{display:grid;grid-template-columns:215px 1fr;gap:1rem;align-items:start}
-.sidebar{display:flex;flex-direction:column;gap:.7rem}
+.sidebar{display:flex;flex-direction:column;gap:.7rem;position:sticky;top:1rem;max-height:calc(100vh - 2rem);overflow-y:scroll}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sidebar::-webkit-scrollbar-thumb:hover{background:var(--accent2)}
 .scard{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
 .scard h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid)}
 .ha{color:var(--accent)}.hb{color:var(--accent2)}.hg{color:var(--accent3)}
@@ -154,6 +158,15 @@ details.expl summary::-webkit-details-marker{display:none}
             <span class="expl-hd">MCMC Metropolis-Hastings</span>
             Samplet (β, σ) gemeinsam. σ wird auf Log-Skala vorgeschlagen (garantiert Positivität). Die Heatmap zeigt log P(β,σ|y). Trace-Plots zeigen Konvergenz; Histogramme die marginale Posterior nach Burn-in.
           </div>
+          <div class="expl-sec">
+            <span class="expl-hd">95% CI Mittelwert vs. 95% PPI neue Beobachtung</span>
+            Die <b>Posterior Predictive Lines</b> (50 Stichproben aus dem Posterior) blenden beim Aktivieren eines Bandes zurück — das Band ist deren formale Zusammenfassung.<br><br>
+            <b>95% CI Mittelwert</b> (grün, schmal): Zeigt die Unsicherheit darüber, <em>wo die Regressionsgerade liegt</em>. Enthält nur die Parameterunsicherheit (σ_α und σ_β). McElreath: <em>link()</em>.<br>
+            Breite ∝ √(σ_α² + x²·σ_β²) — am schmalsten an x̄, weiter an den Enden.<br><br>
+            <b>95% PPI neue Beob.</b> (blau, gestrichelt, breiter): Zeigt, <em>wo ein neuer Datenpunkt y_neu fallen würde</em>. Enthält zusätzlich die Residualstreuung σ. McElreath: <em>sim()</em>.<br>
+            Breite ∝ √(σ_α² + x²·σ_β² + σ²)<br><br>
+            <b>Schlüsselunterschied:</b> Bei kleinem σ (wenig Rauschen) liegen CI und PPI eng beieinander. Bei großem σ ist das PPI viel breiter als das CI — denn selbst wenn wir die Linie perfekt kennen, streuen neue Beobachtungen um σ.
+          </div>
         </div>
       </details>
     </div>
@@ -198,6 +211,18 @@ details.expl summary::-webkit-details-marker{display:none}
             <span class="li"><span class="ld" style="background:var(--post);opacity:.6"></span>Post. Pred.</span>
             <span class="li"><span class="ld" style="background:var(--post);height:3.5px"></span>Post. Median</span>
             <span class="li"><span class="ldd" style="color:var(--lik)"></span>Wahre Linie</span>
+          </div>
+          <div class="leg" style="margin-top:.3rem;gap:.65rem;flex-wrap:wrap;align-items:center">
+            <label class="li" style="cursor:pointer;gap:.3rem;user-select:none">
+              <input type="checkbox" id="chk-ci" onchange="toggleCI()" style="accent-color:var(--accent3);cursor:pointer">
+              <span class="ld" style="background:var(--accent3);opacity:.6"></span>
+              <span>95% CI Mittelwert</span>
+            </label>
+            <label class="li" style="cursor:pointer;gap:.3rem;user-select:none">
+              <input type="checkbox" id="chk-ppi" onchange="togglePPI()" style="accent-color:var(--accent2);cursor:pointer">
+              <span class="ld" style="background:var(--accent2);opacity:.35;border:1px dashed var(--accent2)"></span>
+              <span>95% PPI neue Beob.</span>
+            </label>
           </div>
           <div style="position:relative;flex:1;min-height:clamp(260px,36vh,500px)"><canvas id="cPost" style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div>
         </div>
@@ -321,6 +346,7 @@ function cv(v){return getComputedStyle(document.documentElement).getPropertyValu
 // ── state ─────────────────────────────────────────────
 let useSt=false, showOut=false, seed=42, data=[];
 let CH={};  // chart handles
+let showCI=false, showPPI=false; // posterior interval bands
 // MCMC
 let chain=[], running=false, rafId=null, accepted=0, alphaFixed=0;
 const STEP_B=0.15, STEP_S=0.12;
@@ -531,21 +557,53 @@ function buildPostChart(p,post){
       borderColor:cv('--prior')+'22',borderWidth:1,pointRadius:0,tension:0,fill:false,order:50});
   }
   if(post){
-    // 2. Posterior predictive lines
+    // 2. Posterior predictive lines — fade back when a band is active so bands are legible
+    const drawAlpha = (showCI||showPPI) ? '1a' : '44';
     const r2=mkRng(77777);
     for(let i=0;i<50;i++){
       const a=post.mA+rnorm(r2)*post.sA,b=post.mB+rnorm(r2)*post.sB;
       ds.push({data:xL.map(x=>({x,y:a+b*x})),type:'line',
-        borderColor:cv('--post')+'44',borderWidth:1.2,pointRadius:0,tension:0,fill:false,order:20});
+        borderColor:cv('--post')+drawAlpha,borderWidth:1.2,pointRadius:0,tension:0,fill:false,order:20});
     }
-    // 3. Posterior median — thick, order=3
+
+    // 3a. PPI band — 95% Posterior Predictive Interval für neue Beobachtungen (breiter, inkl. σ)
+    if(showPPI){
+      const ppiCol=cv('--accent2');
+      ds.push({
+        data:xL.map(x=>({x,y:post.mA+post.mB*x+1.96*Math.sqrt(post.sA**2+x**2*post.sB**2+post.mS**2)})),
+        type:'line',borderColor:ppiCol+'99',borderWidth:1.5,pointRadius:0,tension:0,
+        fill:false,order:16,borderDash:[5,3]
+      });
+      ds.push({
+        data:xL.map(x=>({x,y:post.mA+post.mB*x-1.96*Math.sqrt(post.sA**2+x**2*post.sB**2+post.mS**2)})),
+        type:'line',borderColor:ppiCol+'99',borderWidth:1.5,pointRadius:0,tension:0,
+        fill:'-1',backgroundColor:ppiCol+'22',order:16,borderDash:[5,3]
+      });
+    }
+
+    // 3b. CI band — 95% Credible Interval für den Mittelwert μ(x) (schmal, nur Parameterunsicherheit)
+    if(showCI){
+      const ciCol=cv('--accent3');
+      ds.push({
+        data:xL.map(x=>({x,y:post.mA+post.mB*x+1.96*Math.sqrt(post.sA**2+x**2*post.sB**2)})),
+        type:'line',borderColor:ciCol+'cc',borderWidth:2,pointRadius:0,tension:0,
+        fill:false,order:11
+      });
+      ds.push({
+        data:xL.map(x=>({x,y:post.mA+post.mB*x-1.96*Math.sqrt(post.sA**2+x**2*post.sB**2)})),
+        type:'line',borderColor:ciCol+'cc',borderWidth:2,pointRadius:0,tension:0,
+        fill:'-1',backgroundColor:ciCol+'45',order:11
+      });
+    }
+
+    // 4. Posterior median — thick, order=3
     ds.push({data:xL.map(x=>({x,y:post.mA+post.mB*x})),type:'line',
       borderColor:cv('--post'),borderWidth:3.5,pointRadius:0,tension:0,fill:false,order:3});
   }
-  // 4. Data points — order=4
+  // 5. Data points — order=4
   ds.push({data:data.map(d=>({x:d.x,y:d.y})),type:'scatter',
     backgroundColor:cv('--ink')+'cc',borderColor:'transparent',pointRadius:4.5,order:4});
-  // 5. True line — FRONT order=1
+  // 6. True line — FRONT order=1
   ds.push({data:xL.map(x=>({x,y:p.a+p.b*x})),type:'line',
     borderColor:cv('--lik'),borderWidth:3,pointRadius:0,tension:0,fill:false,
     borderDash:[8,5],order:1});
@@ -971,6 +1029,8 @@ function toggleOut(){
   document.getElementById('btn-out').className=showOut?'ibtn on':'ibtn';
   genData();mcmcReset();rebuildAll();
 }
+function toggleCI() { showCI=document.getElementById('chk-ci').checked; rebuildAll(); }
+function togglePPI(){ showPPI=document.getElementById('chk-ppi').checked; rebuildAll(); }
 
 // ── main rebuild ──────────────────────────────────────
 function rebuildAll(){

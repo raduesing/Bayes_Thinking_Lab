@@ -161,6 +161,7 @@
 .lcard-body{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.8}
 .lcard-body b{color:var(--ink)}
 .lcard-body code{background:var(--panel);border:1px solid var(--border);color:var(--accent2);padding:.02rem .3rem;font-size:.75rem}
+
 </style>
 </head>
 <body>
@@ -320,12 +321,14 @@
         <div class="panel-label">SHRINKAGE-DIAGRAMM</div>
         <div class="panel-title">No Pooling <em>vs.</em> Partial Pooling Intercepts</div>
         <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.35rem;line-height:1.6">
-          <b>Wie lesen?</b> Jeder Punkt = eine Gruppe. X-Achse: ungeschrumpfter (No-Pooling) Intercept. Y-Achse: geschrumpfter (Partial-Pooling) Intercept.<br>
-          ○ = No-Pooling &nbsp;·&nbsp; ● = Partial-Pooling &nbsp;·&nbsp; Pfeil = Ausmaß und Richtung der Shrinkage
-          <span id="outlier-note" style="display:none;color:var(--accent)"> &nbsp;·&nbsp; ⚡ = Ausreißer-Gruppe (n=3)</span>
+          <b>Wie lesen?</b> Jede Zeile = eine Gruppe, sortiert nach No-Pooling-Intercept (oben = größter). ○ = No-Pooling &nbsp;·&nbsp; ● = Partial-Pooling. Pfeil zeigt Richtung und Stärke der Shrinkage zum Grand Mean (γ̂₀₀, gestrichelt).
+          <span id="outlier-note-cat" style="display:none;color:var(--accent)"> &nbsp;·&nbsp; ⚡ = Ausreißer-Gruppe</span>
         </div>
-        <div style="position:relative;height:clamp(160px, 22vh, 280px)">
+        <div style="display:none;position:relative;height:0">
           <canvas id="shrinkChart"></canvas>
+        </div>
+        <div style="position:relative;">
+          <canvas id="caterpillarCanvas" style="display:block;width:100%;"></canvas>
         </div>
         <div id="grp-table-panel" style="margin-top:.6rem"></div>
       </div>
@@ -437,7 +440,7 @@ function toggleTrue() {
 function toggleOutlier() {
   showOutlier = !showOutlier;
   document.getElementById('btn-outlier').classList.toggle('ib-on', showOutlier);
-  document.getElementById('outlier-note').style.display = showOutlier ? 'inline' : 'none';
+  document.getElementById('outlier-note-cat').style.display = showOutlier ? 'inline' : 'none';
   genData(); renderAll();
 }
 
@@ -1263,6 +1266,169 @@ function buildShrink(p, est) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CATERPILLAR CHART (raw Canvas2D — Forest-Plot-Stil)
+// Zeigt alle Gruppen auf der Y-Achse, sortiert nach NP-Intercept.
+// Pfeil von NP (○) → PP (●) macht die Shrinkage-Richtung direkt lesbar.
+// ═══════════════════════════════════════════════════════════════
+function buildCaterpillar(p, est) {
+  const canvas = document.getElementById('caterpillarCanvas');
+  if (!canvas) return;
+
+  const { grpFit, ppFit, feA, totalJ } = est;
+  const npVals = grpFit.map(g => g.a);
+  const ppVals = ppFit.map(g => g.a);
+
+  // Dimensions
+  const W   = canvas.parentElement.clientWidth || 380;
+  const rowH = Math.max(22, Math.min(32, Math.floor((300 - 52) / totalJ)));
+  const H   = totalJ * rowH + 52;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Background
+  ctx.fillStyle = css('--paper');
+  ctx.fillRect(0, 0, W, H);
+
+  // x range
+  const allVals = [...npVals, ...ppVals, feA];
+  const xSpan   = Math.max(...allVals) - Math.min(...allVals);
+  const padX    = Math.max(0.25, xSpan * 0.13);
+  const xMin    = Math.min(...allVals) - padX;
+  const xMax    = Math.max(...allVals) + padX;
+
+  const padL = 44, padR = 18, padT = 20, padB = 32;
+  const innerW = W - padL - padR;
+
+  function xPx(v) { return padL + (v - xMin) / (xMax - xMin) * innerW; }
+
+  // Sort groups: largest NP intercept at top
+  const order = Array.from({length: totalJ}, (_, j) => j)
+    .sort((a, b) => npVals[b] - npVals[a]);
+
+  // Grid + tick lines
+  const nTicks = 4;
+  for (let i = 0; i <= nTicks; i++) {
+    const v = xMin + (xMax - xMin) * i / nTicks;
+    const x = xPx(v);
+    ctx.strokeStyle = css('--chart-grid');
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, padT - 4);
+    ctx.lineTo(x, H - padB + 4);
+    ctx.stroke();
+    ctx.font      = '9px DM Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = css('--chart-tick');
+    ctx.fillText(v.toFixed(2), x, H - padB + 15);
+  }
+
+  // Axis label
+  ctx.font      = '9px DM Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = css('--chart-tick');
+  ctx.fillText('Intercept', padL + innerW / 2, H - 3);
+
+  // Grand Mean vertical line
+  const gmX = xPx(feA);
+  ctx.save();
+  ctx.strokeStyle = FE_COLOR + 'bb';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(gmX, padT - 8);
+  ctx.lineTo(gmX, H - padB + 4);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font      = '9px DM Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = FE_COLOR + 'cc';
+  ctx.fillText('γ̂₀₀', gmX, padT - 10);
+  ctx.restore();
+
+  // Per-group rows
+  order.forEach((j, rank) => {
+    const np    = npVals[j];
+    const pp    = ppVals[j];
+    const isOut = trueGrp[j]?.isOutlier;
+    const col   = GC[j % GC.length];
+    const y     = padT + (rank + 0.5) * rowH;
+    const xNP   = xPx(np);
+    const xPP   = xPx(pp);
+    const r     = isOut ? 5.5 : 4;
+
+    // Subtle background stripe for readability
+    if (rank % 2 === 0) {
+      ctx.fillStyle = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)';
+      ctx.fillRect(padL, y - rowH / 2, innerW, rowH);
+    }
+
+    // Connecting line NP → PP
+    ctx.strokeStyle = col + '55';
+    ctx.lineWidth   = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(xNP, y);
+    ctx.lineTo(xPP, y);
+    ctx.stroke();
+
+    // Arrow head at PP end (pointing toward grand mean)
+    const dx = xPP - xNP;
+    if (Math.abs(dx) > r * 2 + 2) {
+      const dir = dx > 0 ? 1 : -1;
+      ctx.fillStyle = col + 'cc';
+      ctx.beginPath();
+      ctx.moveTo(xPP, y);
+      ctx.lineTo(xPP - dir * 7, y - 3.5);
+      ctx.lineTo(xPP - dir * 7, y + 3.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // NP: hollow circle
+    ctx.beginPath();
+    ctx.arc(xNP, y, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1.8;
+    ctx.stroke();
+
+    // PP: filled circle
+    ctx.beginPath();
+    ctx.arc(xPP, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+
+    // True value (×) if showTrue is active
+    if (showTrue && trueGrp[j]) {
+      const xT = xPx(p.g00 + trueGrp[j].u0);
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)';
+      ctx.lineWidth   = 1.5;
+      const s = 4;
+      ctx.beginPath();
+      ctx.moveTo(xT - s, y - s); ctx.lineTo(xT + s, y + s);
+      ctx.moveTo(xT + s, y - s); ctx.lineTo(xT - s, y + s);
+      ctx.stroke();
+    }
+
+    // Group label on left
+    ctx.font      = `${isOut ? 'bold ' : ''}9px DM Mono, monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = col;
+    ctx.fillText(`G${j + 1}${isOut ? '⚡' : ''}`, padL - 5, y + 3);
+  });
+
+  // Mini legend
+  const legY = H - padB + 26;
+  ctx.font      = '8.5px DM Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = css('--ink2');
+  ctx.fillText('○ No Pooling', padL, legY);
+  ctx.fillText('● Partial Pooling', padL + 78, legY);
+}
+
 function modelFitStats(p, est) {
   const {grpFit, cpFit, ppFit, feA, feB, totalJ} = est;
   const N = data.length;
@@ -1679,6 +1845,7 @@ function renderAll() {
   checkSimpson(est.cpFit, est.grpFit);
   buildMain(p, est);
   buildShrink(p, est);
+  buildCaterpillar(p, est);
   updateResults(p, est);
 }
 
