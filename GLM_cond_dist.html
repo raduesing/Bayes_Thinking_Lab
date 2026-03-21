@@ -270,6 +270,31 @@ function negBinPMF(k, mu, alpha) {
   return Math.exp(logGamma(k+r) - logGamma(k+1) - logGamma(r) + r*Math.log(p) + k*Math.log(1-p));
 }
 
+// Ordinal-Logit helpers
+function ordinalCutpoints(ncat) {
+  const cuts = {3:[-1,1], 4:[-1.5,0,1.5], 5:[-2,-0.7,0.7,2], 6:[-2.5,-1.2,0,1.2,2.5]};
+  return cuts[ncat] || cuts[5];
+}
+function ordinalProbs(eta, ncat) {
+  const tau = ordinalCutpoints(ncat);
+  const cumP = tau.map(t => 1/(1+Math.exp(-(t - eta))));
+  const p = [cumP[0]];
+  for(let k=1; k<ncat-1; k++) p.push(cumP[k] - cumP[k-1]);
+  p.push(1 - cumP[ncat-2]);
+  return p;
+}
+
+// Zero-Inflation helpers
+function zipPMF(k, pi, lambda) {
+  if(k === 0) return pi + (1-pi)*Math.exp(-lambda);
+  return (1-pi) * poissonPMF(k, lambda);
+}
+function hurdlePoissonPMF(k, p0, lambda) {
+  if(k === 0) return p0;
+  const trunc = 1 - Math.exp(-lambda);
+  return trunc > 1e-10 ? (1-p0) * poissonPMF(k, lambda) / trunc : 0;
+}
+
 // ── MODELS ───────────────────────────────────────────────────────────────────
 const MODELS = {
   ols: {
@@ -478,6 +503,129 @@ const MODELS = {
       }
     },
     distAxis: (m, b0, b1, xVals, e) => ({xMin:-0.5, xMax:1.5, xLabel:'y (0 = Misserfolg, 1 = Erfolg)'})
+  },
+
+  ordinal: {
+    name: 'Ordinal-Logit', paramShort: 'η', paramLabel: 'η (Linearer Prädiktor)',
+    extraParams: [{id:'ncat', label:'K (Kategorien)', min:3, max:6, step:1, default:5}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Kumulativer Link: <strong>Logit</strong>. P(Y ≤ k) = σ(τₖ − η). Die K−1 Cut-Points τ sind gleichmäßig verteilt und gelten für alle Schwellen gleichzeitig (<em>proportional odds</em>). Das Modell modelliert ordinale Outcomes mit natürlicher Rangordnung, ohne gleiche Abstände zwischen Kategorien vorauszusetzen.`,
+    getParam: (eta, e) => eta,
+    getEY:    (eta, e) => { const p = ordinalProbs(eta, e.ncat); return p.reduce((s,v,i) => s+v*(i+1), 0); },
+    getCI:    (eta, e) => {
+      const p = ordinalProbs(eta, e.ncat);
+      const ey = p.reduce((s,v,i) => s+v*(i+1), 0);
+      const ey2 = p.reduce((s,v,i) => s+v*(i+1)**2, 0);
+      const sd = Math.sqrt(Math.max(0, ey2-ey**2));
+      return [Math.max(1, ey-1.64*sd), Math.min(e.ncat, ey+1.64*sd)];
+    },
+    paramStr: (v) => `η = ${v.toFixed(3)}`,
+    formulaHtml: (e) => {
+      const tau = ordinalCutpoints(e.ncat).map(t => t.toFixed(2)).join(', ');
+      return `η = β₀ + β₁·x<br>P(Y ≤ k) = σ(τₖ − η)<br>τ = [<span class="computed">${tau}</span>]<br>Y|x ~ Ordinal(K = <span class="computed">${e.ncat}</span>)`;
+    },
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const ncat = e.ncat;
+        let maxP = 0;
+        xVals.forEach(x => { ordinalProbs(b0+b1*x, ncat).forEach(p => { if(p>maxP) maxP=p; }); });
+        return xVals.map((x,i) => {
+          const probs = ordinalProbs(b0+b1*x, ncat), isHL = x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode==='ridgeline' ? (xVals.length-1-i)*(maxP*0.4) : 0;
+          const pts = probs.map((p,k) => ({x:k+1, y: viewMode==='ridgeline'?[offset, p+offset]:p}));
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.55, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => ({xMin:0.5, xMax:e.ncat+0.5, xLabel:'Antwortkategorie k'})
+  },
+
+  zip: {
+    name: 'ZIP', paramShort: 'λ', paramLabel: 'λ (Poisson-Rate)',
+    extraParams: [{id:'pi_zi', label:'π (Zero-Inflation)', min:0, max:0.95, step:0.05, default:0.3}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Mischmodell aus Null-Prozess (Wahrscheinlichkeit π) und Poisson-Prozess: P(Y=0) = π + (1−π)·e^−λ. <em>Structural zeros</em> kommen von π, <em>sampling zeros</em> vom Poisson-Prozess. E[Y] = (1−π)·λ — der Zero-Inflation-Anteil dämpft den Mittelwert. Kanonischer Count-Link: <strong>Log</strong>.`,
+    getParam: (eta, e) => Math.exp(eta),
+    getEY:    (lambda, e) => (1-e.pi_zi)*lambda,
+    getCI:    (lambda, e) => {
+      const mu = (1-e.pi_zi)*lambda;
+      const sd = Math.sqrt(Math.max(0, (1-e.pi_zi)*lambda*(1+e.pi_zi*lambda)));
+      return [Math.max(0, mu-1.64*sd), mu+1.64*sd];
+    },
+    paramStr: (v) => `λ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>π = <span class="computed">${(e.pi_zi||0).toFixed(2)}</span><br>P(Y=0) = π + (1−π)·e^−λ`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const maxK = 18, pi = e.pi_zi;
+        let maxDens = 0;
+        xVals.forEach(x => { const lam=Math.exp(b0+b1*x); for(let k=0;k<=maxK;k++){const p=zipPMF(k,pi,lam);if(p>maxDens)maxDens=p;} });
+        return xVals.map((x,i) => {
+          const lam=Math.exp(b0+b1*x), isHL=x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode==='ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          const pts = []; for(let k=0;k<=maxK;k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset,zipPMF(k,pi,lam)+offset]:zipPMF(k,pi,lam)});
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const maxLam = Math.max(...xVals.map(x => Math.exp(b0+b1*x)));
+      return {xMin:0, xMax:Math.min(25, Math.max(10, Math.ceil(maxLam*2.5))), xLabel:'k (Anzahl Ereignisse)'};
+    }
+  },
+
+  hurdle: {
+    name: 'Hurdle-Poisson', paramShort: 'λ', paramLabel: 'λ (Count-Rate)',
+    extraParams: [{id:'p0_hurdle', label:'p₀ (Null-Wahrsch.)', min:0, max:0.95, step:0.05, default:0.4}],
+    xValues: [-3,-2.25,-1.5,-0.75,0,0.75,1.5,2.25,3],
+    description: `Zweistufiges Modell: (1) Hürde p₀ = P(Y=0), unabhängig vom Poisson-Prozess. (2) Für Y > 0: nullzensierter Poisson mit E[Y|Y>0] = λ/(1−e^−λ). Im Gegensatz zum ZIP gibt es <strong>keine sampling zeros</strong> — wer die Hürde überwindet, hat garantiert Y ≥ 1. Die beiden Prozesse lassen sich separat modellieren.`,
+    getParam: (eta, e) => Math.exp(eta),
+    getEY:    (lambda, e) => {
+      const trunc = 1 - Math.exp(-lambda);
+      return trunc > 1e-10 ? (1-e.p0_hurdle)*lambda/trunc : 0;
+    },
+    getCI:    (lambda, e) => {
+      const trunc = 1 - Math.exp(-lambda);
+      const mu = trunc > 1e-10 ? (1-e.p0_hurdle)*lambda/trunc : 0;
+      const sd = Math.sqrt(Math.max(0, mu*(1 + lambda*0.5)));
+      return [Math.max(0, mu-1.64*sd), mu+1.64*sd];
+    },
+    paramStr: (v) => `λ = ${v.toFixed(3)}`,
+    formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>p₀ = <span class="computed">${(e.p0_hurdle||0).toFixed(2)}</span><br>P(Y=0) = p₀ &nbsp;·&nbsp; P(Y>0): Pois(λ) trunkiert`,
+    buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
+      if (isLeft) {
+        const maxK = 18, p0 = e.p0_hurdle;
+        let maxDens = 0;
+        xVals.forEach(x => { const lam=Math.exp(b0+b1*x); for(let k=0;k<=maxK;k++){const p=hurdlePoissonPMF(k,p0,lam);if(p>maxDens)maxDens=p;} });
+        return xVals.map((x,i) => {
+          const lam=Math.exp(b0+b1*x), isHL=x===hlX;
+          if(viewMode==='single' && !isHL) return null;
+          const offset = viewMode==='ridgeline' ? (xVals.length-1-i)*(maxDens*0.4) : 0;
+          const pts = []; for(let k=0;k<=maxK;k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset,hurdlePoissonPMF(k,p0,lam)+offset]:hurdlePoissonPMF(k,p0,lam)});
+          return {label:`x=${x}`, data:pts, type:'bar',
+            borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
+            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+        }).filter(d=>d);
+      } else {
+        const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
+        return _buildRegPlot(m, b0, b1, e, hlX, xs);
+      }
+    },
+    distAxis: (m, b0, b1, xVals, e) => {
+      const maxLam = Math.max(...xVals.map(x => Math.exp(b0+b1*x)));
+      return {xMin:0, xMax:Math.min(25, Math.max(10, Math.ceil(maxLam*2.5))), xLabel:'k (Anzahl Ereignisse)'};
+    }
   }
 
 };
@@ -644,6 +792,7 @@ function renderAll() {
   if (currentModel !== 'ols') yAxisRight.min = 0; // Poisson, Gamma, NegBin, Binomial, Bernoulli dürfen nicht ins Minus fallen
   if (currentModel === 'binomial') yAxisRight.max = extras.ntrials; // Binomial ist nach oben beschränkt
   if (currentModel === 'bernoulli') yAxisRight.max = 1; // Bernoulli: p ∈ [0,1]
+  if (currentModel === 'ordinal') { yAxisRight.min = 1; yAxisRight.max = extras.ncat || 5; yAxisRight.title.text = 'E[Y|x] (Kat.)'; }
   
   if (!chartRight || lastRightAxis !== axR_key) {
     if(chartRight) chartRight.destroy();
@@ -891,6 +1040,38 @@ const SCENARIOS = {
     context: 'In einer Lernstudie wird die Gedächtnisleistung (z-standardisiert) durch die Anzahl der Übungsdurchgänge vorhergesagt. Die Zielvariable ist kontinuierlich, annähernd symmetrisch und ohne natürliche Grenzen.',
     paramDesc: 'β₀ = 0.00 · β₁ = 0.60 · σ = 0.70',
     reveal: '<strong>Warum OLS / Normal?</strong> Standardisierte Testwerte sind kontinuierlich und symmetrisch. Die Normalverteilung ist angemessen: keine natürlichen Grenzen, Residuen symmetrisch verteilt. Der Identitäts-Link ist direkt interpretierbar: ein Durchgang mehr → β₁ Einheiten mehr im Test.'
+  },
+  schmerzintensitaet: {
+    title: 'Schmerzintensität', badge: 'ORDINAL',
+    model: 'ordinal', b0: 0.0, b1: -0.7,
+    extras: { ncat: 5 }, hlX: 0,
+    context: 'Patienten bewerten ihre Schmerzintensität auf einer Likert-Skala von 1 (kein Schmerz) bis 5 (stärkster Schmerz). Der Prädiktor ist die Analgetika-Dosis (z-standardisiert). Höhere Dosen sollten die Wahrscheinlichkeitsmasse zu niedrigeren Kategorien verschieben. Die Kategorien haben eine natürliche Rangordnung, aber gleiche Abstände zwischen den Stufen sind inhaltlich nicht gesichert.',
+    paramDesc: 'β₀ = 0.00 · β₁ = −0.70 · K = 5 Kategorien',
+    reveal: '<strong>Warum Ordinal-Logit?</strong> Die Schmerzskala 1–5 hat eine klare Rangordnung, aber unbekannte Abstände. OLS würde gleiche Abstände erzwingen und Vorhersagen außerhalb [1,5] erlauben. Der kumulative Logit-Link modelliert P(Y ≤ k) = σ(τₖ − η). Bei negativem β₁ steigt mit höherer Dosis (x) der Betrag von η, wodurch σ(τₖ − η) größer wird — mehr Wahrscheinlichkeit bei niedrigen Kategorien. In brms: <code>brm(schmerz | thres(4) ~ dosis, family=cumulative("logit"))</code>.'
+  },
+  therapiezufriedenheit_ord: {
+    title: 'Therapiezufriedenheit', badge: 'ORDINAL',
+    model: 'ordinal', b0: -0.5, b1: 0.9,
+    extras: { ncat: 4 }, hlX: 0.75,
+    context: 'Nach Abschluss einer Psychotherapie bewerten Klienten ihre Zufriedenheit auf einer 4-stufigen Skala (1 = unzufrieden, 4 = sehr zufrieden). Der Prädiktor ist die Anzahl der abgeschlossenen Sitzungen (z-standardisiert). Mehr Sitzungen sollten zu höherer Zufriedenheit führen — also mehr Wahrscheinlichkeitsmasse bei höheren Kategorien.',
+    paramDesc: 'β₀ = −0.50 · β₁ = 0.90 · K = 4 Kategorien',
+    reveal: '<strong>Proportional Odds:</strong> β₁ = 0.90 gilt für alle K−1 Schwellenübergänge gleichzeitig. Das ist die <em>proportional odds</em> Annahme: Eine Einheit mehr Sitzungen erhöht die Log-Odds für Y > k um den gleichen Betrag β₁, unabhängig von k. In brms: <code>brm(zuf | thres(3) ~ sitzungen, family=cumulative("logit"))</code>. Beobachte im Ridgeline-Plot, wie sich die gesamte Verteilung gleichmäßig nach rechts verschiebt.'
+  },
+  alkohol_zip: {
+    title: 'Alkoholkonsum', badge: 'ZIP',
+    model: 'zip', b0: 0.5, b1: 0.4,
+    extras: { pi_zi: 0.35 }, hlX: 0,
+    context: 'Wöchentlicher Alkoholkonsum (Einheiten) wird durch den Stresslevel (z-standardisiert) vorhergesagt. Die Stichprobe enthält viele Abstinente — deren Nullen sind strukturell (Nicht-Trinker). Unter hohem Stress konsumieren Trinker tendenziell mehr. Das Modell trennt zwischen "grundsätzlich kein Konsum" und "zufällig kein Konsum in der Messwoche".',
+    paramDesc: 'β₀ = 0.50 · β₁ = 0.40 · π = 0.35 (35% strukturelle Nullen)',
+    reveal: '<strong>Structural vs. Sampling Zeros:</strong> π = 0.35 bedeutet: 35% der Personen trinken grundsätzlich nie (structural zeros). Die restlichen 65% folgen einem Poisson-Prozess — unter diesen gibt es zusätzlich sampling zeros. P(Y=0) = 0.35 + 0.65·exp(−λ). Im Balkendiagramm sichtbar: der Nullbalken ist unverhältnismäßig groß. In R: <code>zeroinfl(konsum ~ stress, dist="poisson")</code> aus dem pscl-Paket.'
+  },
+  arztbesuche_hurdle: {
+    title: 'Arztbesuche (Hürde)', badge: 'HURDLE',
+    model: 'hurdle', b0: 1.2, b1: 0.5,
+    extras: { p0_hurdle: 0.30 }, hlX: 0,
+    context: 'Anzahl Arztbesuche im letzten Jahr, vorhergesagt durch chronischen Stresslevel (z-standardisiert). 30% der Stichprobe hat im Erhebungszeitraum keinen Arzt aufgesucht. Personen, die mindestens einmal gegangen sind, folgen einem nullzensierten Poisson-Prozess — die Hürde trennt sauber "Nicht-Nutzer" von "Nutzern".',
+    paramDesc: 'β₀ = 1.20 · β₁ = 0.50 · p₀ = 0.30 (30% Null-Besucher)',
+    reveal: '<strong>ZIP vs. Hurdle:</strong> Im Hurdle-Modell gibt es keine sampling zeros vom Count-Prozess — wer die Hürde übersteigt (Y > 0), hat mindestens 1 Besuch. Im ZIP gibt es zusätzliche Nullen vom Poisson. Konzeptuell: Hurdle trennt "Nutzung/Nicht-Nutzung" von "Intensität der Nutzung" — konzeptuell sauberer für Gesundheits-Inanspruchnahme-Daten. In brms: <code>brm(besuche ~ stress, family=hurdle_poisson())</code>.'
   }
 };
 
@@ -960,6 +1141,48 @@ const REFLECTIONS = {
     {
       q: 'Wähle x = 0 und notiere p. Ändere β₀ von −2 auf +2. Welche Transformation wandelt β₀ in p um — und warum kann man β₀ nicht direkt als Wahrscheinlichkeit lesen?',
       hint: 'p = σ(β₀) = 1/(1+e^(−β₀)). Die Logit-Transformation ist nichtlinear: β₀ = 0 → p = 0.5; β₀ = 2 → p ≈ 0.88; β₀ = −2 → p ≈ 0.12. β₀ liegt auf der log-Odds-Skala, nicht auf der Wahrscheinlichkeitsskala — ein häufiges Missverständnis!'
+    }
+  ],
+  ordinal: [
+    {
+      q: 'Die proportional odds Annahme besagt, dass β₁ für alle Kategorienschwellen gleichzeitig gilt. Was bedeutet das grafisch im PMF — und wie erkennt man Verletzungen dieser Annahme in echten Daten?',
+      hint: 'Grafisch: Die PMF-Verteilung verschiebt sich gleichmäßig, wenn x wächst — keine einzelne Kategorie "wächst schneller" als andere. Verletzungen erkennt man, indem man separate Logit-Regressionen für jede binäre Dichotomisierung (Y ≤ k vs. Y > k) berechnet und die β-Koeffizienten vergleicht. In R: brant-Test aus dem brant-Paket oder polr() mit Modelltests.'
+    },
+    {
+      q: 'Erhöhe K auf 6 Kategorien. Welchen Vorteil hat das Ordinal-Modell gegenüber OLS, wenn die Abstände zwischen Kategorien inhaltlich ungleich sind?',
+      hint: 'OLS nimmt gleiche Abstände zwischen allen Kategorien an (1→2 = 2→3 = ...). Das Ordinal-Modell macht diese Annahme nicht — die K−1 Cut-Points τ₁, τ₂,... werden aus den Daten geschätzt und können in beliebigen Abständen liegen. Wenn z.B. Kategorien 4 und 5 auf einer Zufriedenheitsskala fast identisch wahrgenommen werden, würde OLS das systematisch verzerren.'
+    },
+    {
+      q: 'Setze β₁ = 0 und verändere β₀ von −2 auf +2. Was passiert mit den PMFs für alle x-Werte — und was beschreibt β₀ inhaltlich im kumulativen Logit-Modell?',
+      hint: 'Bei β₁ = 0 gilt η = β₀ für alle x konstant — alle PMF-Verteilungen sind identisch. β₀ verschiebt die gesamte Kategorienverteilung: hohes β₀ → mehr Masse bei hohen Kategorien, niedriges β₀ → mehr Masse bei niedrigen. Es gibt keinen einzigen Intercept wie in OLS, sondern K−1 Cut-Points τ₁…τ_{K-1} auf der log-Odds-Skala.'
+    }
+  ],
+  zip: [
+    {
+      q: 'Setze π = 0 (keine Zero-Inflation) und vergleiche die Verteilungen mit dem Poisson-Tab bei gleichen β₀ und β₁. Was verändert sich?',
+      hint: 'Bei π = 0 ist ZIP = Standard-Poisson: P(Y=0) = exp(−λ), P(Y=k) = λᵏ·exp(−λ)/k!. Die Verteilungen sind identisch zum Poisson-Tab. Erst bei π > 0 hebt sich der Nullbalken unverhältnismäßig ab — das charakteristische Zeichen von Excess Zeros. Beobachte, wie der Nullbalken mit steigendem π wächst, während die restlichen Balken gleichzeitig schrumpfen.'
+    },
+    {
+      q: 'Erhöhe π schrittweise von 0 auf 0.70 und beobachte E[Y|x] im Regressionsplot. Warum fällt der Mittelwert, obwohl λ (die Poisson-Rate der Nicht-Null-Prozess-Gruppe) unverändert bleibt?',
+      hint: 'E[Y] = (1−π)·λ. Ein Teil der Population "darf" per Definition nie ein Ereignis zeigen (structural zeros) — ihr Beitrag zum Mittelwert ist null. Der beobachtete Mittelwert wird also durch π "heruntergewichtet". Das erklärt, warum ZIP-Modelle Koeffizienten für den Count-Teil (β₁) und den Zero-Teil (π) separat schätzen müssen — sie beschreiben konzeptuell unterschiedliche Prozesse.'
+    },
+    {
+      q: 'Was ist der konzeptionelle Unterschied zwischen structural zeros und sampling zeros — und wann ist ein Hurdle-Modell dem ZIP konzeptuell vorzuziehen?',
+      hint: 'Structural zeros: Personen, die grundsätzlich nie das Ereignis zeigen können (z.B. lebenslange Abstinente). Sampling zeros: Personen, die das Ereignis grundsätzlich zeigen könnten, im Beobachtungszeitraum aber zufällig nicht. ZIP enthält beide Typen. Das Hurdle-Modell ist sinnvoller, wenn "ob überhaupt" und "wie viel" konzeptuell separate Entscheidungen sind und möglicherweise von unterschiedlichen Prädiktoren abhängen.'
+    }
+  ],
+  hurdle: [
+    {
+      q: 'Wie unterscheidet sich P(Y=0) im Hurdle-Modell mathematisch vom ZIP? Welches Modell produziert mehr Nullen bei gleicher Null-Wahrscheinlichkeit und gleichem λ?',
+      hint: 'Hurdle: P(Y=0) = p₀ direkt. ZIP: P(Y=0) = π + (1−π)·exp(−λ) — also mehr Nullen als nur π, weil der Poisson-Prozess zusätzlich sampling zeros erzeugt. Das ZIP produziert deshalb mehr Nullen als Hurdle bei vergleichbaren Parametern. Umgekehrt: Ein Hurdle-Modell mit p₀ = P(Y=0) hat eine sauberere Interpretation von P(Y=0).'
+    },
+    {
+      q: 'Setze β₁ stark positiv (z.B. 0.9) und beobachte den Anstieg von E[Y|x]. Warum ist der Anstieg nicht proportional zu exp(η), sondern durch den Trunkierungsterm gedämpft?',
+      hint: 'E[Y|Y>0, λ] = λ/(1−exp(−λ)) für einen nullzensierten Poisson — der Nenner bereinigt um die Wahrscheinlichkeit von Null. E[Y] = (1−p₀)·λ/(1−exp(−λ)). Bei kleinem λ ist exp(−λ) groß → 1−exp(−λ) klein → der Korrekturfaktor groß, weil viele Nullen ausgeschlossen werden. Bei großem λ nähert sich 1/(1−exp(−λ)) → 1, und E[Y] ≈ (1−p₀)·λ.'
+    },
+    {
+      q: 'In welchen psychologischen oder medizinischen Forschungskontexten wäre das Hurdle-Modell dem ZIP konzeptuell vorzuziehen? Nenne zwei konkrete Beispiele.',
+      hint: 'Hurdle ist sinnvoll, wenn die Entscheidung "ob" und "wie viel" von unterschiedlichen Prädiktoren abhängen könnte und konzeptuell trennbar ist. Beispiele: (1) Anzahl ambulanter Therapiesitzungen — erst Therapiebeginn (Ja/Nein), dann Intensität der Nutzung. (2) Anzahl alkoholischer Getränke — erst Trinker/Abstinent, dann Konsummenge. In brms: <code>brm(y ~ x, family=hurdle_poisson())</code> schätzt beide Teile simultan.'
     }
   ]
 };
