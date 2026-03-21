@@ -181,6 +181,7 @@ main { padding: 1.2rem 1.2rem 2rem; max-width: 1400px; margin: 0 auto; }
 }
 .badge-x { background: var(--a2); color: #fff; }
 .badge-y { background: var(--a1); color: #fff; }
+.badge-u { background: var(--ink3); color: #fff; }
 
 .node-btns { display: flex; gap: .2rem; flex-wrap: wrap; }
 .node-btns .btn { font-size: .68rem; padding: .18rem .38rem; }
@@ -589,6 +590,18 @@ canvas {
 .tag-backdoor { background: var(--a3); color: #fff; }
 .tag-sim { background: var(--a6); color: #fff; }
 
+/* node-type radio row */
+.node-type-row {
+  display: flex;
+  gap: .8rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .75rem;
+  color: var(--ink2);
+}
+.node-type-row label { display: flex; align-items: center; gap: .3rem; cursor: pointer; }
+
+.learn-cite { font-size: 0.78rem; color: var(--ink3); font-style: italic; margin-top: 0.4rem; }
+
 /* message boxes */
 .msg-box {
   font-family: 'DM Mono', monospace;
@@ -639,6 +652,8 @@ canvas {
         <option value="collider">Collider: X→Y, X→C←Y</option>
         <option value="mediation">Mediator (Kette): X→M→Y</option>
         <option value="mediation_confounder">Mediator + Confounder: Z→X, Z→Y, X→M→Y</option>
+        <option value="iv">Instrumentalvariable: Z→X, X→Y, U(latent)→X, U→Y</option>
+        <option value="frontdoor">Front Door: X→M→Y, U(latent)→X, U→Y</option>
       </select>
       <button class="btn btn-example" id="btnExample">Laden</button>
     </div>
@@ -656,6 +671,10 @@ canvas {
         <div class="add-node-row">
           <input type="text" id="nodeNameInput" placeholder="Name…" maxlength="20">
           <button class="btn btn-primary" id="btnAddNode">Hinzufügen</button>
+        </div>
+        <div class="node-type-row">
+          <label><input type="radio" name="nodeType" value="observed" checked> Beobachtet</label>
+          <label><input type="radio" name="nodeType" value="latent"> Latent (U)</label>
         </div>
         <div class="node-list" id="nodeList">
           <div class="empty-note">Noch keine Variablen.</div>
@@ -715,6 +734,10 @@ canvas {
         <div class="legend-item">
           <div class="legend-dot" style="border-color:var(--a5);background:rgba(184,92,0,.2);"></div>
           Collider
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--ink3);background:var(--paper);border-style:dashed;"></div>
+          Latent (U)
         </div>
       </div>
     </div>
@@ -930,6 +953,26 @@ canvas {
         </div>
       </div>
     </div>
+
+    <!-- IV and Front Door learn blocks -->
+    <div style="margin-top:1rem;display:flex;flex-direction:column;gap:.7rem;">
+
+      <div class="learn-block" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;">
+        <div class="learn-title" style="font-weight:600;font-size:.92rem;margin-bottom:.35rem;color:var(--ink);">Instrumentalvariablen (IV)</div>
+        <p style="font-size:.82rem;color:var(--ink2);line-height:1.5;">Eine Instrumentalvariable Z erlaubt kausale Identifikation auch dann, wenn ein ungemessener Confounder U existiert. Z muss drei Bedingungen erfüllen: <strong>(1) Relevanz</strong>: Z→X (Z beeinflusst die Exposition), <strong>(2) Exklusion</strong>: Z hat keinen direkten Effekt auf Y außer über X, <strong>(3) Unabhängigkeit</strong>: Z teilt keine gemeinsamen Ursachen mit Y (Z ist unabhängig von U).</p>
+        <p style="font-size:.82rem;color:var(--ink2);line-height:1.5;margin-top:.4rem;">Frequentistisch: Two-Stage Least Squares (2SLS) via <code>ivreg(Y ~ X | Z)</code>. Bayesianisch: Joint-Modell beider Gleichungen mit korrelierten Residuen — <code>rescor = TRUE</code> schätzt ρ (Konfundierungsstärke durch U) direkt als Posterior.</p>
+        <p class="learn-cite">Angrist &amp; Pischke (2009). <em>Mostly Harmless Econometrics.</em> Princeton UP. — McElreath (2020). <em>Statistical Rethinking</em>, Kap. 15.</p>
+      </div>
+
+      <div class="learn-block" style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:.8rem 1rem;">
+        <div class="learn-title" style="font-weight:600;font-size:.92rem;margin-bottom:.35rem;color:var(--ink);">Front Door Criterion (Pearl)</div>
+        <p style="font-size:.82rem;color:var(--ink2);line-height:1.5;">Wenn U X und Y konfundiert, aber ein Mediator M existiert mit (1) M auf allen Pfaden X→Y, (2) kein Backdoor X→M, (3) alle Backdoors M→Y durch X blockiert — dann ist der kausale Effekt <em>ohne</em> U zu messen identifizierbar.</p>
+        <p style="font-size:.82rem;color:var(--ink2);line-height:1.5;margin-top:.4rem;">Front Door Formel: <strong>P(Y|do(X)) = Σ<sub>m</sub> P(M|X) · Σ<sub>x'</sub> P(Y|M,X=x') · P(X=x')</strong>. Im linearen Fall: β_FD = β_XM × β_MY, wobei β_MY durch Kontrolle für X geschätzt wird (X blockt M←X←U→Y).</p>
+        <p style="font-size:.82rem;color:var(--ink2);line-height:1.5;margin-top:.4rem;">Bayesianisch: multivariates brms-Modell mit <code>rescor = FALSE</code> liefert die gemeinsame Posteriori von β_XM und β_MY — deren Produkt ist der kausale Gesamteffekt als volle Posterior-Verteilung.</p>
+        <p class="learn-cite">Pearl (2009). <em>Causality</em>, Kap. 3.3. Cambridge UP. — Pearl, Glymour &amp; Jewell (2016). <em>Causal Inference in Statistics: A Primer.</em> Wiley.</p>
+      </div>
+
+    </div>
   </div>
 
 </main>
@@ -1023,7 +1066,9 @@ function findAdjustmentSets() {
   const allPaths = findAllPaths(X, Y);
   const backdoorPaths = allPaths.filter(isBackdoorPath);
   const descX = getDescendants(X);
-  const candidates = state.nodes.map(n=>n.id).filter(id=>id!==X&&id!==Y&&!descX.has(id));
+  // Latent nodes cannot be controlled for — exclude from candidates
+  const latentIds = new Set(state.nodes.filter(n=>n.latent).map(n=>n.id));
+  const candidates = state.nodes.map(n=>n.id).filter(id=>id!==X&&id!==Y&&!descX.has(id)&&!latentIds.has(id));
   const n = candidates.length;
   const valid = [];
   for (let mask=0; mask<(1<<n); mask++) {
@@ -1031,7 +1076,21 @@ function findAdjustmentSets() {
     if (backdoorPaths.every(p=>!isPathActive(p,Z))) valid.push(Z);
   }
   const minimal = valid.filter(Z=>!valid.some(Z2=>Z2.length<Z.length&&Z2.every(v=>Z.includes(v))));
-  return { allPaths, backdoorPaths, minimal, descX, candidates };
+
+  // Find backdoor paths blocked only by latent nodes (unblockable)
+  const unblockableLatentPaths = backdoorPaths.filter(path => {
+    // A path is "unblockable via latents" if the only non-collider nodes on it
+    // that block it (when added to Z) are latent nodes
+    if (!isPathActive(path, [])) return false; // already blocked without any control
+    // Check if path has at least one latent non-collider node on it
+    for (let i = 1; i < path.length - 1; i++) {
+      const [A, B, C] = [path[i-1], path[i], path[i+1]];
+      if (!isColliderTriple(A, B, C) && latentIds.has(B)) return true;
+    }
+    return false;
+  });
+
+  return { allPaths, backdoorPaths, minimal, descX, candidates, latentIds, unblockableLatentPaths };
 }
 
 // ============================================================
@@ -1143,6 +1202,81 @@ function getMediators() {
     }
   });
   return mediators;
+}
+
+function hasDirectedPath(fromId, toId) {
+  const visited = new Set();
+  const stack = [fromId];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (cur === toId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    stack.push(...getChildren(cur));
+  }
+  return false;
+}
+
+function detectInstruments() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return [];
+  const instruments = [];
+  state.nodes.forEach(node => {
+    if (node.id === X || node.id === Y || node.latent) return;
+    const Z = node.id;
+    // Condition 1: Z → X (directed path)
+    if (!hasDirectedPath(Z, X)) return;
+    // Condition 2: Z has no direct edge to Y
+    if (state.edges.some(e => e.from === Z && e.to === Y)) return;
+    // Condition 3: Z and Y are d-separated given {X} when outgoing edges from X are removed
+    // Simplified: check that all paths from Z to Y pass through X
+    const allZYPaths = findAllPaths(Z, Y);
+    const allPassThroughX = allZYPaths.every(path => path.includes(X));
+    if (!allPassThroughX) return;
+    // Also check no common cause between Z and Y (Z independent of U confounders)
+    // via d-separation: Z ⊥⊥ Y | X in observational graph
+    // We use the simple check: Z has no parents that also cause Y (share a cause with Y outside X)
+    const parentsZ = getParents(Z);
+    const hasSharedCauseWithY = parentsZ.some(p => hasDirectedPath(p, Y) && p !== X);
+    if (hasSharedCauseWithY) return;
+    instruments.push(Z);
+  });
+  return instruments;
+}
+
+function detectFrontDoor() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return [];
+  // Find all directed paths from X to Y
+  const allPaths = findAllPaths(X, Y);
+  const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
+  if (causalPaths.length === 0) return [];
+
+  // Get all intermediate nodes on causal paths
+  const candidateMediators = new Set();
+  causalPaths.forEach(path => {
+    for (let i = 1; i < path.length - 1; i++) candidateMediators.add(path[i]);
+  });
+
+  const validMediators = [];
+  candidateMediators.forEach(M => {
+    // Condition 1: M is on ALL directed paths from X to Y
+    const allPassThroughM = causalPaths.every(path => path.includes(M));
+    if (!allPassThroughM) return;
+
+    // Condition 2: No unblocked backdoor path from X to M
+    const XMPaths = findAllPaths(X, M);
+    const XMBackdoors = XMPaths.filter(isBackdoorPath);
+    if (XMBackdoors.some(p => isPathActive(p, []))) return;
+
+    // Condition 3: All backdoor paths from M to Y are blocked by X
+    const MYPaths = findAllPaths(M, Y);
+    const MYBackdoors = MYPaths.filter(isBackdoorPath);
+    if (!MYBackdoors.every(p => !isPathActive(p, [X]))) return;
+
+    validMediators.push(M);
+  });
+  return validMediators;
 }
 
 function getEffectType() {
@@ -1329,14 +1463,16 @@ function drawCanvas() {
     const isSelected = state.selectedNode === node.id;
     const isAdjSet = state.highlightAdjSet.has(node.id);
     const isCollider = state.highlightColliders.has(node.id);
+    const isLatent = !!node.latent;
 
     // Fill
     let fillColor = paper;
+    if (isLatent) fillColor = 'rgba(90,84,72,0.10)';
     if (isAdjSet) fillColor = 'rgba(90,138,42,0.18)';
     if (isCollider) fillColor = 'rgba(184,92,0,0.18)';
 
     // Stroke color
-    let strokeColor = ink;
+    let strokeColor = isLatent ? ink3 : ink;
     let lineWidth = 1.5;
     if (isExposure) { strokeColor = a2; lineWidth = 2.5; }
     if (isOutcome) { strokeColor = a1; lineWidth = 2.5; }
@@ -1345,27 +1481,42 @@ function drawCanvas() {
 
     ctx.save();
     if (isSelected) {
-      // Glow / dashed border
       ctx.shadowColor = a2;
       ctx.shadowBlur = 8;
     }
-    roundRect(ctx, x, y, NODE_W, NODE_H, NODE_R);
-    ctx.fillStyle = fillColor;
-    ctx.fill();
 
-    if (isSelected) {
-      ctx.setLineDash([5, 3]);
+    if (isLatent) {
+      // Dashed circle for latent nodes
+      const cx2 = x + NODE_W/2, cy2 = y + NODE_H/2;
+      const r = NODE_H/2 + 4;
+      ctx.beginPath();
+      ctx.ellipse(cx2, cy2, NODE_W/2 + 2, r, 0, 0, Math.PI*2);
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // Solid rounded rectangle for observed nodes
+      roundRect(ctx, x, y, NODE_W, NODE_H, NODE_R);
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      if (isSelected) {
+        ctx.setLineDash([5, 3]);
+      }
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
-    ctx.setLineDash([]);
     ctx.shadowBlur = 0;
     ctx.restore();
 
     // Label
-    ctx.font = `500 13px 'DM Mono', monospace`;
-    ctx.fillStyle = ink;
+    ctx.font = isLatent ? `italic 500 13px 'DM Mono', monospace` : `500 13px 'DM Mono', monospace`;
+    ctx.fillStyle = isLatent ? ink3 : ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(node.name, x + NODE_W/2, y + NODE_H/2);
@@ -1380,6 +1531,11 @@ function drawCanvas() {
       ctx.font = `bold 9px 'DM Mono', monospace`;
       ctx.fillStyle = a1;
       ctx.fillText('Y', x + NODE_W - 10, y + 8);
+    }
+    if (isLatent && !isExposure && !isOutcome) {
+      ctx.font = `bold 9px 'DM Mono', monospace`;
+      ctx.fillStyle = ink3;
+      ctx.fillText('U', x + NODE_W - 8, y + 8);
     }
   });
 }
@@ -1512,7 +1668,7 @@ function updateEdgeStatus() {
 // ============================================================
 // STATE MUTATIONS
 // ============================================================
-function addNode(name) {
+function addNode(name, forceLatent) {
   name = name.trim();
   if (!name) { showToast('Bitte einen Namen eingeben.'); return; }
   if (state.nodes.some(n=>n.name===name)) { showToast(`Knoten "${name}" existiert bereits.`); return; }
@@ -1522,7 +1678,9 @@ function addNode(name) {
   const margin = 20;
   let x = margin + Math.random() * (W - NODE_W - 2*margin);
   let y = margin + Math.random() * (H - NODE_H - 2*margin);
-  state.nodes.push({ id: uuid(), name, x: Math.round(x), y: Math.round(y) });
+  const typeRadio = document.querySelector('input[name="nodeType"]:checked');
+  const isLatent = forceLatent !== undefined ? forceLatent : (typeRadio ? typeRadio.value === 'latent' : false);
+  state.nodes.push({ id: uuid(), name, x: Math.round(x), y: Math.round(y), latent: isLatent });
   renderSidebar();
   updateOverlay();
   drawCanvas();
@@ -1596,8 +1754,9 @@ function renderSidebar() {
 
     item.innerHTML = `
       <span class="node-name">${escHtml(node.name)}</span>
-      ${isExp ? '<span class="badge badge-x">(X)</span>' : ''}
-      ${isOut ? '<span class="badge badge-y">(Y)</span>' : ''}
+      ${isExp ? '<span class="badge badge-x">X</span>' : ''}
+      ${isOut ? '<span class="badge badge-y">Y</span>' : ''}
+      ${node.latent ? '<span class="badge badge-u">U</span>' : ''}
       <div class="node-btns">
         <button class="btn" style="${isExp?'background:var(--a2);color:#fff;border-color:var(--a2);':''}" data-action="exp" data-id="${node.id}">${isExp?'Exposition ✓':'Exposition'}</button>
         <button class="btn" style="${isOut?'background:var(--a1);color:#fff;border-color:var(--a1);':''}" data-action="out" data-id="${node.id}">${isOut?'Outcome ✓':'Outcome'}</button>
@@ -1674,27 +1833,45 @@ function runAnalysis() {
   // Remove X, Y from colliders display
   collidersOnPaths.delete(X); collidersOnPaths.delete(Y);
 
-  // "Can control": nodes not in any path from X to Y, not descendants of X, not X, not Y
+  // "Can control": nodes not in any path from X to Y, not descendants of X, not X, not Y, not latent
   const allPathNodes = new Set(allPaths.flat());
   const canControlIds = state.nodes.map(n=>n.id).filter(id =>
-    id!==X && id!==Y && !descX.has(id) && !allPathNodes.has(id)
+    id!==X && id!==Y && !descX.has(id) && !allPathNodes.has(id) && !result.latentIds.has(id)
   );
 
-  // Must not control: colliders that are NOT in mustControlIds
-  const mustNotControlIds = [...collidersOnPaths].filter(id => !mustControlIds.includes(id));
+  // Must not control: colliders that are NOT in mustControlIds (also exclude latents — they're unobservable)
+  const mustNotControlIds = [...collidersOnPaths].filter(id => !mustControlIds.includes(id) && !result.latentIds.has(id));
 
   // mediators / effectType already computed above for canvas highlighting
+
+  // IV / Front Door detection
+  const instruments = detectInstruments();
+  const frontDoorMediators = detectFrontDoor();
 
   // Update sidebar analysis summary
   document.getElementById('sidebarAnalysisWrap').style.display = 'block';
   const summaryEl = document.getElementById('sidebarAnalysisSummary');
-  if (minimal.length === 0 && result.backdoorPaths.length === 0) {
-    summaryEl.innerHTML = '<div class="msg-ok">Kein Backdoor-Pfad – keine Adjustierung nötig.</div>';
-  } else if (minimal.length === 0) {
-    summaryEl.innerHTML = '<div class="msg-warn">Kein valides Adjustierungsset gefunden!</div>';
-  } else {
-    summaryEl.innerHTML = `<div class="msg-ok">Valides Adjustierungsset: {${minimal[0].map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
+  let summaryHtml = '';
+  if (instruments.length > 0) {
+    summaryHtml += `<div class="msg-ok">Instrument gefunden: ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} → IV-Schätzer möglich</div>`;
   }
+  if (frontDoorMediators.length > 0) {
+    summaryHtml += `<div class="msg-ok">Front Door Mediator: ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} → Front Door Adjustment möglich</div>`;
+  }
+  if (result.unblockableLatentPaths && result.unblockableLatentPaths.length > 0) {
+    const latentNames = [...result.latentIds].map(id=>escHtml(getNodeName(id))).join(', ');
+    summaryHtml += `<div class="msg-warn">Backdoor über latenten Knoten [${latentNames}] — nicht blockierbar (nicht beobachtet).</div>`;
+  }
+  if (!summaryHtml) {
+    if (minimal.length === 0 && result.backdoorPaths.length === 0) {
+      summaryHtml = '<div class="msg-ok">Kein Backdoor-Pfad – keine Adjustierung nötig.</div>';
+    } else if (minimal.length === 0) {
+      summaryHtml = '<div class="msg-warn">Kein valides Adjustierungsset gefunden!</div>';
+    } else {
+      summaryHtml = `<div class="msg-ok">Valides Adjustierungsset: {${minimal[0].map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
+    }
+  }
+  summaryEl.innerHTML = summaryHtml;
 
   // Render analysis panel
   document.getElementById('analysisPanel').classList.add('visible');
@@ -1715,6 +1892,15 @@ function runAnalysis() {
     ).join('') + mustDirectMediators.map(id =>
       `<li>✓ ${escHtml(getNodeName(id))} <span style="color:var(--a4);font-size:.72rem;">(Mediator – direkter Effekt)</span></li>`
     ).join('');
+  }
+  // Add warning for latent unblockable paths
+  if (result.unblockableLatentPaths && result.unblockableLatentPaths.length > 0) {
+    result.unblockableLatentPaths.forEach(path => {
+      const latentOnPath = path.slice(1, -1).filter(id => result.latentIds.has(id));
+      latentOnPath.forEach(lid => {
+        mustEl.innerHTML += `<li style="color:var(--warn);"><span style="font-size:.72rem;">⚠ Backdoor-Pfad über latenten Knoten ${escHtml(getNodeName(lid))} — nicht blockierbar (nicht beobachtet)</span></li>`;
+      });
+    });
   }
 
   // Must not control — Collider + (Mediator wenn totaler Effekt)
@@ -1750,13 +1936,35 @@ function runAnalysis() {
       const isBD = isBackdoorPath(path);
       const isActive = isPathActive(path, minimal[0] || []);
       const pathStr = buildPathString(path);
+      const hasLatent = path.some(id => result.latentIds.has(id));
       let badges = '';
       if (isBD) badges += '<span class="path-badge path-backdoor">Hintertür</span>';
       else badges += '<span class="path-badge path-causal">Kausal</span>';
       if (isActive) badges += '<span class="path-badge path-open">Offen</span>';
       else badges += '<span class="path-badge path-blocked">Blockiert</span>';
+      if (hasLatent) badges += '<span class="path-badge" style="background:var(--ink3);color:#fff;">Latent</span>';
       return `<div class="path-item">${badges}<span>${escHtml(pathStr)}</span></div>`;
     }).join('');
+  }
+
+  // IV / Front Door summary in panel
+  let specialHtml = '';
+  if (instruments.length > 0) {
+    const xName = escHtml(getNodeName(X)), yName = escHtml(getNodeName(Y));
+    specialHtml += `<div style="margin-top:.6rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--a6);border-radius:4px;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a6);">
+      <strong>Instrument:</strong> ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} ist gültiges Instrument für ${xName}→${yName}.
+      IV-Schätzer (2SLS) oder Bayesianisches Joint-Modell mit rescor=TRUE empfohlen.
+    </div>`;
+  }
+  if (frontDoorMediators.length > 0) {
+    const xName = escHtml(getNodeName(X)), yName = escHtml(getNodeName(Y));
+    specialHtml += `<div style="margin-top:.6rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--a4);border-radius:4px;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a4);">
+      <strong>Front Door Mediator:</strong> ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} erfüllt Front Door Kriterium.
+      Kausaler Effekt ${xName}→${yName} über β_XM × β_MY identifizierbar ohne U zu messen.
+    </div>`;
+  }
+  if (specialHtml) {
+    pathsList.innerHTML += specialHtml;
   }
 
   // Refresh implications panel if open
@@ -1904,10 +2112,37 @@ function generateRCode() {
   const seed = document.getElementById('simSeed').value || 42;
   const order = topoSort();
   const roots = state.nodes.filter(nd=>getParents(nd.id).length===0);
+  const latentIds = new Set(state.nodes.filter(nd=>nd.latent).map(nd=>nd.id));
+
+  // Detect special patterns for comment header
+  const instruments = state.exposure && state.outcome ? detectInstruments() : [];
+  const frontDoorMediators = state.exposure && state.outcome ? detectFrontDoor() : [];
+
   const lines = [
     '# Golem Builder — Simulierter Datensatz',
     '# Generiert von Bayes Thinking Lab · Golem Builder',
     '#',
+  ];
+
+  if (instruments.length > 0) {
+    lines.push(
+      '# INSTRUMENTALVARIABLE (IV) Simulation',
+      '# U ist latent (ungemessen) und konfundiert X und Y.',
+      `# ${instruments.map(id=>getNodeName(id)).join(', ')} ist ein gültiges Instrument: Z→X, aber Z hat keinen direkten Effekt auf Y.`,
+      '# Naives lm(Y~X) ist verzerrt. IV-Schätzer korrigiert dies.',
+      '#'
+    );
+  } else if (frontDoorMediators.length > 0) {
+    lines.push(
+      '# FRONT DOOR Simulation',
+      '# U ist latent und konfundiert X und Y.',
+      `# ${frontDoorMediators.map(id=>getNodeName(id)).join(', ')} ist der Mediator: X→M→Y, kein direktes X→Y, kein U→M.`,
+      '# Front Door Adjustment identifiziert den kausalen Effekt ohne U zu messen.',
+      '#'
+    );
+  }
+
+  lines.push(
     '# SIMULATIONSLOGIK (Ansatz A — natürliche Skala, nach McElreath):',
     '#   Endogene Knoten: Y <- rnorm(n, sum(beta_i * X_i), sigma_residual)',
     '#   sigma_residual ist pro Knoten konfigurierbar (Standard: 1).',
@@ -1927,44 +2162,94 @@ function generateRCode() {
     `set.seed(${seed})`,
     `n <- ${n}`,
     '',
-    '# Wurzelknoten (exogene Variablen, keine Eltern)',
-  ];
+  );
 
-  roots.forEach(nd => {
-    const { dist, mean, sd } = getRootDist(nd.id);
-    if (dist === 'Normal') {
-      lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
-    } else if (dist === 'Bernoulli') {
-      lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
-    } else if (dist === 'Poisson') {
-      lines.push(`${nd.name} <- rpois(n, ${mean})`);
-    }
-  });
+  // Separate latent roots and observed roots
+  const latentRoots = roots.filter(nd => latentIds.has(nd.id));
+  const observedRoots = roots.filter(nd => !latentIds.has(nd.id));
 
-  const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
-  if (nonRoots.length > 0) {
-    lines.push('', '# Endogene Knoten (topologische Reihenfolge)');
-    nonRoots.forEach(nd => {
-      const parents = getParents(nd.id);
-      const sigma = getNonRootSd(nd.id);
-      const terms = parents.map(pid => {
-        const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
-        const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-        return `${coef} * ${getNodeName(pid)}`;
-      });
-      const commentParts = parents.map(pid => {
-        const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
-        const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-        return `beta(${getNodeName(pid)})=${coef}`;
-      });
-      commentParts.push(`sigma=${sigma}`);
-      lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+  if (latentRoots.length > 0) {
+    lines.push('# Latente Wurzelknoten (nicht beobachtbar — erzeugen Konfundierung)');
+    latentRoots.forEach(nd => {
+      const { dist, mean, sd } = getRootDist(nd.id);
+      if (dist === 'Normal') {
+        lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})  # latent — nicht im Datensatz!`);
+      } else if (dist === 'Bernoulli') {
+        lines.push(`${nd.name} <- rbinom(n, 1, ${mean})  # latent — nicht im Datensatz!`);
+      } else if (dist === 'Poisson') {
+        lines.push(`${nd.name} <- rpois(n, ${mean})  # latent — nicht im Datensatz!`);
+      }
+    });
+    lines.push('');
+  }
+
+  if (observedRoots.length > 0) {
+    lines.push('# Wurzelknoten (exogene beobachtbare Variablen, keine Eltern)');
+    observedRoots.forEach(nd => {
+      const { dist, mean, sd } = getRootDist(nd.id);
+      if (dist === 'Normal') {
+        lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
+      } else if (dist === 'Bernoulli') {
+        lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
+      } else if (dist === 'Poisson') {
+        lines.push(`${nd.name} <- rpois(n, ${mean})`);
+      }
     });
   }
 
-  const allNames = order.map(id=>state.nodes.find(n=>n.id===id)).filter(Boolean).map(n=>n.name);
-  const yName = state.outcome ? getNodeName(state.outcome) : (allNames[allNames.length-1]||'Y');
-  lines.push('', `dat <- data.frame(${allNames.join(', ')})`);
+  const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
+  if (nonRoots.length > 0) {
+    const latentNonRoots = nonRoots.filter(nd => latentIds.has(nd.id));
+    const observedNonRoots = nonRoots.filter(nd => !latentIds.has(nd.id));
+
+    if (latentNonRoots.length > 0) {
+      lines.push('', '# Latente endogene Knoten (nicht beobachtbar)');
+      latentNonRoots.forEach(nd => {
+        const parents = getParents(nd.id);
+        const sigma = getNonRootSd(nd.id);
+        const terms = parents.map(pid => {
+          const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+          const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+          return `${coef} * ${getNodeName(pid)}`;
+        });
+        const commentParts = parents.map(pid => {
+          const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+          const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+          return `beta(${getNodeName(pid)})=${coef}`;
+        });
+        commentParts.push(`sigma=${sigma}`);
+        lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # latent — nicht im Datensatz! ${commentParts.join(', ')}`);
+      });
+    }
+
+    if (observedNonRoots.length > 0) {
+      lines.push('', '# Endogene beobachtbare Knoten (topologische Reihenfolge)');
+      observedNonRoots.forEach(nd => {
+        const parents = getParents(nd.id);
+        const sigma = getNonRootSd(nd.id);
+        const terms = parents.map(pid => {
+          const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+          const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+          return `${coef} * ${getNodeName(pid)}`;
+        });
+        const commentParts = parents.map(pid => {
+          const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+          const coef = edge ? getEdgeCoef(edge.id) : 0.5;
+          return `beta(${getNodeName(pid)})=${coef}`;
+        });
+        commentParts.push(`sigma=${sigma}`);
+        lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+      });
+    }
+  }
+
+  // Build dat with only non-latent nodes
+  const observedNames = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&!latentIds.has(nd.id)).map(nd=>nd.name);
+  if (latentIds.size > 0) {
+    lines.push('');
+    lines.push('# Latente Knoten (U) erzeugt aber nicht in dat aufgenommen — wie in der Realität');
+  }
+  lines.push('', `dat <- data.frame(${observedNames.join(', ')})`);
 
   return lines.join('\n');
 }
@@ -1984,9 +2269,82 @@ function getAdjSetNames() {
 }
 
 function generateBrmsCode() {
+  const X = state.exposure, Y = state.outcome;
+  const yName = Y ? getNodeName(Y) : 'Y';
+  const xName = X ? getNodeName(X) : 'X';
+
+  // Check special patterns
+  const instruments = X && Y ? detectInstruments() : [];
+  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+
+  if (instruments.length > 0) {
+    const zName = getNodeName(instruments[0]);
+    return [
+      '# INSTRUMENTALVARIABLE — Bayesianisches joint model (McElreath SR 2020, Kap. 15)',
+      '# Beide Gleichungen werden gemeinsam geschätzt (Seemingly Unrelated Regressions).',
+      '# Hinweis: rescor = TRUE fängt unbeobachtete Confounder (U) ab.',
+      `# rho = rescor__${xName}__${yName} schätzt die Stärke der Konfundierung durch U.`,
+      `# b_${yName}_${xName} ist der kausale Effekt von ${xName} auf ${yName}, korrekt geschätzt trotz U.`,
+      '',
+      'library(brms)',
+      `bf_${xName} <- bf(${xName} ~ ${zName})`,
+      `bf_${yName} <- bf(${yName} ~ ${xName})`,
+      '',
+      'fit_iv_bayes <- brm(',
+      `  mvbf(bf_${xName}, bf_${yName}, rescor = TRUE),`,
+      '  data = dat,',
+      '  prior = c(',
+      `    prior(normal(0, 1), class = b, resp = "${xName}"),  # Effekt von ${zName} auf ${xName}`,
+      `    prior(normal(0, 1), class = b, resp = "${yName}"),  # Kausaler Effekt ${xName}→${yName}`,
+      `    prior(exponential(1), class = sigma, resp = "${xName}"),`,
+      `    prior(exponential(1), class = sigma, resp = "${yName}"),`,
+      '    prior(lkj(2), class = rescor)               # Prior für Korrelation der Residuen (U\'s Einfluss)',
+      '  ),',
+      '  chains = 4, iter = 2000',
+      ')',
+      `# Kausaler Effekt ${xName}→${yName}: fixef(fit_iv_bayes)["${yName}_${xName}",]`,
+      `# Konfundierungsstärke U: VarCorr(fit_iv_bayes) → rescor__${xName}__${yName}`,
+    ].join('\n');
+  }
+
+  if (frontDoorMediators.length > 0) {
+    const mName = getNodeName(frontDoorMediators[0]);
+    return [
+      '# FRONT DOOR ADJUSTMENT — Bayesianisches joint model (Pearl 2009, Kap. 3.3)',
+      `# Zwei Gleichungen: (1) ${mName} ~ ${xName}, (2) ${yName} ~ ${mName} + ${xName}`,
+      `# ${xName} in Gleichung 2 blockt den Backdoor ${mName}←${xName}←U→${yName}.`,
+      '# rescor=FALSE: nach Konditionierung auf M und X sind Residuen unkorreliert.',
+      `# Kausaler Gesamteffekt = b_${mName}_${xName} × b_${yName}_${mName} (wird als posterior quantity berechnet).`,
+      '',
+      'library(brms)',
+      `bf_${mName} <- bf(${mName} ~ ${xName})`,
+      `bf_${yName} <- bf(${yName} ~ ${mName} + ${xName})   # ${xName} als Kontrolle — blockt Backdoor ${mName}←${xName}←U→${yName}`,
+      '',
+      'fit_fd_bayes <- brm(',
+      `  mvbf(bf_${mName}, bf_${yName}, rescor = FALSE),`,
+      '  data = dat,',
+      '  prior = c(',
+      '    prior(normal(0, 1), class = b),',
+      '    prior(exponential(1), class = sigma)',
+      '  ),',
+      '  chains = 4, iter = 2000',
+      ')',
+      '',
+      `# Kausaler Gesamteffekt ${xName}→${yName} via Front Door:`,
+      'library(posterior)',
+      'draws <- as_draws_df(fit_fd_bayes)',
+      `fd_effect <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`,
+      `cat("Front Door Effekt ${xName}→${yName}: ", mean(fd_effect),`,
+      '    " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")',
+      '',
+      '# Zum Vergleich: naiver (verzerrter) Schätzer',
+      `fit_naive <- lm(${yName} ~ ${xName}, data = dat)`,
+      `cat("Naiver Schätzer (verzerrt wegen U): ", coef(fit_naive)["${xName}"], "\\n")`,
+    ].join('\n');
+  }
+
+  // General case
   const adjNames = getAdjSetNames();
-  const yName = state.outcome ? getNodeName(state.outcome) : 'Y';
-  const xName = state.exposure ? getNodeName(state.exposure) : 'X';
   const rhs = [xName, ...adjNames].join(' + ');
   const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
 
@@ -2011,23 +2369,108 @@ function generateBrmsCode() {
 }
 
 function generateTMBCode() {
-  const adjNames = getAdjSetNames();
-  const yName = state.outcome ? getNodeName(state.outcome) : 'Y';
-  const xName = state.exposure ? getNodeName(state.exposure) : 'X';
-  const rhs = [xName, ...adjNames].join(' + ');
-  const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
+  const X = state.exposure, Y = state.outcome;
+  const yName = Y ? getNodeName(Y) : 'Y';
+  const xName = X ? getNodeName(X) : 'X';
 
-  return [
-    'library(glmmTMB)',
-    `# Adjustiert für: ${adjComment}`,
-    '',
-    'fit_tmb <- glmmTMB(',
-    `  ${yName} ~ ${rhs},`,
-    '  data = dat,',
-    '  family = gaussian()',
-    ')',
-    'summary(fit_tmb)',
-  ].join('\n');
+  // Check special patterns
+  const instruments = X && Y ? detectInstruments() : [];
+  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+
+  // Bei IV oder Front Door: kein Standard-Adjustierungsmodell voranstellen
+  // (wäre dort irreführend, da naives Y~X wegen U verzerrt ist)
+  const hasSpecialPattern = instruments.length > 0 || frontDoorMediators.length > 0;
+
+  let baseCode = [];
+  if (!hasSpecialPattern) {
+    const adjNames = getAdjSetNames();
+    const rhs = [xName, ...adjNames].join(' + ');
+    const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
+    baseCode = [
+      'library(glmmTMB)',
+      `# Adjustiert für: ${adjComment}`,
+      '',
+      'fit_tmb <- glmmTMB(',
+      `  ${yName} ~ ${rhs},`,
+      '  data = dat,',
+      '  family = gaussian()',
+      ')',
+      'summary(fit_tmb)',
+    ];
+  }
+
+  if (instruments.length > 0) {
+    const zName = getNodeName(instruments[0]);
+    baseCode = baseCode.concat([
+      '',
+      '# ============================================================',
+      '# INSTRUMENTALVARIABLE — Frequentistisch',
+      '# Quelle: Angrist & Pischke (2009) Mostly Harmless Econometrics',
+      '# ============================================================',
+      '',
+      '# Option A: ivreg() — Two-Stage Least Squares (empfohlen für lineares IV)',
+      `# Das | ${zName} bedeutet: "instrumentiere ${xName} durch ${zName}"`,
+      '# Diagnostik: Wu-Hausman Test (ist X endogen?), Schwaches Instrument Test',
+      'library(AER)',
+      `fit_iv_freq <- ivreg(${yName} ~ ${xName} | ${zName}, data = dat)`,
+      'summary(fit_iv_freq, diagnostics = TRUE)',
+      '',
+      '# Option B: manuelles 2SLS mit glmmTMB (für GLM-Verteilungen)',
+      'library(glmmTMB)',
+      `# Stufe 1: ${xName} auf ${zName} regressieren → U-bereinigtes X̂`,
+      `fit_iv1 <- glmmTMB(${xName} ~ ${zName}, data = dat, family = gaussian())`,
+      `dat$${xName}_hat <- fitted(fit_iv1)   # X̂ enthält nur Z-Variation, nicht U`,
+      '',
+      `# Stufe 2: ${yName} auf X̂ regressieren — U's Einfluss ist in X̂ nicht mehr enthalten`,
+      `fit_iv2 <- glmmTMB(${yName} ~ ${xName}_hat, data = dat, family = gaussian())`,
+      'summary(fit_iv2)',
+      '# ACHTUNG: Standardfehler aus Stufe 2 sind zu klein (2SLS-Problem).',
+      '# Für korrekte SEs: ivreg() verwenden oder Bootstrap.',
+      `iv_effect <- fixef(fit_iv2)$cond["${xName}_hat"]`,
+      `cat("IV-Schätzer (2SLS) für ${xName}→${yName}: ", iv_effect, "\\n")`,
+      '',
+      '# Zum Vergleich: naiver Schätzer (verzerrt wegen U)',
+      `fit_naive_freq <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`,
+      `cat("Naiver Schätzer (verzerrt): ", fixef(fit_naive_freq)$cond["${xName}"], "\\n")`,
+    ]);
+  }
+
+  if (frontDoorMediators.length > 0) {
+    const mName = getNodeName(frontDoorMediators[0]);
+    baseCode = baseCode.concat([
+      '',
+      '# ============================================================',
+      '# FRONT DOOR ADJUSTMENT — Frequentistisch',
+      '# Quelle: Pearl (2009) Causality, Kap. 3.3',
+      '# Pearl, Glymour & Jewell (2016) Causal Inference in Statistics: A Primer',
+      '# ============================================================',
+      '',
+      'library(glmmTMB)',
+      '',
+      `# Stufe 1: ${mName} ~ ${xName}`,
+      `# Kein Backdoor von ${xName} nach ${mName} (U beeinflusst ${mName} nicht direkt) → OLS unverzerrte`,
+      `fit_fd1 <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`,
+      `beta_XM <- fixef(fit_fd1)$cond["${xName}"]`,
+      `cat("Schritt 1 — ${xName}→${mName} Effekt (β_XM): ", beta_XM, "\\n")`,
+      '',
+      `# Stufe 2: ${yName} ~ ${mName} + ${xName}`,
+      `# ${xName} als Kontrolle NOTWENDIG: blockt Backdoor ${mName}←${xName}←U→${yName}`,
+      `# Ohne ${xName} würde U's Einfluss auf ${yName} fälschlicherweise ${mName} zugeschrieben!`,
+      `fit_fd2 <- glmmTMB(${yName} ~ ${mName} + ${xName}, data = dat, family = gaussian())`,
+      `beta_MY <- fixef(fit_fd2)$cond["${mName}"]`,
+      `cat("Schritt 2 — ${mName}→${yName} Effekt kontrolliert für ${xName} (β_MY): ", beta_MY, "\\n")`,
+      '',
+      '# Front Door Gesamteffekt = β_XM × β_MY',
+      'fd_effect_freq <- beta_XM * beta_MY',
+      `cat("Front Door Effekt ${xName}→${yName} (β_XM × β_MY): ", fd_effect_freq, "\\n")`,
+      '',
+      '# Zum Vergleich: naiver Schätzer (verzerrt wegen U)',
+      `fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`,
+      `cat("Naiver Schätzer (verzerrt wegen U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`,
+    ]);
+  }
+
+  return baseCode.join('\n');
 }
 
 // ============================================================
@@ -2054,9 +2497,9 @@ function loadExample() {
   if (scenario === 'confounder') {
     // Z → X, Z → Y, X → Y  (Fork / Gabel)
     const zId = uuid(), xId = uuid(), yId = uuid();
-    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 110 });
-    state.nodes.push({ id: xId, name: 'X', x: cx - 140, y: cy + 50 });
-    state.nodes.push({ id: yId, name: 'Y', x: cx + 60,  y: cy + 50 });
+    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 110, latent: false });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 140, y: cy + 50, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 60,  y: cy + 50, latent: false });
     state.edges.push({ id: edgeUuid(), from: zId, to: xId });
     state.edges.push({ id: edgeUuid(), from: zId, to: yId });
     state.edges.push({ id: edgeUuid(), from: xId, to: yId });
@@ -2066,9 +2509,9 @@ function loadExample() {
   } else if (scenario === 'collider') {
     // X → Y (direkt), X → C ← Y  (Collider C)
     const xId = uuid(), yId = uuid(), cId = uuid();
-    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy });
-    state.nodes.push({ id: yId, name: 'Y', x: cx + 80,  y: cy });
-    state.nodes.push({ id: cId, name: 'C', x: cx - 40,  y: cy + 120 });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 80,  y: cy, latent: false });
+    state.nodes.push({ id: cId, name: 'C', x: cx - 40,  y: cy + 120, latent: false });
     state.edges.push({ id: edgeUuid(), from: xId, to: yId });
     state.edges.push({ id: edgeUuid(), from: xId, to: cId });
     state.edges.push({ id: edgeUuid(), from: yId, to: cId });
@@ -2078,9 +2521,9 @@ function loadExample() {
   } else if (scenario === 'mediation') {
     // X → M → Y  (reine Mediation, kein direkter Effekt)
     const xId = uuid(), mId = uuid(), yId = uuid();
-    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy });
-    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy });
-    state.nodes.push({ id: yId, name: 'Y', x: cx + 87,  y: cy });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy, latent: false });
+    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 87,  y: cy, latent: false });
     state.edges.push({ id: edgeUuid(), from: xId, to: mId });
     state.edges.push({ id: edgeUuid(), from: mId, to: yId });
     state.exposure = xId; state.outcome = yId;
@@ -2089,16 +2532,44 @@ function loadExample() {
   } else if (scenario === 'mediation_confounder') {
     // Z → X, Z → Y, X → M → Y  (Mediation + Confounder)
     const zId = uuid(), xId = uuid(), mId = uuid(), yId = uuid();
-    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 120 });
-    state.nodes.push({ id: xId, name: 'X', x: cx - 165, y: cy + 50 });
-    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy + 50 });
-    state.nodes.push({ id: yId, name: 'Y', x: cx + 92,  y: cy + 50 });
+    state.nodes.push({ id: zId, name: 'Z', x: cx - NODE_W/2, y: cy - 120, latent: false });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 165, y: cy + 50, latent: false });
+    state.nodes.push({ id: mId, name: 'M', x: cx - 37,  y: cy + 50, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 92,  y: cy + 50, latent: false });
     state.edges.push({ id: edgeUuid(), from: zId, to: xId });
     state.edges.push({ id: edgeUuid(), from: zId, to: yId });
     state.edges.push({ id: edgeUuid(), from: xId, to: mId });
     state.edges.push({ id: edgeUuid(), from: mId, to: yId });
     state.exposure = xId; state.outcome = yId;
     showToast('Mediator + Confounder: Z kontrollieren, M je nach Effekt', 'ok');
+
+  } else if (scenario === 'iv') {
+    // IV: Z→X, X→Y, U(latent)→X, U→Y
+    const zId = uuid(), xId = uuid(), yId = uuid(), uId = uuid();
+    state.nodes.push({ id: zId, name: 'Z', x: cx - 210, y: cy, latent: false });
+    state.nodes.push({ id: xId, name: 'X', x: cx - 80,  y: cy, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 80,  y: cy, latent: false });
+    state.nodes.push({ id: uId, name: 'U', x: cx - 10,  y: cy - 120, latent: true });
+    state.edges.push({ id: edgeUuid(), from: zId, to: xId });
+    state.edges.push({ id: edgeUuid(), from: xId, to: yId });
+    state.edges.push({ id: edgeUuid(), from: uId, to: xId });
+    state.edges.push({ id: edgeUuid(), from: uId, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Instrumentalvariable: Z ist Instrument, U konfundiert X und Y (latent)', 'ok');
+
+  } else if (scenario === 'frontdoor') {
+    // Front Door: X→M→Y, U(latent)→X, U→Y
+    const xId = uuid(), mId = uuid(), yId = uuid(), uId = uuid();
+    state.nodes.push({ id: xId, name: 'X', x: cx - 160, y: cy, latent: false });
+    state.nodes.push({ id: mId, name: 'M', x: cx - 20,  y: cy, latent: false });
+    state.nodes.push({ id: yId, name: 'Y', x: cx + 120, y: cy, latent: false });
+    state.nodes.push({ id: uId, name: 'U', x: cx - 30,  y: cy - 120, latent: true });
+    state.edges.push({ id: edgeUuid(), from: xId, to: mId });
+    state.edges.push({ id: edgeUuid(), from: mId, to: yId });
+    state.edges.push({ id: edgeUuid(), from: uId, to: xId });
+    state.edges.push({ id: edgeUuid(), from: uId, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Front Door: M ist Mediator, U konfundiert X und Y (latent)', 'ok');
   }
 
   renderSidebar();
