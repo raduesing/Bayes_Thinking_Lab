@@ -520,14 +520,12 @@ function genSimCode(){
     L.push('# ── Gruppeneffekte ─────────────────────────────────────');
     L.push('n_groups <- 10   # Anzahl Gruppen — anpassen');
     L.push(`${gv}       <- sample(1:n_groups, n, replace = TRUE)`);
-    L.push(`sigma_a  <- rexp(1, rate = ${sa_lam})   # Prior: Exponential(${sa_lam})`);
-    L.push(`a_j      <- rnorm(n_groups, mean = 0, sd = sigma_a)`);
+    L.push(`sigma_u  <- rexp(1, rate = ${sa_lam})   # Hyperprior: Exponential(${sa_lam})`);
+    L.push(`u_j      <- rnorm(n_groups, mean = 0, sd = sigma_u)   # Random intercept deviations`);
     if(M.ret==='slope'&&K>0){
       const sb_lam=M.pr.sig_b?.p1??1;
-      const mb_mu=M.pr.mu_b?.mu??0, mb_sig=M.pr.mu_b?.sig??0.5;
-      L.push(`mu_b     <- rnorm(1, mean = ${mb_mu}, sd = ${mb_sig})   # Hyperprior: Normal(${mb_mu}, ${mb_sig})`);
-      L.push(`sigma_b  <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
-      L.push(`b_j      <- rnorm(n_groups, mean = mu_b, sd = sigma_b)   # Gruppenspezifische Slopes`);
+      L.push(`sigma_v  <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
+      L.push(`v_j      <- rnorm(n_groups, mean = 0, sd = sigma_v)   # Random slope deviations`);
     }
     L.push('');
   }
@@ -549,9 +547,9 @@ function genSimCode(){
       const otherTerms=K>1?M.preds.slice(1).map((p,i)=>{
         const pn=p.name||`x${i+2}`, bn=`beta_${pn}`; return ` + ${bn} * ${pn}`;
       }).join(''):'';
-      L.push(`eta <- alpha + b_j[${gv}] * ${p0n} + a_j[${gv}]${otherTerms}`);
+      L.push(`eta <- eta + u_j[${gv}] + v_j[${gv}] * ${p0n}${otherTerms}`);
     } else {
-      L.push(`eta <- eta + a_j[${gv}]`);
+      L.push(`eta <- eta + u_j[${gv}]`);
     }
   }
   L.push('');
@@ -731,6 +729,22 @@ const EX={
     what:'σ_α ist die Streuung der Gruppen-Intercepts um μ_α. Kleines σ_α → viel Pooling (Gruppen ähnlich). Großes σ_α → wenig Pooling (Gruppen sehr verschieden).',
     why:'Exp(1): bevorzugt moderate Heterogenität zwischen Gruppen. σ_α ist inhaltlich sehr aussagekräftig!',
     tip:'Schau dir σ_α im Posterior an: er sagt dir, wie unterschiedlich die Gruppen nach Kontrolle der Prädiktoren noch sind.'},
+  u_j:{title:'Zufälliger Intercept u_j',
+    what:'u_j ist die gruppenspezifische Abweichung vom globalen Intercept α. Jede Gruppe j bekommt ihren eigenen Wert u_j ~ Normal(0, σ_u). Der vollständige Gruppen-Intercept ist α + u_j.',
+    why:'Partial Pooling: Gruppen mit wenig Daten werden zu 0 gezogen (shrinkage). σ_u bestimmt das Ausmaß — kleines σ_u = starkes Pooling. In brms: (1|group).',
+    tip:'u_j ist nicht zu verwechseln mit α[j] aus McElreath. In brms-Notation: α + u_j = α[j]. Die Zentrierung auf 0 ist technisch notwendig für Identifizierbarkeit.'},
+  v_j:{title:'Zufälliger Slope v_j',
+    what:'v_j ist die gruppenspezifische Abweichung vom globalen Slope β₁. v_j ~ Normal(0, σ_v). Der vollständige Gruppen-Slope ist β₁ + v_j.',
+    why:'Random Slopes sind sinnvoll wenn die Beziehung zwischen Prädiktor und AV von Gruppe zu Gruppe variiert — also wenn eine Interaktion mit der Gruppenstruktur vorliegt. In brms: (1+x|group).',
+    tip:'Modelle mit Random Slopes sind deutlich komplexer. Oft reicht ein Random Intercept. Prüfe die Notwendigkeit mit WAIC/LOO.'},
+  sigma_u:{title:'σ_u — SD der zufälligen Intercepts',
+    what:'σ_u ist die Standardabweichung der u_j über alle Gruppen. Er ist selbst unbekannt und bekommt einen Prior (Exponential).',
+    why:'Exponential(λ): E[σ_u]=1/λ. Kleines σ_u → Gruppen-Intercepts liegen eng zusammen (wenig Variation). Großes σ_u → Gruppen sehr unterschiedlich.',
+    tip:'In brms: prior(exponential(1), class=sd). σ_u ist inhaltlich zentral: er quantifiziert, wie stark sich Gruppen im Intercept unterscheiden, nach Berücksichtigung der Prädiktoren.'},
+  sigma_v:{title:'σ_v — SD der zufälligen Slopes',
+    what:'σ_v ist die Standardabweichung der v_j über alle Gruppen. Steuert die Slope-Heterogenität zwischen Gruppen.',
+    why:'Exponential(λ): ähnlich wie σ_u, aber für Slopes. Kleines σ_v → alle Gruppen haben fast gleiche Steigung.',
+    tip:'In brms: prior(exponential(1), class=sd, coef=x1). Wenn σ_v ≈ 0 im Posterior: Random Slopes tragen kaum zur Erklärung bei — überlege ob sie nötig sind.'},
   det:{title:'Deterministischer Knoten (•)',
     what:'Der kleine ausgefüllte Punkt (•) ist der lineare Prädiktor μ_i. Er ist vollständig durch seine Eingaben bestimmt — keine Zufälligkeit, kein Prior. μ_i = α + β₁x₁ + β₂x₂ + …',
     whyLbl:'Wie funktioniert das?',
@@ -849,16 +863,24 @@ function buildFormulaTerms(){
   const pfx=prefix||expPfx;
   const terms=[];
   terms.push({text:`${lhs}ᵢ = ${pfx}`,nodeId:null});
-  const aLbl=isML?`α[${j}]`:'α';
-  terms.push({text:aLbl,nodeId:'alpha'});
+  terms.push({text:'α',nodeId:'alpha'});
   M.preds.forEach((p,i)=>{
-    const isSlope=isML&&M.ret==='slope'&&i===0;
-    const bSym=isSlope?(K>1?`β${SUB[0]}[${j}]`:`β[${j}]`):K>1?`β${SUB[i]||i+1}`:'β';
+    const bSym=K>1?`β${SUB[i]||i+1}`:'β';
     const xSym=(p.name||`x${i+1}`)+'ᵢ';
     terms.push({text:' + ',nodeId:null});
     terms.push({text:bSym,nodeId:`b${i}`}); // arrow target
     terms.push({text:'·'+xSym,nodeId:null});
   });
+  if(isML){
+    const hasSlope=M.ret==='slope'&&K>0;
+    terms.push({text:' + ',nodeId:null});
+    terms.push({text:'u_j',nodeId:'u_j'});
+    if(hasSlope){
+      terms.push({text:' + ',nodeId:null});
+      terms.push({text:'v_j',nodeId:'v_j'});
+      terms.push({text:`·${M.preds[0].name||'x1'}ᵢ`,nodeId:null});
+    }
+  }
   if(suffix) terms.push({text:suffix,nodeId:null});
   return terms;
 }
@@ -891,10 +913,9 @@ function buildLayout(){
 
   // ── Parameter nodes ──────────────────────────────────
   const pNodes=[];
-  pNodes.push({id:'alpha',lbl:isML?`α[${M.gv}]`:'α',sub:'Intercept',col:'int',pk:'alpha'});
+  pNodes.push({id:'alpha',lbl:'α',sub:'Intercept',col:'int',pk:'alpha'});
   M.preds.forEach((p,i)=>{
-    const isSlope=M.ml&&M.ret==='slope'&&i===0;
-    const bLbl=isSlope?(K>1?`β${SUB[0]}[${M.gv}]`:`β[${M.gv}]`):K>1?`β${SUB[i]||i+1}`:'β';
+    const bLbl=K>1?`β${SUB[i]||i+1}`:'β';
     pNodes.push({id:`b${i}`,lbl:bLbl,sub:p.name||`x${i+1}`,col:'beta',pk:`beta_${i}`,prObj:p.pr});
   });
   if(hS) pNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma'});
@@ -902,7 +923,7 @@ function buildLayout(){
 
   // Wide spacing — use 80% of width for params
   const nP=pNodes.length;
-  const pY=isML?330:220;
+  const pY=220;
   const usableW=W*0.82;
   const sp=nP<=1?0:Math.min(170,usableW/(nP-1));
   const px0=cx-(nP-1)*sp/2;
@@ -917,49 +938,35 @@ function buildLayout(){
     edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
   });
 
-  // ── Multilevel hyperpriors ────────────────────────────
+  // ── Multilevel random effects (brms-style) ───────────
   if(isML){
-    const ax=nodes['alpha'].x;
     const hasSlope=M.ret==='slope'&&K>0;
-    // When slope active: stagger α-hyperpriors (y=120) and β-hyperpriors (y=190) to avoid overlap
-    const aHY = hasSlope ? 120 : 155;
-    const aOff= hasSlope ? 55  : 80;
-    nodes['mu_a'] ={id:'mu_a', lbl:'μ_α',sub:'Hyper-Mittel',  col:'re',pk:'mu_a', type:'stoch',x:ax-aOff,y:aHY};
-    nodes['sig_a']={id:'sig_a',lbl:'σ_α',sub:'Hyper-Streuung',col:'re',pk:'sig_a',type:'stoch',x:ax+aOff,y:aHY};
-    nodes['pl_mu_a'] ={id:'pl_mu_a', type:'plbl',prObj:M.pr.mu_a, x:ax-aOff,y:aHY-(R+40),col:'re',parentId:'mu_a'};
-    nodes['pl_sig_a']={id:'pl_sig_a',type:'plbl',prObj:M.pr.sig_a,x:ax+aOff,y:aHY-(R+40),col:'re',parentId:'sig_a'};
-    edges.push({fr:'pl_mu_a', to:'mu_a', col:'re',isPL:true});
-    edges.push({fr:'pl_sig_a',to:'sig_a',col:'re',isPL:true});
-    edges.push({fr:'mu_a', to:'alpha',col:'re'});
-    edges.push({fr:'sig_a',to:'alpha',col:'re'});
-    delete nodes['pl_alpha'];
-    const pli=edges.findIndex(e=>e.fr==='pl_alpha');
-    if(pli>=0) edges.splice(pli,1);
-    // Group plate: wide enough to cover both α and β in slope mode
+    const uX=hasSlope?cx-55:cx, vX=cx+55;
+    const sigRY=pY+90, uY=sigRY+120; // sigma_u/v at 310, u_j/v_j at 430 if pY=220
+
+    // sigma_u: hyperprior for u_j
+    nodes['sigma_u']={id:'sigma_u',lbl:'σ_u',sub:'SD u_j',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
+    nodes['pl_sigma_u']={id:'pl_sigma_u',type:'plbl',prObj:M.pr.sig_a,x:uX,y:sigRY-(R+40),col:'re',parentId:'sigma_u'};
+    edges.push({fr:'pl_sigma_u',to:'sigma_u',col:'re',isPL:true});
+    // u_j: random intercept deviation (inside group plate)
+    nodes['u_j']={id:'u_j',lbl:'u_j',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY};
+    edges.push({fr:'sigma_u',to:'u_j',col:'re'});
+
     if(hasSlope){
-      const bx=nodes['b0'].x;
-      const bHY=190, bOff=55;
-      nodes['mu_b'] ={id:'mu_b', lbl:'μ_β',sub:'Hyper-Mittel β', col:'re',pk:'mu_b', type:'stoch',x:bx-bOff,y:bHY};
-      nodes['sig_b']={id:'sig_b',lbl:'σ_β',sub:'Hyper-Streuung β',col:'re',pk:'sig_b',type:'stoch',x:bx+bOff,y:bHY};
-      nodes['pl_mu_b'] ={id:'pl_mu_b', type:'plbl',prObj:M.pr.mu_b, x:bx-bOff,y:bHY-(R+40),col:'re',parentId:'mu_b'};
-      nodes['pl_sig_b']={id:'pl_sig_b',type:'plbl',prObj:M.pr.sig_b,x:bx+bOff,y:bHY-(R+40),col:'re',parentId:'sig_b'};
-      edges.push({fr:'pl_mu_b', to:'mu_b', col:'re',isPL:true});
-      edges.push({fr:'pl_sig_b',to:'sig_b',col:'re',isPL:true});
-      edges.push({fr:'mu_b',to:'b0',col:'re'});
-      edges.push({fr:'sig_b',to:'b0',col:'re'});
-      delete nodes['pl_b0'];
-      const pli2=edges.findIndex(e=>e.fr==='pl_b0');
-      if(pli2>=0) edges.splice(pli2,1);
-      // Wide plate covering both α[j] and β[j]
-      const plateX=Math.min(ax,bx)-90, plateW=Math.abs(bx-ax)+180;
-      plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateX,y:pY-65,w:plateW,h:165,col:'re',dash:true});
-    } else {
-      plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:ax-90,y:pY-65,w:180,h:165,col:'re',dash:true});
+      nodes['sigma_v']={id:'sigma_v',lbl:'σ_v',sub:'SD v_j',col:'re',pk:'sig_b',type:'stoch',x:vX,y:sigRY};
+      nodes['pl_sigma_v']={id:'pl_sigma_v',type:'plbl',prObj:M.pr.sig_b,x:vX,y:sigRY-(R+40),col:'re',parentId:'sigma_v'};
+      edges.push({fr:'pl_sigma_v',to:'sigma_v',col:'re',isPL:true});
+      nodes['v_j']={id:'v_j',lbl:'v_j',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
+      edges.push({fr:'sigma_v',to:'v_j',col:'re'});
     }
+    // Group plate covering sigma_u/v and u_j/v_j
+    const plateMinX=(hasSlope?Math.min(uX,vX):uX)-85;
+    const plateW=hasSlope?Math.abs(vX-uX)+170:170;
+    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateMinX,y:sigRY-55,w:plateW,h:uY-sigRY+120,col:'re',dash:true});
   }
 
   // ── Deterministic formula node ────────────────────────
-  const detY=isML?480:370;
+  const detY=isML?510:370;
   const terms=buildFormulaTerms();
   const fw=Math.max(formulaWidth(terms)+56, 180);
   const boxHalfW=fw/2;
@@ -1006,6 +1013,15 @@ function buildLayout(){
       edges.push({fr:p.id,to:'det',col:p.col,termX});
     }
   });
+  if(isML){
+    const hasSlope=M.ret==='slope'&&K>0;
+    const uRel=relTermCenters['u_j']??0;
+    edges.push({fr:'u_j',to:'det',col:'re',termX:cx+uRel});
+    if(hasSlope&&K>0){
+      const vRel=relTermCenters['v_j']??0;
+      edges.push({fr:'v_j',to:'det',col:'re',termX:cx+vRel});
+    }
+  }
   if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-55});
   if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 55});
   edges.push({fr:'det',to:'y',col:'data'});
@@ -1019,13 +1035,13 @@ const hasNu =()=>M.fam==='student';
 
 function buildLinear(){
   const K=M.preds.length,isML=M.ml,j=M.gv;
-  const a=isML?`α[${j}]`:'α';
-  const bs=M.preds.map((p,i)=>{
-    const isSlope=isML&&M.ret==='slope'&&i===0;
-    const b=isSlope?(K>1?`β${SUB[0]}[${j}]`:`β[${j}]`):K>1?`β${SUB[i]||i+1}`:'β';
-    return `${b}·${p.name||'x'}ᵢ`;
-  });
-  const lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
+  const a='α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${SUB[i]||i+1}`:'β';return `${b}·${p.name||'x'}ᵢ`;});
+  let lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
+  if(isML){
+    lin+=` + u_j[${j}]`;
+    if(M.ret==='slope'&&K>0) lin+=` + v_j[${j}]·${M.preds[0].name||'x1'}ᵢ`;
+  }
   if(M.fam==='bernoulli') return `logit⁻¹(${lin})`;
   if(M.fam==='poisson'||M.fam==='gamma') return `exp(${lin})`;
   return lin;
@@ -1290,35 +1306,30 @@ function buildMath(){
   html+=block('Likelihood', row(lkMap[M.fam]||lkMap.normal,'data','y'));
 
   // Linear predictor
-  const a=isML?`α[${j}]`:'α';
-  const bs=M.preds.map((p,i)=>{
-    const isSlope=isML&&M.ret==='slope'&&i===0;
-    const b=isSlope?(K>1?`β${sub(1)}[${j}]`:`β[${j}]`):K>1?`β${sub(i+1)}`:'β';
-    return `${b}·${p.name||`x${i+1}`}${sub('i')}`;
-  });
+  const a='α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${sub(i+1)}`:'β'; return `${b}·${p.name||`x${i+1}`}${sub('i')}`;});
   const lin=a+(bs.length?`${space}+${space}${bs.join(`${space}+${space}`)}`:'');
+  const linML=isML?`${lin}${space}+${space}u${sub('j[i]')}`+(M.ret==='slope'&&K>0?`${space}+${space}v${sub('j[i]')}·${M.preds[0]?.name||'x1'}${sub('i')}`:''):lin;
   const lpMap={
-    normal:lin, student:lin,
-    bernoulli:`logit${sup('-1')}(${lin})`,
-    poisson:`exp(${lin})`, gamma:`exp(${lin})`
+    normal:linML, student:linML,
+    bernoulli:`logit${sup('-1')}(${linML})`,
+    poisson:`exp(${linML})`, gamma:`exp(${linML})`
   };
   const detL=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
-  html+=block('Linearer Prädiktor', row(`${detL}${sub('i')} = ${lpMap[M.fam]||lin}`, 'data', 'det'));
+  html+=block('Linearer Prädiktor', row(`${detL}${sub('i')} = ${lpMap[M.fam]||linML}`, 'data', 'det'));
   html+='<div class="msep"></div>';
 
   // Priors
   let pRows='';
+  pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
   if(isML){
-    pRows+=row(`α[${j}] ${sim} Normal(μ${sub('α')}, σ${sub('α')})`,'int','alpha');
     pRows+='<div style="height:.2rem"></div>';
-    pRows+=row(`μ${sub('α')} ${sim} ${htmlPr(M.pr.mu_a)}`,'re','mu_a');
-    pRows+=row(`σ${sub('α')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sig_a');
-    if(M.ret==='slope'){
-      pRows+=row(`μ${sub('β')} ${sim} ${htmlPr(M.pr.mu_b)}`,'re','mu_b');
-      pRows+=row(`σ${sub('β')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sig_b');
+    pRows+=row(`u${sub('j')} ${sim} Normal(0,&thinsp;σ${sub('u')})`,'re','u_j');
+    pRows+=row(`σ${sub('u')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
+    if(M.ret==='slope'&&K>0){
+      pRows+=row(`v${sub('j')} ${sim} Normal(0,&thinsp;σ${sub('v')})`,'re','v_j');
+      pRows+=row(`σ${sub('v')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sigma_v');
     }
-  } else {
-    pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
   }
   M.preds.forEach((p,i)=>{
     const b=K>1?`β${sub(i+1)}`:'β';
@@ -1422,39 +1433,19 @@ function buildPriorUI(){
     ])
   );
 
-  // Hyperpriors
+  // Hyperpriors (brms-style)
   if(isML){
-    html+=blk('re','μ_α — Hyper-Mittel','re',prS(M.pr.mu_a),
-      PR_EX.normal+'<br><b>Was:</b> Mittlerer Intercept über alle Gruppen. Skaliere zur AV-Skala.',
-      sls([
-        {l:'μ',mn:-10,mx:10,st:0.5,dp:1,v:M.pr.mu_a.mu??0,
-         fn:"M.pr.mu_a.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-        {l:'σ',mn:0.5,mx:15,st:0.5,dp:1,v:M.pr.mu_a.sig??5,
-         fn:"M.pr.mu_a.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-      ])
-    );
-    html+=blk('re','σ_α — Hyper-Streuung','re',prS(M.pr.sig_a),
-      PR_EX.exponential+'<br><b>Was:</b> Heterogenität zwischen Gruppen. Klein = viel Pooling.',
-      sls([
-        {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
-         fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+    html+=blk('re','σ_u — SD Rand. Intercepts','re',prS(M.pr.sig_a),
+      PR_EX.exponential+'<br><b>Was:</b> u_j ~ Normal(0, σ_u). σ_u steuert, wie stark Intercepts zwischen Gruppen variieren. Klein = starkes Pooling. In brms: prior(exponential(1), class=sd).',
+      sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
+           fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
       ])
     );
     if(M.ret==='slope'&&M.preds.length>0){
-      html+=blk('re','μ_β — Hyper-Mittel β','re',prS(M.pr.mu_b),
-        PR_EX.normal+'<br><b>Was:</b> Hyperprior für den mittleren Slope über alle Gruppen. Aus diesem Prior wird μ_β gezogen; daraus wiederum b_j ~ Normal(μ_β, σ_β) für jede Gruppe.',
-        sls([
-          {l:'μ',mn:-5,mx:5,st:0.1,dp:1,v:M.pr.mu_b.mu??0,
-           fn:"M.pr.mu_b.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-          {l:'σ',mn:0.1,mx:5,st:0.1,dp:1,v:M.pr.mu_b.sig??0.5,
-           fn:"M.pr.mu_b.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-        ])
-      );
-      html+=blk('re','σ_β — Hyper-Streuung β','re',prS(M.pr.sig_b),
-        PR_EX.exponential+'<br><b>Was:</b> Hyperprior für die Streuung der gruppenspezifischen Slopes. σ_β klein → alle Gruppen haben fast gleichen Slope (starkes Pooling). σ_β groß → Slopes variieren stark zwischen Gruppen.',
-        sls([
-          {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
-           fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+      html+=blk('re','σ_v — SD Rand. Slopes','re',prS(M.pr.sig_b),
+        PR_EX.exponential+'<br><b>Was:</b> v_j ~ Normal(0, σ_v). σ_v steuert, wie stark Slopes für '+((M.preds[0]?.name)||'x1')+' zwischen Gruppen variieren. Der gruppenspezifische Slope ist β₁ + v_j.',
+        sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
+             fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
         ])
       );
     }
@@ -1514,8 +1505,8 @@ function onNodeClick(node){
   if(node.type==='plbl') ACTIVE=node.parentId;
   else ACTIVE=node.id;
   const ek=ACTIVE==='det'?'det':ACTIVE==='y'?'y'
-          :ACTIVE==='alpha'&&M.ml?'alpha_j'
-          :ACTIVE==='mu_a'?'mu_a':ACTIVE==='sig_a'?'sig_a'
+          :ACTIVE==='u_j'?'u_j':ACTIVE==='v_j'?'v_j'
+          :ACTIVE==='sigma_u'?'sigma_u':ACTIVE==='sigma_v'?'sigma_v'
           :ACTIVE?.startsWith('b')?'beta'
           :EX[ACTIVE]?ACTIVE:'alpha';
   if(SHOW_EX) showExplain(ek);
@@ -1524,7 +1515,9 @@ function onNodeClick(node){
 function onMathClick(nid){
   if(!nid) return;
   ACTIVE=nid;
-  const ek=nid==='det'?'det':nid==='y'?'y':nid==='alpha'&&M.ml?'alpha_j'
+  const ek=nid==='det'?'det':nid==='y'?'y'
+          :nid==='u_j'?'u_j':nid==='v_j'?'v_j'
+          :nid==='sigma_u'?'sigma_u':nid==='sigma_v'?'sigma_v'
           :nid.startsWith('b')?'beta':EX[nid]?nid:'alpha';
   if(SHOW_EX) showExplain(ek);
   render();buildMath();
