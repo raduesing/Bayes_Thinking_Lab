@@ -1312,7 +1312,8 @@ function brmsParsToPPCLoc(p) {
 //  TRANSFER: Builder → PPC
 // ═══════════════════════════════════════════════════════════
 function exportToPPC() {
-  const preds   = predictorNames.filter(Boolean);
+  const preds    = predictorNames.filter(Boolean);
+  const predsExp = expandPreds(preds, predictorDegrees);  // includes I(x^2) etc.
   const hasRE   = document.getElementById('has-re').checked;
   const g       = document.getElementById('group-var').value.trim() || 'group';
   const reType  = document.getElementById('re-type').value;
@@ -1323,7 +1324,7 @@ function exportToPPC() {
   const f       = gFamily();
 
   const intParsed   = parsePriorStr(gPrior('mu_int', 'Intercept'));
-  const betaParsed  = preds.map(p => parsePriorStr(gPrior('mu_b_' + p, 'b')));
+  const betaParsed  = predsExp.map(p => parsePriorStr(gPrior('mu_b_' + p, 'b')));
   const sigParsed   = parsePriorStr(gPrior('fixed_sigma', 'sigma'));
   const reIntParsed = parsePriorStr(gPrior('re_sd_int', 'sd'));
   const firstSlope  = slopeVars[0];
@@ -1354,8 +1355,9 @@ function exportToPPC() {
     ts:         Date.now(),
     family:     f,
     ppcFamily:  FAM2PPC[f] || 'linear',
-    nPreds:     preds.length,
-    predNames:  preds,
+    nPreds:     predsExp.length,
+    predNames:  predsExp,
+    degrees:    predictorDegrees.slice(),
     inters:     inters,
     interPriors,
     intercept:  brmsParsToPPCLoc(intParsed),
@@ -1444,15 +1446,41 @@ function importFromPPC() {
   if (famSel) famSel.value = newFam;
   rebuildDistArea();
 
-  // Predictor count + names
-  const n = d.nPreds || 1;
-  predictorNames = Array.from({ length: n }, (_, i) =>
-    (d.predNames && d.predNames[i]) ? d.predNames[i] : ('x' + (i + 1)));
+  // Reconstruct base predictor names + degrees from possibly-expanded predNames
+  // Polynomial terms like I(x1^2) are collapsed back to base predictor x1 with degree 2
+  if (d.degrees && d.degrees.length > 0) {
+    // Builder sent degrees explicitly — use them directly
+    const baseNames = (d.predNames || []).filter(n => !n.match(/^I\(\w+\^\d+\)$/));
+    predictorNames   = baseNames.length > 0 ? baseNames : ['x1'];
+    predictorDegrees = d.degrees.slice();
+  } else if (d.predNames && d.predNames.some(n => n.match(/^I\(\w+\^\d+\)$/))) {
+    // Detect polynomial terms from names
+    const baseNames = []; const baseDegrees = [];
+    (d.predNames || []).forEach(name => {
+      const m = name.match(/^I\((\w+)\^(\d+)\)$/);
+      if (m) {
+        const idx = baseNames.indexOf(m[1]);
+        if (idx >= 0) baseDegrees[idx] = Math.max(baseDegrees[idx], parseInt(m[2]));
+      } else { baseNames.push(name); baseDegrees.push(1); }
+    });
+    predictorNames   = baseNames.length > 0 ? baseNames : ['x1'];
+    predictorDegrees = baseDegrees;
+  } else {
+    const n = d.nPreds || 1;
+    predictorNames   = Array.from({ length: n }, (_, i) =>
+      (d.predNames && d.predNames[i]) ? d.predNames[i] : ('x' + (i + 1)));
+    predictorDegrees = Array(predictorNames.length).fill(1);
+  }
   renderPredList();
 
-  // Apply priors
+  // Apply priors — map betas to expanded term names (predNames), not base predictorNames
   if (d.intercept) userPriors['mu_int'] = ppcLocToStr(d.intercept);
-  if (d.betas) {
+  if (d.betas && d.predNames) {
+    d.betas.forEach((b, i) => {
+      const termName = d.predNames[i] || ('x' + (i + 1));
+      userPriors['mu_b_' + termName] = ppcLocToStr(b);
+    });
+  } else if (d.betas) {
     d.betas.forEach((b, i) => {
       const nm = predictorNames[i] || ('x' + (i + 1));
       userPriors['mu_b_' + nm] = ppcLocToStr(b);
