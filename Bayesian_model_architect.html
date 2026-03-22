@@ -97,7 +97,7 @@ body{font-family:'Fraunces',serif;background:var(--bg);color:var(--ink);
 .pbg-sig{background:rgba(184,92,0,.2);color:var(--a5)}
 .pbg-nu{background:rgba(14,124,123,.2);color:var(--a6)}
 .pbg-re{background:rgba(122,58,138,.2);color:var(--a4)}
-.prior-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);font-weight:500}
+.prior-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prior-val{font-family:'DM Mono',monospace;font-size:.73rem;color:var(--ink2);opacity:.75;flex-shrink:0;text-align:right}
 .prior-exp{display:none;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
            line-height:1.65;margin-bottom:.32rem;padding:.3rem .36rem;
@@ -229,7 +229,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     <button class="hbtn" id="btn-guide" onclick="toggleGuide()">📖 Guide</button>
     <button class="hbtn" id="btn-ex"    onclick="toggleEx()" title="Klicke auf einen Knoten oder Formelzeile für Erklärungen — Infopanel ein/aus">💡 Erklärungen</button>
     <button class="hbtn" onclick="showSimCode()" style="border-color:var(--a3);color:var(--a3)" title="R-Simulationscode generieren (Prior Predictive Simulation)">⬡ Golem light</button>
-    <button class="hbtn" onclick="toggleArchHelp()" style="border-color:var(--a4);color:var(--a4)">ℹ Hilfe</button>
+    <button class="hbtn" onclick="toggleArchHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Hilfe</button>
     <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
@@ -263,7 +263,8 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     <div class="sc-h"><span class="sn">3</span> Struktur</div>
     <label class="ml-toggle"><input type="checkbox" id="ml-ck" onchange="sched()"> Mehrebenenmodell (hierarchisch)</label>
     <div id="ml-opts" class="ml-opts">
-      <div class="pg"><label>Gruppe</label><input type="text" id="gv" value="j" oninput="sched()"></div>
+      <div class="pg"><label title="Name der Gruppenindexvariable im R-Code — z.B. j, person, school">Gruppe</label><input type="text" id="gv" value="j" placeholder="z.B. j, person" oninput="sched()"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink2);margin-bottom:.18rem;line-height:1.5">Name der Gruppenindex-Variable im Datensatz (z.B. j = Schulen, person = Probanden)</div>
       <div class="pg"><label>Varying</label>
         <select id="re-type" onchange="sched()">
           <option value="int">Intercept (α_j)</option>
@@ -389,7 +390,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     · <b>• Punkt</b> = deterministischer Knoten (μᵢ) — kein Prior, wird berechnet<br>
     · <b>Pfeile</b> zeigen die generative Richtung: Prior → Parameter → Daten<br>
     · <b>Plates</b> (gestrichelte Rahmen) markieren wiederholte Einheiten (i = 1…N Beobachtungen; j = 1…J Gruppen)<br><br>
-    Im <b>hierarchischen Modell</b> bekommen gruppenspezifische Parameter (α[j]) eigene Hyperpriors (μ_α, σ_α) — diese steuern, wie stark die Gruppen voneinander "lernen" (Partial Pooling).
+    Im <b>hierarchischen Modell</b> bekommen gruppenspezifische Parameter (α[j]) eigene Hyperpriors (μ_α, σ_α) — diese steuern, wie stark die Gruppen voneinander "lernen" (Partial Pooling). <b>Random Slopes</b> (β[j]) sind hier exemplarisch nur für den ersten Prädiktor implementiert, zur Illustration des Diagramm-Prinzips.
   </div>
   <div class="ahp-tip">
     <b>Nur einfache Beispielmodelle:</b> bis zu 4 Prädiktoren, eine Gruppenstruktur, 5 Likelihoods. Der Fokus liegt auf der <em>Struktur</em>, nicht auf dem vollen Modellumfang. Klicke auf jeden Knoten im Diagramm für eine Erklärung.
@@ -523,9 +524,10 @@ function genSimCode(){
     L.push(`a_j      <- rnorm(n_groups, mean = 0, sd = sigma_a)`);
     if(M.ret==='slope'&&K>0){
       const sb_lam=M.pr.sig_b?.p1??1;
-      const p0n=M.preds[0].name||'x1', bn0=K>1?`beta_${p0n}`:'beta';
-      L.push(`sigma_b  <- rexp(1, rate = ${sb_lam})   # Prior: Exponential(${sb_lam})`);
-      L.push(`b_j      <- rnorm(n_groups, mean = ${bn0}, sd = sigma_b)`);
+      const mb_mu=M.pr.mu_b?.mu??0, mb_sig=M.pr.mu_b?.sig??0.5;
+      L.push(`mu_b     <- rnorm(1, mean = ${mb_mu}, sd = ${mb_sig})   # Hyperprior: Normal(${mb_mu}, ${mb_sig})`);
+      L.push(`sigma_b  <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
+      L.push(`b_j      <- rnorm(n_groups, mean = mu_b, sd = sigma_b)   # Gruppenspezifische Slopes`);
     }
     L.push('');
   }
@@ -541,10 +543,15 @@ function genSimCode(){
     L.push(`eta <- alpha + ${terms.join(' + ')}`);
   }
   if(isML){
-    L.push(`eta <- eta + a_j[${gv}]`);
     if(M.ret==='slope'&&K>0){
-      const p0n=M.preds[0].name||'x1', bn0=K>1?`beta_${p0n}`:'beta';
-      L.push(`eta <- alpha + b_j[${gv}] * ${p0n} + a_j[${gv}]`);
+      // Random slope for first predictor; fixed slopes for remaining predictors
+      const p0n=M.preds[0].name||'x1';
+      const otherTerms=K>1?M.preds.slice(1).map((p,i)=>{
+        const pn=p.name||`x${i+2}`, bn=`beta_${pn}`; return ` + ${bn} * ${pn}`;
+      }).join(''):'';
+      L.push(`eta <- alpha + b_j[${gv}] * ${p0n} + a_j[${gv}]${otherTerms}`);
+    } else {
+      L.push(`eta <- eta + a_j[${gv}]`);
     }
   }
   L.push('');
@@ -1435,7 +1442,7 @@ function buildPriorUI(){
     );
     if(M.ret==='slope'&&M.preds.length>0){
       html+=blk('re','μ_β — Hyper-Mittel β','re',prS(M.pr.mu_b),
-        PR_EX.normal+'<br><b>Was:</b> Gemeinsame Basissteigung über alle Gruppen.',
+        PR_EX.normal+'<br><b>Was:</b> Hyperprior für den mittleren Slope über alle Gruppen. Aus diesem Prior wird μ_β gezogen; daraus wiederum b_j ~ Normal(μ_β, σ_β) für jede Gruppe.',
         sls([
           {l:'μ',mn:-5,mx:5,st:0.1,dp:1,v:M.pr.mu_b.mu??0,
            fn:"M.pr.mu_b.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
@@ -1444,7 +1451,7 @@ function buildPriorUI(){
         ])
       );
       html+=blk('re','σ_β — Hyper-Streuung β','re',prS(M.pr.sig_b),
-        PR_EX.exponential+'<br><b>Was:</b> Variabilität der Slopes zwischen Gruppen. Klein = alle Gruppen ähnliche Steigung (Slope-Pooling).',
+        PR_EX.exponential+'<br><b>Was:</b> Hyperprior für die Streuung der gruppenspezifischen Slopes. σ_β klein → alle Gruppen haben fast gleichen Slope (starkes Pooling). σ_β groß → Slopes variieren stark zwischen Gruppen.',
         sls([
           {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
            fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
