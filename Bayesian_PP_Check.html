@@ -227,13 +227,16 @@ svg text{font-family:'DM Mono',monospace}
 </div>
 
 <div class="hrow">
-  <div>
-    <h1>Prior <em>Predictive</em> Check</h1>
+  <div style="display:flex;flex-direction:column;gap:.06rem">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1.2rem">
+      <h1>Prior <em>Predictive</em> Check</h1>
+      <button class="ibtn" id="btn-theme" onclick="toggleTheme()" style="flex-shrink:0;margin-top:.18rem;font-size:.75rem">☀ Light</button>
+    </div>
     <p class="sub">Prior Predictive Checks · brms · 15 Likelihoods · A/B-Vergleich · LMM · Builder-Integration</p>
     <p class="auth">© Dr. Rainer Düsing · Interactive Tools by Claude</p>
   </div>
   <div class="hbtns">
-        <button class="ibtn" onclick="window.open('index.html','_self')" style="border-color:var(--accent3);color:var(--accent3)">← Übersicht</button>
+    <button class="ibtn" onclick="window.open('index.html','_self')" style="border-color:var(--accent3);color:var(--accent3)">← Übersicht</button>
     <button class="ibtn" onclick="window.open('Decision_Lab.html','_blank')" style="border-color:var(--accent6);color:var(--accent6)">Weiter → Decision Lab</button>
     <button class="ibtn" id="btn-priorlab" onclick="openPriorLab()" style="border-color:var(--accent2);color:var(--accent2)">⬡ Prior Lab light</button>
     <button class="ibtn" id="btn-ab"    onclick="toggleAB()">⊞ A/B Vergleich</button>
@@ -242,8 +245,7 @@ svg text{font-family:'DM Mono',monospace}
     <button class="ibtn" onclick="exportSVG()">↓ SVG</button>
     <button class="ibtn" onclick="exportPNG()">↓ PNG</button>
     <button class="ibtn" onclick="togglePpcHelp()" style="border-color:var(--accent);color:var(--accent);font-weight:500">ℹ Hilfe</button>
-    <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
-    <button class="ibtn" id="btn-to-builder" onclick="exportToBuilder()" style="border-color:var(--accent3);color:var(--accent3)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
+    <button class="ibtn" id="btn-to-builder" onclick="exportToBuilder()" style="border-color:var(--accent2);color:var(--accent2)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
   </div>
 </div>
 <div class="outer">
@@ -1809,7 +1811,7 @@ function simulate(cfg, model) {
         groupOffsets = Array.from({length:cfg.nGrp}, () => ({ b0:rNorm(0,tau0), bs:{} }));
       }
     }
-    draws.push({ alpha, betas, interBetas, sigma, sigAlpha, sigBetas, nu, tau0, tau1,
+    draws.push({ alpha, betas, polyBetasDrawn, interBetas, sigma, sigAlpha, sigBetas, nu, tau0, tau1,
                  yhat: yhats[0], yhats, y0, groupOffsets, auxP: drawAux });
   }
   return { draws, cfg, N };
@@ -2859,26 +2861,10 @@ function render() {
       <div class="sstat"><span class="sv">[${fmt(p10)},${fmt(p90)}]</span><span class="sl">80%-PI</span></div>
       ${icc!==null?`<div class="sstat"><span class="sv">${fmt(icc)}</span><span class="sl">E[ICC]</span></div>`:''}
     </div>
-    <details class="expl" style="border-top:1px solid var(--grid);margin-top:.45rem;padding-top:.38rem">
-      <summary style="font-family:'DM Mono',monospace;font-size:.75rem;cursor:pointer;color:var(--accent2);user-select:none;list-style:none;display:flex;align-items:center;gap:.3rem">
-        <span style="font-size:.75rem">▶</span> ℹ Wie kommt die Ampel-Bewertung zustande?
-      </summary>
-      <div class="expl-body" style="margin-top:.42rem">
-        <b>Prinzip:</b> Aus jedem Prior-Draw (α, β, σ) wird y bei x=0 berechnet und gesampelt.<br>
-        Diese ${simA.N} Werte bilden die Prior Predictive Distribution.<br><br>
-        <b>🔴 Rot — unmögliche Werte:</b><br>
-        · Gamma/Poisson aber &gt;2% negative y → Link-Funktion passt nicht zum α-Prior<br>
-        · Mehr als 5% der Werte außerhalb |y|&gt;10.000 → Priors viel zu vage<br>
-        · Poisson-Median &gt;1.000 → log-Link explodiert (α zu groß)<br><br>
-        <b>🟡 Gelb — plausibel, aber prüfen:</b><br>
-        · Linear: 99%-PI-Breite &gt;200 → sehr breite implizierte Skala<br>
-        · PI-Breite &lt;0.005 → Prior extrem eng, kaum Lernraum für Daten<br><br>
-        <b>🟢 Grün — plausibel:</b><br>
-        · Keins der obigen Kriterien trifft zu<br>
-        · 80%-PI wird angezeigt: so breit ist die Prior-Unsicherheit für y bei x=0<br><br>
-        <b>Wichtig:</b> Die Ampel prüft <em>Plausibilität</em>, nicht Richtigkeit. Ein grüner Prior kann trotzdem falsch sein — er sagt nur, dass die implizierten y-Werte grundsätzlich sinnvoll sind. Die Regressionskurven und pp_check unten geben ein vollständigeres Bild.
-      </div>
-    </details>
+    <div style="border-top:1px solid var(--grid);margin-top:.45rem;padding-top:.35rem;display:flex;align-items:center;gap:.5rem">
+      <span style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2)">Bewertet y bei x = 0 aus allen Prior-Draws</span>
+      <button onclick="toggleTlHelp()" style="font-family:'DM Mono',monospace;font-size:.64rem;background:transparent;border:1px solid var(--border);color:var(--ink2);padding:.12rem .4rem;cursor:pointer;flex-shrink:0" title="Wie funktioniert die Ampel?">ℹ</button>
+    </div>
   </div>`;
 
   if (USE_AB) {
@@ -2987,7 +2973,14 @@ function render() {
       </div>
     </div>
     <div class="${gridCls}">
-      ${cfg.preds.map((_,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β${i+1}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten β${i+1}-Werte</div><div id="bt${i}-a"></div></div>`).join('')}
+      ${cfg.preds.map((p,i)=>{
+        const bname = p.name || (cfg.preds.length===1?'x':`x${i+1}`);
+        let html = `<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β · ${bname}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten β-Werte (Grad 1)</div><div id="bt${i}-a"></div></div>`;
+        (p.polybetas||[]).forEach((_,di)=>{
+          html+=`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: β · I(${bname}^${di+2})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten β-Werte (Grad ${di+2})</div><div id="btpoly${i}-${di}-a"></div></div>`;
+        });
+        return html;
+      }).join('')}
       ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β (${t.name})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten Interaktionskoeff.</div><div id="ix${i}-a"></div></div>`).join('')}
       ${hasSig?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent5)">Prior: σ${ MODEL==='lognormal'||MODEL==='shifted_lognormal'?' (log-Skala)': MODEL==='skew_normal'?' (Skala)':'' }</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten σ-Werte</div><div id="sg-a"></div></div>`:''}
       ${hasPhi?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: φ ${ ['negbinomial','gamma'].includes(MODEL)?'(Shape/Overdispersion)':'(Präzision)' }</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE der gesampelten φ-Werte</div><div id="phi-a"></div></div>`:''}
@@ -3046,7 +3039,12 @@ function drawAllPlots() {
     T(`ln${i}-a`, el=>plotLines(el,draws,lmm,nGrp,'--accent2',i,getXS(pred)));
   });
   T('al-a', el=>plotKDE(el,draws.map(d=>d.alpha),'--accent2'));
-  cfg.preds.forEach((_,i)=>T(`bt${i}-a`,el=>plotKDE(el,draws.map(d=>d.betas[i]).filter(isFinite),'--accent3')));
+  cfg.preds.forEach((p,i)=>{
+    T(`bt${i}-a`,el=>plotKDE(el,draws.map(d=>d.betas[i]).filter(isFinite),'--accent3'));
+    (p.polybetas||[]).forEach((_,di)=>{
+      T(`btpoly${i}-${di}-a`,el=>plotKDE(el,draws.map(d=>(d.polyBetasDrawn&&d.polyBetasDrawn[i]&&d.polyBetasDrawn[i][di])||NaN).filter(isFinite),'--accent4'));
+    });
+  });
   // Interaction KDEs + conditional effect plots (green — same family as betas)
   (cfg.interTerms||[]).forEach((t, i) => {
     T(`ix${i}-a`, el => plotKDE(el, draws.map(d => d.interBetas && d.interBetas[i]).filter(isFinite), '--accent3'));
@@ -4604,6 +4602,49 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
   </div>
 </div>
 
+<!-- ── Traffic Light Help Panel ────────────────────────── -->
+<div id="tl-help-panel" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:360px;z-index:700;background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.18)">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem .9rem;
+    border-bottom:1px solid var(--border);background:rgba(201,74,42,.08)">
+    <span style="font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:500">ℹ Prior Ampel — Wie funktioniert das?</span>
+    <button onclick="closeTlHelp()" style="font-family:'DM Mono',monospace;font-size:.85rem;background:transparent;border:none;cursor:pointer;color:var(--ink2)">✕</button>
+  </div>
+  <div style="padding:.85rem .9rem;font-family:'DM Mono',monospace;font-size:.67rem;line-height:1.85;color:var(--ink2);max-height:70vh;overflow-y:auto">
+    <div style="margin-bottom:.5rem"><strong style="color:var(--ink)">Prinzip:</strong> Aus jedem Prior-Draw (α, β, σ) wird y bei x = 0 berechnet und gesampelt. Diese N Werte bilden die Prior Predictive Distribution am Referenzpunkt.</div>
+    <div style="margin-bottom:.3rem;color:var(--accent);font-weight:500">🔴 Rot — unmögliche Werte</div>
+    <ul style="padding-left:.1rem;margin-bottom:.5rem">
+      <li style="list-style:none;padding:.04rem 0">· Gamma/Poisson/NegBin/Lognormal: &gt; 2% der y-Werte negativ → Link passt nicht zum α-Prior</li>
+      <li style="list-style:none;padding:.04rem 0">· Poisson/NegBin: Median y &gt; 1.000 → log-Link explodiert (α-Prior zu groß)</li>
+      <li style="list-style:none;padding:.04rem 0">· Beta/ZI-Beta: &gt; 2% der Werte außerhalb [0, 1]</li>
+      <li style="list-style:none;padding:.04rem 0">· Allgemein: &gt; 5% mit |y| &gt; 10.000 → Priors viel zu vage</li>
+    </ul>
+    <div style="margin-bottom:.3rem;color:#b8860b;font-weight:500">🟡 Gelb — plausibel, aber prüfen</div>
+    <ul style="padding-left:.1rem;margin-bottom:.5rem">
+      <li style="list-style:none;padding:.04rem 0">· Linear: 99%-PI-Breite &gt; 200 → sehr breite implizierte Outcome-Skala</li>
+      <li style="list-style:none;padding:.04rem 0">· Breite &lt; 0.005 → Prior extrem eng, kaum Lernraum für die Daten</li>
+    </ul>
+    <div style="margin-bottom:.3rem;color:var(--accent3);font-weight:500">🟢 Grün — plausibel</div>
+    <ul style="padding-left:.1rem;margin-bottom:.6rem">
+      <li style="list-style:none;padding:.04rem 0">· Keins der obigen Kriterien trifft zu</li>
+      <li style="list-style:none;padding:.04rem 0">· 80%-PI angezeigt: so breit ist die Prior-Unsicherheit für y bei x = 0</li>
+    </ul>
+    <div style="padding:.4rem .6rem;border-left:3px solid var(--accent3);background:var(--panel);font-size:.65rem">
+      <strong>Wichtig:</strong> Die Ampel prüft <em>formale Plausibilität</em>, nicht inhaltliche Korrektheit. Grün heißt: die implizierten y-Werte sind im richtigen Wertebereich. Ob die Unsicherheit für deine Fragestellung angemessen ist, zeigen die Regressionskurven und der pp_check darunter.
+    </div>
+  </div>
+</div>
+<script>
+function toggleTlHelp() { const p=document.getElementById('tl-help-panel'); p.style.display=p.style.display==='none'?'block':'none'; }
+function closeTlHelp()  { document.getElementById('tl-help-panel').style.display='none'; }
+document.addEventListener('click', function(e) {
+  const p=document.getElementById('tl-help-panel');
+  if(p.style.display==='none') return;
+  if(!p.contains(e.target) && !e.target.onclick?.toString().includes('toggleTlHelp')) closeTlHelp();
+});
+</script>
+
 <!-- ── Floating Help Panel ──────────────────────────────── -->
 <div id="ppc-help-panel">
   <div class="ppc-hp-head">
@@ -4629,12 +4670,12 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
       <li><strong>KDE</strong> = geglättete Dichteabschätzung; kann bei σ/τ leicht unter 0 gehen (Randeffekt) — die Draws selbst sind immer &gt; 0</li>
     </ul>
 
-    <div class="ppc-hp-sect">Mehrere Prädiktoren</div>
+    <div class="ppc-hp-sect">Mehrere Prädiktoren &amp; Polynome</div>
     <ul>
-      <li>Nur einer variiert auf der x-Achse — alle anderen stehen auf 0 (Referenzwert)</li>
-      <li><strong>Problem:</strong> Wenn 0 kein sinnvoller Wert ist (z.B. Einkommen), ist die Kurve unrealistisch</li>
-      <li><strong>Lösung:</strong> Prädiktoren <strong>z-standardisieren</strong> — dann ist 0 = Mittelwert, Gelman-Presets gelten direkt</li>
-      <li>Polynome (x², x³): Grad im Prädiktor-Dropdown wählen; jeder Term hat seinen eigenen Prior</li>
+      <li>Jede Regressionskurve variiert <strong>einen</strong> Prädiktor — alle anderen stehen auf 0</li>
+      <li>x = 0 sollte ein <strong>sinnvoller Referenzwert</strong> sein: am einfachsten durch <strong>z-Standardisierung</strong> sicherstellen (0 = Mittelwert, ±1 = eine SD)</li>
+      <li>Bei Rohskalen (z.B. Alter in Jahren): μ ± und σ max im Skala-Feld auf den realen Wertebereich setzen — die x-Achse passt sich automatisch an</li>
+      <li><strong>Polynome:</strong> Grad-Dropdown pro Prädiktor → I(x²), I(x³) werden automatisch als eigene β-Terme mit separaten Priors hinzugefügt. Die Regressionskurve zeigt die kombinierte Kurve β₁·x + β₂·x² + …</li>
     </ul>
 
     <div class="ppc-hp-sect">Mixed Models (LMM)</div>
@@ -4643,8 +4684,8 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
       <li><strong>ρ</strong> = Korrelation Intercept–Slope, aus LKJ-Prior</li>
     </ul>
 
-    <div class="ppc-hp-tip">
-      <strong>⬡ → Builder</strong>: Überträgt die aktuell eingestellten Priors direkt in den brms Model Builder — kein Copy-Paste. Umgekehrt: im Builder auf <em>⬡ → PP-Check</em> klicken.
+    <div class="ppc-hp-tip" style="border-left-color:var(--accent2);background:rgba(42,110,138,.08)">
+      <strong style="color:var(--accent2)">⬡ → Builder</strong><span style="color:var(--ink2)">: Überträgt alle Priors direkt in den brms Model Builder — kein Copy-Paste, kein Umbau. Umgekehrt: im Builder auf <em>⬡ → PP-Check</em> klicken. Polynomial-Terme werden vollständig übertragen.</span>
     </div>
   </div>
 </div>
