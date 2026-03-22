@@ -621,6 +621,68 @@ canvas {
   .analysis-grid { grid-template-columns: 1fr; }
   .cards-grid { grid-template-columns: 1fr; }
 }
+
+/* ── FLOATING HELP PANEL ─────────────────────────── */
+@keyframes gb-slideIn { from { opacity:0; transform:translateX(10px); } to { opacity:1; transform:translateX(0); } }
+.gb-help-btn {
+  font-family: 'DM Mono', monospace; font-size: .72rem;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--ink3); padding: .25rem .6rem;
+  cursor: pointer; transition: all .15s; letter-spacing: .04em;
+  border-radius: 4px; white-space: nowrap;
+}
+.gb-help-btn:hover { border-color: var(--a6); color: var(--a6); }
+#gb-help-panel {
+  display: none; position: fixed; right: 1.5rem; top: 50%;
+  transform: translateY(-50%); width: 320px; z-index: 500;
+  background: var(--paper); border: 1.5px solid var(--border);
+  box-shadow: 4px 4px 0 rgba(0,0,0,.14);
+  animation: gb-slideIn .18s ease-out;
+}
+#gb-help-panel.open { display: block; }
+.gb-hp-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .55rem .9rem; border-bottom: 1px solid var(--grid);
+  background: rgba(43,199,196,.08);
+}
+.gb-hp-label {
+  font-family: 'DM Mono', monospace; font-size: .6rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--a6); font-weight: 500;
+}
+.gb-hp-close {
+  font-family: 'DM Mono', monospace; font-size: .85rem;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--ink3); padding: 0 .15rem; line-height: 1;
+}
+.gb-hp-close:hover { color: var(--ink); }
+.gb-hp-body {
+  padding: .85rem .9rem; font-family: 'DM Mono', monospace;
+  font-size: .68rem; line-height: 1.8; color: var(--ink2);
+  max-height: 75vh; overflow-y: auto;
+}
+.gb-hp-sect {
+  font-size: .52rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--a6); margin-top: .9rem; margin-bottom: .3rem;
+  border-bottom: 1px solid var(--grid); padding-bottom: .18rem;
+}
+.gb-hp-sect:first-child { margin-top: 0; }
+.gb-hp-body strong { color: var(--ink); }
+.gb-hp-body ul { padding-left: .1rem; }
+.gb-hp-body li { list-style: none; padding: .08rem 0; }
+.gb-hp-body li::before { content: '·'; color: var(--a6); margin-right: .4rem; }
+.gb-legend-row {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .15rem 0; font-size: .65rem;
+}
+.gb-dot {
+  width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,.2);
+}
+.gb-hp-tip {
+  margin-top: .8rem; padding: .45rem .6rem;
+  border-left: 3px solid var(--a6); background: var(--panel);
+  font-size: .65rem; color: var(--ink2);
+}
 </style>
 </head>
 <body>
@@ -632,7 +694,10 @@ canvas {
     <span class="nav-title">Golem Builder</span>
     <span class="nav-subtitle">DAG · Kausalannahmen · Simulation</span>
   </div>
-  <button class="theme-btn" id="themeBtn">☀ Light</button>
+  <div style="display:flex;gap:.5rem;align-items:center">
+    <button class="gb-help-btn" onclick="toggleGbHelp()">ℹ Hilfe</button>
+    <button class="theme-btn" id="themeBtn">☀ Light</button>
+  </div>
 </nav>
 
 <!-- TOAST -->
@@ -2728,6 +2793,74 @@ setTimeout(() => {
   resizeCanvas();
   drawCanvas();
 }, 50);
+
+// ── FLOATING HELP PANEL ───────────────────────────────────────────
+const GB_HELP_HTML = `
+  <div class="gb-hp-sect">Was kann ich hier?</div>
+  Baue einen <strong>Directed Acyclic Graph (DAG)</strong> — eine grafische Darstellung deiner Kausalannahmen. Das Tool analysiert automatisch, welche Variablen du adjustieren musst, darf nicht, oder kannst, und generiert fertigen <strong>brms / glmmTMB R-Code</strong>.
+
+  <div class="gb-hp-sect">Schritt 1 — DAG aufbauen</div>
+  <ul>
+    <li><strong>Knoten hinzufügen:</strong> Name eingeben → Typ wählen → "Hinzufügen"</li>
+    <li><strong>Exposition X</strong> (blau): dein Prädiktor/Treatment</li>
+    <li><strong>Outcome Y</strong> (rot): deine abhängige Variable</li>
+    <li><strong>Latent U</strong> (grau): nicht messbare Confounder → erzeugt IV / Front Door Analyse</li>
+    <li><strong>Kante zeichnen:</strong> Quell-Knoten klicken → Ziel-Knoten klicken</li>
+    <li><strong>Beispiele:</strong> Vorgefertigte Kausalstrukturen (Confounder, Collider, Mediator...) über das Dropdown laden</li>
+  </ul>
+
+  <div class="gb-hp-sect">Schritt 2 — Kausalanalyse lesen</div>
+  <ul>
+    <li><strong>MUSS adjustiert werden:</strong> Backdoor-Confounder — ohne Kontrolle verzerrter Schätzer</li>
+    <li><strong>DARF NICHT adjustiert werden:</strong> Collider oder Mediator (bei totalem Effekt) — Kontrolle öffnet neue Bias-Pfade</li>
+    <li><strong>KANN adjustiert werden:</strong> Präzisionsvariable — kein Bias, aber kleinere SE</li>
+    <li><strong>Testbare Implikationen:</strong> welche bedingte Unabhängigkeiten müssen in den Daten sichtbar sein</li>
+  </ul>
+
+  <div class="gb-hp-sect">Schritt 3 — Code generieren</div>
+  <ul>
+    <li>β-Koeffizienten pro Kante eintragen (Tabelle klappt auf)</li>
+    <li>Residual-SD pro endogenem Knoten konfigurieren</li>
+    <li>Daten simulieren → Bias sichtbar machen</li>
+    <li><strong>R:</strong> Datensimulation · <strong>brms:</strong> Bayesianisches Modell · <strong>glmmTMB:</strong> Frequentistisch</li>
+  </ul>
+
+  <div class="gb-hp-sect">Knotenfarben</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:#888;border-color:#666"></div> Normal — Kovariable / Kontrollvariable</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:var(--a2);border-color:var(--a2)"></div> X — Exposition / Treatment / Prädiktor</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:var(--a1);border-color:var(--a1)"></div> Y — Outcome / abhängige Variable</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:var(--ink3);border-color:var(--ink3)"></div> U — Latenter Confounder (nicht messbar)</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:var(--a3);border-color:var(--a3)"></div> Adjustierungsset (wird vom Tool hervorgehoben)</div>
+  <div class="gb-legend-row"><div class="gb-dot" style="background:var(--a5);border-color:var(--a5)"></div> Collider (darf nicht adjustiert werden)</div>
+
+  <div class="gb-hp-tip">Tipp: Lade zuerst ein <strong>Beispiel</strong> über das Dropdown, um die Logik des Tools kennenzulernen — bevor du deinen eigenen DAG baust.</div>
+`;
+
+let gbHelpOpen = false;
+function toggleGbHelp() {
+  gbHelpOpen = !gbHelpOpen;
+  const panel = document.getElementById('gb-help-panel');
+  panel.classList.toggle('open', gbHelpOpen);
+}
+function closeGbHelp() {
+  gbHelpOpen = false;
+  document.getElementById('gb-help-panel').classList.remove('open');
+}
+document.addEventListener('click', e => {
+  if (gbHelpOpen && !e.target.closest('#gb-help-panel') && !e.target.classList.contains('gb-help-btn')) {
+    closeGbHelp();
+  }
+});
 </script>
+
+<div id="gb-help-panel">
+  <div class="gb-hp-head">
+    <span class="gb-hp-label">Golem Builder — Hilfe</span>
+    <button class="gb-hp-close" onclick="closeGbHelp()">×</button>
+  </div>
+  <div class="gb-hp-body" id="gb-hp-body"></div>
+</div>
+
+<script>document.getElementById('gb-hp-body').innerHTML = GB_HELP_HTML;</script>
 </body>
 </html>
