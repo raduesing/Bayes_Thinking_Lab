@@ -169,6 +169,32 @@ svg text{font-family:'DM Mono',monospace}
 .cal-wrap{margin-top:.45rem}
 @media(max-width:900px){.outer{grid-template-columns:1fr;height:auto;overflow:visible}.sidebar{overflow-y:visible}.two,.three,.ab-wrap{grid-template-columns:1fr}}
 
+/* ── Floating Help Panel ─────────────────────────────────── */
+@keyframes ppc-slideIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+#ppc-help-panel{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:330px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.14);animation:ppc-slideIn .18s ease-out}
+#ppc-help-panel.open{display:block}
+.ppc-hp-head{display:flex;justify-content:space-between;align-items:center;
+  padding:.55rem .9rem;border-bottom:1px solid var(--border);background:rgba(201,74,42,.08)}
+.ppc-hp-label{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);font-weight:500}
+.ppc-hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:transparent;
+  border:none;cursor:pointer;color:var(--ink3,var(--ink2));padding:0 .15rem;line-height:1}
+.ppc-hp-close:hover{color:var(--ink)}
+.ppc-hp-body{padding:.85rem .9rem;font-family:'DM Mono',monospace;font-size:.67rem;
+  line-height:1.8;color:var(--ink2);max-height:78vh;overflow-y:auto}
+.ppc-hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--accent);margin-top:.9rem;margin-bottom:.3rem;
+  border-bottom:1px solid var(--border);padding-bottom:.18rem}
+.ppc-hp-sect:first-child{margin-top:0}
+.ppc-hp-body strong{color:var(--ink)}
+.ppc-hp-body ul{padding-left:.1rem}
+.ppc-hp-body li{list-style:none;padding:.06rem 0}
+.ppc-hp-body li::before{content:'·';color:var(--accent);margin-right:.4rem}
+.ppc-hp-tip{margin-top:.8rem;padding:.45rem .6rem;border-left:3px solid var(--accent3);
+  background:var(--panel);font-size:.65rem;color:var(--ink2)}
+
 /* ── Intercept-Prior Info Modal ─────────────────────────── */
 #ipm-overlay{position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.68);
   backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:1.5rem;}
@@ -208,13 +234,14 @@ svg text{font-family:'DM Mono',monospace}
   </div>
   <div class="hbtns">
         <button class="ibtn" onclick="window.open('index.html','_self')" style="border-color:var(--accent3);color:var(--accent3)">← Übersicht</button>
-    <button class="ibtn" onclick="window.open('Decision_Lab.html','_blank')" style="border-color:var(--accent3);color:var(--accent3)">Weiter → Decision Lab</button>
+    <button class="ibtn" onclick="window.open('Decision_Lab.html','_blank')" style="border-color:var(--accent6);color:var(--accent6)">Weiter → Decision Lab</button>
     <button class="ibtn" id="btn-priorlab" onclick="openPriorLab()" style="border-color:var(--accent2);color:var(--accent2)">⬡ Prior Lab light</button>
     <button class="ibtn" id="btn-ab"    onclick="toggleAB()">⊞ A/B Vergleich</button>
     <button class="ibtn" id="btn-lmm"   onclick="toggleLMM()">⊕ Mixed Model</button>
     <button class="ibtn" onclick="exportR()">↓ R-Code</button>
     <button class="ibtn" onclick="exportSVG()">↓ SVG</button>
     <button class="ibtn" onclick="exportPNG()">↓ PNG</button>
+    <button class="ibtn" onclick="togglePpcHelp()" style="border-color:var(--accent);color:var(--accent);font-weight:500">ℹ Hilfe</button>
     <button class="ibtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
     <button class="ibtn" id="btn-to-builder" onclick="exportToBuilder()" style="border-color:var(--accent3);color:var(--accent3)" title="Aktuelle Priors an brms Builder senden">⬡ → Builder</button>
   </div>
@@ -634,30 +661,6 @@ svg text{font-family:'DM Mono',monospace}
     <button id="del-data-btn" onclick="clearData()" style="display:none;font-family:'DM Mono',monospace;font-size:.75rem;border:1px solid var(--accent);background:transparent;cursor:pointer;color:var(--accent);padding:.22rem .6rem;width:100%;margin-top:.35rem;transition:all .12s" onmouseover="this.style.background=cv('--accent');this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color=cv('--accent')">✕ Daten löschen</button>
   </div>
 
-  <details class="expl">
-    <summary>ℹ Workflow &amp; Hilfe</summary>
-    <div class="expl-body">
-      <b>Workflow:</b><br>
-      1. Modell wählen<br>
-      2. ⬡ <b>Prior Lab light</b> öffnen — Verteilung explorieren, Credible Interval-Solver nutzen, passende μ/σ finden<br>
-      3. Priors einstellen (Preset als Ausgangspunkt)<br>
-      4. Simulation starten → Ampel grün?<br>
-      5. Daten hochladen → pp_check mit echten x-Werten<br>
-      6. brms-Code kopieren<br><br>
-      <b>KDE</b> = Kernel Density Estimation: geglättete Dichteabschätzung via Gauss-Kernel. Alle Plots in dieser App zeigen KDEs statt Histogramme — sie sind glatter, aber es kann bei positiv-definierten Parametern (σ, τ) leicht Masse unter 0 entstehen (Randeffekt des Kernels). Die Priors selbst sampeln immer >0.<br><br>
-      <b>ICC</b> (Random-Intercept-Modell) = Intraklassen-Korrelation: ICC = τ₀²/(τ₀²+σ²) — Anteil der Gesamtvarianz durch Gruppenunterschiede.<br>
-      <b>ρ</b> (Random-Slope-Modell) = Korrelation zwischen Random Intercept und Random Slope, abgeleitet aus dem LKJ-Prior.<br><br>
-      <b>Marginale Prior-KDEs (α, β, σ):</b><br>
-      Zeigen direkt, welche Parameterwerte der Prior erlaubt — unabhängig von den Daten. β₁-KDE = alle gesampelten β₁-Werte; σ-KDE = alle gesampelten σ-Werte.<br><br>
-      <b>Warum steht bei Regressionskurven „xⱼ = 0"?</b><br>
-      Bei mehreren Prädiktoren kann nur einer auf der x-Achse variiert werden. Alle anderen werden auf einen Referenzwert gesetzt — hier: 0. Das ist die Konvention für marginale Effektplots.<br><br>
-      <b>Problem:</b> Wenn x=0 kein sinnvoller Wert ist (z.B. Einkommen in €/Monat — niemand verdient 0€/Monat), zeigt die Regressionskurve den Prior für ein unrealistisches Szenario.<br><br>
-      <b>Lösung 1 (empfohlen):</b> Prädiktoren <b>z-standardisieren</b> — dann ist 0 = Mittelwert, immer sinnvoll, und Gelman-Presets gelten direkt.<br>
-      <b>Lösung 2 (gut genug):</b> Prädiktoren <b>zentrieren</b> (nur Mittelwert abziehen, nicht durch SD teilen) — dann ist 0 = Mittelwert, die Skala bleibt erhalten. Prior-Skala muss dann der Rohskala entsprechen.<br>
-      <b>Lösung 3 (Rohskala):</b> μ und σ-Slider über die Skala-Felder (μ ±, σ max) auf die tatsächlichen Wertebereiche der Variablen setzen. x-Achse passt sich automatisch an (μ ± 3σ).<br><br>
-      <b>pp_check ist immer valide</b> (x~N(0,1)), Regressionslinie bei Rohskalen eher qualitativ.
-    </div>
-  </details>
 </div>
 
 <!-- MAIN -->
@@ -2606,8 +2609,15 @@ function brmsCode(cfg) {
   const hasPhi=['gamma','negbinomial','beta_reg','beta_binomial',
                 'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
   const nP=cfg.preds.length;
-  const pNames = nP===1 ? ['x'] : Array.from({length:nP},(_,i)=>`x${i+1}`);
-  const xTerms = pNames.join(' + ');
+  // Base names: use p.name if set (e.g. from Builder transfer), else generic x / x1 x2...
+  const pNames = cfg.preds.map((p,i) => p.name || (nP===1 ? 'x' : `x${i+1}`));
+  // Expanded terms: include polynomial terms I(x^2), I(x^3) per predictor
+  const allTermNames = [];
+  cfg.preds.forEach((p,i) => {
+    allTermNames.push(pNames[i]);
+    (p.polybetas||[]).forEach((_,di) => allTermNames.push(`I(${pNames[i]}^${di+2})`));
+  });
+  const xTerms = allTermNames.join(' + ');
   const interNames = (cfg.interTerms||[]).map(t=>t.name);
   const interTermsStr = interNames.length ? ' + ' + interNames.join(' + ') : '';
 
@@ -2644,13 +2654,23 @@ function brmsCode(cfg) {
     :`normal(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`;
   const priorLines=[`  <span class="str">prior(${iFam}, class = Intercept)</span>`];
 
-  // β priors — coef quoted, class = b without quotes
+  // β priors — coef quoted, class = b without quotes; includes polynomial betas
+  const totalTerms = allTermNames.length;
   cfg.preds.forEach((p,i)=>{
-    const coefStr = nP>1 ? `, coef = "${pNames[i]}"` : '';
+    const bname = pNames[i];
+    const coefStr = totalTerms>1 ? `, coef = "${bname}"` : '';
     const dist=p.fam==='student_t'?`student_t(${Math.round(p.nu)}, ${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
       :p.fam==='cauchy'?`cauchy(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
       :`normal(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`;
     priorLines.push(`  <span class="str">prior(${dist}, class = b${coefStr})</span>`);
+    // Polynomial beta priors
+    (p.polybetas||[]).forEach((pb,di)=>{
+      const termName = `I(${bname}^${di+2})`;
+      const pdist=pb.fam==='student_t'?`student_t(${Math.round(pb.nu||3)}, ${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`
+        :pb.fam==='cauchy'?`cauchy(${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`
+        :`normal(${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`;
+      priorLines.push(`  <span class="str">prior(${pdist}, class = b, coef = "${termName}")</span>`);
+    });
   });
 
   // Interaction β priors — coef uses : notation (Issue 4), quoted
@@ -4583,5 +4603,66 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
     </div>
   </div>
 </div>
+
+<!-- ── Floating Help Panel ──────────────────────────────── -->
+<div id="ppc-help-panel">
+  <div class="ppc-hp-head">
+    <span class="ppc-hp-label">ℹ Prior Predictive Check</span>
+    <button class="ppc-hp-close" onclick="closePpcHelp()">✕</button>
+  </div>
+  <div class="ppc-hp-body">
+    <div class="ppc-hp-sect">Workflow</div>
+    <ul>
+      <li><strong>1 · Modell wählen</strong> — Likelihood oben im Dropdown</li>
+      <li><strong>2 · Prior Lab</strong> öffnen — Verteilungen explorieren, μ/σ finden</li>
+      <li><strong>3 · Priors einstellen</strong> — Preset als Ausgangspunkt, dann anpassen</li>
+      <li><strong>4 · Simulation starten</strong> → Ampel grün?</li>
+      <li><strong>5 · Daten hochladen</strong> → pp_check mit echten x-Werten</li>
+      <li><strong>6 · brms-Code kopieren</strong> → direkt in R verwenden</li>
+    </ul>
+
+    <div class="ppc-hp-sect">Was zeigen die Plots?</div>
+    <ul>
+      <li><strong>Regressionskurven</strong> — Prior-Unsicherheit über den linearen Prädiktor; jede Linie = ein Prior-Draw</li>
+      <li><strong>Outcome-KDE</strong> — Welche y-Werte erlaubt der Prior? Sollte grob den Bereich realer Daten abdecken</li>
+      <li><strong>Marginale KDEs (α, β, σ)</strong> — Direkt welche Parameterwerte der Prior zulässt</li>
+      <li><strong>KDE</strong> = geglättete Dichteabschätzung; kann bei σ/τ leicht unter 0 gehen (Randeffekt) — die Draws selbst sind immer &gt; 0</li>
+    </ul>
+
+    <div class="ppc-hp-sect">Mehrere Prädiktoren</div>
+    <ul>
+      <li>Nur einer variiert auf der x-Achse — alle anderen stehen auf 0 (Referenzwert)</li>
+      <li><strong>Problem:</strong> Wenn 0 kein sinnvoller Wert ist (z.B. Einkommen), ist die Kurve unrealistisch</li>
+      <li><strong>Lösung:</strong> Prädiktoren <strong>z-standardisieren</strong> — dann ist 0 = Mittelwert, Gelman-Presets gelten direkt</li>
+      <li>Polynome (x², x³): Grad im Prädiktor-Dropdown wählen; jeder Term hat seinen eigenen Prior</li>
+    </ul>
+
+    <div class="ppc-hp-sect">Mixed Models (LMM)</div>
+    <ul>
+      <li><strong>ICC</strong> = τ₀²/(τ₀²+σ²) — Anteil der Varianz durch Gruppenunterschiede</li>
+      <li><strong>ρ</strong> = Korrelation Intercept–Slope, aus LKJ-Prior</li>
+    </ul>
+
+    <div class="ppc-hp-tip">
+      <strong>⬡ → Builder</strong>: Überträgt die aktuell eingestellten Priors direkt in den brms Model Builder — kein Copy-Paste. Umgekehrt: im Builder auf <em>⬡ → PP-Check</em> klicken.
+    </div>
+  </div>
+</div>
+<script>
+function togglePpcHelp() {
+  document.getElementById('ppc-help-panel').classList.toggle('open');
+}
+function closePpcHelp() {
+  document.getElementById('ppc-help-panel').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  const p = document.getElementById('ppc-help-panel');
+  if (!p.classList.contains('open')) return;
+  const btn = e.target.closest('button');
+  if (btn && btn.onclick && btn.onclick.toString().includes('togglePpcHelp')) return;
+  if (!p.contains(e.target)) closePpcHelp();
+});
+</script>
+
 </body>
 </html>
