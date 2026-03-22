@@ -1690,11 +1690,11 @@ function simulate(cfg, model) {
 
   for (let i=0; i<N; i++) {
     const alpha = drawLoc(cfg.ifam, cfg.imu, cfg.isig, cfg.inu);
-    const allBetas = cfg.preds.map(p => {
-      const bs = [drawLoc(p.fam, p.mu, p.sig, p.nu)];
-      (p.polybetas||[]).forEach(pb => bs.push(drawLoc(pb.fam||'normal', pb.mu||0, pb.sig||0.5, pb.nu||3)));
-      return bs;
-    });
+    // betas: flat array (degree-1 only) — kept for draws storage + all existing render code
+    const betas = cfg.preds.map(p => drawLoc(p.fam, p.mu, p.sig, p.nu));
+    // polyBetasDrawn: per predictor, one drawn value per additional degree (degree 2, 3, ...)
+    const polyBetasDrawn = cfg.preds.map(p =>
+      (p.polybetas||[]).map(pb => drawLoc(pb.fam||'normal', pb.mu||0, pb.sig||0.5, pb.nu||3)));
     const sigma = drawScale(cfg.sfam, cfg.sp1, cfg.sfam==='half_student' ? cfg.snu : cfg.sp2);
 
     // ν for Student-t outcome
@@ -1726,9 +1726,10 @@ function simulate(cfg, model) {
       const XS = getXS(pred);
       return XS.map(x => {
         let eta = alpha;
-        for (let j=0; j<cfg.preds.length; j++) {
+        for (let j=0; j<betas.length; j++) {
           const thisX = (j===k ? x : 0);
-          allBetas[j].forEach((b, di) => { eta += b * Math.pow(thisX, di+1); });
+          eta += betas[j] * thisX;  // degree 1
+          (polyBetasDrawn[j]||[]).forEach((b, di) => { eta += b * Math.pow(thisX, di+2); });
         }
         // Interaction terms: only active if one of the parts is the current predictor
         interIdxPairs.forEach((pair, qi) => {
