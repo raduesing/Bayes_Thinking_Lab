@@ -467,7 +467,8 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
 // ═══════════════════════════════════════════════════════════
 let FAMILY   = 'gaussian';
 let DARK     = true;
-let predictorNames = [];   // empty = intercept-only model by default
+let predictorNames   = [];   // empty = intercept-only model by default
+let predictorDegrees = [];   // polynomial degree per predictor (1 = linear)
 let nextPredId = 1;
 let inters   = [];
 let userPriors = {};
@@ -588,21 +589,47 @@ function renderPredList() {
         ${predictorNames.length > 1 ? `<button class="pred-rm" onclick="removePredictor(${i})">✕</button>` : ''}
       </div>
       <input type="text" value="${name}" placeholder="Variablenname"
-             oninput="predictorNames[${i}]=this.value.trim()||'x${i+1}';update()">`;
+             oninput="predictorNames[${i}]=this.value.trim()||'x${i+1}';update()">
+      <select style="font-size:.72rem;margin-top:.25rem;width:100%;font-family:'DM Mono',monospace"
+              onchange="predictorDegrees[${i}]=+this.value;update()">
+        <option value="1" ${(predictorDegrees[i]||1)===1?'selected':''}>linear (Grad 1)</option>
+        <option value="2" ${(predictorDegrees[i]||1)===2?'selected':''}>quadratisch — +I(x²)</option>
+        <option value="3" ${(predictorDegrees[i]||1)===3?'selected':''}>kubisch — +I(x²)+I(x³)</option>
+      </select>`;
     c.appendChild(div);
   });
 }
 function addPredictor() {
   const n = predictorNames.length + 1;
   predictorNames.push('x' + n);
+  predictorDegrees.push(1);
   renderPredList();
   update();
 }
 function removePredictor(idx) {
   if (predictorNames.length <= 1) return;
   predictorNames.splice(idx, 1);
+  predictorDegrees.splice(idx, 1);
   renderPredList();
   update();
+}
+
+// Expand predictor names to include polynomial terms: ['x1','I(x1^2)','I(x1^3)']
+function expandPreds(names, degrees) {
+  const terms = [];
+  names.forEach((name, i) => {
+    terms.push(name);
+    const deg = (degrees && degrees[i]) || 1;
+    for (let d = 2; d <= deg; d++) terms.push(`I(${name}^${d})`);
+  });
+  return terms;
+}
+
+// Convert R polynomial term to LaTeX: 'I(x1^2)' → {betaSub:'x1^{2}', term:'x1_i^{2}'}
+function predToLatex(p) {
+  const m = p.match(/^I\((\w+)\^(\d+)\)$/);
+  if (m) return { betaSub: `${m[1]}^{${m[2]}}`, term: `${m[1]}_i^{${m[2]}}` };
+  return { betaSub: p, term: `${p}_i` };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -817,7 +844,8 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   // formula always in bf() to avoid errors
   const trialsV  = (document.getElementById('trials-var')?.value || 'trials').trim() || 'trials';
   const trailsExpr = (f === 'beta_binomial' || f === 'binomial') ? ` | trials(${trialsV})` : '';
-  const muTerms = [...preds, ...inters].join(' + ') || '1';
+  const expandedPreds = expandPreds(preds, predictorDegrees);
+  const muTerms = [...expandedPreds, ...inters].join(' + ') || '1';
   let reC = '';
   if (hasRE && g) {
     if (reType === 'slope' && slopeVars.length > 0) {
@@ -949,10 +977,11 @@ function buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRow
 
   if (!isCumulative || preds.length > 0) {
     preds.forEach((p, i) => {
+      const lt = predToLatex(p);
       if (isCumulative) {
-        muLine += (i === 0 ? '' : ' + ') + `\\beta_{${p}}\\, ${p}_i`;
+        muLine += (i === 0 ? '' : ' + ') + `\\beta_{${lt.betaSub}}\\, ${lt.term}`;
       } else {
-        muLine += ` + \\beta_{${p}}\\, ${p}_i`;
+        muLine += ` + \\beta_{${lt.betaSub}}\\, ${lt.term}`;
       }
     });
   }
@@ -1079,7 +1108,8 @@ let _updTimer = null;
 function schedUpdate() { clearTimeout(_updTimer); _updTimer = setTimeout(update, 250); }
 
 function update() {
-  const preds     = predictorNames.filter(Boolean);
+  const preds         = predictorNames.filter(Boolean);
+  const predsExpanded = expandPreds(preds, predictorDegrees);
   const hasRE     = document.getElementById('has-re').checked;
   const g         = document.getElementById('group-var').value.trim() || 'group';
   const reType    = document.getElementById('re-type').value;
@@ -1104,7 +1134,7 @@ function update() {
 
   // Math
   const mathContent = document.getElementById('math-content');
-  mathContent.innerHTML = buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+  mathContent.innerHTML = buildMath(predsExpanded, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
 
   // Typeset MathJax
   if (window.MathJax && MathJax.typesetPromise) {
@@ -1137,11 +1167,12 @@ function downloadLatex() {
   const slopeVars = reType === 'slope'
     ? document.getElementById('re-slope-vars').value.split(',').map(s=>s.trim()).filter(Boolean)
     : [];
+  const predsExpanded = expandPreds(preds, predictorDegrees);
   const activeD = getActiveDistParams();
   const priorRows = buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars);
 
   // Regenerate raw LaTeX via buildMath (before MathJax processes it)
-  const rawHtml = buildMath(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+  const rawHtml = buildMath(predsExpanded, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
 
   // Strip HTML tags to get clean LaTeX
   // buildMath returns \[...\] blocks interleaved with <div> section labels
@@ -1522,41 +1553,34 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
 const BRMS_HELP_HTML = `
 <div class="brms-hp-sect">Was kann ich hier?</div>
 <ul>
-  <li>Wähle eine <strong>Likelihood</strong> (z. B. Normal, Poisson, Beta) und konfiguriere dein Modell</li>
-  <li>Setze <strong>Priors</strong> für alle Parameter — mit Vorschau der Verteilung</li>
-  <li>Erstelle <strong>Distributional Models</strong> (σ, φ, zi als Funktion von Prädiktoren)</li>
-  <li>Exportiere fertigen <strong>brms-Code</strong> + McElreath-Notation + LaTeX</li>
-  <li>Sende das Modell direkt an den <strong>PP-Check</strong></li>
+  <li>15 Likelihoods konfigurieren — von Normal bis Zero-Inflated Beta</li>
+  <li>Priors für alle Parameter setzen (β, Intercept, σ, φ, zi …)</li>
+  <li>Polynomial- und Interaktionsterme automatisch einbauen</li>
+  <li>Distributional Models: σ/φ selbst als Funktion modellieren</li>
+  <li>Fertigen brms-Code + McElreath-Notation + LaTeX exportieren</li>
 </ul>
 
-<div class="brms-hp-sect">Die 7 Schritte</div>
+<div class="brms-hp-sect">Die 8 Schritte (= Leiste links)</div>
 <ul>
-  <li><strong>① Likelihood</strong> — Welche Verteilung passt zu deinen Daten?</li>
-  <li><strong>② Outcome</strong> — Name der abhängigen Variable</li>
-  <li><strong>③ Prädiktoren</strong> — Formel eingeben (z. B. <code>1 + x + z</code>)</li>
-  <li><strong>④ Priors</strong> — Für β, Intercept, σ/φ/zi etc.</li>
-  <li><strong>⑤ Sampling</strong> — Chains, Iterations, Adapt-Delta</li>
-  <li><strong>⑥ Distributional?</strong> — σ selbst modellieren? → Checkbox aktivieren</li>
-  <li><strong>⑦ Output</strong> — Code kopieren, LaTeX laden, an PP-Check senden</li>
-</ul>
-
-<div class="brms-hp-sect">Distributional Models</div>
-<ul>
-  <li>Aktiviere <em>Distributional Model</em> um z. B. σ als Funktion eines Prädiktors zu modellieren</li>
-  <li>Beispiel: Varianz wächst mit Alter → <code>sigma ~ age</code></li>
-  <li>Verfügbar je nach Likelihood: σ (Normal), φ (Beta/NegBin), zi (ZIP/Hurdle)</li>
-  <li>Eigene Priors für den distributional Teil können separat gesetzt werden</li>
+  <li><strong>1 · Likelihood</strong> — Verteilungsfamilie wählen + Outcome benennen</li>
+  <li><strong>2 · Prädiktoren</strong> — Variablen benennen; optional Polynomgrad wählen (linear / quadr. / kubisch) — Terme wie <code>I(x²)</code> werden automatisch ergänzt</li>
+  <li><strong>3 · Interaktionen</strong> — Terme wie <code>age:sex</code> eingeben + Enter; werden automatisch in die Formel übernommen</li>
+  <li><strong>4 · Distributional</strong> — σ, ν oder zi selbst als Funktion eines Prädiktors modellieren (optional)</li>
+  <li><strong>5 · Random Effects</strong> — Gruppierungsvariable + Struktur (Intercept / Intercept + Slope)</li>
+  <li><strong>6 · Priors</strong> — Für jeden Parameter individuell; Link-aware Defaults werden vorgeschlagen</li>
+  <li><strong>7 · Sampling</strong> — Chains, Iterations, Adapt-Delta, Backend</li>
+  <li><strong>→ Output</strong> — R-Code kopieren, LaTeX herunterladen, Modell senden</li>
 </ul>
 
 <div class="brms-hp-sect">⚠ Intercept-Prior Warnung</div>
 <ul>
-  <li>Bei <code>y ~ x</code> setzt brms den Intercept-Prior <em>automatisch</em> — eigene Priors werden ignoriert</li>
-  <li>Für eigene Intercept-Priors: Formel als <code>y ~ 0 + Intercept + x</code> schreiben</li>
-  <li>Prädiktoren vor der Analyse <strong>zentrieren</strong> wird empfohlen</li>
+  <li>Bei <code>y ~ x</code> setzt brms den Intercept-Prior <em>automatisch</em> — eigene Angaben werden ignoriert</li>
+  <li>Für explizite Intercept-Priors: <code>y ~ 0 + Intercept + x</code></li>
+  <li>Prädiktoren <strong>zentrieren</strong> wird generell empfohlen</li>
 </ul>
 
-<div class="brms-hp-tip">
-  <strong>Tipp:</strong> Der ⬡ → PP-Check Button übergibt das fertige Modell direkt an den Posterior Predictive Check — dort kannst du prüfen, ob dein Modell die Daten gut reproduziert.
+<div class="brms-hp-tip" style="border-left-color:#2a6e8a;background:rgba(42,110,138,.1)">
+  <strong>⬡ Alleinstellungsmerkmal:</strong> Mit <em>⬡ → PP-Check</em> (oben rechts) sendest du das fertige Modell direkt an den Posterior Predictive Check — kein Copy-Paste, kein Umbau. Der PP-Check prüft dann, ob dein Modell die Daten realistisch reproduziert. Das gibt es in keinem anderen Browser-Tool.
 </div>`;
 
 document.getElementById('brms-hp-body').innerHTML = BRMS_HELP_HTML;
