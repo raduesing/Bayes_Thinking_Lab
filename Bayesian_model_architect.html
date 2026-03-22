@@ -390,7 +390,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     · <b>• Punkt</b> = deterministischer Knoten (μᵢ) — kein Prior, wird berechnet<br>
     · <b>Pfeile</b> zeigen die generative Richtung: Prior → Parameter → Daten<br>
     · <b>Plates</b> (gestrichelte Rahmen) markieren wiederholte Einheiten (i = 1…N Beobachtungen; j = 1…J Gruppen)<br><br>
-    Im <b>hierarchischen Modell</b> bekommen gruppenspezifische Parameter (α[j]) eigene Hyperpriors (μ_α, σ_α) — diese steuern, wie stark die Gruppen voneinander "lernen" (Partial Pooling). <b>Random Slopes</b> (β[j]) sind hier exemplarisch nur für den ersten Prädiktor implementiert, zur Illustration des Diagramm-Prinzips.
+    Im <b>hierarchischen Modell</b> erhält jede Gruppe j eine Abweichung vom globalen Intercept: <b>u₀ⱼ ~ Normal(0, τ₀)</b>. τ₀ steuert das Ausmaß des Partial Pooling — kleines τ₀ = starke Shrinkage. Bei McElreath (Kap. 14, S. 441 ff.) heißt dieser Parameter <em>σ_α</em>. <b>Random Slopes</b> (u₁ⱼ ~ Normal(0, τ₁), entspricht McElreaths <em>σ_β</em>) sind hier exemplarisch nur für den ersten Prädiktor implementiert, zur Illustration des Diagramm-Prinzips.
   </div>
   <div class="ahp-tip">
     <b>Nur einfache Beispielmodelle:</b> bis zu 4 Prädiktoren, eine Gruppenstruktur, 5 Likelihoods. Der Fokus liegt auf der <em>Struktur</em>, nicht auf dem vollen Modellumfang. Klicke auf jeden Knoten im Diagramm für eine Erklärung.
@@ -520,12 +520,12 @@ function genSimCode(){
     L.push('# ── Gruppeneffekte ─────────────────────────────────────');
     L.push('n_groups <- 10   # Anzahl Gruppen — anpassen');
     L.push(`${gv}       <- sample(1:n_groups, n, replace = TRUE)`);
-    L.push(`sigma_u  <- rexp(1, rate = ${sa_lam})   # Hyperprior: Exponential(${sa_lam})`);
-    L.push(`u_j      <- rnorm(n_groups, mean = 0, sd = sigma_u)   # Random intercept deviations`);
+    L.push(`tau_0    <- rexp(1, rate = ${sa_lam})   # Hyperprior: Exponential(${sa_lam})`);
+    L.push(`u0_j     <- rnorm(n_groups, mean = 0, sd = tau_0)   # Random intercept deviations`);
     if(M.ret==='slope'&&K>0){
       const sb_lam=M.pr.sig_b?.p1??1;
-      L.push(`sigma_v  <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
-      L.push(`v_j      <- rnorm(n_groups, mean = 0, sd = sigma_v)   # Random slope deviations`);
+      L.push(`tau_1    <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
+      L.push(`u1_j     <- rnorm(n_groups, mean = 0, sd = tau_1)   # Random slope deviations`);
     }
     L.push('');
   }
@@ -547,9 +547,9 @@ function genSimCode(){
       const otherTerms=K>1?M.preds.slice(1).map((p,i)=>{
         const pn=p.name||`x${i+2}`, bn=`beta_${pn}`; return ` + ${bn} * ${pn}`;
       }).join(''):'';
-      L.push(`eta <- eta + u_j[${gv}] + v_j[${gv}] * ${p0n}${otherTerms}`);
+      L.push(`eta <- eta + u0_j[${gv}] + u1_j[${gv}] * ${p0n}${otherTerms}`);
     } else {
-      L.push(`eta <- eta + u_j[${gv}]`);
+      L.push(`eta <- eta + u0_j[${gv}]`);
     }
   }
   L.push('');
@@ -729,22 +729,22 @@ const EX={
     what:'σ_α ist die Streuung der Gruppen-Intercepts um μ_α. Kleines σ_α → viel Pooling (Gruppen ähnlich). Großes σ_α → wenig Pooling (Gruppen sehr verschieden).',
     why:'Exp(1): bevorzugt moderate Heterogenität zwischen Gruppen. σ_α ist inhaltlich sehr aussagekräftig!',
     tip:'Schau dir σ_α im Posterior an: er sagt dir, wie unterschiedlich die Gruppen nach Kontrolle der Prädiktoren noch sind.'},
-  u_j:{title:'Zufälliger Intercept u_j',
-    what:'u_j ist die gruppenspezifische Abweichung vom globalen Intercept α. Jede Gruppe j bekommt ihren eigenen Wert u_j ~ Normal(0, σ_u). Der vollständige Gruppen-Intercept ist α + u_j.',
-    why:'Partial Pooling: Gruppen mit wenig Daten werden zu 0 gezogen (shrinkage). σ_u bestimmt das Ausmaß — kleines σ_u = starkes Pooling. In brms: (1|group).',
-    tip:'u_j ist nicht zu verwechseln mit α[j] aus McElreath. In brms-Notation: α + u_j = α[j]. Die Zentrierung auf 0 ist technisch notwendig für Identifizierbarkeit.'},
-  v_j:{title:'Zufälliger Slope v_j',
-    what:'v_j ist die gruppenspezifische Abweichung vom globalen Slope β₁. v_j ~ Normal(0, σ_v). Der vollständige Gruppen-Slope ist β₁ + v_j.',
+  u_j:{title:'Zufälliger Intercept u₀ⱼ',
+    what:'u₀ⱼ ist die gruppenspezifische Abweichung vom globalen Intercept α. Jede Gruppe j bekommt ihren eigenen Wert u₀ⱼ ~ Normal(0, τ₀). Der vollständige Gruppen-Intercept ist α + u₀ⱼ.',
+    why:'Partial Pooling: Gruppen mit wenig Daten werden zu 0 gezogen (shrinkage). τ₀ bestimmt das Ausmaß — kleines τ₀ = starkes Pooling. In brms: (1|group).',
+    tip:'u₀ⱼ entspricht McElreaths α[j] verschoben: α + u₀ⱼ = α[j]. Die Zentrierung auf 0 ist technisch notwendig für Identifizierbarkeit.'},
+  v_j:{title:'Zufälliger Slope u₁ⱼ',
+    what:'u₁ⱼ ist die gruppenspezifische Abweichung vom globalen Slope β₁. u₁ⱼ ~ Normal(0, τ₁). Der vollständige Gruppen-Slope ist β₁ + u₁ⱼ.',
     why:'Random Slopes sind sinnvoll wenn die Beziehung zwischen Prädiktor und AV von Gruppe zu Gruppe variiert — also wenn eine Interaktion mit der Gruppenstruktur vorliegt. In brms: (1+x|group).',
     tip:'Modelle mit Random Slopes sind deutlich komplexer. Oft reicht ein Random Intercept. Prüfe die Notwendigkeit mit WAIC/LOO.'},
-  sigma_u:{title:'σ_u — SD der zufälligen Intercepts',
-    what:'σ_u ist die Standardabweichung der u_j über alle Gruppen. Er ist selbst unbekannt und bekommt einen Prior (Exponential).',
-    why:'Exponential(λ): E[σ_u]=1/λ. Kleines σ_u → Gruppen-Intercepts liegen eng zusammen (wenig Variation). Großes σ_u → Gruppen sehr unterschiedlich.',
-    tip:'In brms: prior(exponential(1), class=sd). σ_u ist inhaltlich zentral: er quantifiziert, wie stark sich Gruppen im Intercept unterscheiden, nach Berücksichtigung der Prädiktoren.'},
-  sigma_v:{title:'σ_v — SD der zufälligen Slopes',
-    what:'σ_v ist die Standardabweichung der v_j über alle Gruppen. Steuert die Slope-Heterogenität zwischen Gruppen.',
-    why:'Exponential(λ): ähnlich wie σ_u, aber für Slopes. Kleines σ_v → alle Gruppen haben fast gleiche Steigung.',
-    tip:'In brms: prior(exponential(1), class=sd, coef=x1). Wenn σ_v ≈ 0 im Posterior: Random Slopes tragen kaum zur Erklärung bei — überlege ob sie nötig sind.'},
+  sigma_u:{title:'τ₀ — SD der zufälligen Intercepts',
+    what:'τ₀ ist die Standardabweichung der u₀ⱼ über alle Gruppen. Er ist selbst unbekannt und bekommt einen Prior (Exponential).',
+    why:'Exponential(λ): E[τ₀]=1/λ. Kleines τ₀ → Gruppen-Intercepts liegen eng zusammen (wenig Variation). Großes τ₀ → Gruppen sehr unterschiedlich.',
+    tip:'In brms: prior(exponential(1), class=sd). Bei McElreath (Kap. 14, S. 441 ff.) entspricht τ₀ dem Parameter σ_α. Er quantifiziert, wie stark sich Gruppen im Intercept unterscheiden, nach Berücksichtigung der Prädiktoren.'},
+  sigma_v:{title:'τ₁ — SD der zufälligen Slopes',
+    what:'τ₁ ist die Standardabweichung der u₁ⱼ über alle Gruppen. Steuert die Slope-Heterogenität zwischen Gruppen.',
+    why:'Exponential(λ): ähnlich wie τ₀, aber für Slopes. Kleines τ₁ → alle Gruppen haben fast gleiche Steigung.',
+    tip:'In brms: prior(exponential(1), class=sd, coef=x1). Bei McElreath (Kap. 14, S. 441 ff.) entspricht τ₁ dem Parameter σ_β. Wenn τ₁ ≈ 0 im Posterior: Random Slopes tragen kaum zur Erklärung bei.'},
   det:{title:'Deterministischer Knoten (•)',
     what:'Der kleine ausgefüllte Punkt (•) ist der lineare Prädiktor μ_i. Er ist vollständig durch seine Eingaben bestimmt — keine Zufälligkeit, kein Prior. μ_i = α + β₁x₁ + β₂x₂ + …',
     whyLbl:'Wie funktioniert das?',
@@ -874,10 +874,10 @@ function buildFormulaTerms(){
   if(isML){
     const hasSlope=M.ret==='slope'&&K>0;
     terms.push({text:' + ',nodeId:null});
-    terms.push({text:'u_j',nodeId:'u_j'});
+    terms.push({text:'u₀ⱼ',nodeId:'u_j'});
     if(hasSlope){
       terms.push({text:' + ',nodeId:null});
-      terms.push({text:'v_j',nodeId:'v_j'});
+      terms.push({text:'u₁ⱼ',nodeId:'v_j'});
       terms.push({text:`·${M.preds[0].name||'x1'}ᵢ`,nodeId:null});
     }
   }
@@ -939,34 +939,38 @@ function buildLayout(){
   });
 
   // ── Multilevel random effects (brms-style) ───────────
+  // uY hoisted: needed for detY computation below (uY is const-scoped inside the block otherwise)
+  let uY=pY+305; // = pY+165+140 — used by detY; overwritten inside if(isML)
   if(isML){
     const hasSlope=M.ret==='slope'&&K>0;
     const uX=hasSlope?cx-55:cx, vX=cx+55;
-    const sigRY=pY+90, uY=sigRY+120; // sigma_u/v at 310, u_j/v_j at 430 if pY=220
+    // sigRY well below pY nodes (pY+R=262) so pl_sigma labels (sigRY-82) don't overlap
+    const sigRY=pY+165; uY=sigRY+140; // τ₀/τ₁ at 385, u₀ⱼ/u₁ⱼ at 525
 
-    // sigma_u: hyperprior for u_j
-    nodes['sigma_u']={id:'sigma_u',lbl:'σ_u',sub:'SD u_j',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
+    // τ₀: hyperprior for u₀ⱼ
+    nodes['sigma_u']={id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
     nodes['pl_sigma_u']={id:'pl_sigma_u',type:'plbl',prObj:M.pr.sig_a,x:uX,y:sigRY-(R+40),col:'re',parentId:'sigma_u'};
     edges.push({fr:'pl_sigma_u',to:'sigma_u',col:'re',isPL:true});
-    // u_j: random intercept deviation (inside group plate)
-    nodes['u_j']={id:'u_j',lbl:'u_j',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY};
+    // u₀ⱼ: random intercept deviation (inside group plate)
+    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY};
     edges.push({fr:'sigma_u',to:'u_j',col:'re'});
 
     if(hasSlope){
-      nodes['sigma_v']={id:'sigma_v',lbl:'σ_v',sub:'SD v_j',col:'re',pk:'sig_b',type:'stoch',x:vX,y:sigRY};
+      nodes['sigma_v']={id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',type:'stoch',x:vX,y:sigRY};
       nodes['pl_sigma_v']={id:'pl_sigma_v',type:'plbl',prObj:M.pr.sig_b,x:vX,y:sigRY-(R+40),col:'re',parentId:'sigma_v'};
       edges.push({fr:'pl_sigma_v',to:'sigma_v',col:'re',isPL:true});
-      nodes['v_j']={id:'v_j',lbl:'v_j',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
+      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
       edges.push({fr:'sigma_v',to:'v_j',col:'re'});
     }
-    // Group plate covering sigma_u/v and u_j/v_j
+    // Group plate: τ nodes at top, u nodes at bottom — uY+65 must stay below detY-68
     const plateMinX=(hasSlope?Math.min(uX,vX):uX)-85;
     const plateW=hasSlope?Math.abs(vX-uX)+170:170;
-    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateMinX,y:sigRY-55,w:plateW,h:uY-sigRY+120,col:'re',dash:true});
+    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateMinX,y:sigRY-55,w:plateW,h:uY-sigRY+110,col:'re',dash:true});
   }
 
   // ── Deterministic formula node ────────────────────────
-  const detY=isML?510:370;
+  // detY: uY+155 for ML → obs plate top (detY-68)=uY+87, group plate bottom (sigRY-55+h)=uY+55 → 32px gap ✓
+  const detY=isML?uY+155:370;
   const terms=buildFormulaTerms();
   const fw=Math.max(formulaWidth(terms)+56, 180);
   const boxHalfW=fw/2;
@@ -1039,8 +1043,8 @@ function buildLinear(){
   const bs=M.preds.map((p,i)=>{const b=K>1?`β${SUB[i]||i+1}`:'β';return `${b}·${p.name||'x'}ᵢ`;});
   let lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
   if(isML){
-    lin+=` + u_j[${j}]`;
-    if(M.ret==='slope'&&K>0) lin+=` + v_j[${j}]·${M.preds[0].name||'x1'}ᵢ`;
+    lin+=` + u₀ⱼ[${j}]`;
+    if(M.ret==='slope'&&K>0) lin+=` + u₁ⱼ[${j}]·${M.preds[0].name||'x1'}ᵢ`;
   }
   if(M.fam==='bernoulli') return `logit⁻¹(${lin})`;
   if(M.fam==='poisson'||M.fam==='gamma') return `exp(${lin})`;
@@ -1309,7 +1313,7 @@ function buildMath(){
   const a='α';
   const bs=M.preds.map((p,i)=>{const b=K>1?`β${sub(i+1)}`:'β'; return `${b}·${p.name||`x${i+1}`}${sub('i')}`;});
   const lin=a+(bs.length?`${space}+${space}${bs.join(`${space}+${space}`)}`:'');
-  const linML=isML?`${lin}${space}+${space}u${sub('j[i]')}`+(M.ret==='slope'&&K>0?`${space}+${space}v${sub('j[i]')}·${M.preds[0]?.name||'x1'}${sub('i')}`:''):lin;
+  const linML=isML?`${lin}${space}+${space}u<sub>0j[i]</sub>`+(M.ret==='slope'&&K>0?`${space}+${space}u<sub>1j[i]</sub>·${M.preds[0]?.name||'x1'}${sub('i')}`:''):lin;
   const lpMap={
     normal:linML, student:linML,
     bernoulli:`logit${sup('-1')}(${linML})`,
@@ -1324,11 +1328,11 @@ function buildMath(){
   pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
   if(isML){
     pRows+='<div style="height:.2rem"></div>';
-    pRows+=row(`u${sub('j')} ${sim} Normal(0,&thinsp;σ${sub('u')})`,'re','u_j');
-    pRows+=row(`σ${sub('u')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
+    pRows+=row(`u${sub('0j')} ${sim} Normal(0,&thinsp;τ${sub('0')})`,'re','u_j');
+    pRows+=row(`τ${sub('0')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
     if(M.ret==='slope'&&K>0){
-      pRows+=row(`v${sub('j')} ${sim} Normal(0,&thinsp;σ${sub('v')})`,'re','v_j');
-      pRows+=row(`σ${sub('v')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sigma_v');
+      pRows+=row(`u${sub('1j')} ${sim} Normal(0,&thinsp;τ${sub('1')})`,'re','v_j');
+      pRows+=row(`τ${sub('1')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sigma_v');
     }
   }
   M.preds.forEach((p,i)=>{
@@ -1435,15 +1439,15 @@ function buildPriorUI(){
 
   // Hyperpriors (brms-style)
   if(isML){
-    html+=blk('re','σ_u — SD Rand. Intercepts','re',prS(M.pr.sig_a),
-      PR_EX.exponential+'<br><b>Was:</b> u_j ~ Normal(0, σ_u). σ_u steuert, wie stark Intercepts zwischen Gruppen variieren. Klein = starkes Pooling. In brms: prior(exponential(1), class=sd).',
+    html+=blk('re','τ₀ — SD Rand. Intercepts','re',prS(M.pr.sig_a),
+      PR_EX.exponential+'<br><b>Was:</b> u₀ⱼ ~ Normal(0, τ₀). τ₀ steuert, wie stark Intercepts zwischen Gruppen variieren. Klein = starkes Pooling. In brms: prior(exponential(1), class=sd).',
       sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
            fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
       ])
     );
     if(M.ret==='slope'&&M.preds.length>0){
-      html+=blk('re','σ_v — SD Rand. Slopes','re',prS(M.pr.sig_b),
-        PR_EX.exponential+'<br><b>Was:</b> v_j ~ Normal(0, σ_v). σ_v steuert, wie stark Slopes für '+((M.preds[0]?.name)||'x1')+' zwischen Gruppen variieren. Der gruppenspezifische Slope ist β₁ + v_j.',
+      html+=blk('re','τ₁ — SD Rand. Slopes','re',prS(M.pr.sig_b),
+        PR_EX.exponential+'<br><b>Was:</b> u₁ⱼ ~ Normal(0, τ₁). τ₁ steuert, wie stark Slopes für '+((M.preds[0]?.name)||'x1')+' zwischen Gruppen variieren. Der gruppenspezifische Slope ist β₁ + u₁ⱼ.',
         sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
              fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
         ])
