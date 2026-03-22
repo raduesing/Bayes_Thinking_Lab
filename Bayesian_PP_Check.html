@@ -679,7 +679,7 @@ let MODEL      = 'linear';
 let USE_LMM    = false;
 let USE_AB     = false;
 let DARK       = true;
-let predictors = [{ id:0, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3 }];
+let predictors = [{ id:0, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3, degree:1, polybetas:[] }];
 let nextPredId = 1;
 let uploadedData = null;
 let lastSimA = null, lastSimB = null;
@@ -1096,7 +1096,33 @@ function renderPredictors() {
         <input type="number" class="skala-num" value="${sigMax.toFixed(0)}" min="0.1" step="1"
                onchange="setPredSigMax(${p.id},+this.value)">
         <span class="skala-lbl" style="opacity:.5;font-size:.75rem" title="x-Achse = μ±3σ des Priors">x±3σ</span>
-      </div>`;
+      </div>
+      <div class="pg" style="margin-top:.3rem">
+        <div class="pl"><span class="lbl">Polynomgrad</span></div>
+        <select style="font-size:.72rem;font-family:'DM Mono',monospace;margin-top:.15rem;width:100%" onchange="changePredDegree(${p.id},+this.value)">
+          <option value="1" ${(p.degree||1)===1?'selected':''}>linear (Grad 1)</option>
+          <option value="2" ${(p.degree||1)===2?'selected':''}>quadratisch — +I(x²)</option>
+          <option value="3" ${(p.degree||1)===3?'selected':''}>kubisch — +I(x²)+I(x³)</option>
+        </select>
+      </div>
+      ${(p.polybetas||[]).map((pb,di)=>{
+        const sup=['²','³'][di]||`^${di+2}`;
+        const muH=Math.max(Math.abs(pb.mu||0)+3*(pb.sig||0.5),5);
+        const sMax=Math.max((pb.sig||0.5)*4,3);
+        const mSt=muH>=100?1:muH>=10?0.5:0.1;
+        const sSt=sMax>=10?0.5:0.1;
+        return `<div style="margin-top:.3rem;padding:.3rem .4rem;border-left:2px solid var(--accent4);margin-left:.3rem">
+          <div class="pred-hdr" style="margin-bottom:.2rem"><span class="pred-name" style="font-size:.72rem;color:var(--accent4)">β${sup} · ${label}${sup}</span></div>
+          <div class="pg"><div class="pl"><span class="lbl">μ (Prior)</span><span class="pv pvp" id="pbm-${p.id}-${di}">${(pb.mu||0).toFixed(1)}</span></div>
+            <input type="range" min="${-muH}" max="${muH}" step="${mSt}" value="${pb.mu||0}"
+                   oninput="predictors.find(x=>x.id===${p.id}).polybetas[${di}].mu=+this.value;document.getElementById('pbm-${p.id}-${di}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+          </div>
+          <div class="pg"><div class="pl"><span class="lbl">σ (Prior)</span><span class="pv pvp" id="pbs-${p.id}-${di}">${(pb.sig||0.5).toFixed(1)}</span></div>
+            <input type="range" min="0.05" max="${sMax}" step="${sSt}" value="${pb.sig||0.5}"
+                   oninput="predictors.find(x=>x.id===${p.id}).polybetas[${di}].sig=+this.value;document.getElementById('pbs-${p.id}-${di}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
+          </div>
+        </div>`;
+      }).join('')}`;
     c.appendChild(div);
   });
   // Keep slope checkboxes in sync with predictor count
@@ -1107,7 +1133,7 @@ function addPredictor() {
   const logitLink = ['logistic','binomial','beta_reg','beta_binomial',
                      'zero_inflated_beta','zero_one_inflated_beta'].includes(MODEL);
   const defSig = logitLink ? 1.0 : 0.5;
-  predictors.push({ id:nextPredId++, fam:'normal', mu:0, sig:defSig, nu:3, xMin:-3, xMax:3 });
+  predictors.push({ id:nextPredId++, fam:'normal', mu:0, sig:defSig, nu:3, xMin:-3, xMax:3, degree:1, polybetas:[] });
   renderPredictors();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
@@ -1117,6 +1143,15 @@ function removePredictor(id) {
   renderPredictors();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 
+}
+function changePredDegree(id, deg) {
+  const p = predictors.find(x => x.id === id); if (!p) return;
+  p.degree = deg;
+  const needed = deg - 1;
+  while ((p.polybetas||[]).length < needed) p.polybetas.push({ fam:'normal', mu:0, sig:0.5, nu:3 });
+  if (p.polybetas.length > needed) p.polybetas = p.polybetas.slice(0, needed);
+  renderPredictors();
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
 function setPredFam(id, fam) {
   const p = predictors.find(x=>x.id===id); if (!p) return;
@@ -1655,7 +1690,11 @@ function simulate(cfg, model) {
 
   for (let i=0; i<N; i++) {
     const alpha = drawLoc(cfg.ifam, cfg.imu, cfg.isig, cfg.inu);
-    const betas = cfg.preds.map(p => drawLoc(p.fam, p.mu, p.sig, p.nu));
+    const allBetas = cfg.preds.map(p => {
+      const bs = [drawLoc(p.fam, p.mu, p.sig, p.nu)];
+      (p.polybetas||[]).forEach(pb => bs.push(drawLoc(pb.fam||'normal', pb.mu||0, pb.sig||0.5, pb.nu||3)));
+      return bs;
+    });
     const sigma = drawScale(cfg.sfam, cfg.sp1, cfg.sfam==='half_student' ? cfg.snu : cfg.sp2);
 
     // ν for Student-t outcome
@@ -1687,7 +1726,10 @@ function simulate(cfg, model) {
       const XS = getXS(pred);
       return XS.map(x => {
         let eta = alpha;
-        for (let j=0; j<betas.length; j++) eta += betas[j] * (j===k ? x : 0);
+        for (let j=0; j<cfg.preds.length; j++) {
+          const thisX = (j===k ? x : 0);
+          allBetas[j].forEach((b, di) => { eta += b * Math.pow(thisX, di+1); });
+        }
         // Interaction terms: only active if one of the parts is the current predictor
         interIdxPairs.forEach((pair, qi) => {
           const x1 = (pair.k1===k) ? x : 0;
@@ -4062,7 +4104,20 @@ window.exportToBuilder = function() {
     sig: gn('int-sig'),
     nu:  gn('int-nu') || 3
   };
-  const betaPriors = cfg.preds.map(p => ({ fam: p.fam, mu: p.mu, sig: p.sig, nu: p.nu || 3 }));
+  // Expand polynomial terms: each predictor with degree d contributes d terms
+  const expandedPredNames = [];
+  const betaPriors = [];
+  const baseDegrees = [];
+  cfg.preds.forEach((p, i) => {
+    const bname = p.name || `x${i+1}`;
+    expandedPredNames.push(bname);
+    betaPriors.push({ fam: p.fam, mu: p.mu, sig: p.sig, nu: p.nu||3 });
+    baseDegrees.push(p.degree||1);
+    (p.polybetas||[]).forEach((pb, di) => {
+      expandedPredNames.push(`I(${bname}^${di+2})`);
+      betaPriors.push({ fam: pb.fam||'normal', mu: pb.mu??0, sig: pb.sig??0.5, nu: pb.nu||3 });
+    });
+  });
   const sigPrior = hasSig ? {
     fam: gv('sig-fam') || 'exponential',
     p1:  gn('sig-p1'),
@@ -4103,8 +4158,9 @@ window.exportToBuilder = function() {
     source:     'ppc',
     ts:         Date.now(),
     ppcFamily:  MODEL,   // kept as-is; importFromBuilder does the reverse mapping
-    nPreds:     cfg.preds.length,
-    predNames:  cfg.preds.map((p,i) => p.name || `x${i+1}`),
+    nPreds:     expandedPredNames.length,
+    predNames:  expandedPredNames,
+    degrees:    baseDegrees,
     inters:     (cfg.interTerms||[]).map(t => t.name),
     interPriors,
     intercept:  intPrior,
@@ -4209,22 +4265,47 @@ window.importFromBuilder = function() {
     if (ifam === 'student_t') setSlider('int-nu', ip.nu ?? 3, 'd-inu', 1);
   }
 
-  // Adjust predictor count and set priors
-  const targetN = d.nPreds || 1;
+  // Reconstruct base predictors with polynomial degrees from expanded predNames
+  const isPolyTerm = n => /^I\(\w+\^\d+\)$/.test(n);
+  const expandedNames = d.predNames || [];
+  const expandedBetas = d.betas || [];
+  // Group expanded terms by base predictor
+  const groups = [];
+  expandedNames.forEach((name, i) => {
+    if (!isPolyTerm(name)) {
+      groups.push({ baseName: name, degree: 1, baseBeta: expandedBetas[i]||null, polyBetas: [] });
+    } else {
+      const m = name.match(/^I\((\w+)\^(\d+)\)$/);
+      if (m && groups.length > 0) {
+        const last = groups[groups.length-1];
+        last.degree = Math.max(last.degree, parseInt(m[2]));
+        last.polyBetas.push({ deg: parseInt(m[2]), beta: expandedBetas[i]||null });
+      }
+    }
+  });
+  // Fallback: no groups means old-style payload without polynomial info
+  if (groups.length === 0) {
+    const n = d.nPreds || 1;
+    for (let i=0; i<n; i++) groups.push({ baseName: (d.predNames&&d.predNames[i])||`x${i+1}`, degree:1, baseBeta: expandedBetas[i]||null, polyBetas:[] });
+  }
+  // Override degrees from explicit degrees[] if sent by builder
+  if (d.degrees) d.degrees.forEach((deg, i) => { if (groups[i]) groups[i].degree = Math.max(groups[i].degree, deg); });
+  const targetN = groups.length || 1;
   while (predictors.length < targetN) addPredictor();
   while (predictors.length > targetN && predictors.length > 1) removePredictor(predictors[predictors.length-1].id);
-  if (d.betas) {
-    d.betas.forEach((b, i) => {
-      const p = predictors[i]; if (!p) return;
-      p.fam  = b.fam || 'normal';
-      p.mu   = b.mu  ?? 0;
-      p.sig  = b.sig ?? 1;
-      p.nu   = b.nu  ?? 3;
-      // Restore term name (e.g. 'I(x1^2)') so label and export reflect the actual term
-      if (d.predNames && d.predNames[i]) p.name = d.predNames[i];
-    });
-    renderPredictors();
-  }
+  groups.forEach((g, i) => {
+    const p = predictors[i]; if (!p) return;
+    p.name   = g.baseName;
+    p.degree = g.degree;
+    p.polybetas = [];
+    for (let d2=2; d2<=g.degree; d2++) {
+      const pb = g.polyBetas.find(x=>x.deg===d2);
+      const beta = pb?.beta || { fam:'normal', mu:0, sig:0.5, nu:3 };
+      p.polybetas.push({ fam: beta.fam||'normal', mu: beta.mu??0, sig: beta.sig??0.5, nu: beta.nu??3 });
+    }
+    if (g.baseBeta) { p.fam=g.baseBeta.fam||'normal'; p.mu=g.baseBeta.mu??0; p.sig=g.baseBeta.sig??1; p.nu=g.baseBeta.nu??3; }
+  });
+  renderPredictors();
 
   // Interaction terms
   if (d.inters && d.inters.length > 0) {
