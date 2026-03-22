@@ -734,9 +734,11 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
   // Intercept
   addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha', defInt);
 
-  // β per predictor
-  preds.forEach(p =>
-    addRow('mu_b_' + p, 'β\u2009' + p, 'b', p, null, '\\beta_{' + p + '}', defB));
+  // β per predictor (includes expanded polynomial terms like I(x1^2))
+  preds.forEach(p => {
+    const lt = predToLatex(p);
+    addRow('mu_b_' + p, 'β\u2009' + p, 'b', p, null, '\\beta_{' + lt.betaSub + '}', defB);
+  });
 
   // β per interaction — coef uses : notation as required by brms
   inters.forEach(ix =>
@@ -1125,8 +1127,8 @@ function update() {
 
   const activeD = getActiveDistParams();
 
-  // Prior section
-  const priorRows = buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars);
+  // Prior section — use expanded preds so polynomial terms get own prior rows
+  const priorRows = buildPriorSection(predsExpanded, activeD, hasRE, g, reType, slopeVars);
 
   // R Code
   document.getElementById('code-block').innerHTML =
@@ -1169,7 +1171,7 @@ function downloadLatex() {
     : [];
   const predsExpanded = expandPreds(preds, predictorDegrees);
   const activeD = getActiveDistParams();
-  const priorRows = buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars);
+  const priorRows = buildPriorSection(predsExpanded, activeD, hasRE, g, reType, slopeVars);
 
   // Regenerate raw LaTeX via buildMath (before MathJax processes it)
   const rawHtml = buildMath(predsExpanded, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
@@ -1579,8 +1581,9 @@ const BRMS_HELP_HTML = `
   <li>Prädiktoren <strong>zentrieren</strong> wird generell empfohlen</li>
 </ul>
 
-<div class="brms-hp-tip" style="border-left-color:#2a6e8a;background:rgba(42,110,138,.1)">
-  <strong>⬡ Alleinstellungsmerkmal:</strong> Mit <em>⬡ → PP-Check</em> (oben rechts) sendest du das fertige Modell direkt an den Posterior Predictive Check — kein Copy-Paste, kein Umbau. Der PP-Check prüft dann, ob dein Modell die Daten realistisch reproduziert. Das gibt es in keinem anderen Browser-Tool.
+<div class="brms-hp-tip" style="border-left:3px solid var(--accent3);background:rgba(94,160,42,.08);color:var(--accent3)">
+  <strong style="color:var(--accent3)">⬡ Prior Predictive Check</strong><br>
+  <span style="color:var(--ink2)">Mit <em>⬡ → PP-Check</em> (oben rechts) sendest du das fertige Modell direkt an den PP-Check — kein Copy-Paste, kein Umbau. Dort wird geprüft, ob deine Priors plausible Daten erzeugen, bevor ein einziges echtes Datum gesehen wird.</span>
 </div>`;
 
 document.getElementById('brms-hp-body').innerHTML = BRMS_HELP_HTML;
