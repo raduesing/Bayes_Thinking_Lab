@@ -188,6 +188,59 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
   color:var(--accent2);padding:.06rem .38rem;font-size:.75rem;letter-spacing:.01em;}
 #ipm-body .ipm-strong{display:block;margin-top:.85rem;padding:.5rem .75rem;
   background:var(--accent);color:white;font-weight:500;font-size:.75rem;}
+
+/* ── FLOATING HELP PANEL ─────────────────────────── */
+@keyframes brms-slideIn { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
+.brms-help-btn {
+  font-family:'DM Mono',monospace; font-size:.64rem;
+  background:transparent; border:1px solid var(--border);
+  color:var(--ink3); padding:.2rem .55rem;
+  cursor:pointer; transition:all .15s; letter-spacing:.04em; white-space:nowrap;
+}
+.brms-help-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+#brms-help-panel {
+  display:none; position:fixed; right:1.5rem; top:50%;
+  transform:translateY(-50%); width:320px; z-index:600;
+  background:var(--paper); border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.14);
+  animation:brms-slideIn .18s ease-out;
+}
+#brms-help-panel.open { display:block; }
+.brms-hp-head {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:.55rem .9rem; border-bottom:1px solid var(--border);
+  background:rgba(42,110,138,.08);
+}
+.brms-hp-label {
+  font-family:'DM Mono',monospace; font-size:.6rem;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); font-weight:500;
+}
+.brms-hp-close {
+  font-family:'DM Mono',monospace; font-size:.85rem;
+  background:transparent; border:none; cursor:pointer;
+  color:var(--ink3); padding:0 .15rem; line-height:1;
+}
+.brms-hp-close:hover { color:var(--ink); }
+.brms-hp-body {
+  padding:.85rem .9rem; font-family:'DM Mono',monospace;
+  font-size:.67rem; line-height:1.8; color:var(--ink2);
+  max-height:75vh; overflow-y:auto;
+}
+.brms-hp-sect {
+  font-size:.52rem; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--accent2); margin-top:.9rem; margin-bottom:.3rem;
+  border-bottom:1px solid var(--border); padding-bottom:.18rem;
+}
+.brms-hp-sect:first-child { margin-top:0; }
+.brms-hp-body strong { color:var(--ink); }
+.brms-hp-body ul { padding-left:.1rem; }
+.brms-hp-body li { list-style:none; padding:.08rem 0; }
+.brms-hp-body li::before { content:'·'; color:var(--accent2); margin-right:.4rem; }
+.brms-hp-tip {
+  margin-top:.8rem; padding:.45rem .6rem;
+  border-left:3px solid var(--accent2); background:var(--panel);
+  font-size:.65rem; color:var(--ink2);
+}
 </style>
 </head>
 <body>
@@ -208,7 +261,8 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
     <button class="ibtn" onclick="window.open('https://raduesing.shinyapps.io/btl-posterior-ppc/','_blank')"
       style="border-color:var(--accent5);color:var(--accent5);font-size:.64rem;padding:.2rem .55rem"
       title="Posterior Predictive Check — echtes Modell hochladen und prüfen">⬡ → Posterior PPC</button>
-    <button class="ibtn" id="btn-theme" onclick="toggleTheme()" 
+    <button class="brms-help-btn" onclick="toggleBrmsHelp()">ℹ Hilfe</button>
+    <button class="ibtn" id="btn-theme" onclick="toggleTheme()"
       style="font-size:.64rem;padding:.2rem .5rem">☀ Light</button>
   </div>
 </div>
@@ -1456,7 +1510,74 @@ function ipmCloseBg(e){ if(e.target===document.getElementById('ipm-overlay')) ip
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
 </script>
 
-<!-- ── Intercept-Prior Info Modal ──────────────────────── -->
+<!-- ── Floating Help Panel ──────────────────────────────── -->
+<div id="brms-help-panel">
+  <div class="brms-hp-head">
+    <span class="brms-hp-label">ℹ brms Model Builder</span>
+    <button class="brms-hp-close" onclick="closeBrmsHelp()">✕</button>
+  </div>
+  <div class="brms-hp-body" id="brms-hp-body"></div>
+</div>
+<script>
+const BRMS_HELP_HTML = `
+<div class="brms-hp-sect">Was kann ich hier?</div>
+<ul>
+  <li>Wähle eine <strong>Likelihood</strong> (z. B. Normal, Poisson, Beta) und konfiguriere dein Modell</li>
+  <li>Setze <strong>Priors</strong> für alle Parameter — mit Vorschau der Verteilung</li>
+  <li>Erstelle <strong>Distributional Models</strong> (σ, φ, zi als Funktion von Prädiktoren)</li>
+  <li>Exportiere fertigen <strong>brms-Code</strong> + McElreath-Notation + LaTeX</li>
+  <li>Sende das Modell direkt an den <strong>PP-Check</strong></li>
+</ul>
+
+<div class="brms-hp-sect">Die 7 Schritte</div>
+<ul>
+  <li><strong>① Likelihood</strong> — Welche Verteilung passt zu deinen Daten?</li>
+  <li><strong>② Outcome</strong> — Name der abhängigen Variable</li>
+  <li><strong>③ Prädiktoren</strong> — Formel eingeben (z. B. <code>1 + x + z</code>)</li>
+  <li><strong>④ Priors</strong> — Für β, Intercept, σ/φ/zi etc.</li>
+  <li><strong>⑤ Sampling</strong> — Chains, Iterations, Adapt-Delta</li>
+  <li><strong>⑥ Distributional?</strong> — σ selbst modellieren? → Checkbox aktivieren</li>
+  <li><strong>⑦ Output</strong> — Code kopieren, LaTeX laden, an PP-Check senden</li>
+</ul>
+
+<div class="brms-hp-sect">Distributional Models</div>
+<ul>
+  <li>Aktiviere <em>Distributional Model</em> um z. B. σ als Funktion eines Prädiktors zu modellieren</li>
+  <li>Beispiel: Varianz wächst mit Alter → <code>sigma ~ age</code></li>
+  <li>Verfügbar je nach Likelihood: σ (Normal), φ (Beta/NegBin), zi (ZIP/Hurdle)</li>
+  <li>Eigene Priors für den distributional Teil können separat gesetzt werden</li>
+</ul>
+
+<div class="brms-hp-sect">⚠ Intercept-Prior Warnung</div>
+<ul>
+  <li>Bei <code>y ~ x</code> setzt brms den Intercept-Prior <em>automatisch</em> — eigene Priors werden ignoriert</li>
+  <li>Für eigene Intercept-Priors: Formel als <code>y ~ 0 + Intercept + x</code> schreiben</li>
+  <li>Prädiktoren vor der Analyse <strong>zentrieren</strong> wird empfohlen</li>
+</ul>
+
+<div class="brms-hp-tip">
+  <strong>Tipp:</strong> Der ⬡ → PP-Check Button übergibt das fertige Modell direkt an den Posterior Predictive Check — dort kannst du prüfen, ob dein Modell die Daten gut reproduziert.
+</div>`;
+
+document.getElementById('brms-hp-body').innerHTML = BRMS_HELP_HTML;
+
+function toggleBrmsHelp() {
+  const p = document.getElementById('brms-help-panel');
+  p.classList.toggle('open');
+}
+function closeBrmsHelp() {
+  document.getElementById('brms-help-panel').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  const p = document.getElementById('brms-help-panel');
+  if (!p.classList.contains('open')) return;
+  if (!p.contains(e.target) && !e.target.classList.contains('brms-help-btn')) {
+    closeBrmsHelp();
+  }
+});
+</script>
+
+<!-- ── Intercept-Prior Info Modal ──────────────────────────── -->
 <div id="ipm-overlay" onclick="ipmCloseBg(event)">
   <div id="ipm-modal">
     <div id="ipm-header">
