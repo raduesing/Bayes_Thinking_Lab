@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision Lab — HDI · ETI · ROPE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+:root{
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --accent:#0e7c7b;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#7a3a8a;--accent5:#b85c00;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--shadow:#c0b8a4;
+  --hdi-col:#c94a2a;--eti-col:#2a6e8a;--rope-col:#5a8a2a;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --accent:#2bc7c4;--accent2:#4ab0d8;--accent3:#80cb52;--accent4:#c87ad8;--accent5:#e07830;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--shadow:#080b10;
+  --hdi-col:#e8614a;--eti-col:#4ab0d8;--rope-col:#80cb52;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px;-webkit-font-smoothing:antialiased}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;font-weight:300;overflow-x:hidden}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:100;background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.6rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.nb{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.nb:hover{border-color:var(--accent2);color:var(--accent2)}
+.nav-title{font-size:1rem;font-weight:300}
+.nav-title em{font-style:italic;color:var(--accent)}
+.nav-back{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);text-decoration:none;
+  border-bottom:1px dotted var(--border);transition:color .15s}
+.nav-back:hover{color:var(--accent2)}
+
+/* LAYOUT */
+.wrap{max-width:none;margin:0;padding:1.2rem 1.5rem}
+.outer{display:grid;grid-template-columns:230px 1fr;gap:1.2rem;align-items:start}
+.sidebar{display:flex;flex-direction:column;gap:.7rem;position:sticky;top:3.5rem;
+  max-height:calc(100vh - 4rem);overflow-y:scroll}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.sidebar::-webkit-scrollbar-thumb:hover{background:var(--accent2)}
+.main{display:flex;flex-direction:column;gap:1rem}
+
+/* CARDS */
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.6rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid);color:var(--ink3)}
+.panel{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.2rem;box-shadow:2px 2px 0 var(--shadow)}
+.panel-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:.8rem;padding-bottom:.3rem;border-bottom:1px solid var(--grid)}
+
+/* SLIDERS */
+.pg{margin-bottom:.65rem}.pg:last-child{margin-bottom:0}
+.pl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem}
+.pl span:first-child{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink)}
+.pv{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--grid);
+  outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--ink);border-radius:50%;cursor:pointer}
+input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
+
+/* BUTTONS / TOGGLES */
+.btn-group{display:flex;gap:2px}
+.tbtn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.25rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;flex:1;text-align:center}
+.tbtn:hover{border-color:var(--accent2);color:var(--accent2)}
+.tbtn.on{background:var(--accent2);color:var(--paper);border-color:var(--accent2)}
+.tbtn.on-hdi{background:var(--hdi-col);color:var(--paper);border-color:var(--hdi-col)}
+.tbtn.on-eti{background:var(--eti-col);color:var(--paper);border-color:var(--eti-col)}
+
+/* DIST SELECTOR */
+select{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink);padding:.3rem .5rem;
+  cursor:pointer;width:100%;outline:none}
+select:focus{border-color:var(--accent2)}
+
+/* CANVAS */
+#mainCanvas{display:block}
+#plot-area{overflow:hidden;min-width:0}
+
+/* DECISION PANELS */
+.decisions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-top:.8rem}
+.dec-panel{background:var(--paper);border:1.5px solid var(--border);padding:.9rem 1rem;
+  box-shadow:2px 2px 0 var(--shadow)}
+.dec-label{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink3);margin-bottom:.4rem}
+.dec-name{font-size:.9rem;font-weight:300;margin-bottom:.5rem}
+.dec-name em{font-style:italic}
+.dec-value{font-family:'DM Mono',monospace;font-size:.8rem;margin-bottom:.5rem;color:var(--ink2)}
+.dec-verdict{font-family:'DM Mono',monospace;font-size:.72rem;padding:.3rem .6rem;
+  text-align:center;font-weight:500;letter-spacing:.03em}
+.v-accept{background:rgba(80,180,80,.18);color:#4a9a4a;border:1px solid rgba(80,180,80,.35)}
+[data-theme="dark"] .v-accept{color:#80cb52;border-color:rgba(128,203,82,.35)}
+.v-withhold{background:rgba(220,160,0,.15);color:#8a6a00;border:1px solid rgba(220,160,0,.3)}
+[data-theme="dark"] .v-withhold{color:#e0a830;border-color:rgba(224,168,48,.3)}
+.v-reject{background:rgba(200,60,40,.15);color:#b83020;border:1px solid rgba(200,60,40,.3)}
+[data-theme="dark"] .v-reject{color:#e8614a;border-color:rgba(232,97,74,.3)}
+.v-neutral{background:var(--panel);color:var(--ink3);border:1px solid var(--grid)}
+
+/* ROPE bar */
+.rope-bar-wrap{margin-top:.5rem}
+.rope-bar-bg{height:10px;background:var(--grid);border-radius:2px;overflow:hidden;position:relative;margin:.3rem 0}
+.rope-bar-fill{height:100%;background:var(--rope-col);border-radius:2px;transition:width .3s}
+.rope-pct{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--rope-col);font-weight:500}
+
+/* LEGEND ROW */
+.legend-row{display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:.6rem;
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);align-items:center}
+.ld{display:inline-block;width:18px;height:3px;border-radius:1px;margin-right:.25rem;vertical-align:middle}
+
+/* COLLAPSIBLE */
+.collap-hd{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+  font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.06em;color:var(--ink2);
+  padding:.55rem .75rem;background:var(--panel);border:1px solid var(--grid);user-select:none}
+.collap-hd:hover{color:var(--accent2)}
+.collap-hd span.arr{transition:transform .2s}
+.collap-hd.open span.arr{transform:rotate(90deg)}
+.collap-body{display:none;padding:.8rem 1rem;border:1px solid var(--grid);border-top:none;
+  background:var(--paper);font-family:'DM Mono',monospace;font-size:.72rem;
+  color:var(--ink2);line-height:1.85}
+.collap-body.open{display:block}
+.collap-body p{margin-bottom:.6rem}.collap-body p:last-child{margin-bottom:0}
+.collap-body strong{color:var(--ink)}
+.formula{font-style:italic;color:var(--accent2);display:block;margin:.3rem 0}
+
+/* R CODE */
+.rcode{background:var(--panel);border:1px solid var(--grid);padding:.7rem .9rem;
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--accent2);
+  line-height:1.7;white-space:pre;overflow-x:auto;margin-top:.5rem}
+.cbtn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;margin-top:.4rem}
+.cbtn:hover{background:var(--accent3);color:var(--paper);border-color:var(--accent3)}
+
+/* HEADER STRIP */
+.hstrip{background:var(--paper);border-bottom:1.5px solid var(--border);padding:1rem 1.5rem;
+  display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap}
+.hstrip-title{font-size:1.4rem;font-weight:200;letter-spacing:-.02em}
+.hstrip-title em{font-style:italic;color:var(--accent)}
+.hstrip-sub{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);line-height:1.6}
+.hstrip-tags{display:flex;gap:.3rem;flex-wrap:wrap;margin-left:auto}
+.htag{font-family:'DM Mono',monospace;font-size:.55rem;padding:.1rem .35rem;
+  border:1px solid var(--grid);color:var(--ink3)}
+
+@media(max-width:900px){
+  .outer{grid-template-columns:1fr}
+  .sidebar{position:static;max-height:none;overflow-y:visible}
+  .decisions{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="../index.html" class="nav-back">← Bayes Thinking Lab</a>
+  <span class="nav-title">Decision <em>Lab</em></span>
+  <button class="nb" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+</nav>
+
+<!-- HEADER -->
+<div class="hstrip">
+  <div>
+    <div class="hstrip-title">Decision <em>Lab</em></div>
+    <div class="hstrip-sub">HDI · ETI · ROPE — From posterior to decision</div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);opacity:.5;margin-top:.15rem">
+      © Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hstrip-tags">
+    <span class="htag">Interactive</span>
+    <span class="htag">bayestestR</span>
+    <span class="htag">Kruschke</span>
+    <span class="htag">McElreath</span>
+  </div>
+</div>
+
+<div class="wrap">
+<div class="outer">
+
+<!-- ══ SIDEBAR ══════════════════════════════════ -->
+<div class="sidebar">
+
+  <!-- Distribution -->
+  <div class="scard">
+    <h3>Posterior distribution</h3>
+    <div class="pg">
+      <select id="sel-dist" onchange="onDistChange()">
+        <option value="normal">Normal (symmetric)</option>
+        <option value="t">t-distribution (heavy tails)</option>
+        <option value="gamma">Gamma (skewed positive)</option>
+      </select>
+    </div>
+    <div class="pg" id="row-mu">
+      <div class="pl"><span>Mean μ</span><span class="pv" id="v-mu" style="color:var(--accent)">105</span></div>
+      <input type="range" id="sl-mu" min="50" max="160" step="1" value="105" oninput="update()">
+    </div>
+    <div class="pg" id="row-sigma">
+      <div class="pl"><span>Spread σ</span><span class="pv" id="v-sigma" style="color:var(--accent2)">8</span></div>
+      <input type="range" id="sl-sigma" min="1" max="30" step=".5" value="8" oninput="update()">
+    </div>
+    <div class="pg" id="row-nu" style="display:none">
+      <div class="pl"><span>Degrees of freedom ν</span><span class="pv" id="v-nu" style="color:var(--accent4)">4</span></div>
+      <input type="range" id="sl-nu" min="1" max="30" step="1" value="4" oninput="update()">
+    </div>
+    <div class="pg" id="row-shape" style="display:none">
+      <div class="pl"><span>Shape α</span><span class="pv" id="v-shape" style="color:var(--accent4)">4</span></div>
+      <input type="range" id="sl-shape" min=".5" max="20" step=".5" value="4" oninput="update()">
+    </div>
+    <div class="pg" id="row-rate" style="display:none">
+      <div class="pl"><span>Rate β</span><span class="pv" id="v-rate" style="color:var(--accent5)">0.04</span></div>
+      <input type="range" id="sl-rate" min=".005" max=".5" step=".005" value="0.04" oninput="update()">
+    </div>
+  </div>
+
+  <!-- ROPE -->
+  <div class="scard">
+    <h3>ROPE</h3>
+    <div class="pg">
+      <div class="pl"><span>ROPE lower bound</span><span class="pv" id="v-rl" style="color:var(--rope-col)">97</span></div>
+      <input type="range" id="sl-rl" min="50" max="160" step=".5" value="97" oninput="update()">
+    </div>
+    <div class="pg">
+      <div class="pl"><span>ROPE upper bound</span><span class="pv" id="v-ru" style="color:var(--rope-col)">113</span></div>
+      <input type="range" id="sl-ru" min="50" max="160" step=".5" value="113" oninput="update()">
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);line-height:1.7;
+         border-top:1px solid var(--grid);padding-top:.5rem;margin-top:.1rem">
+      ROPE = Region of Practical Equivalence. Ideally determined by content (smallest effect of interest).
+      Without prior knowledge: ±0.1·SD(y) following Kruschke.
+    </div>
+  </div>
+
+  <!-- Intervall-Breite -->
+  <div class="scard">
+    <h3>Interval width</h3>
+    <div class="btn-group" id="cri-btns">
+      <button class="tbtn" onclick="setCrI(89)" id="cri-89">89%</button>
+      <button class="tbtn on" onclick="setCrI(95)" id="cri-95">95%</button>
+      <button class="tbtn" onclick="setCrI(99)" id="cri-99">99%</button>
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
+         line-height:1.7;margin-top:.55rem" id="cri-hint">
+      95% — Kruschke's standard
+    </div>
+  </div>
+
+  <!-- HDI / ETI Toggle -->
+  <div class="scard">
+    <h3>Interval type</h3>
+    <div class="btn-group">
+      <button class="tbtn on-hdi" onclick="setIvType('hdi')" id="iv-hdi">HDI</button>
+      <button class="tbtn" onclick="setIvType('eti')" id="iv-eti">ETI</button>
+      <button class="tbtn" onclick="setIvType('both')" id="iv-both">Both</button>
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
+         line-height:1.7;margin-top:.55rem" id="iv-hint">
+      HDI = shortest interval containing X% of the mass. Identical to ETI for normal distributions.
+    </div>
+  </div>
+
+
+</div><!-- /sidebar -->
+
+<!-- ══ MAIN ══════════════════════════════════ -->
+<div class="main">
+
+  <!-- Plot -->
+  <div class="panel">
+    <div class="panel-title">Posterior distribution · ROPE · Intervals</div>
+    <div class="legend-row" id="legend-row">
+      <span><span class="ld" style="background:var(--accent);height:2px"></span>Posterior</span>
+      <span id="leg-hdi"><span class="ld" style="background:var(--hdi-col);height:3px"></span>HDI</span>
+      <span id="leg-eti" style="display:none"><span class="ld" style="background:var(--eti-col);height:3px;border-bottom:2px dashed var(--eti-col)"></span>ETI</span>
+      <span><span class="ld" style="background:var(--rope-col);opacity:.4;height:10px;border-radius:2px"></span>ROPE</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 150px;gap:1rem;align-items:start">
+      <div id="plot-area"><canvas id="mainCanvas"></canvas></div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+             text-transform:uppercase;color:var(--ink3);margin-bottom:.6rem;
+             padding-bottom:.28rem;border-bottom:1px solid var(--grid)">Value range</div>
+        <div class="pg">
+          <div class="pl"><span style="font-family:'DM Mono',monospace;font-size:.68rem">Min</span>
+            <span class="pv" id="v-xmin" style="color:var(--ink3)">50</span></div>
+          <input type="range" id="sl-xmin" min="0" max="130" step="5" value="50" oninput="update()">
+        </div>
+        <div class="pg">
+          <div class="pl"><span style="font-family:'DM Mono',monospace;font-size:.68rem">Max</span>
+            <span class="pv" id="v-xmax" style="color:var(--ink3)">160</span></div>
+          <input type="range" id="sl-xmax" min="0" max="250" step="5" value="160" oninput="update()">
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink3);
+             line-height:1.7;margin-top:.4rem">
+          Default: IQ scale.<br>For Gamma: from 0.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three decision panels -->
+  <div class="decisions">
+
+    <!-- A: Kruschke HDI vs ROPE -->
+    <div class="dec-panel" id="dp-kruschke">
+      <div class="dec-label">Approach A — Kruschke</div>
+      <div class="dec-name">HDI vs. <em>ROPE</em></div>
+      <div class="dec-value" id="da-interval">—</div>
+      <div class="dec-verdict v-neutral" id="da-verdict">—</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);
+           margin-top:.5rem;line-height:1.7" id="da-explain">
+        Trichotomous decision: HDI outside, inside, or overlapping ROPE.
+      </div>
+    </div>
+
+    <!-- B: Full ROPE % -->
+    <div class="dec-panel" id="dp-rope">
+      <div class="dec-label">Approach B — Full ROPE</div>
+      <div class="dec-name">% in <em>ROPE</em></div>
+      <div class="rope-bar-wrap">
+        <div class="rope-pct" id="db-pct">—</div>
+        <div class="rope-bar-bg"><div class="rope-bar-fill" id="db-bar" style="width:0%"></div></div>
+      </div>
+      <div class="dec-verdict v-neutral" id="db-verdict">—</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);
+           margin-top:.5rem;line-height:1.7">
+        Gradual: proportion of posterior mass in the ROPE. &lt;2.5% = effect, &gt;97.5% = equivalence (Makowski et al. 2019).
+      </div>
+    </div>
+
+    <!-- C: ETI vs ROPE -->
+    <div class="dec-panel" id="dp-eti">
+      <div class="dec-label">Approach C — ETI</div>
+      <div class="dec-name">ETI vs. <em>ROPE</em></div>
+      <div class="dec-value" id="dc-interval">—</div>
+      <div class="dec-verdict v-neutral" id="dc-verdict">—</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);
+           margin-top:.5rem;line-height:1.7" id="dc-explain">
+        Invariant under transformations. Equal to HDI for normal distributions. Differences appear with skewed posteriors.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Erläuterungen -->
+  <div>
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>Explanations &amp; Background</span><span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+      <p><strong>HDI (Highest Density Interval)</strong> — The shortest interval containing X% of the posterior mass. The key property: <em>no value outside the HDI has a higher density than any value inside.</em> This means the HDI contains exactly the "most plausible" parameter values — those most strongly supported by the posterior. Density is proportional to probability, so a value with higher density is more credible than one with lower density. For a unimodal distribution the HDI is always a contiguous interval around the mode (densest point). For symmetric posteriors (Normal, t) HDI = ETI.</p>
+      <p><strong>ETI (Equal-Tailed Interval)</strong> — Cuts equal probability mass from both tails (at 95%: 2.5% each). The ETI corresponds to what frequentist confidence intervals approximate. Key property: <em>invariant under monotone transformations.</em> If you transform a parameter (e.g. log(σ) instead of σ), the ETI on the original scale gives the same decision as on the transformed scale. The HDI can lead to different decisions depending on parameterisation (HDI on log scale ≠ exp(HDI on log scale)). <strong>For Normal and t distributions: HDI = ETI</strong>, since both distributions are symmetric. Differences arise only with skewed posteriors (here: Gamma).</p>
+      <p><strong>Kruschke's decision rule (Approach A)</strong> — Trichotomous using the chosen interval (HDI or ETI):
+        <span class="formula">Interval completely outside ROPE → accept effect as real</span>
+        <span class="formula">Interval completely inside ROPE → accept practical equivalence</span>
+        <span class="formula">Interval overlaps ROPE → withhold judgment</span>
+      </p>
+      <p><strong>Full-ROPE approach (Approach B, bayestestR)</strong> — Computes the proportion of the entire posterior mass that lies within the ROPE. This is a gradual, continuous statement: "37% of the posterior mass lies in the ROPE." Decision rule following Makowski et al. (2019): &lt;2.5% = effect (negligible proportion in ROPE); &gt;97.5% = practical equivalence; in between = undecided.</p>
+      <p><strong>Setting the ROPE: SESOI</strong> — The ROPE should always be determined by content. The key concept is SESOI (Smallest Effect Size Of Interest): <em>Which effect would be so small that it has no practical relevance for your research question?</em> This is a scientific, not a statistical question. Example therapy study: An IQ gain of less than 3 points is indistinguishable in practice — so ROPE = [−3, +3]. Methods for determining SESOI: (1) pilot data / expert knowledge, (2) standardised effect size (e.g. d=0.2 as "small effect"), (3) what clinicians specify as the minimal clinically important difference (MCID). Lakens et al. (2018) provide a detailed introduction: Lakens, D., Scheel, A. M., &amp; Isager, P. M. (2018). Equivalence testing for psychological research: A tutorial. <em>Advances in Methods and Practices in Psychological Science</em>, 1(2), 259–301. — Without any prior knowledge: Kruschke suggests ±0.1·SD(y).</p>
+      <p><strong>Interval width 89% vs. 95%</strong> — McElreath prefers 89% because there is no special privilege for the number 95 — this convention comes from the frequentist world. 89 is the largest prime number below 90. The 95% interval is widely used and facilitates communication. Choose deliberately and justify the choice.</p>
+    </div>
+  </div>
+
+  <!-- R Code -->
+  <div>
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>R Code (bayestestR)</span><span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+      <p>Install bayestestR: <code style="color:var(--accent2)">install.packages("bayestestR")</code></p>
+      <div class="rcode" id="rcode-block">library(bayestestR)
+
+# Generate posterior samples (here: normal distribution)
+posterior &lt;- rnorm(10000, mean = 105, sd = 8)
+
+# Compute HDI
+hdi(posterior, ci = 0.95)
+
+# Compute ETI
+eti(posterior, ci = 0.95)
+
+# ROPE analysis
+rope(posterior, range = c(97, 113), ci = 0.95)
+
+# Full decision
+p_direction(posterior)
+equivalence_test(posterior, range = c(97, 113), ci = 0.95)</div>
+      <button class="cbtn" onclick="copyCode()">Copy code</button>
+    </div>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /outer -->
+</div><!-- /wrap -->
+
+<script>
+// ─── State ────────────────────────────────────────
+let CRI = 95;
+let IV_TYPE = 'hdi'; // 'hdi' | 'eti' | 'both'
+let DIST = 'normal';
+
+// ─── Theme ───────────────────────────────────────
+let DARK = true;
+function toggleTheme(){
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-th').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  update();
+}
+
+// ─── Collapsible ─────────────────────────────────
+function toggleCollap(hd){
+  hd.classList.toggle('open');
+  hd.nextElementSibling.classList.toggle('open');
+}
+
+// ─── CrI width ───────────────────────────────────
+function setCrI(v){
+  CRI = v;
+  ['89','95','99'].forEach(x => {
+    document.getElementById('cri-'+x).classList.remove('on');
+  });
+  document.getElementById('cri-'+v).classList.add('on');
+  const hints = {89:"89% — McElreath's recommendation (largest prime < 90)",
+                 95:"95% — Kruschke's standard",
+                 99:"99% — conservative, wide interval"};
+  document.getElementById('cri-hint').textContent = hints[v];
+  update();
+}
+
+// ─── Interval type ───────────────────────────────
+function setIvType(t){
+  IV_TYPE = t;
+  ['hdi','eti','both'].forEach(x => {
+    const b = document.getElementById('iv-'+x);
+    b.className = 'tbtn';
+    if(x===t) b.className = 'tbtn on-'+(t==='eti'?'eti':'hdi');
+    if(t==='both') b.classList.add('on');
+  });
+  const hints = {
+    hdi: 'HDI = shortest interval containing X% of the mass. Contains the densest (most plausible) values.',
+    eti: 'ETI = quantile-based, invariant under transformations. Same decision regardless of parameterisation.',
+    both: 'Both simultaneously. Difference visible only for skewed distributions (Gamma). Normal and t are symmetric → HDI = ETI.'
+  };
+  document.getElementById('iv-hint').textContent = hints[t];
+  document.getElementById('leg-hdi').style.display = (t==='eti') ? 'none' : '';
+  document.getElementById('leg-eti').style.display = (t==='hdi') ? 'none' : '';
+  update();
+}
+
+// ─── Distribution change ─────────────────────────
+function onDistChange(){
+  DIST = document.getElementById('sel-dist').value;
+  const isGamma = DIST === 'gamma';
+  const isT = DIST === 't';
+  document.getElementById('row-nu').style.display = isT ? '' : 'none';
+  document.getElementById('row-shape').style.display = isGamma ? '' : 'none';
+  document.getElementById('row-rate').style.display = isGamma ? '' : 'none';
+  document.getElementById('row-mu').style.display = isGamma ? 'none' : '';
+  document.getElementById('row-sigma').style.display = isGamma ? 'none' : '';
+
+  if(isGamma){
+    // Gamma: shape=3, rate=0.3 → mean=10, skewed positive, starts at 0
+    document.getElementById('sl-shape').value = 3;
+    document.getElementById('sl-rate').value = 0.3;
+    document.getElementById('sl-xmin').value = 0;
+    document.getElementById('sl-xmax').value = 50;
+    // ROPE: ±1 um den Nulleffekt-Bereich nahe 0
+    document.getElementById('sl-rl').min = 0; document.getElementById('sl-rl').max = 50;
+    document.getElementById('sl-ru').min = 0; document.getElementById('sl-ru').max = 50;
+    document.getElementById('sl-rl').value = 2;
+    document.getElementById('sl-ru').value = 8;
+  } else {
+    // Normal / t: IQ-Skala defaults
+    document.getElementById('sl-xmin').value = 50;
+    document.getElementById('sl-xmax').value = 160;
+    document.getElementById('sl-rl').min = 50; document.getElementById('sl-rl').max = 160;
+    document.getElementById('sl-ru').min = 50; document.getElementById('sl-ru').max = 160;
+    document.getElementById('sl-rl').value = 97;
+    document.getElementById('sl-ru').value = 113;
+  }
+  update();
+}
+
+// ─── Math helpers ─────────────────────────────────
+function normalPDF(x, mu, sigma){
+  const z = (x - mu) / sigma;
+  return Math.exp(-0.5 * z * z) / (sigma * Math.sqrt(2 * Math.PI));
+}
+function tPDF(x, mu, sigma, nu){
+  const z = (x - mu) / sigma;
+  const c = Math.exp(lgamma((nu+1)/2) - lgamma(nu/2)) / (Math.sqrt(nu * Math.PI) * sigma);
+  return c * Math.pow(1 + z*z/nu, -(nu+1)/2);
+}
+function gammaPDF(x, shape, rate){
+  if(x <= 0) return 0;
+  return Math.pow(rate, shape) * Math.pow(x, shape-1) * Math.exp(-rate*x) / Math.exp(lgamma(shape));
+}
+function lgamma(x){
+  // Stirling approximation
+  if(x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x);
+  x -= 1;
+  let a = 0.99999999999980993;
+  const c = [676.5203681218851,-1259.1392167224028,771.32342877765313,
+             -176.61502916214059,12.507343278686905,-0.13857109526572012,
+             9.9843695780195716e-6,1.5056327351493116e-7];
+  for(let i=0;i<8;i++) a += c[i]/(x+i+1);
+  const t = x + 8 - 0.5;
+  return 0.5*Math.log(2*Math.PI) + (x+0.5)*Math.log(t) - t + Math.log(a);
+}
+
+// ─── Analytical quantile functions ───────────────
+// Normal inverse CDF — Peter Acklam's rational approximation (max error ~1.15e-9)
+function normalInvCDF(p){
+  const a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,
+            1.383577518672690e2,-3.066479806614716e1,2.506628277459239];
+  const b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,
+            6.680131188771972e1,-1.328068155288572e1];
+  const c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838,
+            -2.549732539343734,4.374664141464968,2.938163982698783];
+  const d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996,3.754408661907416];
+  const pL=0.02425, pH=1-pL;
+  let q,r;
+  if(p<pL){
+    q=Math.sqrt(-2*Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/
+           ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }else if(p<=pH){
+    q=p-0.5; r=q*q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  }else{
+    q=Math.sqrt(-2*Math.log(1-p));
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/
+            ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }
+}
+
+// t-distribution ETI: build CDF table on fine grid, interpolate quantiles
+// Returns [lo, hi] for the given ci (0-100), symmetric around mu
+function tAnalyticalETI(mu, sigma, nu, ci){
+  const pLo=(1-ci/100)/2;
+  const N=3000, xLo=-60, xHi=60, step=(xHi-xLo)/N;
+  // Build cumulative PDF for standard t(nu)
+  const cum=new Float64Array(N+1); cum[0]=0;
+  for(let i=1;i<=N;i++){
+    const x=xLo+i*step;
+    cum[i]=cum[i-1]+0.5*(tPDF(x-step,0,1,nu)+tPDF(x,0,1,nu))*step;
+  }
+  const total=cum[N];
+  // Interpolate lower quantile
+  let qLo=xLo, qHi=xHi;
+  for(let i=0;i<N;i++){
+    if(cum[i]/total<=pLo && cum[i+1]/total>=pLo){
+      const frac=(pLo*total-cum[i])/(cum[i+1]-cum[i]);
+      qLo=xLo+(i+frac)*step; break;
+    }
+  }
+  // t is symmetric: upper quantile = -lower quantile
+  qHi=-qLo;
+  return [mu+qLo*sigma, mu+qHi*sigma];
+}
+
+// compute PDF array
+function getPDF(xs, params){
+  return xs.map(x => {
+    if(DIST==='normal') return normalPDF(x, params.mu, params.sigma);
+    if(DIST==='t') return tPDF(x, params.mu, params.sigma, params.nu);
+    if(DIST==='gamma') return gammaPDF(x, params.shape, params.rate);
+    return 0;
+  });
+}
+
+// numeric integration (trapezoid)
+function trapz(xs, ys){
+  let s = 0;
+  for(let i=1;i<xs.length;i++) s += 0.5*(ys[i-1]+ys[i])*(xs[i]-xs[i-1]);
+  return s;
+}
+
+// HDI via cumulative mass + two-pointer (O(N))
+function computeHDI(xs, ys, ci){
+  const N = xs.length;
+  // Build cumulative mass array
+  const cum = new Float64Array(N);
+  cum[0] = 0;
+  for(let i=1;i<N;i++) cum[i] = cum[i-1] + 0.5*(ys[i-1]+ys[i])*(xs[i]-xs[i-1]);
+  const total = cum[N-1];
+  const target = ci/100 * total;
+  let bestL = xs[0], bestR = xs[N-1], bestWidth = Infinity;
+  let j = 0;
+  for(let i=0;i<N;i++){
+    // advance j until mass [i..j] >= target
+    while(j < N-1 && (cum[j] - cum[i]) < target) j++;
+    const mass = cum[j] - cum[i];
+    if(mass >= target * 0.995){
+      const w = xs[j] - xs[i];
+      if(w < bestWidth){ bestWidth = w; bestL = xs[i]; bestR = xs[j]; }
+    }
+  }
+  return [bestL, bestR];
+}
+
+// ETI via quantile on grid
+function computeETI(xs, ys, ci){
+  const total = trapz(xs, ys);
+  const lo = (1 - ci/100)/2;
+  const hi = 1 - lo;
+  let cumL = 0, cumH = 0;
+  let eL = xs[0], eH = xs[xs.length-1];
+  for(let i=1;i<xs.length;i++){
+    cumL += 0.5*(ys[i-1]+ys[i])*(xs[i]-xs[i-1]);
+    if(cumL/total >= lo && eL === xs[0]) eL = xs[i];
+  }
+  cumH = 0;
+  for(let i=xs.length-2;i>=0;i--){
+    cumH += 0.5*(ys[i]+ys[i+1])*(xs[i+1]-xs[i]);
+    if(cumH/total >= lo && eH === xs[xs.length-1]) eH = xs[i];
+  }
+  return [eL, eH];
+}
+
+// ROPE mass percentage
+function computeROPEmass(xs, ys, rl, ru){
+  const total = trapz(xs, ys);
+  if(total === 0) return 0;
+  const inside = xs.map((x,i) => (x >= rl && x <= ru) ? ys[i] : 0);
+  return 100 * trapz(xs, inside) / total;
+}
+
+// Kruschke verdict
+function kruschkeVerdict(ivL, ivR, rl, ru){
+  if(ivR < rl || ivL > ru) return 'reject';   // outside ROPE → effect real
+  if(ivL >= rl && ivR <= ru) return 'accept';  // inside ROPE → equivalence
+  return 'withhold';
+}
+
+// ─── CSS var helper ──────────────────────────────
+function cssv(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+// ─── Main update ─────────────────────────────────
+function update(){
+  // Read params
+  const mu    = parseFloat(document.getElementById('sl-mu').value);
+  const sigma = parseFloat(document.getElementById('sl-sigma').value);
+  const nu    = parseFloat(document.getElementById('sl-nu').value);
+  const shape = parseFloat(document.getElementById('sl-shape').value);
+  const rate  = parseFloat(document.getElementById('sl-rate').value);
+  const rl    = parseFloat(document.getElementById('sl-rl').value);
+  const ru    = parseFloat(document.getElementById('sl-ru').value);
+  const xmin  = parseFloat(document.getElementById('sl-xmin').value);
+  const xmax  = parseFloat(document.getElementById('sl-xmax').value);
+
+  // Display values
+  document.getElementById('v-mu').textContent    = mu;
+  document.getElementById('v-sigma').textContent  = sigma;
+  document.getElementById('v-nu').textContent     = nu;
+  document.getElementById('v-shape').textContent  = shape;
+  document.getElementById('v-rate').textContent   = rate.toFixed(3);
+  document.getElementById('v-rl').textContent     = rl;
+  document.getElementById('v-ru').textContent     = ru;
+  document.getElementById('v-xmin').textContent   = xmin;
+  document.getElementById('v-xmax').textContent   = xmax;
+
+  const params = {mu, sigma, nu, shape, rate};
+
+  // Grid
+  const N = 400;
+  const xs = Array.from({length:N}, (_,i) => xmin + (xmax - xmin) * i / (N-1));
+  const ys = getPDF(xs, params);
+  const maxY = Math.max(...ys);
+
+  // Intervals — analytical for Normal/t (exact), grid-based for Gamma
+  let hdi, eti;
+  if(DIST === 'normal'){
+    const z = normalInvCDF((1+CRI/100)/2);
+    const lo = mu - z*sigma, hi = mu + z*sigma;
+    hdi = [lo, hi]; eti = [lo, hi];
+  } else if(DIST === 't'){
+    const iv = tAnalyticalETI(mu, sigma, nu, CRI);
+    hdi = iv; eti = iv;  // t is symmetric: HDI = ETI exactly
+  } else {
+    // Gamma: use grid (HDI ≠ ETI for skewed distributions)
+    hdi = computeHDI(xs, ys, CRI);
+    eti = computeETI(xs, ys, CRI);
+  }
+  const ropeMass = computeROPEmass(xs, ys, rl, ru);
+
+  // Verdicts
+  const ivForKruschke = (IV_TYPE === 'eti') ? eti : hdi;
+  const vK = kruschkeVerdict(ivForKruschke[0], ivForKruschke[1], rl, ru);
+  const vE = kruschkeVerdict(eti[0], eti[1], rl, ru);
+
+  // ── Draw canvas ────────────────────────────────
+  const canvas = document.getElementById('mainCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  // Reset canvas first so plot-area can shrink to its natural grid width
+  canvas.style.width = '1px'; canvas.width = 1;
+  const plotArea = document.getElementById('plot-area');
+  const W = Math.max(200, plotArea.clientWidth);
+  const H = 400;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Colors
+  const cInk   = cssv('--ink');
+  const cInk3  = cssv('--ink3');
+  const cGrid  = cssv('--grid');
+  const cPaper = cssv('--paper');
+  const cPosterior = cssv('--accent');
+  const cHDI   = cssv('--hdi-col');
+  const cETI   = cssv('--eti-col');
+  const cROPE  = cssv('--rope-col');
+
+  // Margins
+  const ml = 52, mr = 18, mt = 20, mb = 36;
+  const pw = W - ml - mr, ph = H - mt - mb;
+
+  function toX(v){ return ml + (v - xmin)/(xmax - xmin) * pw; }
+  function toY(v){ return mt + ph - v/maxY * ph * 0.88; }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = cGrid; ctx.lineWidth = .8;
+  for(let i=0;i<=4;i++){
+    const y = mt + ph/4 * i;
+    ctx.beginPath(); ctx.moveTo(ml, y); ctx.lineTo(ml+pw, y); ctx.stroke();
+  }
+
+  // ROPE region
+  const rx1 = Math.max(toX(rl), ml);
+  const rx2 = Math.min(toX(ru), ml+pw);
+  if(rx2 > rx1){
+    ctx.fillStyle = cROPE + '28';
+    ctx.fillRect(rx1, mt, rx2-rx1, ph);
+    ctx.strokeStyle = cROPE + '80'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(rx1, mt); ctx.lineTo(rx1, mt+ph); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx2, mt); ctx.lineTo(rx2, mt+ph); ctx.stroke();
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = cROPE; ctx.font = `500 10px 'DM Mono',monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('ROPE', (rx1+rx2)/2, mt + 12);
+  }
+
+  // Posterior fill
+  ctx.beginPath();
+  ctx.moveTo(toX(xs[0]), toY(0));
+  xs.forEach((x,i) => ctx.lineTo(toX(x), toY(ys[i])));
+  ctx.lineTo(toX(xs[xs.length-1]), toY(0));
+  ctx.closePath();
+  ctx.fillStyle = cPosterior + '1a';
+  ctx.fill();
+
+  // Posterior curve
+  ctx.beginPath();
+  xs.forEach((x,i) => { if(i===0) ctx.moveTo(toX(x), toY(ys[i])); else ctx.lineTo(toX(x), toY(ys[i])); });
+  ctx.strokeStyle = cPosterior; ctx.lineWidth = 2; ctx.setLineDash([]);
+  ctx.stroke();
+
+  // HDI band
+  if(IV_TYPE !== 'eti'){
+    const hx1 = toX(hdi[0]), hx2 = toX(hdi[1]);
+    ctx.strokeStyle = cHDI; ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(hx1, mt+ph+6); ctx.lineTo(hx2, mt+ph+6); ctx.stroke();
+    // caps
+    [hx1, hx2].forEach(x => {
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+2); ctx.lineTo(x, mt+ph+10); ctx.stroke();
+    });
+    // label
+    ctx.fillStyle = cHDI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('HDI', (hx1+hx2)/2, mt+ph+20);
+  }
+
+  // ETI band
+  if(IV_TYPE !== 'hdi'){
+    const ex1 = toX(eti[0]), ex2 = toX(eti[1]);
+    const yOff = IV_TYPE === 'both' ? 14 : 6;
+    ctx.strokeStyle = cETI; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(ex1, mt+ph+yOff); ctx.lineTo(ex2, mt+ph+yOff); ctx.stroke();
+    ctx.setLineDash([]);
+    [ex1, ex2].forEach(x => {
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+yOff-4); ctx.lineTo(x, mt+ph+yOff+4); ctx.stroke();
+    });
+    ctx.fillStyle = cETI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('ETI', (ex1+ex2)/2, mt+ph+(IV_TYPE==='both'?28:20));
+  }
+
+  // X axis
+  ctx.strokeStyle = cInk3; ctx.lineWidth = 1; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(ml, mt+ph); ctx.lineTo(ml+pw, mt+ph); ctx.stroke();
+  ctx.fillStyle = cInk3; ctx.font = `10px 'DM Mono',monospace`; ctx.textAlign = 'center';
+  const ticks = 6;
+  for(let i=0;i<=ticks;i++){
+    const v = xmin + (xmax-xmin)*i/ticks;
+    const x = toX(v);
+    ctx.beginPath(); ctx.moveTo(x, mt+ph); ctx.lineTo(x, mt+ph+4); ctx.stroke();
+    ctx.fillText(v.toFixed(0), x, mt+ph+15);
+  }
+
+  // ── Update decision panels ─────────────────────
+  // A: Kruschke
+  const ivKL = ivForKruschke[0], ivKR = ivForKruschke[1];
+  const ivTypeName = IV_TYPE === 'eti' ? 'ETI' : 'HDI';
+  document.getElementById('da-interval').textContent =
+    `${CRI}% ${ivTypeName}: [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}]`;
+  const vKlabels = {
+    reject:   ['✓ Accept effect', 'v-accept'],
+    accept:   ['≈ Accept equivalence', 'v-accept'],
+    withhold: ['○ Withhold judgment', 'v-withhold']
+  };
+  const [vKtext, vKclass] = vKlabels[vK];
+  const dvA = document.getElementById('da-verdict');
+  dvA.textContent = vKtext; dvA.className = 'dec-verdict ' + vKclass;
+  const explA = {
+    reject: `${ivTypeName} [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}] lies completely outside ROPE [${rl}, ${ru}] → effect is real.`,
+    accept: `${ivTypeName} lies completely inside ROPE → practically no effect.`,
+    withhold: `${ivTypeName} overlaps the ROPE boundary → insufficient data for a decision.`
+  };
+  document.getElementById('da-explain').textContent = explA[vK];
+
+  // B: Full ROPE
+  document.getElementById('db-pct').textContent = ropeMass.toFixed(1) + '% in ROPE';
+  document.getElementById('db-bar').style.width = Math.min(ropeMass, 100) + '%';
+  let vBtext, vBclass;
+  if(ropeMass < 2.5){ vBtext = '✓ Effect (<2.5% in ROPE)'; vBclass = 'v-accept'; }
+  else if(ropeMass > 97.5){ vBtext = '≈ Practical equivalence (>97.5%)'; vBclass = 'v-accept'; }
+  else{ vBtext = '○ Undecided (2.5–97.5%)'; vBclass = 'v-withhold'; }
+  const dvB = document.getElementById('db-verdict');
+  dvB.textContent = vBtext; dvB.className = 'dec-verdict ' + vBclass;
+
+  // C: ETI
+  document.getElementById('dc-interval').textContent =
+    `${CRI}% ETI: [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}]`;
+  const vEtext2 = {
+    reject:   '✓ Accept effect',
+    accept:   '≈ Accept equivalence',
+    withhold: '○ Withhold judgment'
+  };
+  const vEclass2 = {reject:'v-accept', accept:'v-accept', withhold:'v-withhold'};
+  const dvC = document.getElementById('dc-verdict');
+  dvC.textContent = vEtext2[vE]; dvC.className = 'dec-verdict ' + vEclass2[vE];
+  // Compare to HDI verdict
+  const sameAsHDI = (vK === vE) || IV_TYPE === 'eti';
+  document.getElementById('dc-explain').textContent = sameAsHDI
+    ? `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — same decision as HDI for this distribution.`
+    : `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — DIFFERENT decision from HDI! Typical for skewed posteriors.`;
+
+  // ── Update R Code ──────────────────────────────
+  let rcode = 'library(bayestestR)\n\n';
+  if(DIST === 'normal'){
+    rcode += `# Posterior samples (normal distribution)\nposterior <- rnorm(10000, mean = ${mu}, sd = ${sigma})\n`;
+  } else if(DIST === 't'){
+    rcode += `# Posterior samples (t-distribution)\nposterior <- ${mu} + ${sigma} * rt(10000, df = ${nu})\n`;
+  } else {
+    rcode += `# Posterior samples (gamma distribution)\nposterior <- rgamma(10000, shape = ${shape}, rate = ${rate})\n`;
+  }
+  rcode += `\n# ${CRI}% HDI\nhdi(posterior, ci = ${CRI/100})\n\n`;
+  rcode += `# ${CRI}% ETI\neti(posterior, ci = ${CRI/100})\n\n`;
+  rcode += `# ROPE analysis (${CRI}% interval)\nrope(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
+  rcode += `# Full decision\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})`;
+  document.getElementById('rcode-block').textContent = rcode;
+}
+
+function copyCode(){
+  const txt = document.getElementById('rcode-block').textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const b = event.target; b.textContent = 'Copied ✓';
+    setTimeout(() => b.textContent = 'Copy code', 1800);
+  });
+}
+
+// ─── Init ────────────────────────────────────────
+window.addEventListener('resize', update);
+update();
+</script>
+</body>
+</html>

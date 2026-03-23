@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bayesian Model Architect v3</title>
+<style>
+html{font-size:18px}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap');
+
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;
+  --a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;
+}
+[data-theme="dark"]{
+  --bg:#0d1018;--paper:#141820;--ink:#ebe5d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;
+  --a5:#e07830;--a6:#2bc7c4;
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',serif;background:var(--bg);color:var(--ink);
+     display:flex;flex-direction:column;height:100vh;overflow:hidden;transition:background .2s,color .2s}
+
+/* ─── Header ──────────────────────────────────── */
+#hdr{background:var(--paper);border-bottom:1.5px solid var(--border);
+     padding:.5rem 1.1rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:.5rem}
+.hdr-l{display:flex;flex-direction:column;gap:.06rem}
+.hdr-title{font-size:1.12rem;font-weight:300;letter-spacing:-.02em}
+.hdr-title em{font-style:italic;color:var(--a4)}
+.hdr-h1 em{font-style:italic;color:var(--a4)}
+.hdr-title .ver{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.55;vertical-align:middle;margin-left:.3rem}
+.hdr-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);letter-spacing:.02em}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+      border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--a2);color:var(--a2)}
+.hbtn.act{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+
+/* ─── Main 3-col ─────────────────────────────── */
+#main{flex:1;display:grid;grid-template-columns:300px 1fr 330px;overflow:hidden;min-height:0}
+
+/* ─── Sidebar ────────────────────────────────── */
+#sb{background:var(--paper);border-right:1.5px solid var(--border);
+    overflow-y:auto;padding:.8rem .85rem 3rem;display:flex;flex-direction:column;gap:.6rem}
+.sc{background:var(--bg);border:1px solid var(--grid);padding:.6rem .75rem;transition:box-shadow .18s}
+.sc.hl{box-shadow:0 0 0 2.5px var(--a4),0 2px 12px rgba(120,60,140,.15)}
+.sc-h{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.06em;color:var(--ink2);
+      text-transform:uppercase;margin-bottom:.5rem;display:flex;align-items:center;gap:.35rem}
+.sn{font-size:.75rem;background:var(--a2);color:var(--paper);padding:.05rem .24rem;font-family:'DM Mono',monospace}
+
+/* Likelihood buttons — friendlier, bigger */
+.fam-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem}
+.fb{font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);
+    border:2px solid var(--grid);color:var(--ink2);padding:.35rem .4rem;cursor:pointer;
+    transition:all .16s;text-align:center;line-height:1.4;border-radius:2px}
+.fb:hover{border-color:var(--a2);color:var(--a2)}
+.fb.sel{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.fb .fx{font-size:.75rem;opacity:.7;display:block;margin-top:.08rem}
+.lkd{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.65;
+     margin-top:.38rem;padding:.32rem .42rem;border-left:3px solid var(--a2);background:var(--panel);display:none}
+
+/* Predictor rows */
+.pr{display:flex;align-items:center;gap:.32rem;margin-bottom:.25rem}
+.pi{flex:1;background:var(--panel);border:1.5px solid var(--grid);color:var(--ink);
+    font-family:'DM Mono',monospace;font-size:.7rem;padding:.22rem .38rem;outline:none;transition:border .12s}
+.pi:focus{border-color:var(--a3)}
+.pd{cursor:pointer;color:var(--a1);font-size:.85rem;opacity:.6;padding:.08rem .18rem;transition:opacity .12s}
+.pd:hover{opacity:1}
+.pb-tag{font-family:'DM Mono',monospace;font-size:.75rem;padding:.1rem .32rem;
+        background:rgba(90,138,42,.15);color:var(--a3);min-width:1.9rem;text-align:center}
+.add-b{width:100%;font-family:'DM Mono',monospace;font-size:.75rem;background:transparent;
+       border:1.5px dashed var(--a3);color:var(--a3);padding:.25rem;cursor:pointer;transition:all .15s;margin-top:.05rem}
+.add-b:hover{background:var(--a3);color:var(--paper);border-style:solid}
+.pg{display:flex;align-items:center;gap:.4rem;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.22rem}
+.pg label{color:var(--ink2);flex-shrink:0;min-width:2.6rem}
+.pg select,.pg input[type=text]{background:var(--panel);border:1.5px solid var(--grid);
+  color:var(--ink);font-family:'DM Mono',monospace;font-size:.67rem;padding:.2rem .35rem;flex:1;outline:none}
+.ml-toggle{display:flex;align-items:center;gap:.42rem;cursor:pointer;
+           font-family:'DM Mono',monospace;font-size:.68rem;margin-bottom:.35rem}
+.ml-opts{display:none;flex-direction:column;gap:.22rem}
+
+/* Prior blocks — friendlier */
+.prior-b{margin-bottom:.55rem;background:var(--panel);border-left:3.5px solid var(--grid);padding:.4rem .5rem}
+.prior-b.pi-int{border-color:var(--a2)}
+.prior-b.pi-beta{border-color:var(--a3)}
+.prior-b.pi-sig{border-color:var(--a5)}
+.prior-b.pi-nu{border-color:var(--a6)}
+.prior-b.pi-re{border-color:var(--a4)}
+.prior-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:.28rem;cursor:pointer;gap:.3rem}
+.prior-h-l{display:flex;align-items:center;gap:.32rem;min-width:0;flex:1}
+.pbg{font-family:'DM Mono',monospace;font-size:.75rem;padding:.06rem .22rem}
+.pbg-int{background:rgba(42,110,138,.2);color:var(--a2)}
+.pbg-beta{background:rgba(90,138,42,.2);color:var(--a3)}
+.pbg-sig{background:rgba(184,92,0,.2);color:var(--a5)}
+.pbg-nu{background:rgba(14,124,123,.2);color:var(--a6)}
+.pbg-re{background:rgba(122,58,138,.2);color:var(--a4)}
+.prior-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prior-val{font-family:'DM Mono',monospace;font-size:.73rem;color:var(--ink2);opacity:.75;flex-shrink:0;text-align:right}
+.prior-exp{display:none;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+           line-height:1.65;margin-bottom:.32rem;padding:.3rem .36rem;
+           background:var(--bg);border-left:2px solid var(--a4)}
+.prior-exp b{color:var(--ink)}
+/* Sliders — bigger, friendlier */
+.sl-r{display:flex;align-items:center;gap:.45rem;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.18rem}
+.sl-r label{color:var(--ink2);min-width:1.2rem;font-size:.75rem}
+.sl-r span.sv{min-width:2.3rem;text-align:right;color:var(--a2);font-size:.75rem;font-weight:500}
+input[type=range]{flex:1;height:4px;cursor:pointer;background:var(--grid);appearance:none;outline:none}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;background:var(--a2);border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.detail-g{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.3rem;margin-bottom:.4rem}
+.db{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+    border:1.5px solid var(--grid);color:var(--ink2);padding:.25rem .32rem;cursor:pointer;text-align:center}
+.db:hover{border-color:var(--a4)}
+.db.sel{background:var(--a4);color:var(--paper);border-color:var(--a4)}
+
+/* ─── Guide Banner ───────────────────────────── */
+#guide{background:var(--paper);border-bottom:2.5px solid var(--a4);flex-shrink:0;
+       overflow:hidden;transition:max-height .28s ease}
+#guide.open{max-height:200px}
+#guide.closed{max-height:0;border-bottom-width:0}
+.g-inner{padding:.55rem 1rem .6rem}
+.g-steps{display:flex;align-items:center;gap:.3rem;margin-bottom:.3rem}
+.g-step-n{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-right:.15rem}
+.g-dot{width:9px;height:9px;border-radius:50%;background:var(--grid);cursor:pointer;flex-shrink:0;transition:all .15s;border:1.5px solid transparent}
+.g-dot.done{background:var(--a3);border-color:var(--a3)}
+.g-dot.act{background:var(--a4);border-color:var(--a4);box-shadow:0 0 0 3px rgba(200,122,216,.2)}
+.g-body{display:flex;gap:.9rem;align-items:flex-start}
+.g-text-a{flex:1;min-width:0}
+.g-title{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;color:var(--a4);margin-bottom:.24rem;letter-spacing:.01em}
+.g-text{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.7}
+.g-text b{color:var(--ink)}
+.g-nav{display:flex;flex-direction:column;gap:.3rem;flex-shrink:0}
+.g-btn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+       border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;white-space:nowrap;transition:all .15s}
+.g-btn:hover{border-color:var(--a4);color:var(--a4)}
+.g-btn.prim{background:var(--a4);color:var(--paper);border-color:var(--a4)}
+.g-btn.prim:hover{opacity:.85}
+.g-link-btn{font-family:'DM Mono',monospace;font-size:.75rem;display:inline-block;
+  margin-top:.3rem;padding:.22rem .7rem;background:var(--a3);color:var(--paper);
+  border:1.5px solid var(--a3);text-decoration:none;transition:opacity .15s;cursor:pointer}
+.g-link-btn:hover{opacity:.8}
+
+/* ─── Canvas area ────────────────────────────── */
+#ca{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-height:0}
+.cv-bar{background:var(--paper);border-bottom:1px solid var(--border);
+        padding:.35rem .85rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.cv-t{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+.legend{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.li{display:flex;align-items:center;gap:.2rem}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.lr{width:11px;height:7px;border:1.5px solid currentColor;flex-shrink:0;opacity:.65}
+#dw{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;min-height:0}
+#svg{width:100%;display:block}
+
+/* ─── Math Panel ─────────────────────────────── */
+#mp{background:var(--paper);border-left:1.5px solid var(--border);
+    overflow-y:auto;display:flex;flex-direction:column;min-height:0}
+.mp-h{background:var(--paper);border-bottom:1px solid var(--border);
+      padding:.38rem .8rem;flex-shrink:0;font-family:'DM Mono',monospace;
+      font-size:.75rem;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+#mlines{padding:.65rem .85rem .3rem;font-size:.9rem}
+.mblock{margin-bottom:.7rem}
+.mblk-l{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;
+        text-transform:uppercase;letter-spacing:.08em;margin-bottom:.25rem}
+.mrow{padding:.1rem .35rem;cursor:pointer;transition:background .12s;
+      border-left:2.5px solid transparent;font-size:.88rem;line-height:2;
+      font-family:'DM Mono',monospace}
+.mrow:hover{background:var(--panel)}
+.mrow.act{background:var(--panel);border-left-color:var(--a4)}
+.msep{height:1px;background:var(--grid);margin:.4rem 0}
+
+/* Inline explanation for math panel */
+#exbox{margin:.5rem .8rem .8rem;padding:.55rem .7rem;
+       background:var(--panel);border-left:4px solid var(--a4);
+       font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.75;
+       color:var(--ink2)}
+.ex-title{color:var(--ink);font-weight:500;margin-bottom:.32rem;font-size:.75rem;letter-spacing:.01em}
+.ex-sec{margin-bottom:.35rem}
+.ex-sec:last-child{margin:0}
+.ex-lbl{color:var(--a4);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.1rem}
+
+#arch-help-panel{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:340px;max-height:85vh;overflow-y:auto;
+  background:var(--paper);border:1.5px solid var(--a4);
+  padding:1rem 1.1rem;z-index:600;box-shadow:0 4px 24px rgba(0,0,0,.35)}
+.ahp-h{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--a4);font-weight:500}
+.ahp-body{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.75;margin-top:.6rem}
+.ahp-body b{color:var(--ink)}
+.ahp-tip{margin-top:.65rem;padding:.45rem .55rem;border-left:3px solid var(--a4);
+  background:rgba(122,58,138,.08);font-family:'DM Mono',monospace;font-size:.74rem;
+  color:var(--ink2);line-height:1.7}
+.ahp-tip2{margin-top:.5rem;padding:.45rem .55rem;border-left:3px solid var(--a2);
+  background:rgba(42,110,138,.08);font-family:'DM Mono',monospace;font-size:.74rem;
+  color:var(--ink2);line-height:1.7}
+#toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);
+       background:var(--paper);border:1.5px solid var(--border);padding:.38rem .9rem;
+       font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);
+       opacity:0;pointer-events:none;transition:opacity .25s;z-index:100}
+#toast.show{opacity:1}
+
+/* MathJax output styling */
+.MJX-TEX{font-size:1em !important}
+
+/* ── Header harmonization ── */
+.hdr-hrow{display:flex;justify-content:space-between;align-items:flex-start;
+  padding:1rem 1.8rem .7rem;gap:1rem;flex-wrap:wrap;flex-shrink:0;border-bottom:1px solid var(--border)}
+.hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;
+  letter-spacing:-.02em;line-height:1.2}
+.hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  margin-top:.2rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  opacity:.5;margin-top:.1rem}
+</style>
+</head>
+<body>
+
+<div id="hdr" class="hdr-hrow">
+  <div>
+    <div class="hdr-h1">Bayesian Model <em>Architect</em></div>
+    <div class="hdr-sub2">Kruschke diagrams · McElreath notation · Guided model building · brms export</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" onclick="window.open('../index.html','_self')" style="border-color:var(--a4);color:var(--a4)">← Overview</button>
+    <button class="hbtn" onclick="window.open('../Brms_model_builder.html','_blank')" style="border-color:var(--a2);color:var(--a2)">Next → brms Builder</button>
+    <button class="hbtn" id="btn-guide" onclick="toggleGuide()">📖 Guide</button>
+    <button class="hbtn" id="btn-ex"    onclick="toggleEx()" title="Click on a node or formula row for explanations — toggle info panel">💡 Explanations</button>
+    <button class="hbtn" onclick="showSimCode()" style="border-color:var(--a3);color:var(--a3)" title="Generate R simulation code (prior predictive simulation)">⬡ Golem light</button>
+    <button class="hbtn" onclick="toggleArchHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Help</button>
+    <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<div id="main">
+
+<!-- ═══ SIDEBAR ═══ -->
+<div id="sb">
+
+  <div class="sc" id="sc-lk">
+    <div class="sc-h"><span class="sn">1</span> Likelihood — Which distribution?</div>
+    <div class="fam-grid">
+      <button class="fb sel" data-fam="normal"    onclick="setFam(this)">Gaussian<span class="fx">Continuous, symmetric</span></button>
+      <button class="fb"    data-fam="student"   onclick="setFam(this)">Student-t<span class="fx">Robust, outliers</span></button>
+      <button class="fb"    data-fam="bernoulli" onclick="setFam(this)">Bernoulli<span class="fx">Binary 0 / 1</span></button>
+      <button class="fb"    data-fam="poisson"   onclick="setFam(this)">Poisson<span class="fx">Count data ≥ 0</span></button>
+      <button class="fb"    data-fam="gamma"     onclick="setFam(this)">Gamma<span class="fx">Positive, right-skewed</span></button>
+    </div>
+    <div id="lkd" class="lkd"></div>
+  </div>
+
+  <div class="sc" id="sc-var">
+    <div class="sc-h"><span class="sn">2</span> Variables</div>
+    <div class="pg"><label>DV</label><input type="text" id="ov" value="y" oninput="sched()"></div>
+    <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.3rem">Predictors</div>
+    <div id="pred-list"></div>
+    <button class="add-b" onclick="addPred()">＋ Add predictor</button>
+  </div>
+
+  <div class="sc" id="sc-str">
+    <div class="sc-h"><span class="sn">3</span> Structure</div>
+    <label class="ml-toggle"><input type="checkbox" id="ml-ck" onchange="sched()"> Multilevel model (hierarchical)</label>
+    <div id="ml-opts" class="ml-opts">
+      <div class="pg"><label title="Name of the group index variable in R code — e.g. j, person, school">Group</label><input type="text" id="gv" value="j" placeholder="e.g. j, person" oninput="sched()"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink2);margin-bottom:.18rem;line-height:1.5">Name of the group index variable in the dataset (e.g. j = schools, person = subjects)</div>
+      <div class="pg"><label>Varying</label>
+        <select id="re-type" onchange="sched()">
+          <option value="int">Intercept (α_j)</option>
+          <option value="slope">Intercept + Slopes (α_j, β_j)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="sc" id="sc-pr">
+    <div class="sc-h"><span class="sn">4</span> Priors</div>
+    <div id="prior-ui"></div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-h"><span class="sn">5</span> Detail level</div>
+    <div class="detail-g" style="grid-template-columns:1fr 1fr">
+      <button class="db sel" data-d="medium" onclick="setDet(this)">Standard</button>
+      <button class="db"     data-d="full"   onclick="setDet(this)">Full</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ CENTER ═══ -->
+<div id="ca">
+
+  <div id="guide" class="open">
+    <div class="g-inner">
+      <div class="g-steps">
+        <span class="g-step-n" id="gs-n"></span>
+        <span id="gs-dots"></span>
+      </div>
+      <div class="g-body">
+        <div class="g-text-a">
+          <div class="g-title" id="g-tit"></div>
+          <div class="g-text"  id="g-txt"></div>
+        </div>
+        <div class="g-nav">
+          <button class="g-btn prim" id="g-next" onclick="gNext()">Next →</button>
+          <button class="g-btn" id="g-prev" onclick="gPrev()" style="display:none">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cv-bar">
+    <span class="cv-t">Model diagram (Kruschke notation)</span>
+    <div class="legend">
+      <span class="li"><span class="ld" style="background:var(--a2)"></span>α</span>
+      <span class="li"><span class="ld" style="background:var(--a3)"></span>β</span>
+      <span class="li"><span class="ld" style="background:var(--a5)"></span>σ</span>
+      <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
+      <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
+      <span class="li"><span class="lr" style="color:var(--ink2)"></span>Plate</span>
+      <span class="li" style="opacity:.55">○ latent &nbsp; □ observed</span>
+    </div>
+  </div>
+
+  <div id="dw">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs id="defs"></defs>
+      <g id="g-plates"></g>
+      <g id="g-edges"></g>
+      <g id="g-nodes"></g>
+    </svg>
+  </div>
+
+</div>
+
+<!-- ═══ MATH PANEL ═══ -->
+<div id="mp">
+  <div class="mp-h">McElreath Notation</div>
+  <div id="mlines"></div>
+  <div id="exbox">
+    <div class="ex-title" id="ex-tit">— click on a node —</div>
+    <div class="ex-sec" id="ex-what-s"><div class="ex-lbl">What is this?</div><div id="ex-what"></div></div>
+    <div class="ex-sec" id="ex-why-s"><div class="ex-lbl">Why this prior?</div><div id="ex-why"></div></div>
+    <div class="ex-sec" id="ex-tip-s"><div class="ex-lbl">Tip</div><div id="ex-tip"></div></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+<div id="sim-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+  z-index:500;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:var(--paper);border:1.5px solid var(--border);
+    max-width:780px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;
+      padding:.65rem 1rem;border-bottom:1.5px solid var(--border);flex-shrink:0">
+      <div>
+        <div style="font-family:'Fraunces',Georgia,serif;font-size:1rem;font-weight:300">
+          Golem light — <em style="color:var(--a3)">Prior Predictive Simulation</em>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.1rem" id="sim-explain"></div>
+        <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--a6);margin-top:.25rem">⬡ Golem Builder — DAGs · kausale Adjustment-Sets · IV · Front-Door · volle Datensimulation</div>
+      </div>
+      <div style="display:flex;gap:.35rem;align-items:center">
+        <button class="hbtn" onclick="copySimCode()" style="border-color:var(--a3);color:var(--a3)">↓ Copy</button>
+        <button class="hbtn" onclick="window.open('../Golem_Builder.html','_blank')" style="border-color:var(--a6);color:var(--a6)" title="Golem Builder: DAGs, causal inference, data simulation — full feature set">⬡ Golem Builder ↗</button>
+        <button class="hbtn" onclick="closeSimModal()">✕ Close</button>
+      </div>
+    </div>
+    <pre id="sim-code" style="font-family:'DM Mono',monospace;font-size:.75rem;
+      color:var(--ink);background:var(--bg);padding:1rem;overflow-y:auto;
+      flex:1;margin:0;line-height:1.7;white-space:pre"></pre>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="arch-help-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+    <span class="ahp-h">ℹ Bayesian Model Architect</span>
+    <button onclick="closeArchHelp()" style="font-family:'DM Mono',monospace;font-size:.75rem;
+      background:transparent;border:1px solid var(--border);color:var(--ink2);
+      padding:.18rem .5rem;cursor:pointer">✕</button>
+  </div>
+  <div class="ahp-body">
+    <b>Reading and understanding Kruschke diagrams</b><br><br>
+    This tool shows you the <b>graphical model structure</b> of Bayesian regression models — live, interactive, in simple examples:<br><br>
+    · <b>○ open circles</b> = unknown parameters that need priors (α, β, σ)<br>
+    · <b>□ rectangle</b> = observed data y<br>
+    · <b>• dot</b> = deterministic node (μᵢ) — no prior, computed from inputs<br>
+    · <b>Arrows</b> show the generative direction: Prior → Parameter → Data<br>
+    · <b>Plates</b> (dashed frames) mark repeated units (i = 1…N observations; j = 1…J groups)<br><br>
+    In the <b>hierarchical model</b>, each group j receives a deviation from the global intercept: <b>u₀ⱼ ~ Normal(0, τ₀)</b>. τ₀ controls the degree of partial pooling — small τ₀ = strong shrinkage. In McElreath (Ch. 14, p. 441 ff.) this parameter is called <em>σ_α</em>. <b>Random Slopes</b> (u₁ⱼ ~ Normal(0, τ₁), corresponding to McElreath's <em>σ_β</em>) are implemented here only for the first predictor, to illustrate the diagram principle.
+  </div>
+  <div class="ahp-tip">
+    <b>Simple example models only:</b> up to 4 predictors, one group structure, 5 likelihoods. The focus is on <em>structure</em>, not full model complexity. Click on any node in the diagram for an explanation.
+  </div>
+  <div class="ahp-body" style="margin-top:.65rem">
+    <b>📖 Guide</b> — Step-by-step (top). <em>Recommendation: read through first!</em><br>
+    <b>💡 Explanations</b> — Click on nodes or formula rows on the right for context on each parameter.<br>
+    <b>⬡ Golem light</b> — Generates R code: draw parameters from priors and simulate data.
+  </div>
+  <div class="ahp-tip2">
+    <b style="color:var(--a2)">For the full model scope:</b><br>
+    <b>⬡ brms Model Builder</b> — 15 likelihoods, polynomials, interactions, distributional parameters, random effects, prior predictive check — directly executable brms code.<br><br>
+    <span onclick="window.open('../Brms_model_builder.html','_blank')"
+      style="color:var(--a2);cursor:pointer;border-bottom:1px dotted var(--a2)">→ brms Model Builder ↗</span>
+  </div>
+</div>
+
+<!-- MathJax for formula rendering -->
+<script>
+MathJax = {
+  tex:{ inlineMath:[['$','$']], displayMath:[['$$','$$']] },
+  options:{ skipHtmlTags:['script','noscript','style','textarea','pre'] },
+  startup:{ typeset:false }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let DARK=true, DET='medium', ACTIVE=null, SHOW_EX=true;
+let _t=null, GSTEP=0, GOPEN=true;
+
+const M = {
+  fam:'normal', out:'y',
+  preds:[],
+  ml:false, gv:'j', ret:'int',
+  pr:{
+    alpha: {fam:'normal',      mu:0,  sig:2.5},  // McElreath: Normal(0,2.5) für z-std.
+    sigma: {fam:'exponential', p1:1          },
+    nu:    {fam:'gamma',       p1:2,  p2:0.1 },
+    mu_a:  {fam:'normal',      mu:0,  sig:2.5},
+    sig_a: {fam:'exponential', p1:1          },
+    mu_b:  {fam:'normal',      mu:0,  sig:0.5},  // McElreath: Normal(0,0.5) für z-std.
+    sig_b: {fam:'exponential', p1:1          },
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+//  GOLEM LIGHT — SIMULATION CODE GENERATOR
+// ═══════════════════════════════════════════════════════
+
+const FAM_LABEL = {
+  normal:'Normal (Gaussian)', student:'Student-t', bernoulli:'Bernoulli (Logistic)',
+  poisson:'Poisson', gamma:'Gamma'
+};
+const FAM_BRMS = {
+  normal:'gaussian', student:'student', bernoulli:'bernoulli', poisson:'poisson', gamma:'Gamma'
+};
+
+function priorToR(pr, cls){
+  if(!pr) return '';
+  const {fam,mu,sig,p1,p2}=pr;
+  if(fam==='normal')      return `prior(normal(${mu||0}, ${sig||1}), class = "${cls}")`;
+  if(fam==='exponential') return `prior(exponential(${p1||1}), class = "${cls}")`;
+  if(fam==='gamma')       return `prior(gamma(${p1||2}, ${p2||0.1}), class = "${cls}")`;
+  if(fam==='student_t')   return `prior(student_t(3, ${mu||0}, ${sig||1}), class = "${cls}")`;
+  return `prior(${fam}(${p1||1}), class = "${cls}")`;
+}
+
+function genSimCode(){
+  const y=M.out||'y', K=M.preds.length, isML=M.ml, gv=M.gv||'j', fam=M.fam;
+  const a_mu=M.pr.alpha.mu??0, a_sig=M.pr.alpha.sig??2.5;
+  const s_lam=M.pr.sigma.p1??1;
+  const nu_sh=M.pr.nu.p1??2, nu_rt=M.pr.nu.p2??0.1;
+  const L=[];
+
+  L.push('# ══════════════════════════════════════════════════════');
+  L.push('# Golem light — Prior Predictive Simulation');
+  L.push('# Bayesian Model Architect · ' + (FAM_LABEL[fam]||fam) + (isML?' · Hierarchical':''));
+  L.push('# Parameters are drawn from priors (McElreath World Building)');
+  L.push('# ══════════════════════════════════════════════════════');
+  L.push('');
+  L.push('library(tidyverse)');
+  L.push('library(brms)');
+  L.push('');
+  L.push('set.seed(42)');
+  L.push('n <- 100   # sample size — adjust as needed');
+  L.push('');
+
+  L.push('# ── Predictors ─────────────────────────────────────────');
+  L.push('# For z-standardised variables: rnorm(n, 0, 1)');
+  L.push('# Use commented alternative for other scales:');
+  if(K===0){
+    L.push('# (intercept-only)');
+  } else {
+    M.preds.forEach((p,i)=>{
+      const pn=p.name||`x${i+1}`;
+      L.push(`${pn} <- rnorm(n, mean = 0, sd = 1)       # z-standardised`);
+      L.push(`# ${pn} <- runif(n, min = 0, max = 1)     # alternative: uniform`);
+    });
+  }
+  L.push('');
+
+  L.push('# ── Draw parameters from priors ────────────────────────');
+  L.push('# Each parameter is drawn ONCE from its prior.');
+  L.push('# Prior values correspond to the current slider settings.');
+  L.push(`alpha <- rnorm(1, mean = ${a_mu}, sd = ${a_sig})   # Prior: Normal(${a_mu}, ${a_sig})`);
+  M.preds.forEach((p,i)=>{
+    const pn=p.name||`x${i+1}`, bn=K>1?`beta_${pn}`:'beta';
+    const bmu=p.pr?.mu??0, bsg=p.pr?.sig??0.5;
+    L.push(`${bn} <- rnorm(1, mean = ${bmu}, sd = ${bsg})   # Prior: Normal(${bmu}, ${bsg})`);
+  });
+  if(fam==='normal'){
+    L.push(`sigma <- rexp(1, rate = ${s_lam})   # Prior: Exponential(${s_lam}), E[σ] = ${(1/s_lam).toFixed(2)}`);
+  } else if(fam==='student'){
+    L.push(`sigma <- rexp(1, rate = ${s_lam})   # Prior: Exponential(${s_lam})`);
+    L.push(`nu    <- rgamma(1, shape = ${nu_sh}, rate = ${nu_rt})   # Prior: Gamma(${nu_sh}, ${nu_rt})`);
+  }
+  L.push('');
+
+  if(isML){
+    const sa_lam=M.pr.sig_a?.p1??1;
+    L.push('# ── Group effects ──────────────────────────────────────');
+    L.push('n_groups <- 10   # number of groups — adjust as needed');
+    L.push(`${gv}       <- sample(1:n_groups, n, replace = TRUE)`);
+    L.push(`tau_0    <- rexp(1, rate = ${sa_lam})   # Hyperprior: Exponential(${sa_lam})`);
+    L.push(`u0_j     <- rnorm(n_groups, mean = 0, sd = tau_0)   # Random intercept deviations`);
+    if(M.ret==='slope'&&K>0){
+      const sb_lam=M.pr.sig_b?.p1??1;
+      L.push(`tau_1    <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
+      L.push(`u1_j     <- rnorm(n_groups, mean = 0, sd = tau_1)   # Random slope deviations`);
+    }
+    L.push('');
+  }
+
+  L.push('# ── Linear predictor η ─────────────────────────────────');
+  if(K===0){
+    L.push('eta <- rep(alpha, n)');
+  } else {
+    const terms=M.preds.map((p,i)=>{
+      const pn=p.name||`x${i+1}`, bn=K>1?`beta_${pn}`:'beta';
+      return `${bn} * ${pn}`;
+    });
+    L.push(`eta <- alpha + ${terms.join(' + ')}`);
+  }
+  if(isML){
+    if(M.ret==='slope'&&K>0){
+      // Random slope for first predictor; fixed slopes for remaining predictors
+      const p0n=M.preds[0].name||'x1';
+      const otherTerms=K>1?M.preds.slice(1).map((p,i)=>{
+        const pn=p.name||`x${i+2}`, bn=`beta_${pn}`; return ` + ${bn} * ${pn}`;
+      }).join(''):'';
+      L.push(`eta <- eta + u0_j[${gv}] + u1_j[${gv}] * ${p0n}${otherTerms}`);
+    } else {
+      L.push(`eta <- eta + u0_j[${gv}]`);
+    }
+  }
+  L.push('');
+
+  L.push('# ── Simulate outcome y ─────────────────────────────────');
+  if(fam==='normal'){
+    L.push(`${y} <- rnorm(n, mean = eta, sd = sigma)`);
+  } else if(fam==='student'){
+    L.push(`${y} <- eta + sigma * rt(n, df = nu)`);
+  } else if(fam==='bernoulli'){
+    L.push(`p  <- plogis(eta)   # Logit-Inverse → p ∈ (0,1)`);
+    L.push(`${y} <- rbinom(n, size = 1, prob = p)`);
+  } else if(fam==='poisson'){
+    L.push(`lam <- exp(eta)     # Log-Link-Inverse → λ > 0`);
+    L.push(`${y}   <- rpois(n, lambda = lam)`);
+  } else if(fam==='gamma'){
+    L.push(`mu    <- exp(eta)   # Log-Link-Inverse → μ > 0`);
+    L.push(`shape <- 2          # shape parameter — adjust as needed`);
+    L.push(`${y}   <- rgamma(n, shape = shape, rate = shape / mu)`);
+  }
+  L.push('');
+
+  L.push('# ── Dataset ────────────────────────────────────────────');
+  const cols=[y,...M.preds.map((p,i)=>p.name||'x'+(i+1))];
+  if(isML) cols.push(gv);
+  L.push('d <- data.frame(');
+  cols.forEach((c,i)=>L.push(`  ${c}${i<cols.length-1?',':''}`));
+  L.push(')');
+  L.push('glimpse(d)');
+  L.push('# write.csv(d, "simulated_data.csv", row.names = FALSE)');
+  L.push('');
+
+  if(K>0){
+    const p0=M.preds[0].name||'x1';
+    L.push('# ── Graphical inspection ───────────────────────────────');
+    L.push(`ggplot(d, aes(x = ${p0}, y = ${y})) +`);
+    L.push('  geom_point(alpha = .4) +');
+    const sm=fam==='bernoulli'?'  geom_smooth(method="glm",method.args=list(family=binomial)) +'
+             :fam==='poisson'?'  geom_smooth(method="glm",method.args=list(family=poisson)) +'
+             :'  geom_smooth(method = "lm") +';
+    L.push(sm);
+    L.push(`  labs(title = "Golem light — ${FAM_LABEL[fam]||fam}")`);
+    L.push('');
+  }
+
+  L.push('# ── Fit brms model ─────────────────────────────────────');
+  const pstr=K===0?'1':M.preds.map((p,i)=>p.name||'x'+(i+1)).join(' + ');
+  const restr=isML?` + (1${M.ret==='slope'&&K>0?' + '+(M.preds[0].name||'x1'):''}|${gv})`:'';
+  L.push('fit <- brm(');
+  L.push(`  formula = ${y} ~ ${pstr}${restr},`);
+  L.push(`  data    = d,`);
+  L.push(`  family  = ${FAM_BRMS[fam]||fam}(),`);
+  L.push('  prior   = c(');
+  const pl=[
+    '    '+priorToR(M.pr.alpha,'Intercept'),
+    ...(fam==='normal'||fam==='student'?['    '+priorToR(M.pr.sigma,'sigma')]:[]),
+    ...(fam==='student'?['    '+priorToR(M.pr.nu,'nu')]:[]),
+    ...M.preds.map(p=>'    '+priorToR(p.pr,'b')),
+    ...(isML?['    '+priorToR(M.pr.sig_a,'sd')]:[])
+  ];
+  L.push(pl.join(',\n'));
+  L.push('  ),');
+  L.push('  chains = 4, iter = 2000, warmup = 1000, cores = 4, seed = 42');
+  L.push(')');
+  L.push('summary(fit)');
+  L.push('pp_check(fit)   # Posterior Predictive Check');
+  return L.join('\n');
+}
+
+function genSimExplain(){
+  const fam=M.fam, K=M.preds.length, isML=M.ml;
+  const famSim={normal:'rnorm(n,η,σ)',student:'η+σ·rt(n,ν)',
+    bernoulli:'rbinom(n,1,plogis(η))',poisson:'rpois(n,exp(η))',gamma:'rgamma(n,shape,shape/exp(η))'};
+  return 'Prior Predictive · '+(isML?'Hierarchical · ':'')+(FAM_LABEL[fam]||fam)
+        +' · '+(K===0?'Intercept-Only':K+' Predictor'+(K>1?'s':''))
+        +' · Simulation: '+(famSim[fam]||'rnorm(n,η,σ)')
+        +' | Prior values from current sliders';
+}
+
+function showSimCode(){
+  document.getElementById('sim-code').textContent = genSimCode();
+  document.getElementById('sim-explain').textContent = genSimExplain();
+  document.getElementById('sim-overlay').style.display = 'flex';
+}
+function closeSimModal(){
+  document.getElementById('sim-overlay').style.display='none';
+}
+function copySimCode(){
+  navigator.clipboard.writeText(document.getElementById('sim-code').textContent)
+    .then(()=>{
+      const b=event.target, t=b.textContent;
+      b.textContent='✓ Copied!';
+      setTimeout(()=>{b.textContent=t;},2000);
+    });
+}
+document.addEventListener('click',e=>{
+  if(e.target===document.getElementById('sim-overlay')) closeSimModal();
+});
+
+// ═══════════════════════════════════════════════════════
+//  GUIDE
+// ═══════════════════════════════════════════════════════
+const STEPS=[
+  {t:'Step 1 — Likelihood: How is your data generated?',
+   tx:'The first step: which process generated your data? <b>Gaussian</b> → continuous, symmetric (e.g. IQ scores, body height, z-standardized test values). <b>Student-t</b> → like Gaussian, more robust against outliers (e.g. reaction times after outlier removal, income data). <b>Bernoulli</b> → binary yes/no outcomes (purchase, relapse, therapy success). <b>Poisson</b> → event counts (doctor visits, error counts). <b>Gamma</b> → positive, right-skewed (reaction times in ms/s, waiting times, cortisol). Choose on the left.',
+   hl:'sc-lk'},
+  {t:'Step 2 — Variables: What are you modelling?',
+   tx:'Give the dependent variable (DV) a meaningful name. No predictor needed if only the mean is of interest. Do you have explanatory variables? → add them as predictors (max. 4). <b>Note on names:</b> The predictor names in the field are purely for the diagram display — they appear in the formula notation as variable labels. They do not change the model structure itself. In the diagram you can see live how the model grows.',
+   hl:'sc-var'},
+  {t:'Step 3 — Structure: Flat or hierarchical?',
+   tx:'Is there a group structure in your data (persons, schools, clinics)? Then a <b>hierarchical model</b> is appropriate. Groups get their own parameters (α_j) from a shared <b>hyperprior</b> — this creates <em>partial pooling</em>. Hierarchical structures can be analysed with <b>(Generalized) Linear Mixed Models (GLMM)</b>. Go directly to the interactive tutorial here:<br><br><a href="../GLMM_interactive.html" target="_blank" class="g-link-btn">→ GLMM Interactive Tutorial</a>',
+   hl:'sc-str'},
+  {t:'Step 4 — Understanding the model diagram',
+   tx:'Look at the diagram! <b>Open circles (○)</b> = unknown parameters with priors. <b>Dot (•)</b> = deterministic predictor μ_i, computed from α, β and x — no randomness, no prior. <b>Formula row</b> = shows exactly which parameter contributes which term. <b>Rectangle (□)</b> = observed data y. Arrows show the generative direction. Each level = one row in the formula on the right. <b>Tip:</b> Click 💡 Node info above, then click any node for details.',
+   hl:null},
+  {t:'Step 5 — Reading the model from bottom to top',
+   tx:'A Bayesian model is read from bottom to top. <b>Bottom: the data y.</b> They are distributed according to the <em>likelihood</em> — e.g. y_i ~ Normal(μ_i, σ). <b>Above: the deterministic part</b> — μ_i is composed of the regression parameters: μ_i = α + β·x_i. This is the equation without randomness. <b>Above that: the stochastic part</b> — every open circle (α, β, σ…) is unknown and needs a <em>prior</em> describing the prior knowledge about it. Priors flow into the model from above, data from below — the <em>posterior</em> arises from where they meet.',
+   hl:null},
+  {t:'Step 6 — Priors: making prior knowledge explicit',
+   tx:'Every parameter needs a <b>prior</b> — a distribution over its plausible range of values. The small curves in the circles show the prior shape live! Change the sliders on the left and observe how the curve adapts. Click ▸ on a prior block for an explanation. <b>Click on nodes in the diagram</b> (💡 Node info active) for contextual hints about each parameter.',
+   hl:'sc-pr'},
+  {t:'Done — Understanding your model and thinking further',
+   tx:'The diagram shows your complete model in Kruschke notation. On the right you see the McElreath notation. <b>The Architect is intentionally didactic</b> — it helps you understand the structure of Bayesian models: which distribution? Which parameters need priors? How does everything connect? <br><br>For more complex models and actual R code, the <b>brms Model Builder</b> is recommended — there you build the model step by step yourself and generate directly executable brms code. <br><br><b style="color:var(--a3)">⬡ Golem light</b>: Click the button top right to generate R simulation code — parameters are drawn from the priors (prior predictive simulation following McElreath). Ideal for testing whether the model produces plausible data before seeing real data.<br><br><b style="color:var(--a4)">⬡ Golem Builder</b> (coming soon): draw DAGs, compute causal adjustment sets, quantify effects, simulate data. <a href="../Golem_builder.html" target="_blank" style="color:var(--a4);border-bottom:1px dotted var(--a4);text-decoration:none">Golem Builder ↗</a> Architect and Builder share the same logic, but are independent tools.<br><br><a href="../Brms_model_builder.html" target="_blank" class="g-link-btn">→ brms Model Builder</a>',
+   hl:null},
+];
+function renderGuide(){
+  const s=STEPS[GSTEP];
+  document.getElementById('gs-n').textContent=`Step ${GSTEP+1} / ${STEPS.length}`;
+  document.getElementById('g-tit').textContent=s.t;
+  document.getElementById('g-txt').innerHTML=s.tx;
+  document.getElementById('g-next').textContent=GSTEP===STEPS.length-1?'✓ Close':'Next →';
+  document.getElementById('g-prev').style.display=GSTEP>0?'':'none';
+  document.getElementById('gs-dots').innerHTML=STEPS.map((_,i)=>
+    `<span class="g-dot ${i<GSTEP?'done':i===GSTEP?'act':''}" onclick="gJump(${i})" title="Step ${i+1}"></span>`
+  ).join('');
+  document.querySelectorAll('.sc').forEach(c=>c.classList.remove('hl'));
+  if(s.hl) document.getElementById(s.hl)?.classList.add('hl');
+}
+function gNext(){ if(GSTEP<STEPS.length-1){GSTEP++;renderGuide();}else toggleGuide(); }
+function gPrev(){ if(GSTEP>0){GSTEP--;renderGuide();} }
+function gJump(i){ GSTEP=i;renderGuide(); }
+function toggleGuide(){
+  GOPEN=!GOPEN;
+  document.getElementById('guide').className=GOPEN?'open':'closed';
+  document.getElementById('btn-guide').classList.toggle('act',GOPEN);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPLANATIONS
+// ═══════════════════════════════════════════════════════
+const EX={
+  alpha:{title:'Intercept α',
+    what:'α is the expected value of the linear predictor when all x=0. With centred predictors it corresponds to the grand mean of the DV (on the link scale).',
+    why:'Normal(0, 10): very wide, weak prior. σ=10 only says: α is somewhere in a wide range. Scale it to the scale of your DV — if y is reaction times in ms, use Normal(500, 300) or similar.',
+    tip:'Tip: Z-standardise your DV before analysis. Then Normal(0, 2) is a sensible prior for α.'},
+  beta:{title:'Slope parameter β',
+    what:'β measures the effect of a predictor: per unit increase in x, the linear predictor changes by β (on the link scale). β=0 means no linear relationship.',
+    why:'Normal(0, 2.5): regularising prior. Expects moderate to small effects and constrains extreme estimates when data are sparse — prevents overfitting.',
+    tip:'For standardised variables: |β|≈0.2 small effect, ≈0.5 medium, ≈0.8 large (Cohen\'s d analogy).'},
+  sigma:{title:'Residual spread σ',
+    what:'σ is the remaining spread of y_i around μ_i — the irreducible noise the model cannot explain. σ must always be > 0.',
+    why:'Exponential(λ): prior for positive values. E[σ]=1/λ. λ=1 → E[σ]=1. Smaller λ allows larger σ values (flatter prior).',
+    tip:'If you know σ ≈ 5: use Exp(0.2) or Half-Normal(0, 5). Adjust λ to the expected magnitude of the spread.'},
+  nu:{title:'Degrees of freedom ν (Student-t)',
+    what:'ν controls how "heavy" the tails of the distribution are. ν=1 ≈ Cauchy (extremely heavy tails, very robust), ν=30 ≈ Normal (practically normal).',
+    why:'Gamma(2, 0.1): E[ν]=20. Allows both small (robust) and large (near-normal) values. brms default prior.',
+    tip:'For very robust modelling: fix ν=4. Moderately robust: ν=7–15. If unsure: leave ν as a parameter with a prior.'},
+  alpha_j:{title:'Group intercept α_j',
+    what:'α_j is the group-specific intercept. Each group j has its own α_j value, which however comes from the shared hyperprior Normal(μ_α, σ_α).',
+    why:'Partial pooling: groups with little data are pulled toward μ_α (shrinkage). Groups with more data retain their own estimate. Both at once — better than complete pooling or no pooling.',
+    tip:'The golden feature of hierarchical models: it learns the optimal pooling strength from the data itself via σ_α!'},
+  mu_a:{title:'Hyperprior μ_α',
+    what:'μ_α is the grand mean of the group intercepts. It is itself uncertain and gets a prior — this makes it a "hyperprior".',
+    why:'Normal(0, 5): weak prior for the grand mean. Scale it to the scale of the DV (on the link scale).',
+    tip:'Hyperpriors create the hierarchical structure: groups "learn from each other" through the shared μ_α.'},
+  sig_a:{title:'Hyperprior σ_α',
+    what:'σ_α is the spread of the group intercepts around μ_α. Small σ_α → lots of pooling (groups similar). Large σ_α → little pooling (groups very different).',
+    why:'Exp(1): favours moderate heterogeneity between groups. σ_α is substantively very informative!',
+    tip:'Look at σ_α in the posterior: it tells you how different the groups still are after controlling for predictors.'},
+  u_j:{title:'Random intercept u₀ⱼ',
+    what:'u₀ⱼ is the group-specific deviation from the global intercept α. Each group j gets its own value u₀ⱼ ~ Normal(0, τ₀). The full group intercept is α + u₀ⱼ.',
+    why:'Partial pooling: groups with little data are pulled toward 0 (shrinkage). τ₀ determines the extent — small τ₀ = strong pooling. In brms: (1|group).',
+    tip:'u₀ⱼ corresponds to McElreath\'s α[j] shifted: α + u₀ⱼ = α[j]. Centering at 0 is technically necessary for identifiability.'},
+  v_j:{title:'Random slope u₁ⱼ',
+    what:'u₁ⱼ is the group-specific deviation from the global slope β₁. u₁ⱼ ~ Normal(0, τ₁). The full group slope is β₁ + u₁ⱼ.',
+    why:'Random slopes are useful when the relationship between predictor and DV varies from group to group — i.e. when an interaction with the group structure exists. In brms: (1+x|group).',
+    tip:'Models with random slopes are considerably more complex. A random intercept often suffices. Check necessity with WAIC/LOO.'},
+  sigma_u:{title:'τ₀ — SD of random intercepts',
+    what:'τ₀ is the standard deviation of u₀ⱼ across all groups. It is itself unknown and gets a prior (Exponential).',
+    why:'Exponential(λ): E[τ₀]=1/λ. Small τ₀ → group intercepts lie close together (little variation). Large τ₀ → groups very different.',
+    tip:'In brms: prior(exponential(1), class=sd). In McElreath (Ch. 14, p. 441 ff.) τ₀ corresponds to σ_α. It quantifies how strongly groups differ in their intercept, after accounting for predictors.'},
+  sigma_v:{title:'τ₁ — SD of random slopes',
+    what:'τ₁ is the standard deviation of u₁ⱼ across all groups. Controls slope heterogeneity between groups.',
+    why:'Exponential(λ): similar to τ₀, but for slopes. Small τ₁ → all groups have nearly the same slope.',
+    tip:'In brms: prior(exponential(1), class=sd, coef=x1). In McElreath (Ch. 14, p. 441 ff.) τ₁ corresponds to σ_β. If τ₁ ≈ 0 in the posterior: random slopes contribute little to the explanation.'},
+  det:{title:'Deterministic node (•)',
+    what:'The small filled dot (•) is the linear predictor μ_i. It is fully determined by its inputs — no randomness, no prior. μ_i = α + β₁x₁ + β₂x₂ + …',
+    whyLbl:'How does it work?',
+    why:'Deterministic = Kruschke\'s small black dot. There is nothing to estimate, only to compute.',
+    tip:'For Bernoulli/Poisson/Gamma, μ_i is transformed by a link function: logit⁻¹(μ) for probabilities, exp(μ) for positive values.'},
+  y:{title:'Observed data y_i (□)',
+    what:'The rectangle (□) represents observed data. Known, not estimated. Bayes reverses the logic: given y, what is likely for θ?',
+    whyLbl:'The Likelihood',
+    why:'P(θ|y) ∝ P(y|θ) · P(θ) — Posterior ∝ Likelihood × Prior. The diagram reads from top (hyperpriors) to bottom (data).',
+    tip:'Kruschke\'s notation: shaded = observed, unshaded = latent/unknown. Everything we cannot see needs a prior.'}
+};
+
+// Prior distribution explanations
+const PR_EX={
+  normal:'<b>Normal(μ, σ)</b>: Symmetric bell curve. μ = centre, σ = width. Allows positive and negative values. Suitable for intercepts and slopes.',
+  exponential:'<b>Exponential(λ)</b>: Positive values only. High at 0, then decreasing. E[x]=1/λ. Suitable for spread parameters (σ, τ). Small λ → flat prior, allows large values.',
+  gamma:'<b>Gamma(α, β)</b>: Positive values only, flexibly shaped. α>1: bell-shaped. α<1: monotonically decreasing. E[x]=α/β. Suitable for degrees of freedom ν or rate parameters.',
+  half_normal:'<b>Normal⁺(0, σ)</b>: Normal distribution for positive values only. Suitable for spread parameters. σ controls the expected magnitude.',
+  student_t:'<b>Student-t(ν, μ, σ)</b>: Symmetric, but heavy tails. Small ν → robust prior that allows extreme values.',
+};
+
+// ═══════════════════════════════════════════════════════
+//  CSS variable helpers
+// ═══════════════════════════════════════════════════════
+function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+const C={
+  int: ()=>cv('--a2'), beta:()=>cv('--a3'), sig:()=>cv('--a5'),
+  nu:  ()=>cv('--a6'), re:  ()=>cv('--a4'), data:()=>cv('--a1'),
+  ink2:()=>cv('--ink2'), ink:()=>cv('--ink'), paper:()=>cv('--paper'), grid:()=>cv('--grid'),
+};
+
+// ═══════════════════════════════════════════════════════
+//  PRIOR STRING
+// ═══════════════════════════════════════════════════════
+function prS(pr,dp=1){
+  if(!pr) return '?';
+  const f=pr.fam||'normal', n=(v,d=dp)=>parseFloat(v).toFixed(d).replace(/\.?0+$/,'');
+  if(f==='normal')      return `Normal(${n(pr.mu??0)}, ${n(pr.sig??1)})`;
+  if(f==='student_t')   return `t(${n(pr.nu??3,0)}, ${n(pr.mu??0)}, ${n(pr.sig??1)})`;
+  if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
+  if(f==='gamma')       return `Gamma(${n(pr.p1??2)}, ${n(pr.p2??0.1,2)})`;
+  if(f==='half_normal') return `Normal⁺(0, ${n(pr.p1??1)})`;
+  return `${f}(${n(pr.p1??1)})`;
+}
+function famS(pr){ return {normal:'Normal',exponential:'Exp',gamma:'Gamma',half_normal:'HN',student_t:'t'}[pr?.fam]||pr?.fam||''; }
+
+// ═══════════════════════════════════════════════════════
+//  MINI CURVES — truly live-responsive
+// ═══════════════════════════════════════════════════════
+function miniCurve(pr){
+  if(!pr) pr={fam:'normal',mu:0,sig:1};
+  const W=40,H=14,N=70;
+  const dens=[];
+  const f=pr.fam||'normal';
+  const sig=Math.max(0.01,pr.sig??1);
+  const p1=Math.max(0.01,pr.p1??1),p2=Math.max(0.01,pr.p2??1);
+
+  for(let i=0;i<=N;i++){
+    const t=i/N; let d=0;
+    if(f==='normal'||f==='student_t'){
+      // Width responds to σ: larger σ = wider, shallower bell
+      const eff=Math.min(sig,5);
+      const x=(t-0.5)*8;
+      d=Math.exp(-0.5*(x/eff)**2); // bell width scales with sig
+    } else if(f==='exponential'){
+      d=t<0.015?0:Math.exp(-t*5.5*p1); // faster decay = higher λ
+    } else if(f==='half_normal'){
+      d=t<0.01?0:Math.exp(-0.5*(t*4.5/p1)**2);
+    } else if(f==='gamma'){
+      const a=Math.max(0.2,p1),rt=Math.max(0.05,p2);
+      const peak=Math.max(0.01,(a-1)/rt);
+      const xsc=t*(peak*3.5+2);
+      d=xsc>0?Math.pow(xsc,a-1)*Math.exp(-rt*xsc):0;
+    } else if(f==='beta'){
+      const a=Math.max(0.1,p1),b=Math.max(0.1,p2);
+      d=(t<=0||t>=1)?0:Math.pow(t,a-1)*Math.pow(1-t,b-1);
+    } else {
+      d=Math.exp(-0.5*((t-0.5)*7)**2);
+    }
+    dens.push(Math.max(0,d));
+  }
+  const mx=Math.max(...dens,0.001);
+  const pts=dens.map((d,i)=>{
+    const x=(-W/2+(i/N)*W).toFixed(1);
+    const y=(H/2-(d/mx)*H*0.87).toFixed(1);
+    return `${x},${y}`;
+  });
+  return `M${pts[0]}L${pts.slice(1).join('L')}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  SVG HELPER
+// ═══════════════════════════════════════════════════════
+function se(tag,a={},txt){
+  const e=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  for(const [k,v] of Object.entries(a)) e.setAttribute(k,v);
+  if(txt!=null) e.textContent=txt;
+  return e;
+}
+
+// ═══════════════════════════════════════════════════════
+//  LAYOUT — bigger, more spacious
+// ═══════════════════════════════════════════════════════
+const R=42, OR=38;
+
+// ── Approx monospace char width at 13px ──
+const _CW=8.4;
+
+// Returns array of {text, nodeId} for formula terms
+function buildFormulaTerms(){
+  const K=M.preds.length, isML=M.ml, j=M.gv;
+  const lhs=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
+  const prefix=M.fam==='bernoulli'?'logit⁻¹(':'';
+  const expPfx=(M.fam==='poisson'||M.fam==='gamma')?'exp(':'';
+  const suffix=(prefix||expPfx)?')':'';
+  const pfx=prefix||expPfx;
+  const terms=[];
+  terms.push({text:`${lhs}ᵢ = ${pfx}`,nodeId:null});
+  terms.push({text:'α',nodeId:'alpha'});
+  M.preds.forEach((p,i)=>{
+    const bSym=K>1?`β${SUB[i]||i+1}`:'β';
+    const xSym=(p.name||`x${i+1}`)+'ᵢ';
+    terms.push({text:' + ',nodeId:null});
+    terms.push({text:bSym,nodeId:`b${i}`}); // arrow target
+    terms.push({text:'·'+xSym,nodeId:null});
+  });
+  if(isML){
+    const hasSlope=M.ret==='slope'&&K>0;
+    terms.push({text:' + ',nodeId:null});
+    terms.push({text:'u₀ⱼ',nodeId:'u_j'});
+    if(hasSlope){
+      terms.push({text:' + ',nodeId:null});
+      terms.push({text:'u₁ⱼ',nodeId:'v_j'});
+      terms.push({text:`·${M.preds[0].name||'x1'}ᵢ`,nodeId:null});
+    }
+  }
+  if(suffix) terms.push({text:suffix,nodeId:null});
+  return terms;
+}
+
+// Compute x-center of each node's term given formula start x
+function computeTermCenters(terms, startX){
+  const map={};
+  let cx=startX;
+  terms.forEach(t=>{
+    const w=t.text.length*_CW;
+    if(t.nodeId) map[t.nodeId]=cx+w/2;
+    cx+=w;
+  });
+  return map; // nodeId → center x
+}
+
+function formulaWidth(terms){
+  return terms.reduce((s,t)=>s+t.text.length*_CW,0);
+}
+
+function buildLayout(){
+  // Responsive: use actual SVG size
+  const svgEl=document.getElementById('svg');
+  const W=Math.max(680,svgEl.clientWidth||740);
+  const H=Math.max(520,svgEl.clientHeight||590);
+  const cx=W/2;
+  const K=M.preds.length, isML=M.ml;
+  const hS=hasSig(), hN=hasNu();
+  const nodes={}, edges=[], plates=[];
+
+  // ── Parameter nodes ──────────────────────────────────
+  const pNodes=[];
+  pNodes.push({id:'alpha',lbl:'α',sub:'Intercept',col:'int',pk:'alpha'});
+  M.preds.forEach((p,i)=>{
+    const bLbl=K>1?`β${SUB[i]||i+1}`:'β';
+    pNodes.push({id:`b${i}`,lbl:bLbl,sub:p.name||`x${i+1}`,col:'beta',pk:`beta_${i}`,prObj:p.pr});
+  });
+  if(hS) pNodes.push({id:'sigma',lbl:'σ',sub:'Spread',col:'sig',pk:'sigma'});
+  if(hN) pNodes.push({id:'nu',   lbl:'ν',sub:'df',col:'nu',pk:'nu'});
+
+  // Wide spacing — use 80% of width for params
+  const nP=pNodes.length;
+  const pY=220;
+  const usableW=W*0.82;
+  const sp=nP<=1?0:Math.min(170,usableW/(nP-1));
+  const px0=cx-(nP-1)*sp/2;
+  pNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
+
+  // ── Prior labels above each parameter node ───────────
+  pNodes.forEach((p)=>{
+    const nd=nodes[p.id];
+    const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu:p.prObj;
+    const pid=`pl_${p.id}`;
+    nodes[pid]={id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+52),col:p.col,parentId:p.id};
+    edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
+  });
+
+  // ── Multilevel random effects (brms-style) ───────────
+  // uY hoisted: needed for detY computation below (uY is const-scoped inside the block otherwise)
+  let uY=pY+305; // = pY+165+140 — used by detY; overwritten inside if(isML)
+  if(isML){
+    const hasSlope=M.ret==='slope'&&K>0;
+    const uX=hasSlope?cx-55:cx, vX=cx+55;
+    // sigRY well below pY nodes (pY+R=262) so pl_sigma labels (sigRY-82) don't overlap
+    const sigRY=pY+165; uY=sigRY+140; // τ₀/τ₁ at 385, u₀ⱼ/u₁ⱼ at 525
+
+    // τ₀: hyperprior for u₀ⱼ
+    nodes['sigma_u']={id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
+    nodes['pl_sigma_u']={id:'pl_sigma_u',type:'plbl',prObj:M.pr.sig_a,x:uX,y:sigRY-(R+40),col:'re',parentId:'sigma_u'};
+    edges.push({fr:'pl_sigma_u',to:'sigma_u',col:'re',isPL:true});
+    // u₀ⱼ: random intercept deviation (inside group plate)
+    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY};
+    edges.push({fr:'sigma_u',to:'u_j',col:'re'});
+
+    if(hasSlope){
+      nodes['sigma_v']={id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',type:'stoch',x:vX,y:sigRY};
+      nodes['pl_sigma_v']={id:'pl_sigma_v',type:'plbl',prObj:M.pr.sig_b,x:vX,y:sigRY-(R+40),col:'re',parentId:'sigma_v'};
+      edges.push({fr:'pl_sigma_v',to:'sigma_v',col:'re',isPL:true});
+      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
+      edges.push({fr:'sigma_v',to:'v_j',col:'re'});
+    }
+    // Group plate: τ nodes at top, u nodes at bottom — uY+65 must stay below detY-68
+    const plateMinX=(hasSlope?Math.min(uX,vX):uX)-85;
+    const plateW=hasSlope?Math.abs(vX-uX)+170:170;
+    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateMinX,y:sigRY-55,w:plateW,h:uY-sigRY+110,col:'re',dash:true});
+  }
+
+  // ── Deterministic formula node ────────────────────────
+  // detY: uY+155 for ML → obs plate top (detY-68)=uY+87, group plate bottom (sigRY-55+h)=uY+55 → 32px gap ✓
+  const detY=isML?uY+155:370;
+  const terms=buildFormulaTerms();
+  const fw=Math.max(formulaWidth(terms)+56, 180);
+  const boxHalfW=fw/2;
+  // All positions relative to node center (cx)
+  // Text starts at -boxHalfW+28 (left padding inside box)
+  let relX=-boxHalfW+28;
+  const relTermCenters={};
+  terms.forEach(t=>{
+    const tw=t.text.length*_CW;
+    if(t.nodeId) relTermCenters[t.nodeId]=relX+tw/2;
+    relX+=tw;
+  });
+  const detLbl=M.fam==='bernoulli'?'p_i':M.fam==='poisson'?'λ_i':'μ_i';
+  nodes['det']={id:'det',type:'det',lbl:detLbl,
+    formula:buildLinear(), formulaTerms:terms,
+    relTermCenters, boxHalfW,
+    x:cx, y:detY};
+
+  // ── Data node ─────────────────────────────────────────
+  const dataY=detY+140;
+  nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
+
+  // ── Observation plate ─────────────────────────────────
+  if(DET!=='simple'){
+    const pm=Math.max(fw/2+30, 90);
+    plates.push({id:'obs',lbl:isML?'i = 1…Nⱼ':'i = 1…N',x:cx-pm,y:detY-68,w:pm*2,h:240,col:'data',dash:false});
+  }
+
+  // ── Covariate boxes ────────────────────────────────────
+  if(DET==='full'){
+    M.preds.forEach((p,i)=>{
+      nodes[`xv${i}`]={id:`xv${i}`,type:'cov',lbl:p.name||`x${i+1}`,x:cx-50+(i*38),y:detY+20,col:'ink2'};
+      edges.push({fr:`xv${i}`,to:'det',col:'ink2',dash:true});
+    });
+  }
+
+  // ── Structural edges ──────────────────────────────────
+  // α and β → det: arrow tip targets the term in the formula box
+  pNodes.forEach(p=>{
+    if(p.id!=='sigma'&&p.id!=='nu'){
+      // termX is ABSOLUTE: node.x + relative offset
+      const rel=relTermCenters[p.id]??0;
+      const termX=cx+rel; // absolute x of term center
+      edges.push({fr:p.id,to:'det',col:p.col,termX});
+    }
+  });
+  if(isML){
+    const hasSlope=M.ret==='slope'&&K>0;
+    const uRel=relTermCenters['u_j']??0;
+    edges.push({fr:'u_j',to:'det',col:'re',termX:cx+uRel});
+    if(hasSlope&&K>0){
+      const vRel=relTermCenters['v_j']??0;
+      edges.push({fr:'v_j',to:'det',col:'re',termX:cx+vRel});
+    }
+  }
+  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-55});
+  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 55});
+  edges.push({fr:'det',to:'y',col:'data'});
+
+  return {nodes,edges,plates,W,H};
+}
+
+const SUB=['₁','₂','₃','₄'];
+const hasSig=()=>['normal','student','gamma'].includes(M.fam);
+const hasNu =()=>M.fam==='student';
+
+function buildLinear(){
+  const K=M.preds.length,isML=M.ml,j=M.gv;
+  const a='α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${SUB[i]||i+1}`:'β';return `${b}·${p.name||'x'}ᵢ`;});
+  let lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
+  if(isML){
+    lin+=` + u₀ⱼ[${j}]`;
+    if(M.ret==='slope'&&K>0) lin+=` + u₁ⱼ[${j}]·${M.preds[0].name||'x1'}ᵢ`;
+  }
+  if(M.fam==='bernoulli') return `logit⁻¹(${lin})`;
+  if(M.fam==='poisson'||M.fam==='gamma') return `exp(${lin})`;
+  return lin;
+}
+function sampStr(){
+  const y=M.out||'y';
+  return {normal:`${y}ᵢ ~ Normal(μᵢ, σ)`,student:`${y}ᵢ ~ t(ν, μᵢ, σ)`,
+    bernoulli:`${y}ᵢ ~ Bernoulli(pᵢ)`,poisson:`${y}ᵢ ~ Poisson(λᵢ)`,gamma:`${y}ᵢ ~ Gamma(μᵢ, φ)`}[M.fam]||`${y}ᵢ ~ ?`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+function render(){
+  const defs=document.getElementById('defs');
+  const gP=document.getElementById('g-plates');
+  const gE=document.getElementById('g-edges');
+  const gN=document.getElementById('g-nodes');
+  defs.innerHTML='';gP.innerHTML='';gE.innerHTML='';gN.innerHTML='';
+
+  ['int','beta','sig','nu','re','data','ink2'].forEach(c=>{
+    const m=se('marker',{id:`a-${c}`,markerWidth:'7',markerHeight:'7',refX:'5.5',refY:'3.5',orient:'auto'});
+    m.appendChild(se('path',{d:'M0,0 L0,7 L7,3.5 z',fill:C[c]?C[c]():C.ink2()}));
+    defs.appendChild(m);
+    // Softer arrow for prior labels
+    const ms=se('marker',{id:`as-${c}`,markerWidth:'5',markerHeight:'5',refX:'4',refY:'2.5',orient:'auto'});
+    ms.appendChild(se('path',{d:'M0,0 L0,5 L5,2.5 z',fill:C[c]?C[c]():C.ink2()}));
+    defs.appendChild(ms);
+  });
+
+  const D=buildLayout();
+  // Set SVG height to fit all content (enables scrolling for large models)
+  const svgEl=document.getElementById('svg');
+  const dwH=document.getElementById('dw').clientHeight||520;
+  const yNode=D.nodes['y'];
+  const neededH=yNode?yNode.y+120:D.H;
+  svgEl.setAttribute('height',Math.max(neededH,dwH));
+
+  D.plates.forEach(p=>drawPlate(gP,p));
+  D.edges.forEach(e=>{ const a=D.nodes[e.fr],b=D.nodes[e.to]; if(a&&b) drawEdge(gE,a,b,e); });
+  Object.values(D.nodes).forEach(n=>drawNode(gN,n));
+}
+
+function drawPlate(g,p){
+  const c=p.col==='data'?C.data():p.col==='re'?C.re():C.ink2();
+  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:c,'fill-opacity':'0.04',stroke:'none'}));
+  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:'none',stroke:c,
+    'stroke-width':'1.5','stroke-dasharray':p.dash?'7,4':'6,5',opacity:'0.5'}));
+  g.appendChild(se('text',{x:p.x+p.w-10,y:p.y+p.h-8,'text-anchor':'end',fill:c,
+    'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.75'},p.lbl));
+}
+
+function drawEdge(g,a,b,edge){
+  const c=C[edge.col]?C[edge.col]():C.ink2();
+  if(a.type==='plbl'){
+    // Vertical dashed arrow from prior label to param node
+    const x=a.x, y1=a.y+12, y2=b.y-R-6;
+    g.appendChild(se('line',{x1:x,y1,x2:x,y2,stroke:c,'stroke-width':'1.5',
+      'stroke-dasharray':'5,3',opacity:'0.7',
+      'marker-end':`url(#as-${edge.col||'ink2'})`}));
+    return;
+  }
+  const rA=a.type==='det'?8:a.type==='obs'?23:R;
+  const rB=b.type==='det'?8:b.type==='obs'?23:R;
+
+  // For α/β→det edges: arrow tip lands at the term's x-position in the formula
+  let tx2=b.x, ty2=b.y;
+  if(b.type==='det' && edge.termX!=null){
+    tx2=edge.termX;
+    ty2=b.y-10; // top of formula box
+  }
+
+  const dx=tx2-a.x, dy=ty2-a.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const ux=dx/len, uy=dy/len;
+  const x1=(a.x+ux*(rA+3)).toFixed(1), y1=(a.y+uy*(rA+3)).toFixed(1);
+  // End point: for term-targeted edges, land exactly at termX
+  const x2=edge.termX!=null?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
+  const y2=edge.termX!=null?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
+  // Control point with gentle curve
+  const midX=((+x1+ +x2)/2).toFixed(1);
+  const midY=((+y1+ +y2)/2).toFixed(1);
+  const cx1=(+x1+(edge.crv||0)*0.3).toFixed(1);
+  const cy1=(+y1+(+y2- +y1)*0.3).toFixed(1);
+  const cx2=(+x2+(edge.crv||0)*0.3).toFixed(1);
+  const cy2=(+y2-(+y2- +y1)*0.3).toFixed(1);
+  const d=`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
+  g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.2':'1.8',
+    fill:'none','stroke-dasharray':edge.dash?'5,2.5':'',
+    'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
+}
+
+function drawNode(g,node){
+  const grp=se('g',{transform:`translate(${node.x},${node.y})`,style:'cursor:pointer',id:`n-${node.id}`});
+  grp.addEventListener('click',()=>onNodeClick(node));
+  if(node.type==='plbl')  drawPLbl(grp,node);
+  else if(node.type==='stoch') drawStoch(grp,node);
+  else if(node.type==='det')   drawDet(grp,node);
+  else if(node.type==='obs')   drawObs(grp,node);
+  else if(node.type==='cov')   drawCov(grp,node);
+  g.appendChild(grp);
+}
+
+function drawPLbl(g,node){
+  const c=C[node.col]?C[node.col]():C.ink2();
+  const s=prS(node.prObj); const w=s.length*5.8+14;
+  // Rounded pill label
+  g.appendChild(se('rect',{x:-w/2,y:-10,width:w,height:20,rx:10,
+    fill:c,opacity:'0.12',stroke:c,'stroke-width':'1','stroke-opacity':'0.5'}));
+  g.appendChild(se('text',{x:'0',y:'0','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'9.5',opacity:'0.95',
+    'font-weight':'500'},`~ ${s}`));
+}
+
+function drawStoch(g,node){
+  const c=C[node.col]?C[node.col]():C.ink2();
+  const isAct=ACTIVE===node.id;
+  const pr=getPr(node);
+
+  // Shadow
+  g.appendChild(se('circle',{cx:'2',cy:'3',r:R,fill:'rgba(0,0,0,0.12)'}));
+  // Background
+  g.appendChild(se('circle',{cx:'0',cy:'0',r:R,fill:C.paper(),stroke:c,'stroke-width':isAct?'3.5':'2.5'}));
+  if(isAct){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:R+5,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
+  }
+
+  // Parameter name — bigger, clearer
+  const fs=node.lbl.length>4?'11':node.lbl.length>2?'14':'18';
+  g.appendChild(se('text',{x:'0',y:'-6','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'600'},node.lbl));
+
+  // Mini distribution curve — live
+  if(pr){
+    g.appendChild(se('path',{d:miniCurve(pr),stroke:c,'stroke-width':'1.3',fill:'none',
+      transform:'translate(0,11)',opacity:'0.88'}));
+    if(DET!=='simple'){
+      g.appendChild(se('text',{x:'0',y:R-6,'text-anchor':'middle',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8',opacity:'0.7'},famS(pr)));
+    }
+  }
+  if(DET==='full'&&node.sub){
+    g.appendChild(se('text',{x:'0',y:R+16,'text-anchor':'middle',
+      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.6'},node.sub));
+  }
+}
+
+function getPr(node){
+  if(node.pk==='alpha') return M.pr.alpha;
+  if(node.pk==='sigma') return M.pr.sigma;
+  if(node.pk==='nu')    return M.pr.nu;
+  if(node.pk==='mu_a')  return M.pr.mu_a;
+  if(node.pk==='sig_a') return M.pr.sig_a;
+  if(node.pk==='mu_b')  return M.pr.mu_b;
+  if(node.pk==='sig_b') return M.pr.sig_b;
+  if(node.pk?.startsWith('beta_')){ const i=parseInt(node.pk.split('_')[1]); return M.preds[i]?.pr; }
+  if(node.prObj) return node.prObj;
+  return null;
+}
+
+function drawDet(g,node){
+  const c=C.ink2(); const isAct=ACTIVE===node.id;
+  const terms=node.formulaTerms||[];
+  const bHW=node.boxHalfW||100;
+  const relTCs=node.relTermCenters||{};
+
+  if(DET==='simple'){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'9',fill:c,opacity:isAct?'0.85':'0.55'}));
+    g.appendChild(se('text',{x:'15',y:'1','dominant-baseline':'middle',fill:c,
+      'font-family':"'DM Mono',monospace",'font-size':'13',opacity:'0.85'},node.lbl));
+    return;
+  }
+
+  // ── Formula box (all coords relative to node center) ──
+  const bL=-bHW, bT=-20, bW=bHW*2, bH=40;
+
+  g.appendChild(se('rect',{x:bL,y:bT,width:bW,height:bH,rx:'6',
+    fill:C.paper(),'fill-opacity':'0.9',stroke:c,'stroke-width':'1.2','stroke-opacity':'0.4'}));
+  if(isAct) g.appendChild(se('rect',{x:bL-3,y:bT-3,width:bW+6,height:bH+6,rx:'8',
+    fill:'none',stroke:c,'stroke-width':'1.5',opacity:'0.2'}));
+
+  // Render terms — positions relative to node center
+  let rx=-bHW+28;
+  terms.forEach(t=>{
+    let fill=c, fw='400', opacity='0.75';
+    if(t.nodeId==='alpha'){fill=C.int();fw='700';opacity='0.98';}
+    else if(t.nodeId&&t.nodeId.startsWith('b')){fill=C.beta();fw='700';opacity='0.98';}
+    else if(t.nodeId==='sigma'){fill=C.sig();fw='700';opacity='0.98';}
+    g.appendChild(se('text',{x:rx.toFixed(1),y:'6','dominant-baseline':'middle',
+      fill,'font-family':"'DM Mono',monospace",'font-size':'13.5','font-weight':fw,opacity},t.text));
+    rx+=t.text.length*_CW;
+  });
+
+  // Dot indicator above-left of box
+  const dotX=(-bHW+14).toFixed(1);
+  g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'7',fill:c,opacity:isAct?'0.85':'0.55'}));
+  if(isAct) g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'11',fill:'none',stroke:c,'stroke-width':'1.1',opacity:'0.22'}));
+  g.appendChild(se('line',{x1:dotX,y1:'-22',x2:dotX,y2:bT.toString(),stroke:c,'stroke-width':'1.1',opacity:'0.35'}));
+}
+
+function drawObs(g,node){
+  const c=C.data(); const isAct=ACTIVE===node.id;
+  const lbl=node.lbl||'y';
+  // Width adapts to label length
+  const rw=Math.max(70, lbl.length*14+32), rh=46, rx2=8;
+  const x0=-rw/2, y0=-rh/2;
+  // Shadow
+  g.appendChild(se('rect',{x:x0+3,y:y0+4,width:rw,height:rh,rx:rx2,fill:'rgba(0,0,0,0.14)'}));
+  // Fill
+  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:c,opacity:'0.12'}));
+  // Border (double-line effect: outer thin + inner)
+  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:'none',stroke:c,'stroke-width':isAct?'3.5':'3'}));
+  g.appendChild(se('rect',{x:x0+6,y:y0+6,width:rw-12,height:rh-12,rx:Math.max(2,rx2-4),fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.4'}));
+  if(isAct) g.appendChild(se('rect',{x:x0-4,y:y0-4,width:rw+8,height:rh+8,rx:rx2+3,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
+  // Label
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':'18','font-weight':'600'},lbl));
+  if(DET!=='simple'&&node.sub){
+    g.appendChild(se('text',{x:'0',y:rh/2+14,'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.sub));
+  }
+}
+
+function drawCov(g,node){
+  const c=C.ink2();
+  g.appendChild(se('rect',{x:-19,y:-9,width:38,height:18,fill:c,opacity:'0.1',stroke:c,'stroke-width':'0.9',rx:'3'}));
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'11'},node.lbl));
+}
+
+// ═══════════════════════════════════════════════════════
+//  MATH PANEL — proper formatted HTML
+// ═══════════════════════════════════════════════════════
+const CC={int:'--a2',beta:'--a3',sig:'--a5',nu:'--a6',re:'--a4',data:'--a1'};
+
+function buildMath(){
+  const K=M.preds.length,isML=M.ml,j=M.gv;
+  const y=M.out||'y',hS=hasSig(),hN=hasNu();
+  let html='';
+
+  function row(inner,cc,nid){
+    const act=ACTIVE===nid?' act':'';
+    const style=cc?`color:var(${CC[cc]})`:'';
+    return `<div class="mrow${act}" style="${style}" onclick="onMathClick('${nid||''}')">${inner}</div>`;
+  }
+  function block(lbl,rows){
+    return `<div class="mblock"><div class="mblk-l">${lbl}</div>${rows}</div>`;
+  }
+  // Superscript/subscript helpers for HTML
+  function sub(s){ return `<sub>${s}</sub>`; }
+  function sup(s){ return `<sup>${s}</sup>`; }
+  const tilde='~', sim='∼';
+  const space='&thinsp;';
+
+  // Likelihood
+  const lkMap={
+    normal:   `${y}${sub('i')} ${sim} Normal(μ${sub('i')}, σ)`,
+    student:  `${y}${sub('i')} ${sim} Student-t(ν, μ${sub('i')}, σ)`,
+    bernoulli:`${y}${sub('i')} ${sim} Bernoulli(p${sub('i')})`,
+    poisson:  `${y}${sub('i')} ${sim} Poisson(λ${sub('i')})`,
+    gamma:    `${y}${sub('i')} ${sim} Gamma(μ${sub('i')}, φ)`,
+  };
+  html+=block('Likelihood', row(lkMap[M.fam]||lkMap.normal,'data','y'));
+
+  // Linear predictor
+  const a='α';
+  const bs=M.preds.map((p,i)=>{const b=K>1?`β${sub(i+1)}`:'β'; return `${b}·${p.name||`x${i+1}`}${sub('i')}`;});
+  const lin=a+(bs.length?`${space}+${space}${bs.join(`${space}+${space}`)}`:'');
+  const linML=isML?`${lin}${space}+${space}u<sub>0j[i]</sub>`+(M.ret==='slope'&&K>0?`${space}+${space}u<sub>1j[i]</sub>·${M.preds[0]?.name||'x1'}${sub('i')}`:''):lin;
+  const lpMap={
+    normal:linML, student:linML,
+    bernoulli:`logit${sup('-1')}(${linML})`,
+    poisson:`exp(${linML})`, gamma:`exp(${linML})`
+  };
+  const detL=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
+  html+=block('Linear Predictor', row(`${detL}${sub('i')} = ${lpMap[M.fam]||linML}`, 'data', 'det'));
+  html+='<div class="msep"></div>';
+
+  // Priors
+  let pRows='';
+  pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
+  if(isML){
+    pRows+='<div style="height:.2rem"></div>';
+    pRows+=row(`u${sub('0j')} ${sim} Normal(0,&thinsp;τ${sub('0')})`,'re','u_j');
+    pRows+=row(`τ${sub('0')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
+    if(M.ret==='slope'&&K>0){
+      pRows+=row(`u${sub('1j')} ${sim} Normal(0,&thinsp;τ${sub('1')})`,'re','v_j');
+      pRows+=row(`τ${sub('1')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sigma_v');
+    }
+  }
+  M.preds.forEach((p,i)=>{
+    const b=K>1?`β${sub(i+1)}`:'β';
+    pRows+=row(`${b} ${sim} ${htmlPr(p.pr)}`,'beta',`b${i}`);
+  });
+  if(hS) pRows+=row(`σ ${sim} ${htmlPr(M.pr.sigma)}`,'sig','sigma');
+  if(hN) pRows+=row(`ν ${sim} ${htmlPr(M.pr.nu)}`,'nu','nu');
+  html+=block('Priors', pRows);
+
+  document.getElementById('mlines').innerHTML=html;
+}
+
+function htmlPr(pr){
+  if(!pr) return '?';
+  const f=pr.fam||'normal';
+  const n=(v,d=1)=>parseFloat(v).toFixed(d).replace(/\.?0+$/,'');
+  const sub=s=>`<sub>${s}</sub>`;
+  if(f==='normal')      return `Normal(${n(pr.mu??0)},&thinsp;${n(pr.sig??1)})`;
+  if(f==='student_t')   return `t(${n(pr.nu??3,0)},&thinsp;${n(pr.mu??0)},&thinsp;${n(pr.sig??1)})`;
+  if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
+  if(f==='gamma')       return `Gamma(${n(pr.p1??2)},&thinsp;${n(pr.p2??0.1,2)})`;
+  if(f==='half_normal') return `Normal<sup>+</sup>(0,&thinsp;${n(pr.p1??1)})`;
+  return `${f}(${n(pr.p1??1)})`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PRIOR UI — per-predictor, with explanation toggle
+// ═══════════════════════════════════════════════════════
+function buildPriorUI(){
+  const isML=M.ml,hS=hasSig(),hN=hasNu();
+  let html='';
+
+  function blk(cls,lbl,badgeCls,valStr,exTxt,sliders){
+    return `<div class="prior-b pi-${cls}">
+      <div class="prior-h" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'">
+        <div class="prior-h-l">
+          <span class="pbg pbg-${badgeCls}">${cls}</span>
+          <span class="prior-lbl">${lbl}</span>
+        </div>
+        <span class="prior-val">${valStr}</span>
+      </div>
+      <div class="prior-exp">${exTxt}</div>
+      ${sliders}
+    </div>`;
+  }
+
+  function sls(params){
+    return params.map(p=>`
+      <div class="sl-r">
+        <label>${p.l}</label>
+        <input type="range" min="${p.mn}" max="${p.mx}" step="${p.st}" value="${p.v}"
+          oninput="${p.fn};sched()">
+        <span class="sv">${parseFloat(p.v).toFixed(p.dp||1)}</span>
+      </div>`).join('');
+  }
+
+  // Alpha
+  html+=blk('int','α — Intercept','int',prS(M.pr.alpha),
+    PR_EX.normal+'<br><b>Tip:</b> Adjust σ to the scale of the DV. For z-standardised DV: Normal(0, 2).',
+    sls([
+      {l:'μ',mn:-20,mx:20,st:0.5,dp:1,v:M.pr.alpha.mu??0,
+       fn:"M.pr.alpha.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+      {l:'σ',mn:0.1,mx:20,st:0.2,dp:1,v:M.pr.alpha.sig??2.5,
+       fn:"M.pr.alpha.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+    ])
+  );
+
+  // Per-predictor betas
+  M.preds.forEach((p,i)=>{
+    if(!p.pr) p.pr={fam:'normal',mu:0,sig:2.5};
+    const K=M.preds.length;
+    const lb=K>1?`β${SUB[i]||i+1} — ${p.name||`x${i+1}`}`:`β — ${p.name||'x'}`;
+    html+=blk('beta',lb,'beta',prS(p.pr),
+      PR_EX.normal+'<br><b>Tip:</b> For standardised variables: Normal(0, 1) to Normal(0, 2.5) are well suited.',
+      sls([
+        {l:'μ',mn:-5,mx:5,st:0.1,dp:1,v:p.pr.mu??0,
+         fn:`M.preds[${i}].pr.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
+        {l:'σ',mn:0.1,mx:10,st:0.1,dp:1,v:p.pr.sig??2.5,
+         fn:`M.preds[${i}].pr.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
+      ])
+    );
+  });
+
+  // Sigma
+  if(hS) html+=blk('sig','σ — Residual spread','sig',prS(M.pr.sigma),
+    PR_EX.exponential+'<br><b>Tip:</b> E[σ] = 1/λ. If σ ≈ 5 expected: λ = 0.2.',
+    sls([
+      {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sigma.p1??1,
+       fn:"M.pr.sigma.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+    ])
+  );
+
+  // Nu
+  if(hN) html+=blk('nu','ν — Degrees of freedom','nu',prS(M.pr.nu),
+    PR_EX.gamma+'<br><b>Tip:</b> E[ν] = α/β. brms default: Gamma(2, 0.1) → E[ν]=20.',
+    sls([
+      {l:'α',mn:0.5,mx:10,st:0.1,dp:1,v:M.pr.nu.p1??2,
+       fn:"M.pr.nu.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+      {l:'β',mn:0.01,mx:0.5,st:0.01,dp:2,v:M.pr.nu.p2??0.1,
+       fn:"M.pr.nu.p2=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+    ])
+  );
+
+  // Hyperpriors (brms-style)
+  if(isML){
+    html+=blk('re','τ₀ — SD Rand. Intercepts','re',prS(M.pr.sig_a),
+      PR_EX.exponential+'<br><b>What:</b> u₀ⱼ ~ Normal(0, τ₀). τ₀ controls how strongly intercepts vary between groups. Small = strong pooling. In brms: prior(exponential(1), class=sd).',
+      sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
+           fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+      ])
+    );
+    if(M.ret==='slope'&&M.preds.length>0){
+      html+=blk('re','τ₁ — SD Rand. Slopes','re',prS(M.pr.sig_b),
+        PR_EX.exponential+'<br><b>What:</b> u₁ⱼ ~ Normal(0, τ₁). τ₁ controls how strongly slopes for '+((M.preds[0]?.name)||'x1')+' vary between groups. The group-specific slope is β₁ + u₁ⱼ.',
+        sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
+             fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
+        ])
+      );
+    }
+  }
+
+  document.getElementById('prior-ui').innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PREDICTOR LIST
+// ═══════════════════════════════════════════════════════
+function renderPreds(){
+  document.getElementById('pred-list').innerHTML=M.preds.map((p,i)=>`
+    <div class="pr">
+      <span class="pb-tag">β${SUB[i]||i+1}</span>
+      <input class="pi" type="text" value="${p.name||`x${i+1}`}" placeholder="Name"
+             oninput="M.preds[${i}].name=this.value;sched()">
+      <span class="pd" onclick="removePred(${i})" title="Remove">✕</span>
+    </div>`).join('');
+}
+function addPred(){
+  if(M.preds.length>=4){showToast('Maximum 4 predictors');return;}
+  M.preds.push({name:`x${M.preds.length+1}`,pr:{fam:'normal',mu:0,sig:0.5}});update();
+}
+function removePred(i){M.preds.splice(i,1);update();}
+
+// ═══════════════════════════════════════════════════════
+//  INTERACTIONS
+// ═══════════════════════════════════════════════════════
+const LK_DESC={
+  normal:'y_i ~ Normal(μ_i, σ): Continuous, symmetric. Residuals approximately normal. Classical linear regression.',
+  student:'y_i ~ t(ν, μ_i, σ): Heavy tails via ν. Robust against outliers. ν→∞ ≈ Normal.',
+  bernoulli:'y_i ~ Bernoulli(p_i): Binary 0/1. Logit-link: p = logit⁻¹(α+βx) ∈ (0,1).',
+  poisson:'y_i ~ Poisson(λ_i): Count data. Log-link: λ = exp(α+βx) > 0.',
+  gamma:'y_i ~ Gamma(μ_i, φ): Positive, right-skewed data. Log-link.'
+};
+
+function setFam(btn){
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); M.fam=btn.dataset.fam;
+  const d=document.getElementById('lkd');
+  d.textContent=LK_DESC[M.fam]||''; d.style.display=M.fam==='normal'?'none':'';
+  update();
+}
+function setDet(btn){
+  document.querySelectorAll('.db').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); DET=btn.dataset.d; sched();
+}
+function toggleTheme(){
+  DARK=!DARK;
+  document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
+  document.getElementById('btn-th').textContent=DARK?'☀ Light':'🌙 Dark';
+  sched();
+}
+
+function onNodeClick(node){
+  if(node.type==='plbl') ACTIVE=node.parentId;
+  else ACTIVE=node.id;
+  const ek=ACTIVE==='det'?'det':ACTIVE==='y'?'y'
+          :ACTIVE==='u_j'?'u_j':ACTIVE==='v_j'?'v_j'
+          :ACTIVE==='sigma_u'?'sigma_u':ACTIVE==='sigma_v'?'sigma_v'
+          :ACTIVE?.startsWith('b')?'beta'
+          :EX[ACTIVE]?ACTIVE:'alpha';
+  if(SHOW_EX) showExplain(ek);
+  render();buildMath();
+}
+function onMathClick(nid){
+  if(!nid) return;
+  ACTIVE=nid;
+  const ek=nid==='det'?'det':nid==='y'?'y'
+          :nid==='u_j'?'u_j':nid==='v_j'?'v_j'
+          :nid==='sigma_u'?'sigma_u':nid==='sigma_v'?'sigma_v'
+          :nid.startsWith('b')?'beta':EX[nid]?nid:'alpha';
+  if(SHOW_EX) showExplain(ek);
+  render();buildMath();
+}
+function showExplain(key){
+  const e=EX[key]||EX['alpha'];
+  const box=document.getElementById('exbox');
+  box.style.display='';
+  document.getElementById('ex-tit').textContent=e.title||key;
+  document.getElementById('ex-what').textContent=e.what||'';
+  const wy=document.getElementById('ex-why-s');
+  if(e.why){
+    wy.style.display='';
+    // Use custom label if defined, otherwise default
+    wy.querySelector('.ex-lbl').textContent=e.whyLbl||'Why this prior?';
+    document.getElementById('ex-why').textContent=e.why;
+  } else wy.style.display='none';
+  const tp=document.getElementById('ex-tip-s');
+  if(e.tip){tp.style.display='';document.getElementById('ex-tip').textContent=e.tip;}
+  else tp.style.display='none';
+}
+function toggleEx(){
+  SHOW_EX=!SHOW_EX;
+  document.getElementById('btn-ex').classList.toggle('act',SHOW_EX);
+  const box=document.getElementById('exbox');
+  box.style.display=SHOW_EX?'':'none';
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN UPDATE
+// ═══════════════════════════════════════════════════════
+function sched(){clearTimeout(_t);_t=setTimeout(update,55);}
+function update(){
+  M.ml =(document.getElementById('ml-ck').checked);
+  M.gv =(document.getElementById('gv').value.trim()||'j');
+  M.ret=(document.getElementById('re-type').value);
+  M.out=(document.getElementById('ov').value.trim()||'y');
+  document.getElementById('ml-opts').style.display=M.ml?'flex':'none';
+  renderPreds();buildPriorUI();render();buildMath();
+}
+
+// ═══════════════════════════════════════════════════════
+//  FLOATING HELP PANEL
+// ═══════════════════════════════════════════════════════
+function toggleArchHelp(){
+  const p=document.getElementById('arch-help-panel');
+  p.style.display=p.style.display==='block'?'none':'block';
+}
+function closeArchHelp(){
+  document.getElementById('arch-help-panel').style.display='none';
+}
+document.addEventListener('click',e=>{
+  const p=document.getElementById('arch-help-panel');
+  if(p&&p.style.display==='block'&&!p.contains(e.target)){
+    const oc=e.target.getAttribute('onclick')||'';
+    if(!oc.includes('toggleArchHelp')) closeArchHelp();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+let _tt;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2100);
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  renderGuide();update();
+  // Node info: start active, show default hint
+  document.getElementById('btn-ex').classList.add('act');
+  const box=document.getElementById('exbox');
+  document.getElementById('ex-tit').textContent='← Click on a node in the diagram or a row in the notation on the right';
+  document.getElementById('ex-what').textContent='A contextual explanation for each parameter, link and prior will appear here.';
+  document.getElementById('ex-why-s').style.display='none';
+  document.getElementById('ex-tip-s').style.display='none';
+  window.addEventListener('resize',()=>{clearTimeout(_t);_t=setTimeout(render,90);});
+  setTimeout(()=>{ if(SHOW_EX) showExplain('alpha'); },800);
+});
+</script>
+</body>
+</html>
