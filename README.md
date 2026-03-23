@@ -4,16 +4,16 @@
 
 <div align="center">
 
-# Bayes Thinking Lab `v0.6`
+# Bayes Thinking Lab `v0.7`
 ### Statistical Intuition, Reimagined.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Static Badge](https://img.shields.io/badge/Status-Academic_Project-blue)]()
 [![Static Badge](https://img.shields.io/badge/Tech-Vanilla_JS-orange)]()
 
-**A comprehensive, interactive suite designed to bridge the gap between frequentist foundations and Bayesian multi-level modeling.**
+**A comprehensive, interactive suite that guides users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making.**
 
-[ [Explore the Lab](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
+[ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
 ---
 
@@ -23,41 +23,78 @@
 
 The **Bayes Thinking Lab (BTL)** moves away from the "black-box" approach of statistical software. Inspired by the pedagogical works of **John Kruschke** and **Richard McElreath**, this project emphasizes:
 
-* **Visual Proofs:** Concepts like *Partial Pooling* and *Link Functions* become tangible through real-time manipulation.
-* **The Formula-Graphic Duality:** Every model is simultaneously represented as a **Kruschke-style DAG** and in **McElreath-style mathematical notation**.
-* **Workflow Integration:** Beyond simple demos, the lab functions as a productivity tool by generating production-ready `brms` code for R.
+* **Visual Proofs:** Concepts like *Partial Pooling*, *Link Functions*, and *HDI vs. ROPE* become tangible through real-time manipulation.
+* **The Formula-Graphic Duality:** Hierarchical models are simultaneously represented as **Kruschke-style diagrams** and in **mathematical notation** consistent with McElreath and brms.
+* **Workflow Integration:** Beyond interactive demos, the lab functions as a productivity tool — generating production-ready `brms` code for R and supporting the full Bayesian workflow from prior specification to posterior decision.
+
+---
+
+## 🗺 The Learning Path
+
+The lab is organized into five sections that build on each other. Work through them in order, or jump in wherever your current knowledge begins.
+
+| Section | What you will learn | Key Tools |
+| :--- | :--- | :--- |
+| **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
+| **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | GLM Conditional Distributions · GLM 3D · Interactive GLMM |
+| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
+| **III · Bayesian Workflow** | How to specify, build, check, and export hierarchical Bayesian models | Model Architect · brms Model Builder · Prior & Posterior Predictive Check |
+| **IV · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Decision Lab · Decision Maker |
+
+> **⬡ Recommended alongside Section III — not obligatory:**
+> The **[Golem Builder](Golem_builder.html)** supports causal reasoning via DAGs before model specification. Many workflows do not require DAGs, but when causal questions matter, starting here pays off. See Section III below.
 
 ---
 
 ## 🛠 The Ecosystem
 
-The lab is structured into four logical modules that guide users from undergraduate basics to advanced research-level modeling.
-
 ### 0. Statistical Foundations
-*The prerequisite for Bayesian thinking: mastering the GLM.*
-* **Interactive LM:** Experience OLS minimization and residuals manually.
-* **Maximum Likelihood:** Grasp the critical distinction between Probability and Likelihood.
-* **LM to GLM Transition:** Understand why link functions are necessary for non-normal data.
+*Master the GLM — the prerequisite for Bayesian thinking.*
+
+* **Interactive LM** — Manipulate data points and watch OLS minimization and residuals update in real time. Build intuition for what a regression line actually optimizes.
+* **Maximum Likelihood** — Explore the conceptual distinction between probability and likelihood by adjusting parameters interactively against simulated data.
+* **LM → GLM Transition** — Discover why link functions are necessary for non-normal outcomes and how the GLM generalizes the linear model across distribution families.
+
+---
 
 ### I. From LM to GLMM
-*Scaling the hierarchy of linear modeling.*
-* **Conditional Distributions:** Visualize $y|x$ along a predictor — the heart of every GLM.
-* **GLM in 3D:** Interact with regression planes and residuals in a spatial environment.
-* **Interactive GLMM:** Compare *Complete Pooling*, *No Pooling*, and *Partial Pooling*.
+*Scale the hierarchy of linear modeling.*
+
+* **GLM Conditional Distributions** — Visualize the conditional distribution y|x along a predictor across **8 model families**: Normal, Student-t, Bernoulli (logistic), Poisson, Gamma, Ordinal (cumulative logit), Zero-Inflated Poisson, and Hurdle-Poisson. Compare parameter behavior and link functions across families.
+* **GLM in 3D** — Interact with regression planes and residuals in a spatial environment. Explore how multiple predictors jointly determine the outcome surface.
+* **Interactive GLMM** — Simulate grouped data and compare **Complete Pooling**, **No Pooling**, and **Partial Pooling** side by side. Observe Simpson's Paradox, the Intraclass Correlation Coefficient (ICC), and the shrinkage mechanism — for Normal, Poisson, Gamma, and logistic outcomes.
+
+---
 
 ### II. Bayesian Intuition
-*Learning to think in probability distributions.*
-* **Thinking Simulator:** 8 psychological scenarios to build qualitative updating skills without math.
-* **Prior Lab:** Translate verbal uncertainty into mathematical parameters with a real-time CI-solver.
-* **MCMC Visualizer:** Watch the "animated hiker" (Metropolis-Hastings) sample from the posterior.
-* **Bayes Interactive:** Watch how priors and data (and sample size) form the posterior.
+*Learn to think in probability distributions.*
+
+* **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
+* **Prior Lab** — Translate verbal uncertainty statements into mathematical priors. A real-time CI-solver maps your beliefs onto distribution parameters.
+* **MCMC Visualizer** — Watch the Metropolis-Hastings sampler navigate the posterior landscape — the "animated hiker" analogy made interactive.
+* **Bayes Interactive** — Manipulate prior strength, likelihood, and sample size and see how they jointly shape the posterior. Includes CI and PPI bands for the full posterior predictive.
+
+---
 
 ### III. Bayesian Workflow
-*Tools for the professional scientist.*
-* **Model Architect:** Visually build hierarchical structures in Kruschke style and with McElreath notation.
-* **brms Model Builder:** A powerful R-code generator to build complex hierarchical models and transfer to prior checks.
-* **Prior Predictive Checks:** Import and Validate your models via Prior Predictive Checking.
-* **Posterior Predictive Checks:** Specialized ShinyApp to check your brms results and get feedback.
+*Tools for the applied scientist.*
+
+* **Bayesian Model Architect** — Build hierarchical Bayesian model structures visually in Kruschke-diagram style. See how priors, hyperpriors, and random effects (intercepts and slopes: u₀ⱼ, u₁ⱼ, τ₀, τ₁) connect in a live diagram — then generate R simulation code for prior predictive checking.
+* **brms Model Builder** — Specify complex hierarchical models step by step across 15+ likelihood families, polynomial terms, interactions, and distributional parameters. Export production-ready `brms` code for R.
+* **Prior Predictive Check** — Import your brms model specification, explore the prior predictive distribution, and validate that your priors generate plausible data before fitting.
+* **Posterior Predictive Check** — Evaluate model fit and posterior behavior via a dedicated Shiny app with visual diagnostics and feedback.
+
+> **⬡ Recommended: Causal Reasoning with the Golem Builder**
+>
+> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and front-door criteria, and generate brms simulation code — all in the browser. Causal reasoning is not a required step in the workflow, but when the causal question matters, starting here pays off.
+
+---
+
+### IV. Posterior Decision
+*Move from estimation to decision.*
+
+* **Decision Lab** — Apply three principled decision frameworks to any posterior distribution: **Kruschke's HDI vs. ROPE trichotomy** (accept / reject / undecided), **Full ROPE %** (probability of practical equivalence), and **ETI vs. ROPE**. Supports Normal, Student-t, and Gamma posteriors with analytically correct HDI and ETI computation.
+* **Decision Maker** — Upload your own posterior samples via CSV, define a Region of Practical Equivalence (ROPE / SESOI), compute HDI and ETI, and export a complete **APA-formatted decision report** — ready to paste into a manuscript.
 
 ---
 
@@ -65,36 +102,37 @@ The lab is structured into four logical modules that guide users from undergradu
 
 The Bayes Thinking Lab is a **serverless web application**. No installation, no backend, and no data leaves your machine.
 
-1.  **Clone the repository:**
+1. **Clone the repository:**
     ```bash
-    git clone [https://github.com/raduesing/Bayes_Thinking_Lab.git]
-    (https://github.com/raduesing/Bayes_Thinking_Lab.git)
+    git clone https://github.com/raduesing/Bayes_Thinking_Lab.git
     ```
-2.  **Open `index.html`** in any modern web browser.
-3.  **Start Building:** Design your model, configure your priors, and copy the generated `brms` code into your R script.
+2. **Open `index.html`** in any modern web browser.
+3. **Follow the learning path** — or jump directly to the tool that matches your current need.
+
+> **Tip:** Each tool includes a built-in **ℹ Help panel** and inline explanations for every parameter. Use the Guide in Model Architect and brms Builder for step-by-step walkthroughs.
 
 ---
 
 ## 🎓 Target Audience
 
-| Level | Recommended Tools |
-| :--- | :--- |
-| **BSc. Students** | e.g. Interactive LM, Thinking Simulator, Bayes Simulator |
-| **MSc. Students** | e.g. Interactive GLMM, Prior Lab, Model Architect |
-| **PhD / Researchers** | e.g. brms Model Builder, Prior P. Check, Posterior P. Check |
+| Level | Recommended Entry Point | Tools to Explore |
+| :--- | :--- | :--- |
+| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Bayes Interactive |
+| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab · Model Architect |
+| **PhD / Researchers** | Section III–IV | brms Model Builder · Golem Builder · Prior & Posterior P. Check · Decision Maker |
 
 ---
 
 ## 🖋 Scientific Acknowledgments
 
-The development of the **Bayes Thinking Lab** is based on the pedagogical and methodological frameworks established by the following researchers. Their work has been instrumental in shaping the conceptual logic of this suite:
+The development of the **Bayes Thinking Lab** is grounded in the pedagogical and methodological frameworks established by the following researchers:
 
 | Author | Framework / Contribution | Resource |
 | :--- | :--- | :--- |
-| **John K. Kruschke** | The visual model representations are based on the "Kruschke Diagrams" introduced in *Doing Bayesian Data Analysis*. | [Institutional Page](https://doingbayesiandataanalysis.blogspot.com/) |
-| **Richard McElreath** | The integration of model architectures and the Bayesian workflow is informed by the principles in *Statistical Rethinking*. | [Institutional Page](https://github.com/rmcelreath) |
-| **A. Solomon Kurz** | Acknowledgment is given to his comprehensive translations of statistical textbooks into the *brms* and *tidyverse* framework. | [Project Documentation](https://solomonkurz.netlify.app/) |
-| **Paul-Christian Bürkner** | Computational compatibility is maintained with the R package *brms*, developed for high-level Bayesian regression modeling. | [brms Project Site](https://paul-buerkner.github.io/) |
+| **John K. Kruschke** | Graphical model representations follow the Kruschke Diagram conventions from *Doing Bayesian Data Analysis*. | [Blog](https://doingbayesiandataanalysis.blogspot.com/) |
+| **Richard McElreath** | Model notation, workflow structure, and prior predictive thinking are informed by *Statistical Rethinking* (Ch. 5–6, 14). | [GitHub](https://github.com/rmcelreath) |
+| **A. Solomon Kurz** | Acknowledgment to his brms and tidyverse translations of Kruschke and McElreath, which informed several implementation details. | [Website](https://solomonkurz.netlify.app/) |
+| **Paul-Christian Bürkner** | All exported code targets the `brms` R package. Prior notation (class=sd, τ₀, τ₁) follows brms conventions. | [brms](https://paul-buerkner.github.io/) |
 
 > **Note on Licensing:** This project is released under the MIT License. All external references and conceptual frameworks belong to their respective copyright holders.
 
@@ -102,22 +140,22 @@ The development of the **Bayes Thinking Lab** is based on the pedagogical and me
 
 ## 🎓 Citation
 
-If you use the **Bayes Thinking Lab** for your research, teaching, or software development, please cite it as follows:
+If you use the **Bayes Thinking Lab** for research, teaching, or software development, please cite it as follows:
 
 <div align="left">
 
 ### APA Style
-> Düsing, R. (2026). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.6). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
+> Düsing, R. (2026). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.7). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
 
- 
-### BibTeX (for LaTeX users)
-```latex
+### BibTeX
+```bibtex
 @software{Duesing_Bayes_Thinking_Lab_2026,
-  author = {Düsing, Rainer},
-  title = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
-  url = {[https://github.com/raduesing/Bayes_Thinking_Lab](https://github.com/raduesing/Bayes_Thinking_Lab)},
-  version = {0.6.0},
-  year = {2026}
+  author  = {Düsing, Rainer},
+  title   = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
+  url     = {https://github.com/raduesing/Bayes_Thinking_Lab},
+  version = {0.7.0},
+  year    = {2026}
 }
+```
 
 </div>
