@@ -154,6 +154,35 @@ select:focus{border-color:var(--accent2)}
   .sidebar{position:static;max-height:none;overflow-y:visible}
   .decisions{grid-template-columns:1fr}
 }
+
+/* ── FLOATING HELP PANEL ── */
+#help-float{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:300px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.18)}
+#help-float.open{display:block}
+.hp-head{display:flex;justify-content:space-between;align-items:center;
+         padding:.5rem .85rem;border-bottom:1px solid var(--grid)}
+.hp-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;
+          text-transform:uppercase;color:var(--ink2)}
+.hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:none;border:none;
+          cursor:pointer;color:var(--ink2);padding:0 .2rem;line-height:1}
+.hp-close:hover{color:var(--ink)}
+.hp-body{padding:.8rem .85rem;font-family:'DM Mono',monospace;font-size:.67rem;
+         line-height:1.8;color:var(--ink2);max-height:75vh;overflow-y:auto}
+.hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;
+         margin-top:.85rem;margin-bottom:.28rem;border-bottom:1px solid var(--grid);
+         padding-bottom:.18rem;color:var(--ink2)}
+.hp-sect:first-child{margin-top:0}
+.hp-body strong{color:var(--ink)}
+.hp-body em{color:var(--accent);font-style:normal}
+.hp-seq{padding-left:.05rem}
+.hp-seq li{list-style:none;padding:.08rem 0}
+.hp-seq li::before{color:var(--accent);margin-right:.4rem;font-weight:600}
+.hp-seq li:nth-child(1)::before{content:'①'}
+.hp-seq li:nth-child(2)::before{content:'②'}
+.hp-seq li:nth-child(3)::before{content:'③'}
+.hp-seq li:nth-child(4)::before{content:'④'}
+.hp-seq li:nth-child(5)::before{content:'⑤'}
 </style>
 </head>
 <body>
@@ -162,7 +191,10 @@ select:focus{border-color:var(--accent2)}
 <nav>
   <a href="index_de.html" class="nav-back">← Bayes Thinking Lab</a>
   <span class="nav-title">Decision <em>Lab</em></span>
-  <button class="nb" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+  <div style="display:flex;gap:.35rem">
+    <button class="nb" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+    <button class="nb" onclick="toggleHelpFloat()" style="border-color:var(--hdi-col);color:var(--hdi-col)">ℹ Hilfe</button>
+  </div>
 </nav>
 
 <!-- HEADER -->
@@ -884,6 +916,51 @@ function copyCode(){
 // ─── Init ────────────────────────────────────────
 window.addEventListener('resize', update);
 update();
+
+// ── Floating Help Panel ─────────────────────────────────────
+let helpFloatOpen = false;
+function toggleHelpFloat(){
+  helpFloatOpen = !helpFloatOpen;
+  document.getElementById('help-float').classList.toggle('open', helpFloatOpen);
+}
+document.addEventListener('click', e => {
+  if(helpFloatOpen && !e.target.closest('#help-float') && !e.target.closest('button[onclick="toggleHelpFloat()"]'))
+    { helpFloatOpen = false; document.getElementById('help-float').classList.remove('open'); }
+});
 </script>
+
+<!-- ═══ FLOATING HELP PANEL ══════════════════════════════════ -->
+<div id="help-float">
+  <div class="hp-head">
+    <span class="hp-title">ℹ Decision Lab — Hilfe</span>
+    <button class="hp-close" onclick="toggleHelpFloat()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect">Was lerne ich hier?</div>
+    Ein Posterior allein trifft keine Entscheidung — dafür braucht es einen <strong>Entscheidungsrahmen</strong>.
+    Dieses Tool zeigt drei komplementäre Ansätze: <strong>HDI</strong> beschreibt, wo die plausibelsten
+    Werte liegen; <strong>ETI</strong> liefert symmetrische Quantilgrenzen; <strong>ROPE</strong> prüft,
+    ob ein Effekt praktisch bedeutsam ist. Alle drei stammen aus dem bayesianischen Werkzeugkasten
+    (Kruschke, McElreath) und sind in <em>bayestestR</em> implementiert.
+
+    <div class="hp-sect">Empfohlene Erkundung</div>
+    <ul class="hp-seq">
+      <li>Posterior-Form und -Breite variieren — wann divergieren <em>HDI</em> und <em>ETI</em> stark voneinander?</li>
+      <li><em>ROPE-Grenzen</em> verschieben — wie empfindlich ist die Entscheidung gegenüber der Wahl des praktisch unbedeutenden Bereichs?</li>
+      <li>Bimodale oder schiefe Verteilung wählen — beobachte, warum HDI bei Multimodalität mehrere Intervalle liefern kann</li>
+      <li><em>Credible Level</em> (z. B. 89 % vs. 95 %) vergleichen — McElreaths Empfehlung: 89 % für weniger falsche Sicherheit</li>
+      <li>Alle drei Entscheidungs-Panels gleichzeitig lesen — wann stimmen sie überein, wann widersprechen sie sich?</li>
+    </ul>
+
+    <div class="hp-sect">Die drei Entscheidungsansätze</div>
+    <strong>HDI</strong> <span style="color:var(--hdi-col)">(rot)</span>: Highest Density Interval —
+    kürzester Bereich mit gewünschter Posteriormasse. Optimal bei schiefen Verteilungen.<br><br>
+    <strong>ETI</strong> <span style="color:var(--eti-col)">(blau)</span>: Equal-Tailed Interval —
+    symmetrische Quantile (z. B. 5 % / 95 %). Entspricht dem Vorgehen frequentistischer Konfidenzintervalle, aber mit bayesianischer Interpretation anhand der Posteriorverteilung.<br><br>
+    <strong>ROPE</strong> <span style="color:var(--rope-col)">(grün)</span>: Region of Practical Equivalence —
+    Anteil des Posteriors innerhalb des «praktisch null»-Bereichs. Entscheidungsregel nach Kruschke:
+    &gt; 97.5 % → akzeptiere H₀; &lt; 2.5 % → lehne ab; dazwischen → zurückhalten.
+  </div>
+</div>
 </body>
 </html>

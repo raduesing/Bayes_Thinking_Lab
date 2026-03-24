@@ -203,6 +203,35 @@ canvas.plot{display:block;width:100%;border:1px solid var(--grid)}
   line-height:1.85;color:var(--ink2)}
 #mhm-bd b{color:var(--ink)}
 #mhm-bd code{background:var(--panel);border:1px solid var(--border);color:var(--a2);padding:.02rem .3rem;font-size:.75rem}
+
+/* ── FLOATING HELP PANEL ── */
+#help-float{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:300px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.18)}
+#help-float.open{display:block}
+.hp-head{display:flex;justify-content:space-between;align-items:center;
+         padding:.5rem .85rem;border-bottom:1px solid var(--grid)}
+.hp-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;
+          text-transform:uppercase;color:var(--ink2)}
+.hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:none;border:none;
+          cursor:pointer;color:var(--ink2);padding:0 .2rem;line-height:1}
+.hp-close:hover{color:var(--ink)}
+.hp-body{padding:.8rem .85rem;font-family:'DM Mono',monospace;font-size:.67rem;
+         line-height:1.8;color:var(--ink2);max-height:75vh;overflow-y:auto}
+.hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;
+         margin-top:.85rem;margin-bottom:.28rem;border-bottom:1px solid var(--grid);
+         padding-bottom:.18rem;color:var(--ink2)}
+.hp-sect:first-child{margin-top:0}
+.hp-body strong{color:var(--ink)}
+.hp-body em{color:var(--a5);font-style:normal}
+.hp-seq{padding-left:.05rem}
+.hp-seq li{list-style:none;padding:.08rem 0}
+.hp-seq li::before{color:var(--a5);margin-right:.4rem;font-weight:600}
+.hp-seq li:nth-child(1)::before{content:'①'}
+.hp-seq li:nth-child(2)::before{content:'②'}
+.hp-seq li:nth-child(3)::before{content:'③'}
+.hp-seq li:nth-child(4)::before{content:'④'}
+.hp-seq li:nth-child(5)::before{content:'⑤'}
 </style>
 </head>
 <body>
@@ -215,6 +244,7 @@ canvas.plot{display:block;width:100%;border:1px solid var(--grid)}
   </div>
   <div style="display:flex;gap:.35rem">
     <button class="tbtn" onclick="window.open('index_de.html','_self')" style="border-color:var(--a5);color:var(--a5)">← Übersicht</button>
+    <button class="tbtn" onclick="toggleHelpFloat()" style="border-color:var(--a1);color:var(--a1)">ℹ Hilfe</button>
     <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
@@ -1259,6 +1289,48 @@ function mhModal(){document.getElementById('mhm-ov').classList.add('open');}
 function mhClose(){document.getElementById('mhm-ov').classList.remove('open');}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')mhClose();});
 document.addEventListener('DOMContentLoaded',init);
+
+// ── Floating Help Panel ─────────────────────────────────────
+let helpFloatOpen = false;
+function toggleHelpFloat(){
+  helpFloatOpen = !helpFloatOpen;
+  document.getElementById('help-float').classList.toggle('open', helpFloatOpen);
+}
+document.addEventListener('click', e => {
+  if(helpFloatOpen && !e.target.closest('#help-float') && !e.target.closest('button[onclick="toggleHelpFloat()"]'))
+    { helpFloatOpen = false; document.getElementById('help-float').classList.remove('open'); }
+});
 </script>
+
+<!-- ═══ FLOATING HELP PANEL ══════════════════════════════════ -->
+<div id="help-float">
+  <div class="hp-head">
+    <span class="hp-title">ℹ MCMC Visualizer — Hilfe</span>
+    <button class="hp-close" onclick="toggleHelpFloat()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect">Was lerne ich hier?</div>
+    Bayesianische Inferenz erfordert den <strong>Posterior P(θ|Daten)</strong> — eine Verteilung über
+    alle plausiblen Parameterwerte. Da der Nenner des Bayes-Theorems ein unlösbares Integral enthält,
+    wird der Posterior durch <strong>Markov Chain Monte Carlo (MCMC)</strong> beprobt statt berechnet.
+    Dieses Tool zeigt Schritt für Schritt, wie der Metropolis-Hastings-Algorithmus dabei vorgeht.
+
+    <div class="hp-sect">Empfohlene Erkundung</div>
+    <ul class="hp-seq">
+      <li><em>Stufe 1</em> starten, einzelne Schritte mit <strong>→ Ein Schritt</strong> durchklicken — Inspector beobachten: Verhältnis α und Zufallszahl u entscheiden über Annahme oder Ablehnung</li>
+      <li><em>Schrittweite s</em> variieren — zu groß: viele Ablehnungen; zu klein: Wanderer bewegt sich kaum. Ziel: Akzeptanzrate 20–50 %</li>
+      <li><em>Stufe 2</em> (bimodaler Posterior) — beobachte, ob der Wanderer beide Gipfel findet oder in einem stecken bleibt</li>
+      <li><em>Stufe 3</em> (2D: μ und σ) — sehe wie brms gleichzeitig zwei Parameter schätzt; Histogramme zeigen die marginalen Posteriors</li>
+      <li><em>Warmup vs. Sampling</em> vergleichen — orange Punkte (Warmup) werden verworfen, blaue (Sampling) bilden die Posterior-Schätzung</li>
+    </ul>
+
+    <div class="hp-sect">Die wichtigsten Anzeigen</div>
+    <strong>Hauptplot:</strong> Posterior-Landschaft + Pfad des Wanderers<br><br>
+    <strong>Inspector:</strong> Letzter Schritt im Detail — Verhältnis α = P(Vorschlag)/P(Aktuell); wenn α ≥ u → Annahme<br><br>
+    <strong>Akzeptanzrate:</strong> Grüner Bereich (20–50 %) = optimale Schrittweite<br><br>
+    <strong>Histogramm + Trace:</strong> Entstehende Posterior-Approximation und Verlauf über alle Schritte — ein «Raupen»-Trace signalisiert gute Konvergenz<br><br>
+    <strong>Narrative-Banner:</strong> Erklärt jeden Schritt in Worten — ideal zum schrittweisen Lernen
+  </div>
+</div>
 </body>
 </html>
