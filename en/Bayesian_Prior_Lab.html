@@ -271,7 +271,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 <div id="topbar">
   <div class="topbar-l">
     <div class="topbar-title">Prior <em>Lab</em></div>
-    <div class="topbar-sub">Distributions · CI-Solver · 10 Families · brms-Syntax · Defaults</div>
+    <div class="topbar-sub">CI-Solver · 12 Distributions · brms-Syntax · Defaults</div>
     <div class="topbar-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
   </div>
   <div class="topbar-btns">
@@ -514,6 +514,31 @@ const DISTS = [
     brmsLine:(p,cls)=>`prior(<span class="fn">student_t</span>(<span class="nm">${fmtN(p.nu,0)}</span>, <span class="nm">${fmtN(p.mu)}</span>, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'Intercept'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
   },
   {
+    id:'skewed_normal', name:'Skewed Normal', brms:'skew_normal(ξ, ω, α)',
+    cat:'Unbounded',
+    desc:'Asymmetric generalisation of the Normal distribution (Azzalini 1985). α=0 → Normal; α>0 → right-skewed (longer right tail); α<0 → left-skewed. ξ is the <em>location parameter</em> (shifts the distribution, but is not the mean), ω is the <em>scale</em> (stretches/compresses). The mean depends on all three parameters. The solver finds ξ and ω for the chosen α.',
+    use:'Asymmetric priors for β; reaction times without a hard lower bound; effects expected to be large rather than small',
+    params:[
+      {id:'alp',label:'α (skewness)',min:-20,max:20,step:0.1,val:0},
+      {id:'xi', label:'ξ (location)', min:-50,max:50,step:0.1,val:0},
+      {id:'om', label:'ω (scale)',    min:0.01,max:30,step:0.1,val:1}
+    ],
+    pdf:(x,p)=>{
+      const z=(x-p.xi)/p.om;
+      const phi=Math.exp(-.5*z*z)/Math.sqrt(2*Math.PI);
+      const Phi=jStat.normal.cdf(p.alp*z,0,1);
+      return 2/p.om*phi*Phi;
+    },
+    cdf:(x,p)=>{
+      const z=(x-p.xi)/p.om;
+      return jStat.normal.cdf(z,0,1)-2*owenT(z,p.alp);
+    },
+    mean:p=>{ const d=p.alp/Math.sqrt(1+p.alp**2); return p.xi+p.om*Math.sqrt(2/Math.PI)*d; },
+    variance:p=>{ const d=p.alp/Math.sqrt(1+p.alp**2); return p.om**2*(1-2*d**2/Math.PI); },
+    support:()=>[-Infinity,Infinity],
+    brmsLine:(p,cls)=>`prior(<span class="fn">skew_normal</span>(<span class="nm">${fmtN(p.xi)}</span>, <span class="nm">${fmtN(p.om)}</span>, <span class="nm">${fmtN(p.alp,1)}</span>), <span class="nm">class</span> = ${cls||'b'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
+  },
+  {
     id:'cauchy', name:'Cauchy', brms:'cauchy(μ, σ)',
     cat:'Unbounded',
     desc:'Extremely heavy tails. No finite mean. Formerly popular for σ priors.',
@@ -638,6 +663,7 @@ const EXAMPLES = [
   {dist:'beta',       p:{alpha:1,beta_:1}, desc:'zi / zoi / coi: uniform [0,1]'},
   {dist:'beta',       p:{alpha:2,beta_:8}, desc:'zi: little zero-inflation expected'},
   {dist:'lkj',        p:{eta:2},          desc:'cor: regularised (η=2)'},
+  {dist:'skewed_normal', p:{alp:3, xi:-0.46, om:1.2}, desc:'β: slightly right-skewed (α=3)'},
 ];
 
 // ── State ──────────────────────────────────────────────────
@@ -670,7 +696,7 @@ function buildDistList() {
 
 function buildExamples() {
   const c = document.getElementById('examples-area');
-  const greekMap = {mu:'μ', sig:'σ', nu:'ν', lambda:'λ', alpha:'α', beta:'β', beta_:'β', eta:'η'};
+  const greekMap = {mu:'μ', sig:'σ', nu:'ν', lambda:'λ', alpha:'α', beta:'β', beta_:'β', eta:'η', xi:'ξ', om:'ω', alp:'α'};
   c.innerHTML = EXAMPLES.map((ex, i) => {
     const d = DISTS.find(x => x.id === ex.dist);
     const paramStr = Object.entries(ex.p)
@@ -740,6 +766,9 @@ function updateSolverHint() {
   } else if (CUR.id === 'student_t') {
     if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
     hint.innerHTML = '<b style="color:var(--a2)">Student-t:</b> First set ν (degrees of freedom) via slider — ν determines tail weight. Then μ and σ will be calculated for the chosen ν.';
+  } else if (CUR.id === 'skewed_normal') {
+    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
+    hint.innerHTML = '<b style="color:var(--a4)">Skewed Normal:</b> First set α (skewness) via slider — α determines direction and strength of asymmetry (α>0 = right-skewed, α<0 = left-skewed, α=0 = Normal). Then ξ (location) and ω (scale) will be calculated for the chosen α.';
   } else if (CUR.id === 'lkj') {
     if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.title = ''; }
     hint.innerHTML = '<span style="opacity:.6">No automatic solver available for LKJ — please adjust η via slider.</span>';
@@ -751,7 +780,7 @@ function updateSolverHint() {
 
 function buildParams() {
   const c = document.getElementById('params-area');
-  const decFor = id => id==='lambda'?3 : id==='nu'?1 : id==='eta'?2 : 2;
+  const decFor = id => id==='lambda'?3 : id==='nu'?1 : id==='alp'?1 : id==='eta'?2 : 2;
   c.innerHTML = CUR.params.map(p => `
     <div class="pg">
       <div class="pl">
@@ -766,8 +795,8 @@ function buildParams() {
 function setParam(id, val) {
   PARAMS[id] = val;
   const s = document.getElementById('slv-'+id);
-  if (s) s.textContent = fmtN(val, id==='nu'?1:id==='lambda'?3:2);
-  drawPlot();
+  if (s) s.textContent = fmtN(val, id==='nu'?1:id==='alp'?1:id==='lambda'?3:2);
+  autoRange();
 }
 
 // ── Auto range ─────────────────────────────────────────────
@@ -994,6 +1023,20 @@ function solvCI() {
       const sigma=(hi-lo)/(t_hi-t_lo),mu=(lo+hi)/2;
       res.innerHTML=`<b>Student-t(ν=${fmtN(nu,1)} — fixed):</b><br>μ = <b>${fmtN(mu,4)}</b>, σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(mu+sigma*t_lo,3)}, ${fmtN(mu+sigma*t_hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">ν controls tail weight and must be chosen substantively. μ and σ were calculated automatically.</span>`;
       setP('mu',mu); setP('sig',sigma);
+    } else if (CUR.id==='skewed_normal') {
+      const alp = PARAMS.alp !== undefined ? PARAMS.alp : 0;
+      const stdSkewCdf = z => jStat.normal.cdf(z,0,1) - 2*owenT(z, alp);
+      const findSkewQ = p_target => {
+        let a_q=-30, b_q=30;
+        for (let i=0;i<150;i++) { const m=(a_q+b_q)/2; if(stdSkewCdf(m)<p_target) a_q=m; else b_q=m; if(b_q-a_q<1e-9)break; }
+        return (a_q+b_q)/2;
+      };
+      const z_lo=findSkewQ(q_lo), z_hi=findSkewQ(q_hi);
+      const om=(hi-lo)/(z_hi-z_lo), xi=lo-om*z_lo;
+      const d=alp/Math.sqrt(1+alp**2);
+      const E_X=xi+om*Math.sqrt(2/Math.PI)*d;
+      res.innerHTML=`<b>Skewed Normal (α=${fmtN(alp,1)} — fixed):</b><br>ξ = <b>${fmtN(xi,4)}</b>, ω = <b>${fmtN(om,4)}</b><br>E[x] ≈ ${fmtN(E_X,3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(lo,3)}, ${fmtN(hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">α controls direction and strength of skewness and must be chosen substantively. ξ and ω were calculated automatically.</span>`;
+      setP('xi',xi); setP('om',om);
     } else if (CUR.id==='cauchy') {
       const t_lo=Math.tan(Math.PI*(q_lo-.5)),t_hi=Math.tan(Math.PI*(q_hi-.5));
       const sigma=(hi-lo)/(t_hi-t_lo),mu=(lo+hi)/2;
