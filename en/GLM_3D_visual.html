@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLM 3D Visualisation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+html{font-size:18px}
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;600&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --a6: #0e7c7b;
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --border: #1f2433;
+    --accent1: #4fc3f7;
+    --accent2: #f06292;
+    --accent3: #81c784;
+    --accent4: #ffb74d;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --renderer-bg: #0d0f14;
+    --ink2: #6b7280;
+  }
+
+  :root.light {
+    --a6: #0e7c7b;
+    --bg: #f4f6fa;
+    --surface: #ffffff;
+    --border: #d1d5db;
+    --accent1: #0284c7;
+    --accent2: #e11d48;
+    --accent3: #16a34a;
+    --accent4: #d97706;
+    --text: #111827;
+    --muted: #6b7280;
+    --renderer-bg: #f0f2f8;
+    --ink2: #6b7280;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    padding: 18px 40px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    justify-content: space-between;
+  }
+  .header-titles { display: flex; flex-direction: column; gap: 0; }
+  header h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.55rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  header h1 em {
+    font-style: italic;
+    color: var(--accent1);
+  }
+  header .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.22rem;
+    letter-spacing: 0.03em;
+  }
+  header .author {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    opacity: 0.55;
+    margin-top: 0.12rem;
+    letter-spacing: 0.02em;
+  }
+
+  .controls-bar {
+    display: flex;
+    gap: 10px;
+    padding: 16px 40px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .tab-group { display: flex; gap: 4px; }
+  .tab {
+    padding: 7px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active { background: var(--accent1); color: #0d0f14; border-color: var(--accent1); font-weight: 500; }
+  .tab:hover:not(.active) { color: var(--text); border-color: #374151; }
+
+  .sep { width: 1px; height: 28px; background: var(--border); margin: 0 6px; }
+
+  .param-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .param-group label { font-family: 'DM Mono', monospace; font-size: 0.75rem; }
+  .param-group input[type=range] {
+    accent-color: var(--accent2);
+    width: 90px;
+    cursor: pointer;
+  }
+  .param-val {
+    font-family: 'DM Mono', monospace;
+    color: var(--accent2);
+    font-size: 0.8rem;
+    min-width: 30px;
+  }
+
+  .viz-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    height: calc(100vh - 130px);
+  }
+
+  .panel {
+    position: relative;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-label {
+    position: absolute;
+    top: 14px; left: 18px;
+    z-index: 10;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(13,15,20,0.7);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+  }
+  .panel-label span {
+    color: var(--accent1);
+    margin-right: 6px;
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: var(--muted);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  canvas { display: block; }
+
+  .legend {
+    position: absolute;
+    bottom: 30px; right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    background: rgba(13,15,20,0.75);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+  }
+  .legend-row { display: flex; align-items: center; gap: 7px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* Info box — opposite corner to legend */
+  .infobox {
+    position: absolute;
+    bottom: 30px; left: 16px;
+    max-width: 230px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    background: rgba(13,15,20,0.82);
+    padding: 10px 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+    line-height: 1.55;
+  }
+  .infobox .ib-title {
+    font-size: 0.75rem;
+    color: var(--accent1);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .infobox .ib-row {
+    display: flex; gap: 6px; margin-bottom: 3px;
+  }
+  .ib-label { color: var(--accent3); min-width: 58px; }
+  .ib-val   { color: #c9d1e0; }
+  .infobox .ib-sep {
+    border: none; border-top: 1px solid var(--border);
+    margin: 6px 0;
+  }
+  .infobox .ib-note {
+    color: #4b5563; font-size: 0.75rem; line-height: 1.4;
+  }
+
+  /* Data-points toggle button */
+  .btn-toggle {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-toggle.on {
+    background: rgba(129,199,132,0.15);
+    color: var(--accent3);
+    border-color: var(--accent3);
+  }
+  .btn-toggle:hover:not(.on) { color: var(--text); border-color: #374151; }
+  .btn-toggle .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Theme toggle */
+  .btn-theme {
+    margin-left: auto;
+    padding: 6px 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-theme:hover { color: var(--text); border-color: var(--accent4); }
+  .light .btn-theme { color: var(--muted); }
+em{font-style:italic;color:var(--a6)}
+
+/* ── FLOATING HELP PANEL ── */
+#help-float{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:300px;z-index:600;background:var(--surface);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.35)}
+#help-float.open{display:block}
+.hp-head{display:flex;justify-content:space-between;align-items:center;
+         padding:.5rem .85rem;border-bottom:1px solid var(--border)}
+.hp-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;
+          text-transform:uppercase;color:var(--muted)}
+.hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:none;border:none;
+          cursor:pointer;color:var(--muted);padding:0 .2rem;line-height:1}
+.hp-close:hover{color:var(--text)}
+.hp-body{padding:.8rem .85rem;font-family:'DM Mono',monospace;font-size:.67rem;
+         line-height:1.8;color:var(--muted);max-height:75vh;overflow-y:auto}
+.hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;
+         margin-top:.85rem;margin-bottom:.28rem;border-bottom:1px solid var(--border);
+         padding-bottom:.18rem;color:var(--muted)}
+.hp-sect:first-child{margin-top:0}
+.hp-body strong{color:var(--text)}
+.hp-body em{color:var(--accent1);font-style:normal}
+.hp-seq{padding-left:.05rem}
+.hp-seq li{list-style:none;padding:.08rem 0}
+.hp-seq li::before{color:var(--accent1);margin-right:.4rem;font-weight:600}
+.hp-seq li:nth-child(1)::before{content:'①'}
+.hp-seq li:nth-child(2)::before{content:'②'}
+.hp-seq li:nth-child(3)::before{content:'③'}
+.hp-seq li:nth-child(4)::before{content:'④'}
+.hp-seq li:nth-child(5)::before{content:'⑤'}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-titles">
+    <h1>GLM · <em>3D Distributions</em></h1>
+    <p class="sub">Generalised Linear Models · 3D Posterior Landscape · Interactive · Rotate · Zoom</p>
+    <p class="author">© Dr. Rainer Düsing · Interactive Tools by Claude</p>
+  </div>
+  <div style="display:flex;gap:.4rem;align-items:flex-start;flex-shrink:0">
+    <button class="btn-theme" onclick="window.open('../index.html','_self')" style="border-color:var(--a6);color:var(--a6)">← Overview</button>
+    <button class="btn-theme" onclick="window.open('../GLMM_interactive.html','_blank')" style="border-color:var(--a6);color:var(--a6)">Next → GLMM interactive</button>
+    <button class="btn-theme" onclick="toggleHelpFloat()" style="border-color:#e8614a;color:#e8614a">ℹ Help</button>
+    <button class="btn-theme" id="btn-theme" onclick="toggleTheme()">☀ Light Mode</button>
+  </div>
+</header>
+
+<div class="controls-bar">
+  <div class="tab-group">
+    <button class="tab active" onclick="setModel('normal', this)">Normal (OLS)</button>
+    <button class="tab" onclick="setModel('poisson', this)">Poisson</button>
+    <button class="tab" onclick="setModel('negbinom', this)">Neg. Binomial</button>
+    <button class="tab" onclick="setModel('gamma', this)">Gamma</button>
+    <button class="tab" onclick="setModel('binomial', this)">Binomial</button>
+    <button class="tab" onclick="setModel('logistic', this)">Logistic</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="param-group">
+    <label>β₀</label>
+    <input type="range" id="b0" min="-3" max="5" step="0.1" value="0.5" oninput="updateParams()">
+    <span class="param-val" id="b0val">0.5</span>
+  </div>
+  <div class="param-group">
+    <label>β₁</label>
+    <input type="range" id="b1" min="-2" max="2" step="0.05" value="0.4" oninput="updateParams()">
+    <span class="param-val" id="b1val">0.4</span>
+  </div>
+  <div class="param-group" id="sigma-group" style="display:flex">
+    <div class="sep"></div>
+    <label>σ (Dispersion)</label>
+    <input type="range" id="sigma" min="0.2" max="3.0" step="0.1" value="0.8" oninput="updateParams()">
+    <span class="param-val" id="sigmaval">0.8</span>
+  </div>
+  <div class="param-group" id="shape-group" style="display:none">
+    <div class="sep"></div>
+    <label>κ (Shape)</label>
+    <input type="range" id="shape" min="0.5" max="8.0" step="0.25" value="2.0" oninput="updateParams()">
+    <span class="param-val" id="shapeval">2.0</span>
+  </div>
+  <div class="param-group" id="ntrials-group" style="display:none">
+    <div class="sep"></div>
+    <label>n (Trials)</label>
+    <input type="range" id="ntrials" min="1" max="20" step="1" value="10" oninput="updateParams()">
+    <span class="param-val" id="ntrialsval">10</span>
+  </div>
+  <div class="param-group" id="nbr-group" style="display:none">
+    <div class="sep"></div>
+    <label>r (Dispersion)</label>
+    <input type="range" id="nbr" min="0.25" max="10" step="0.25" value="2" oninput="updateParams()">
+    <span class="param-val" id="nbrval">2.00</span>
+  </div>
+
+  <div class="sep"></div>
+  <button class="btn-toggle" id="btn-data" onclick="toggleData()">
+    <span class="dot"></span> Data points
+  </button>
+  <div class="param-group" id="nsamples-group" style="display:none">
+    <label>N</label>
+    <input type="range" id="nsamples" min="10" max="200" step="10" value="30" oninput="updateParams()">
+    <span class="param-val" id="nsamplesval">30</span>
+  </div>
+</div>
+
+<div class="viz-grid">
+  <div class="panel" id="panel1">
+    <div class="panel-label"><span>01</span> Bar Histogram</div>
+    <div class="infobox" id="infobox1"></div>
+    <div class="legend" id="legend1"></div>
+    <div class="hint">🖱 Rotate / Zoom</div>
+  </div>
+  <div class="panel" id="panel2">
+    <div class="panel-label"><span>02</span> Curves / Surfaces</div>
+    <div class="infobox" id="infobox2"></div>
+    <div class="legend" id="legend2"></div>
+    <div class="hint">🖱 Rotate / Zoom</div>
+  </div>
+</div>
+
+<script>
+// ─── Math helpers ────────────────────────────────────────────────────────────
+function poissonPMF(k, lambda) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let logP = k * Math.log(lambda) - lambda;
+  for (let i = 2; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
+}
+
+// Negative Binomial PMF: NB(r, p) parametrised by mean μ
+// p_success = r/(r+μ), so Var(Y) = μ + μ²/r  (→ Poisson as r→∞)
+function negbinomPMF(k, mu, r) {
+  if (mu <= 0 || r <= 0) return k === 0 ? 1 : 0;
+  // log P(Y=k) = lgamma(k+r) - lgamma(r) - lgamma(k+1)
+  //              + r*log(r/(r+mu)) + k*log(mu/(r+mu))
+  const pS = r / (r + mu);
+  const logP = logGammaFn(k + r) - logGammaFn(r) - logGammaFn(k + 1)
+             + r * Math.log(pS) + k * Math.log(1 - pS);
+  return Math.exp(logP);
+}
+function normalPDF(x, mu, sigma) {
+  return Math.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * Math.sqrt(2 * Math.PI));
+}
+function logisticP(eta) { return 1 / (1 + Math.exp(-eta)); }
+
+// Binomial PMF: B(n, p) — n trials, success prob p
+function binomialPMF(k, n, p) {
+  if (k < 0 || k > n) return 0;
+  // log C(n,k) + k*log(p) + (n-k)*log(1-p)
+  let logC = 0;
+  for (let i = 0; i < k; i++) logC += Math.log(n - i) - Math.log(i + 1);
+  const lp = p > 0 ? Math.log(p) : -Infinity;
+  const l1p = (1 - p) > 0 ? Math.log(1 - p) : -Infinity;
+  return Math.exp(logC + k * lp + (n - k) * l1p);
+}
+
+// Gamma PDF: shape=k, scale=mu/k  → mean=mu, var=mu²/k
+function gammaPDF(x, mu, kShape) {
+  if (x <= 0 || mu <= 0 || kShape <= 0) return 0;
+  const scale = mu / kShape;
+  // Use log-space for numerical stability
+  return Math.exp((kShape - 1) * Math.log(x) - x / scale - kShape * Math.log(scale) - _logGammaCache(kShape));
+}
+// Cache log-gamma result — kShape only changes on slider release, not per-point
+let _lgCache = { z: -1, val: 0 };
+function _logGammaCache(z) {
+  if (z === _lgCache.z) return _lgCache.val;
+  _lgCache = { z, val: logGammaFn(z) };
+  return _lgCache.val;
+}
+// Lanczos approximation for log-gamma
+function logGammaFn(z) {
+  const g = 7;
+  const c = [0.99999999999980993,676.5203681218851,-1259.1392167224028,
+    771.32342877765313,-176.61502916214059,12.507343278686905,
+    -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - logGammaFn(1 - z);
+  z -= 1;
+  let x = c[0];
+  for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+  const t = z + g + 0.5;
+  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+
+// ─── Coordinate convention ───────────────────────────────────────────────────
+// X-axis (Three X) = Predictor x
+// Z-axis (Three Z) = Outcome y/k  (negative Z = higher outcome values)
+// Y-axis (Three Y) = Probability / density  (up)
+//
+// Regression curve μ(x) lives on the FLOOR (Y=0) at position (x, 0, -mu*zScale)
+// Distributions rise upward (Y > 0) from that floor point.
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let model = 'normal';
+let beta0 = 0.5, beta1 = 0.4, sigma = 0.8, kShape = 2.0, nTrials = 10, nSamples = 30, nbR = 2.0;
+let showData = false;
+let renderers = [], scenes = [], cameras = [];
+
+// Per-model settings — each model remembers its own β₀, β₁ and extras independently
+const modelSettings = {
+  normal:    { beta0: 0.5,  beta1: 0.4,  sigma: 0.8 },
+  poisson:   { beta0: 0.5,  beta1: 0.4  },
+  negbinom:  { beta0: 0.5,  beta1: 0.4,  nbR: 2.0 },
+  gamma:     { beta0: 0.5,  beta1: 0.4,  kShape: 2.0 },
+  binomial:  { beta0: 0.0,  beta1: 0.8,  nTrials: 10 },
+  logistic:  { beta0: 0.0,  beta1: 0.8  },
+};
+
+// ─── Model info definitions ───────────────────────────────────────────────────
+const MODEL_INFO = {
+  normal: {
+    name: 'Normal (OLS)',
+    family: 'Gaussian',
+    link: 'Identity',
+    linkFn: 'μ = η',
+    varFn: 'Var(Y) = σ²',
+    eta: 'η = β₀ + β₁x',
+    note: 'Constant variance. Residuals ∼ N(0, σ²).',
+  },
+  poisson: {
+    name: 'Poisson',
+    family: 'Poisson',
+    link: 'Log',
+    linkFn: 'μ = exp(η)',
+    varFn: 'Var(Y) = μ',
+    eta: 'η = β₀ + β₁x',
+    note: 'For count data (≥ 0). Variance grows with μ.',
+  },
+  negbinom: {
+    name: 'Neg. Binomial',
+    family: 'Neg. Binomial',
+    link: 'Log',
+    linkFn: 'μ = exp(η)',
+    varFn: 'Var(Y) = μ + μ²/r',
+    eta: 'η = β₀ + β₁x',
+    note: 'Overdispersed count data. r → ∞ = Poisson. Small r = strong overdispersion.',
+  },
+  gamma: {
+    name: 'Gamma',
+    family: 'Gamma',
+    link: 'Log',
+    linkFn: 'μ = exp(η)',
+    varFn: 'Var(Y) = μ²/κ',
+    eta: 'η = β₀ + β₁x',
+    note: 'Positive continuous values. Relative variance constant.',
+  },
+  binomial: {
+    name: 'Binomial',
+    family: 'Binomial',
+    link: 'Logit',
+    linkFn: 'p = 1/(1+e⁻ᶯ)',
+    varFn: 'Var(Y) = np(1−p)',
+    eta: 'η = β₀ + β₁x',
+    note: 'Outcome = k/n ∈ [0,1]. k successes out of n trials.',
+  },
+  logistic: {
+    name: 'Logistic',
+    family: 'Binomial (n=1)',
+    link: 'Logit',
+    linkFn: 'p = 1/(1+e⁻ᶯ)',
+    varFn: 'Var(Y) = p(1−p)',
+    eta: 'η = β₀ + β₁x',
+    note: 'Binary: Y ∈ {0,1}. Special case of Binomial.',
+  },
+};
+
+// ─── Simulated data points ────────────────────────────────────────────────────
+// Fixed seed-like RNG so points don't jump on every rebuild
+function seededRand(seed) {
+  let s = seed;
+  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+function generateDataPoints() {
+  const rng = seededRand(42);
+  const randn = () => {
+    const u = rng(), v = rng();
+    return Math.sqrt(-2 * Math.log(u + 1e-10)) * Math.cos(2 * Math.PI * v);
+  };
+  const points = [];
+  for (let i = 0; i < nSamples; i++) {
+    const xJitter = (rng() * 6) - 3;   // uniform in [-3, 3]
+    const mu = getMuAt(xJitter);
+    let y;
+    if (model === 'normal') {
+      y = mu + randn() * sigma;
+    } else if (model === 'poisson') {
+      y = Math.max(0, Math.round(mu + randn() * Math.sqrt(mu)));
+    } else if (model === 'negbinom') {
+      // Approximate: NB via Gamma-Poisson mixture
+      const nbVar = mu + mu * mu / nbR;
+      y = Math.max(0, Math.round(mu + randn() * Math.sqrt(nbVar)));
+    } else if (model === 'gamma') {
+      const sd = mu / Math.sqrt(kShape);
+      y = Math.max(0.01, mu + randn() * sd);
+    } else if (model === 'binomial') {
+      if (nTrials === 1) {
+        y = rng() < mu ? 1 : 0;
+      } else {
+        let successes = 0;
+        for (let t = 0; t < nTrials; t++) if (rng() < mu) successes++;
+        y = successes / nTrials;  // proportion k/n ∈ [0,1]
+      }
+    } else if (model === 'logistic') {
+      y = rng() < mu ? 1 : 0;
+    }
+    points.push({ x: xJitter, y });
+  }
+  return points;
+}
+
+// getMu at any x (not just grid) — used for data generation
+function getMuAt(x) {
+  const eta = beta0 + beta1 * x;
+  if (model === 'poisson' || model === 'gamma' || model === 'negbinom') return Math.exp(eta);
+  if (model === 'normal')   return eta;
+  if (model === 'binomial') return logisticP(eta);
+  if (model === 'logistic') return logisticP(eta);
+  return eta;
+}
+
+// ─── Setup Three.js for both panels ──────────────────────────────────────────
+function makeRenderer(panelId) {
+  const panel = document.getElementById(panelId);
+  const w = panel.clientWidth, h = panel.clientHeight;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x0d0f14, 1);
+  panel.appendChild(renderer.domElement);
+  return renderer;
+}
+
+function makeCamera(w, h) {
+  const cam = new THREE.PerspectiveCamera(45, w / h, 0.01, 1000);
+  cam.position.set(6, 5, 8);
+  cam.lookAt(0, 0, 0);
+  return cam;
+}
+
+// ─── Orbit Controls ───────────────────────────────────────────────────────────
+function addOrbitControls(camera, domEl) {
+  let isDragging = false, isRightDrag = false;
+  let lastX = 0, lastY = 0;
+  let theta = 0.55, phi = 0.85, radius = 13;
+  let targetX = 0, targetY = 1;
+
+  function updateCam() {
+    camera.position.x = targetX + radius * Math.sin(phi) * Math.sin(theta);
+    camera.position.y = targetY + radius * Math.cos(phi);
+    camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
+    camera.lookAt(targetX, targetY, 0);
+  }
+  updateCam();
+
+  domEl.addEventListener('mousedown', e => {
+    isDragging = true;
+    isRightDrag = e.button === 2;
+    lastX = e.clientX; lastY = e.clientY;
+    e.preventDefault();
+  });
+  domEl.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    if (!isRightDrag) {
+      theta -= dx * 0.01;
+      phi = Math.max(0.1, Math.min(Math.PI - 0.1, phi + dy * 0.01));
+    } else {
+      targetX -= dx * 0.02;
+      targetY += dy * 0.02;
+    }
+    updateCam();
+  });
+  domEl.addEventListener('wheel', e => {
+    radius = Math.max(3, Math.min(30, radius + e.deltaY * 0.02));
+    updateCam();
+    e.preventDefault();
+  }, { passive: false });
+}
+
+// ─── Colors ───────────────────────────────────────────────────────────────────
+// 9 perceptually distinct colors — one per x-value (−3 to +3, step 0.75)
+// Chosen to avoid similar hues and remain readable on both dark and light bg
+const BAR_COLORS_HEX = [
+  '#e05252', // x=−3.00  red
+  '#e8853a', // x=−2.25  orange
+  '#d4c23a', // x=−1.50  yellow
+  '#52b04a', // x=−0.75  green
+  '#3fc4c4', // x= 0.00  teal
+  '#4a90d9', // x=+0.75  blue
+  '#7b5ea7', // x=+1.50  purple
+  '#c45696', // x=+2.25  pink-magenta
+  '#a0785a', // x=+3.00  brown
+];
+
+function hexToInt(h) { return parseInt(h.replace('#',''), 16); }
+
+const COLORS = {
+  bars:    BAR_COLORS_HEX.map(hexToInt),
+  grid:    0x1f2433,
+  axis:    0x4b5563,
+  mu_line: 0xf06292,
+  mu_dot:  0xf06292,
+};
+
+let isLightMode = false;
+
+function getThemeColors() {
+  return isLightMode
+    ? { grid: 0xd1d5db, axis: 0x9ca3af, mu_line: 0xe11d48, mu_dot: 0xe11d48, rendererBg: 0xf0f2f8 }
+    : { grid: 0x1f2433, axis: 0x4b5563, mu_line: 0xf06292, mu_dot: 0xf06292, rendererBg: 0x0d0f14 };
+}
+
+// ─── Scales ───────────────────────────────────────────────────────────────────
+const zScaleDefault  = 0.42;
+const zScaleLogistic = 3.0;
+const zScaleBinomial = 0.38;
+const pScale = 4.5;
+
+function outcomeToZ(k) {
+  if (model === 'logistic' || model === 'binomial') return -k * zScaleLogistic;
+  return -k * zScaleDefault;
+}
+function probToY(p) { return p * pScale; }
+function isContinuous() { return model === 'normal' || model === 'gamma'; }
+function isBinary()     { return model === 'logistic'; }
+function isDiscrete()   { return model === 'poisson' || model === 'negbinom' || model === 'binomial'; }
+
+// ─── Dispose helper — frees GPU memory before removing objects ────────────────
+function disposeObject(obj) {
+  if (obj.geometry) obj.geometry.dispose();
+  if (obj.material) {
+    if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+    else obj.material.dispose();
+  }
+}
+
+function clearScene(scene) {
+  // Walk backwards so splice doesn't skip items
+  for (let i = scene.children.length - 1; i >= 0; i--) {
+    const obj = scene.children[i];
+    disposeObject(obj);
+    scene.remove(obj);
+  }
+}
+
+// ─── Debounced rebuild — prevents thrashing GPU on rapid slider moves ─────────
+let _rebuildTimer = null;
+function scheduleRebuild() {
+  if (_rebuildTimer) clearTimeout(_rebuildTimer);
+  _rebuildTimer = setTimeout(() => {
+    _rebuildTimer = null;
+    buildBars(scenes[0]);
+    buildCurves(scenes[1]);
+  }, 40); // ~25fps max rebuild rate, feels instant but won't pile up
+}
+
+function addGrid(scene) {
+  const tc = getThemeColors();
+  const isCompact = model === 'logistic' || model === 'binomial';
+  const zMax  = isCompact ? 3.5 : 7;
+  const zStep = isCompact ? 0.5 : 1;
+
+  const axMat = new THREE.LineBasicMaterial({ color: tc.axis });
+  addLine(scene, [-5,0,0], [5,0,0], axMat);
+  addLine(scene, [0,0,0],  [0,5,0], axMat);
+  addLine(scene, [0,0,0],  [0,0,-zMax], axMat);
+
+  const gridMat = new THREE.LineBasicMaterial({ color: tc.grid, transparent: true, opacity: 0.6 });
+  for (let ix = -5; ix <= 5; ix++) addLine(scene, [ix,0,0], [ix,0,-zMax], gridMat);
+  for (let iz = 0; iz >= -zMax; iz -= zStep) addLine(scene, [-5,0,iz], [5,0,iz], gridMat);
+}
+
+function addLine(scene, a, b, mat) {
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
+  scene.add(new THREE.Line(geo, mat));
+}
+
+// Axis labels via sprites
+function makeTextSprite(text, colorDark, colorLight) {
+  const color = isLightMode ? (colorLight || '#374151') : (colorDark || '#9ca3af');
+  const c = document.createElement('canvas'); c.width = 320; c.height = 72;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.font = 'bold 38px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 160, 36);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.0, 0.45, 1);
+  return sprite;
+}
+
+// ─── Model computations ───────────────────────────────────────────────────────
+function getXValues() {
+  const xs = [];
+  for (let x = -3; x <= 3; x += 0.75) xs.push(+x.toFixed(2));
+  return xs;
+}
+
+// Returns μ in outcome-space (used for placing regression curve on floor)
+function getMu(x) {
+  const eta = beta0 + beta1 * x;
+  if (model === 'poisson' || model === 'gamma' || model === 'negbinom') return Math.exp(eta);
+  if (model === 'normal')   return eta;
+  if (model === 'binomial') return logisticP(eta);  // p = success probability
+  if (model === 'logistic') return logisticP(eta);
+  return eta;
+}
+
+// Returns distribution points {k, p} for the distribution at predictor value x
+function getDistPoints(x) {
+  const mu = getMu(x);
+  const pts = [];
+  if (model === 'poisson') {
+    const kmax = Math.max(14, Math.ceil(mu * 2.5 + 6));
+    for (let k = 0; k <= kmax; k++) pts.push({ k, p: poissonPMF(k, mu) });
+  } else if (model === 'negbinom') {
+    // NB is more spread out — extend range by variance contribution μ²/r
+    const nbVar = mu + mu * mu / nbR;
+    const kmax = Math.max(20, Math.ceil(mu + 4 * Math.sqrt(nbVar) + 4));
+    for (let k = 0; k <= kmax; k++) {
+      const p = negbinomPMF(k, mu, nbR);
+      if (p > 0) pts.push({ k, p });
+    }
+  } else if (model === 'normal') {
+    for (let k = mu - 3.5 * sigma; k <= mu + 3.5 * sigma; k += sigma * 0.12)
+      pts.push({ k, p: normalPDF(k, mu, sigma) * sigma * 0.12 });
+  } else if (model === 'gamma') {
+    const sd = mu / Math.sqrt(kShape);
+    const kMax = mu + 4 * sd;
+    const N = 36;
+    const step = kMax / N;
+    for (let i = 1; i <= N; i++)
+      pts.push({ k: i * step, p: gammaPDF(i * step, mu, kShape) * step });
+  } else if (model === 'binomial') {
+    if (nTrials === 1) {
+      // n=1 is identical to logistic: only k/n = 0 or 1
+      pts.push({ k: 0, p: 1 - mu });
+      pts.push({ k: 1, p: mu });
+    } else {
+      // Outcome is proportion k/n ∈ [0,1] — each bar at k/n position
+      for (let k = 0; k <= nTrials; k++)
+        pts.push({ k: k / nTrials, p: binomialPMF(k, nTrials, mu) });
+    }
+  } else if (model === 'logistic') {
+    pts.push({ k: 0, p: 1 - mu });
+    pts.push({ k: 1, p: mu });
+  }
+  return pts;
+}
+
+// ─── Data points overlay ──────────────────────────────────────────────────────
+function addDataPoints(scene) {
+  if (!showData) return;
+  const pts = generateDataPoints();
+  const geo = new THREE.SphereGeometry(0.055, 6, 6);   // small
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.90 });
+  pts.forEach(({ x, y }) => {
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, 0.02, outcomeToZ(y));
+    scene.add(mesh);
+  });
+}
+
+// Helper: z label position depends on model
+function zLabelZ() {
+  return (model === 'logistic' || model === 'binomial') ? -4.0 : -7.8;
+}
+// The key insight: μ(x) is drawn on the FLOOR (Y=0) as a curve in the X-Z plane.
+// For each predictor x, μ(x) tells us the expected outcome → that's the Z position.
+// The distributions then rise UPWARD (Y) from each (x, 0, outcomeToZ(k)) point.
+
+function addRegressionFloorCurve(scene) {
+  const tc = getThemeColors();
+  const pts = [];
+  for (let x = -3; x <= 3.01; x += 0.08) {
+    const mu = getMu(x);
+    pts.push(new THREE.Vector3(x, 0.01, outcomeToZ(mu)));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  scene.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: tc.mu_line, linewidth: 3 })));
+
+  getXValues().forEach(x => {
+    const mu = getMu(x);
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 10, 10),
+      new THREE.MeshBasicMaterial({ color: tc.mu_dot })
+    );
+    dot.position.set(x, 0.01, outcomeToZ(mu));
+    scene.add(dot);
+  });
+}
+
+// ─── Version 1: Bar Histograms ────────────────────────────────────────────────
+function buildBars(scene) {
+  clearScene(scene);
+  addGrid(scene);
+  addRegressionFloorCurve(scene);
+  addDataPoints(scene);
+
+  const xs = getXValues();
+
+  xs.forEach((x, xi) => {
+    const pts = getDistPoints(x);
+    const color = COLORS.bars[xi % COLORS.bars.length];
+
+    // For continuous distributions (normal, gamma): use narrow bars as histogram approx
+    // For discrete (poisson, negbinom) and binary (logistic): use wider bars
+    const barWActual = isContinuous() ? 0.08 : 0.16;
+
+    pts.forEach(({ k, p }) => {
+      const h = probToY(p);
+      if (h < 0.008) return;
+      const zPos = outcomeToZ(k);
+
+      const geo = new THREE.BoxGeometry(barWActual, h, barWActual * 0.85);
+      const mat = new THREE.MeshPhongMaterial({
+        color,
+        transparent: true,
+        opacity: isContinuous() ? 0.65 : 0.78,
+        shininess: 50,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, h / 2, zPos);
+      scene.add(mesh);
+
+      // Subtle wireframe edges
+      const wf = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.10 })
+      );
+      wf.position.copy(mesh.position);
+      scene.add(wf);
+    });
+  });
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(4, 9, 4); scene.add(dir);
+  const dir2 = new THREE.DirectionalLight(0x4fc3f7, 0.25);
+  dir2.position.set(-4, 3, -4); scene.add(dir2);
+
+  // Axis labels
+  const lx = makeTextSprite('x (Predictor)', '#4fc3f7', '#0284c7');
+  lx.position.set(5.8, 0.1, 0); scene.add(lx);
+  const ly = makeTextSprite('P(Y=k)', '#aaaaaa', '#6b7280');
+  ly.position.set(-0.5, 4.8, 0); scene.add(ly);
+  const lz = makeTextSprite('k (Outcome)', '#81c784', '#16a34a');
+  lz.position.set(0, 0.1, zLabelZ()); scene.add(lz);
+
+  updateInfobox(1);
+  updateLegend(1, xs);
+}
+
+// ─── Version 2: Curve Surfaces ────────────────────────────────────────────────
+function buildCurves(scene) {
+  clearScene(scene);
+  addGrid(scene);
+  addRegressionFloorCurve(scene);
+  addDataPoints(scene);
+
+  const xs = getXValues();
+
+  xs.forEach((x, xi) => {
+    const pts = getDistPoints(x);
+    const color = new THREE.Color(COLORS.bars[xi % COLORS.bars.length]);
+
+    if (isContinuous()) {
+      const validPts = pts.filter(({ p }) => p > 0.002);
+      if (validPts.length < 2) return;
+      const curvePts = [
+        new THREE.Vector3(x, 0, outcomeToZ(validPts[0].k)),
+        ...validPts.map(({ k, p }) => new THREE.Vector3(x, probToY(p), outcomeToZ(k))),
+        new THREE.Vector3(x, 0, outcomeToZ(validPts[validPts.length - 1].k)),
+      ];
+      const lGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+      scene.add(new THREE.Line(lGeo, new THREE.LineBasicMaterial({ color, linewidth: 2 })));
+      const shapeVerts = [];
+      shapeVerts.push(new THREE.Vector3(x, 0, outcomeToZ(validPts[0].k)));
+      validPts.forEach(({ k, p }) => shapeVerts.push(new THREE.Vector3(x, probToY(p), outcomeToZ(k))));
+      shapeVerts.push(new THREE.Vector3(x, 0, outcomeToZ(validPts[validPts.length - 1].k)));
+      const positions = [];
+      for (let i = 1; i < shapeVerts.length - 1; i++) {
+        positions.push(...shapeVerts[0].toArray(), ...shapeVerts[i].toArray(), ...shapeVerts[i + 1].toArray());
+      }
+      const fillGeo = new THREE.BufferGeometry();
+      fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      fillGeo.computeVertexNormals();
+      scene.add(new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide })));
+
+    } else if (model === 'poisson' || model === 'negbinom' || model === 'binomial') {
+      pts.forEach(({ k, p }) => {
+        if (p < 0.004) return;
+        const zPos = outcomeToZ(k), yTop = probToY(p);
+        addLine(scene, [x, 0, zPos], [x, yTop, zPos], new THREE.LineBasicMaterial({ color, linewidth: 2 }));
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ color }));
+        dot.position.set(x, yTop, zPos);
+        scene.add(dot);
+      });
+      const topPts = pts.filter(({ p }) => p > 0.004).map(({ k, p }) => new THREE.Vector3(x, probToY(p), outcomeToZ(k)));
+      if (topPts.length > 1) {
+        scene.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(topPts),
+          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35 })
+        ));
+      }
+
+    } else if (isBinary()) {
+      pts.forEach(({ k, p }) => {
+        const zPos = outcomeToZ(k), yTop = probToY(p);
+        const c2 = new THREE.Color(k === 1 ? 0x4fc3f7 : 0xf06292);
+        addLine(scene, [x, 0, zPos], [x, yTop, zPos], new THREE.LineBasicMaterial({ color: c2, linewidth: 3 }));
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({ color: c2 }));
+        dot.position.set(x, yTop, zPos);
+        scene.add(dot);
+      });
+    }
+  });
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+  dir.position.set(4, 9, 4); scene.add(dir);
+
+  const lx = makeTextSprite('x (Predictor)', '#4fc3f7', '#0284c7');
+  lx.position.set(5.8, 0.1, 0); scene.add(lx);
+  const ly = makeTextSprite('P / f(y)', '#aaaaaa', '#6b7280');
+  ly.position.set(-0.5, 4.8, 0); scene.add(ly);
+  const lz = makeTextSprite('y (Outcome)', '#81c784', '#16a34a');
+  lz.position.set(0, 0.1, zLabelZ()); scene.add(lz);
+
+  updateInfobox(2);
+  updateLegend(2, xs);
+}
+
+function updateInfobox(panelIdx) {
+  const el = document.getElementById(`infobox${panelIdx}`);
+  const info = MODEL_INFO[model];
+  if (!info) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="ib-title">${info.name}</div>
+    <div class="ib-row"><span class="ib-label">Family</span><span class="ib-val">${info.family}</span></div>
+    <div class="ib-row"><span class="ib-label">Link</span><span class="ib-val">${info.link}</span></div>
+    <div class="ib-row"><span class="ib-label">Link fn</span><span class="ib-val">${info.linkFn}</span></div>
+    <div class="ib-row"><span class="ib-label">Variance</span><span class="ib-val">${info.varFn}</span></div>
+    <hr class="ib-sep">
+    <div class="ib-row"><span class="ib-label">Predictor</span><span class="ib-val">${info.eta}</span></div>
+    <hr class="ib-sep">
+    <div class="ib-note">${info.note}</div>`;
+}
+
+function updateLegend(panelIdx, xs) {
+  const el = document.getElementById(`legend${panelIdx}`);
+  const tc = getThemeColors();
+  const muColor = '#' + tc.mu_line.toString(16).padStart(6,'0');
+  el.innerHTML = xs.map((x, i) =>
+    `<div class="legend-row"><div class="legend-dot" style="background:${BAR_COLORS_HEX[i % BAR_COLORS_HEX.length]}"></div>x = ${x}</div>`
+  ).join('') +
+  `<div class="legend-row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+    <div class="legend-dot" style="background:${muColor};border-radius:50%"></div>μ(x) curve
+  </div>` +
+  (showData ? `<div class="legend-row"><div class="legend-dot" style="background:${isLightMode ? '#374151' : '#ffffff'};border-radius:50%"></div>Data points (N=${nSamples})</div>` : '');
+}
+
+function toggleData() {
+  showData = !showData;
+  const btn = document.getElementById('btn-data');
+  btn.classList.toggle('on', showData);
+  document.getElementById('nsamples-group').style.display = showData ? 'flex' : 'none';
+  rebuildScenes();
+}
+
+function toggleTheme() {
+  isLightMode = !isLightMode;
+  document.documentElement.classList.toggle('light', isLightMode);
+  const btn = document.getElementById('btn-theme');
+  btn.textContent = isLightMode ? '🌙 Dark Mode' : '☀ Light Mode';
+  // Update renderer background colors
+  const bg = getThemeColors().rendererBg;
+  renderers.forEach(r => r.setClearColor(bg, 1));
+  rebuildScenes();
+}
+
+function rebuildScenes() {
+  buildBars(scenes[0]);
+  buildCurves(scenes[1]);
+}
+
+// ─── Save current slider values into the model's settings store ───────────────
+function saveCurrentSettings() {
+  const s = modelSettings[model];
+  if (!s) return;
+  s.beta0 = parseFloat(document.getElementById('b0').value);
+  s.beta1 = parseFloat(document.getElementById('b1').value);
+  if ('sigma'   in s) s.sigma   = parseFloat(document.getElementById('sigma').value);
+  if ('kShape'  in s) s.kShape  = parseFloat(document.getElementById('shape').value);
+  if ('nTrials' in s) s.nTrials = parseInt(document.getElementById('ntrials').value);
+  if ('nbR'     in s) s.nbR     = parseFloat(document.getElementById('nbr').value);
+}
+
+// ─── Load a model's stored settings into sliders + state vars ────────────────
+function loadSettings(m) {
+  const s = modelSettings[m];
+  beta0   = s.beta0  ?? 0.5;
+  beta1   = s.beta1  ?? 0.4;
+  sigma   = s.sigma  ?? 0.8;
+  kShape  = s.kShape ?? 2.0;
+  nTrials = s.nTrials ?? 10;
+  nbR     = s.nbR    ?? 2.0;
+
+  const b0el = document.getElementById('b0');
+  const b1el = document.getElementById('b1');
+  b0el.value = beta0;
+  b1el.value = beta1;
+  document.getElementById('b0val').textContent = beta0.toFixed(2);
+  document.getElementById('b1val').textContent = beta1.toFixed(2);
+
+  if (m === 'normal') {
+    document.getElementById('sigma').value = sigma;
+    document.getElementById('sigmaval').textContent = sigma.toFixed(1);
+  }
+  if (m === 'gamma') {
+    document.getElementById('shape').value = kShape;
+    document.getElementById('shapeval').textContent = kShape.toFixed(2);
+  }
+  if (m === 'binomial') {
+    document.getElementById('ntrials').value = nTrials;
+    document.getElementById('ntrialsval').textContent = nTrials;
+  }
+  if (m === 'negbinom') {
+    document.getElementById('nbr').value = nbR;
+    document.getElementById('nbrval').textContent = nbR.toFixed(2);
+  }
+}
+
+function setModel(m, btn) {
+  saveCurrentSettings();          // store current sliders under old model
+  model = m;
+  loadSettings(m);                // restore this model's remembered values
+
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sigma-group').style.display   = m === 'normal'   ? 'flex' : 'none';
+  document.getElementById('shape-group').style.display   = m === 'gamma'    ? 'flex' : 'none';
+  document.getElementById('ntrials-group').style.display = m === 'binomial' ? 'flex' : 'none';
+  document.getElementById('nbr-group').style.display     = m === 'negbinom' ? 'flex' : 'none';
+  rebuildScenes();
+}
+
+function updateParams() {
+  beta0    = parseFloat(document.getElementById('b0').value);
+  beta1    = parseFloat(document.getElementById('b1').value);
+  sigma    = parseFloat(document.getElementById('sigma').value);
+  kShape   = parseFloat(document.getElementById('shape').value);
+  nTrials  = parseInt(document.getElementById('ntrials').value);
+  nSamples = parseInt(document.getElementById('nsamples').value);
+  nbR      = parseFloat(document.getElementById('nbr').value);
+  document.getElementById('b0val').textContent       = beta0.toFixed(2);
+  document.getElementById('b1val').textContent       = beta1.toFixed(2);
+  document.getElementById('sigmaval').textContent    = sigma.toFixed(1);
+  document.getElementById('shapeval').textContent    = kShape.toFixed(2);
+  document.getElementById('ntrialsval').textContent  = nTrials;
+  document.getElementById('nsamplesval').textContent = nSamples;
+  document.getElementById('nbrval').textContent      = nbR.toFixed(2);
+  scheduleRebuild();
+}
+function init() {
+  const p1 = document.getElementById('panel1');
+  const p2 = document.getElementById('panel2');
+
+  const r1 = makeRenderer('panel1');
+  const r2 = makeRenderer('panel2');
+
+  const cam1 = makeCamera(p1.clientWidth, p1.clientHeight);
+  const cam2 = makeCamera(p2.clientWidth, p2.clientHeight);
+
+  cam1.position.set(5, 6, 9);
+  cam2.position.set(5, 6, 9);
+
+  const s1 = new THREE.Scene();
+  const s2 = new THREE.Scene();
+
+  addOrbitControls(cam1, r1.domElement);
+  addOrbitControls(cam2, r2.domElement);
+
+  renderers.push(r1, r2);
+  scenes.push(s1, s2);
+  cameras.push(cam1, cam2);
+
+  rebuildScenes();
+
+  // Animate
+  function animate() {
+    requestAnimationFrame(animate);
+    r1.render(s1, cam1);
+    r2.render(s2, cam2);
+  }
+  animate();
+
+  // Resize
+  window.addEventListener('resize', () => {
+    [0, 1].forEach(i => {
+      const panel = document.getElementById(`panel${i + 1}`);
+      const w = panel.clientWidth, h = panel.clientHeight;
+      renderers[i].setSize(w, h);
+      cameras[i].aspect = w / h;
+      cameras[i].updateProjectionMatrix();
+    });
+  });
+}
+
+
+init();
+
+// ── Floating Help Panel ─────────────────────────────────────
+let helpFloatOpen = false;
+function toggleHelpFloat(){
+  helpFloatOpen = !helpFloatOpen;
+  document.getElementById('help-float').classList.toggle('open', helpFloatOpen);
+}
+document.addEventListener('click', e => {
+  if(helpFloatOpen && !e.target.closest('#help-float') && !e.target.closest('button[onclick="toggleHelpFloat()"]'))
+    { helpFloatOpen = false; document.getElementById('help-float').classList.remove('open'); }
+});
+</script>
+
+<!-- ═══ FLOATING HELP PANEL ══════════════════════════════════ -->
+<div id="help-float">
+  <div class="hp-head">
+    <span class="hp-title">ℹ GLM 3D Visual — Help</span>
+    <button class="hp-close" onclick="toggleHelpFloat()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect">What will I learn here?</div>
+    Generalised Linear Models differ in their <strong>conditional distribution</strong> —
+    not every outcome variable is normally distributed. This tool shows the 3D posterior landscape
+    P(y | x, β₀, β₁) for six GLM families: How does the distribution shape change when
+    the predictor x or the parameters vary?
+
+    <div class="hp-sect">Recommended exploration</div>
+    <ul class="hp-seq">
+      <li>Click through all six <em>model tabs</em> — observe how the distribution shape changes depending on the outcome type</li>
+      <li>Vary <em>β₁ (Slope)</em> — how does the conditional distribution change along the x-axis?</li>
+      <li>For <em>Poisson</em>: increase β₀ — the distribution shifts and widens (Variance = Mean)</li>
+      <li>For <em>Neg. Binomial</em>: vary dispersion r — how does it differ from Poisson under overdispersion?</li>
+      <li><strong>Rotate and zoom</strong> the 3D view — explore the landscape from different angles</li>
+    </ul>
+
+    <div class="hp-sect">The six GLM families</div>
+    <strong>Normal (OLS):</strong> continuous data — symmetric bell curve, σ constant<br>
+    <strong>Poisson:</strong> count data (0,1,2,…) — log link, Variance = Mean<br>
+    <strong>Neg. Binomial:</strong> count data with overdispersion — Variance &gt; Mean<br>
+    <strong>Gamma:</strong> positive continuous data — right-skewed, log link<br>
+    <strong>Binomial:</strong> number of successes out of n trials — logit link<br>
+    <strong>Logistic:</strong> binary 0/1 data — probability between 0 and 1
+  </div>
+</div>
+</body>
+</html>
