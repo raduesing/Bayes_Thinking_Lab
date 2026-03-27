@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision Maker — Analyse Posterior Draws</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+:root{
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--shadow:#c0b8a4;--warm:#c8a96e;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--shadow:#080b10;--warm:#c8a96e;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px;-webkit-font-smoothing:antialiased;moz-osx-font-smoothing:grayscale;scroll-behavior:smooth}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;font-weight:300;overflow-x:hidden}
+
+/* ── NAV ── */
+nav{position:sticky;top:0;z-index:300;background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.6rem 2rem;display:flex;align-items:center;justify-content:space-between}
+.nb{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.nb:hover{border-color:var(--a2);color:var(--a2)}
+.nav-title{font-size:1rem;font-weight:300}
+.nav-title em{font-style:italic;color:var(--a2)}
+.nav-back{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);text-decoration:none;
+  border-bottom:1px dotted var(--border);transition:color .15s}
+.nav-back:hover{color:var(--a2)}
+
+/* ── HEADER ── */
+.hstrip{background:var(--paper);border-bottom:1.5px solid var(--border);padding:1rem 2rem;
+  display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap}
+.hstrip-title{font-size:1.4rem;font-weight:200;letter-spacing:-.02em}
+.hstrip-title em{font-style:italic;color:var(--a2)}
+.hstrip-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.6}
+.hstrip-tags{display:flex;gap:.3rem;flex-wrap:wrap;margin-left:auto;align-items:center}
+.htag{font-family:'DM Mono',monospace;font-size:.6rem;padding:.1rem .35rem;
+  border:1px solid var(--grid);color:var(--ink3)}
+
+/* ── MAIN WRAP ── */
+.wrap{padding:1.4rem 2rem 3rem;max-width:100%}
+
+/* ── SECTION CARDS ── */
+.sec{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.2rem;
+  box-shadow:2px 2px 0 var(--shadow);margin-bottom:1rem}
+.sec-hd{display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;
+  padding-bottom:.4rem;border-bottom:1px solid var(--grid)}
+.sec-title{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink2);flex:1}
+.sec-title em{color:var(--a2);font-style:normal}
+
+/* ── HELP BUTTON ── */
+.help-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.2rem .55rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink3);transition:all .15s;white-space:nowrap}
+.help-btn:hover,.help-btn.active{border-color:var(--a2);color:var(--a2);background:rgba(42,110,138,.08)}
+[data-theme="dark"] .help-btn.active{background:rgba(74,176,216,.1)}
+
+/* ── FLOATING HELP PANEL ── */
+.help-panel{position:fixed;right:2rem;top:56px;width:380px;max-height:calc(100vh - 80px);
+  overflow-y:auto;z-index:500;background:var(--paper);border:2px solid var(--a2);
+  box-shadow:4px 4px 0 var(--shadow);display:none}
+.help-panel.open{display:block}
+.help-ph{background:var(--a2);padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:1}
+.help-ph-title{font-family:'DM Mono',monospace;font-size:.75rem;color:#fff;letter-spacing:.08em;text-transform:uppercase}
+.help-close{font-family:'DM Mono',monospace;font-size:.85rem;color:#fff;background:transparent;
+  border:none;cursor:pointer;padding:.1rem .3rem;transition:opacity .15s}
+.help-close:hover{opacity:.7}
+.help-body{padding:1rem 1.1rem;font-size:.82rem;line-height:1.8;color:var(--ink2)}
+.help-body h4{font-family:'DM Mono',monospace;font-size:.72rem;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--a2);margin:1rem 0 .4rem;padding-bottom:.2rem;border-bottom:1px solid var(--grid)}
+.help-body h4:first-child{margin-top:0}
+.help-body p{margin-bottom:.7rem}
+.help-body p:last-child{margin-bottom:0}
+.help-body strong{color:var(--ink);font-weight:600}
+.help-body code{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  padding:.1rem .3rem;color:var(--a2)}
+.help-body pre{font-family:'DM Mono',monospace;font-size:.72rem;background:var(--panel);
+  border:1px solid var(--grid);padding:.7rem .9rem;line-height:1.7;color:var(--a2);
+  overflow-x:auto;margin:.5rem 0}
+.help-body .note{background:rgba(42,110,138,.1);border-left:3px solid var(--a2);
+  padding:.5rem .8rem;font-size:.78rem;color:var(--ink2)}
+[data-theme="dark"] .help-body .note{background:rgba(74,176,216,.08)}
+.help-panel::-webkit-scrollbar{width:5px}
+.help-panel::-webkit-scrollbar-track{background:transparent}
+.help-panel::-webkit-scrollbar-thumb{background:var(--border)}
+.help-panel::-webkit-scrollbar-thumb:hover{background:var(--a2)}
+
+/* ── CSV DROPZONE ── */
+.dropzone{border:2px dashed var(--border);padding:1.5rem;text-align:center;cursor:pointer;
+  transition:all .2s;position:relative}
+.dropzone:hover,.dropzone.drag{border-color:var(--a2);background:rgba(42,110,138,.05)}
+[data-theme="dark"] .dropzone:hover,[data-theme="dark"] .dropzone.drag{background:rgba(74,176,216,.06)}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.dz-icon{font-size:1.8rem;margin-bottom:.4rem;opacity:.5}
+.dz-label{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2)}
+.dz-hint{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3);margin-top:.2rem}
+
+/* ── COLUMN PREVIEW ── */
+.col-preview{margin-top:.9rem;display:none}
+.col-status{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  margin-bottom:.6rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.badge{font-family:'DM Mono',monospace;font-size:.68rem;padding:.1rem .4rem;border-radius:2px}
+.badge-ok{background:rgba(90,138,42,.2);color:var(--a3);border:1px solid rgba(90,138,42,.3)}
+.badge-warn{background:rgba(184,92,0,.2);color:var(--a5);border:1px solid rgba(184,92,0,.3)}
+.badge-err{background:rgba(201,74,42,.2);color:var(--a1);border:1px solid rgba(201,74,42,.3)}
+[data-theme="dark"] .badge-ok{background:rgba(128,203,82,.15);color:var(--a3)}
+[data-theme="dark"] .badge-warn{background:rgba(224,120,48,.15);color:var(--a5)}
+[data-theme="dark"] .badge-err{background:rgba(232,97,74,.15);color:var(--a1)}
+.col-chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem}
+.col-chip{font-family:'DM Mono',monospace;font-size:.7rem;padding:.15rem .45rem;
+  background:var(--panel);border:1px solid var(--grid);color:var(--ink2);cursor:pointer;
+  transition:all .15s;user-select:none}
+.col-chip:hover{border-color:var(--a2);color:var(--a2)}
+.col-chip.numeric{border-color:var(--border)}
+.col-chip.system{opacity:.4;cursor:default}
+.col-chip.system:hover{border-color:var(--border);color:var(--ink2)}
+.col-mapping{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);
+  margin-top:.4rem;display:none}
+
+/* ── COLLAPSIBLE ── */
+.collap-hd{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+  font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.06em;color:var(--ink2);
+  padding:.5rem .75rem;background:var(--panel);border:1px solid var(--grid);user-select:none;
+  margin-top:.8rem}
+.collap-hd:hover{color:var(--a2)}
+.collap-hd .arr{transition:transform .2s;display:inline-block}
+.collap-hd.open .arr{transform:rotate(90deg)}
+.collap-body{display:none;border:1px solid var(--grid);border-top:none}
+.collap-body.open{display:block}
+.rcode{background:var(--panel);border:none;padding:.8rem 1rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a2);
+  line-height:1.75;white-space:pre;overflow-x:auto;margin:0}
+.cbtn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.22rem .7rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;display:inline-block;margin:.4rem .8rem .6rem}
+.cbtn:hover{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+
+/* ── VARIABLE SLOTS ── */
+.slot{background:var(--panel);border:1.5px solid var(--border);margin-bottom:.7rem;
+  padding:.9rem 1rem;position:relative;transition:border-color .15s}
+.slot:hover{border-color:var(--a2)}
+.slot-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.5rem}
+.slot-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin-bottom:.5rem}
+.slot-num{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--a2);
+  position:absolute;top:.6rem;right:.7rem}
+.field-lbl{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);
+  margin-bottom:.2rem;display:block}
+.field-input{font-family:'DM Mono',monospace;font-size:.78rem;background:var(--paper);
+  border:1.5px solid var(--border);color:var(--ink);padding:.3rem .5rem;
+  width:100%;outline:none;transition:border-color .15s}
+.field-input:focus{border-color:var(--a2)}
+.field-input::placeholder{color:var(--ink3)}
+.field-select{font-family:'DM Mono',monospace;font-size:.78rem;background:var(--paper);
+  border:1.5px solid var(--border);color:var(--ink);padding:.3rem .5rem;
+  width:100%;outline:none;cursor:pointer}
+.field-select:focus{border-color:var(--a2)}
+.formula-wrap{position:relative}
+.formula-chips{display:flex;flex-wrap:wrap;gap:.2rem;margin-top:.3rem;min-height:1.2rem}
+.fcol-chip{font-family:'DM Mono',monospace;font-size:.65rem;padding:.1rem .35rem;
+  background:var(--paper);border:1px solid var(--grid);color:var(--ink3);cursor:pointer;
+  transition:all .12s}
+.fcol-chip:hover{border-color:var(--a2);color:var(--a2)}
+.slot-del{position:absolute;top:.5rem;right:2.5rem;font-family:'DM Mono',monospace;
+  font-size:.75rem;background:transparent;border:none;cursor:pointer;color:var(--ink3);
+  transition:color .15s;padding:.15rem .3rem}
+.slot-del:hover{color:var(--a1)}
+.slot-err{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a1);
+  margin-top:.3rem;display:none;padding:.2rem .4rem;background:rgba(201,74,42,.1)}
+[data-theme="dark"] .slot-err{background:rgba(232,97,74,.1)}
+
+/* ── BUTTONS ── */
+.btn-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:.8rem 0}
+.btn{font-family:'DM Mono',monospace;font-size:.78rem;padding:.35rem .9rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s}
+.btn:hover{border-color:var(--a2);color:var(--a2)}
+.btn-primary{background:var(--a2);color:var(--paper);border-color:var(--a2);font-weight:500}
+.btn-primary:hover{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary:disabled:hover{background:var(--a2);border-color:var(--a2)}
+
+/* ── CRI / MODE TOGGLES ── */
+.tbtn-group{display:flex;gap:2px}
+.tbtn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.25rem .65rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;min-width:2.5rem;text-align:center}
+.tbtn:hover{border-color:var(--a2);color:var(--a2)}
+.tbtn.on{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.hint-text{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);
+  margin-top:.35rem;min-height:1.4rem;line-height:1.4}
+
+/* ── RESULTS ── */
+#results-section{margin-top:1.2rem}
+.result-card{background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:2px 2px 0 var(--shadow);margin-bottom:1.2rem}
+.result-hd{display:flex;align-items:center;gap:.7rem;padding:.7rem 1.1rem;
+  border-bottom:1px solid var(--grid);background:var(--panel)}
+.result-label{font-size:1rem;font-weight:300;flex:1}
+.result-label em{font-style:italic;color:var(--a2)}
+.result-unit{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)}
+.canvas-wrap{padding:1rem 1.1rem;overflow:hidden}
+.plot-canvas{display:block;width:100%;max-width:100%}
+.stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;
+  padding:.6rem 1.1rem;border-top:1px solid var(--grid)}
+.stat-box{background:var(--panel);border:1px solid var(--grid);padding:.65rem .8rem}
+.stat-label{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink3);margin-bottom:.3rem}
+.stat-value{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--ink);margin-bottom:.2rem}
+.stat-sub{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3)}
+
+/* ── DECISION VERDICT ── */
+.verdict-row{padding:.6rem 1.1rem;border-top:1px solid var(--grid)}
+.verdict{font-family:'DM Mono',monospace;font-size:.8rem;padding:.35rem .8rem;
+  text-align:center;font-weight:500;letter-spacing:.03em;display:inline-block}
+.v-effect{background:rgba(90,138,42,.18);color:#4a9a4a;border:1px solid rgba(90,138,42,.35)}
+.v-null{background:rgba(42,110,138,.18);color:var(--a2);border:1px solid rgba(42,110,138,.35)}
+.v-withhold{background:rgba(184,92,0,.15);color:var(--a5);border:1px solid rgba(184,92,0,.3)}
+[data-theme="dark"] .v-effect{color:var(--a3);border-color:rgba(128,203,82,.35)}
+[data-theme="dark"] .v-null{color:var(--a2);border-color:rgba(74,176,216,.35)}
+[data-theme="dark"] .v-withhold{color:var(--a5);border-color:rgba(224,120,48,.3)}
+.verdict-detail{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);
+  margin-left:.7rem}
+
+/* ── ROPE BAR ── */
+.rope-bar-bg{height:8px;background:var(--grid);border-radius:2px;overflow:hidden;margin:.3rem 0}
+.rope-bar-fill{height:100%;background:var(--a3);border-radius:2px;transition:width .4s}
+[data-theme="dark"] .rope-bar-fill{background:var(--a3)}
+
+/* ── EXPORT BUTTON ── */
+.export-row{padding:.5rem 1.1rem;border-top:1px solid var(--grid);
+  display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.export-hint{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3)}
+
+/* ── EXPORT MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:800;
+  display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:6px 6px 0 var(--shadow);padding:1.4rem 1.6rem;width:340px;max-width:90vw}
+.modal-title{font-family:'DM Mono',monospace;font-size:.78rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink2);margin-bottom:1rem;
+  padding-bottom:.4rem;border-bottom:1px solid var(--grid)}
+.modal-row{margin-bottom:.8rem}
+.modal-row label{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);
+  display:block;margin-bottom:.4rem}
+.modal-btns{display:flex;gap:.4rem;margin-top:1rem}
+.radio-group{display:flex;gap:.3rem;flex-wrap:wrap}
+.radio-opt{font-family:'DM Mono',monospace;font-size:.75rem;padding:.25rem .65rem;
+  border:1.5px solid var(--border);cursor:pointer;color:var(--ink2);transition:all .15s}
+.radio-opt.sel{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.radio-opt:hover:not(.sel){border-color:var(--a2);color:var(--a2)}
+
+/* ── SUMMARY TABLE ── */
+.sum-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.75rem}
+.sum-table th{font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink3);text-align:left;padding:.4rem .6rem;
+  border-bottom:2px solid var(--border)}
+.sum-table td{padding:.45rem .6rem;border-bottom:1px solid var(--grid);color:var(--ink2)}
+.sum-table tr:hover td{background:var(--panel)}
+.sum-verdict{font-size:.7rem;padding:.1rem .35rem;border-radius:2px}
+
+/* ── LEARN CARDS ── */
+.learn-section{margin-top:2.5rem}
+.learn-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink3);margin-bottom:.8rem;
+  padding-bottom:.3rem;border-bottom:1px solid var(--grid)}
+.lcard-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.lcard{background:var(--paper);border:1.5px solid var(--border);padding:.9rem 1rem;
+  box-shadow:2px 2px 0 var(--shadow)}
+.lcard-h{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a2);
+  margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.05em}
+.lcard-body{font-size:.82rem;line-height:1.7;color:var(--ink2)}
+.lcard-body strong{color:var(--ink)}
+.lcard-body code{font-family:'DM Mono',monospace;font-size:.73rem;
+  background:var(--panel);padding:.1rem .3rem;color:var(--a2)}
+
+@media(max-width:860px){
+  .slot-row{grid-template-columns:1fr}
+  .slot-row3{grid-template-columns:1fr 1fr}
+  .stats-row{grid-template-columns:1fr}
+  .lcard-grid{grid-template-columns:1fr}
+  .help-panel{width:300px;right:.8rem}
+}
+</style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <a href="index_de.html" class="nav-back">← Bayes Thinking Lab</a>
+  <span class="nav-title">Decision <em>Maker</em></span>
+  <button class="nb" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+</nav>
+
+<!-- ── HEADER ── -->
+<div class="hstrip">
+  <div>
+    <div class="hstrip-title">Decision <em>Maker</em></div>
+    <div class="hstrip-sub">Analyse Real Posterior Draws — HDI · ETI · ROPE · Transformations · Derived Quantities</div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);opacity:.5;margin-top:.15rem">
+      © Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hstrip-tags">
+    <span class="htag">CSV Upload</span>
+    <span class="htag">brms · Stan · rstanarm</span>
+    <span class="htag">bayestestR</span>
+    <span class="htag">APA Export</span>
+  </div>
+</div>
+
+<!-- ── FLOATING HELP PANEL ── -->
+<div class="help-panel" id="help-panel">
+  <div class="help-ph">
+    <span class="help-ph-title" id="help-title">Help</span>
+    <button class="help-close" onclick="closeHelp()">✕ close</button>
+  </div>
+  <div class="help-body" id="help-body"></div>
+</div>
+
+<!-- ── MAIN ── -->
+<div class="wrap">
+
+  <!-- ① IMPORT -->
+  <div class="sec">
+    <div class="sec-hd">
+      <span class="sec-title"><em>①</em> Import Posterior Draws</span>
+      <button class="help-btn" id="hbtn-import" onclick="toggleHelp('import', this)">? Help</button>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="file-input" accept=".csv,.txt" onchange="handleFile(this.files[0])">
+      <div class="dz-icon">⬆</div>
+      <div class="dz-label">Drop CSV file here or click</div>
+      <div class="dz-hint">Columns = parameters, rows = draws (e.g. as_draws_df() output)</div>
+    </div>
+
+    <div class="col-preview" id="col-preview">
+      <div class="col-status" id="col-status"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-bottom:.3rem">
+        Available columns <span style="color:var(--ink3);font-size:.65rem">(click to copy)</span>
+      </div>
+      <div class="col-chips" id="col-chips"></div>
+      <div class="col-mapping" id="col-mapping"></div>
+    </div>
+
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>▸ R-Code: as_draws_df() — how to export draws from brms?</span>
+      <span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+      <div class="rcode"># ── Export draws from brms ─────────────────────────────────────────────────
+library(brms)
+
+# Fit model
+fit &lt;- brm(y ~ age + treatment, data = d, family = gaussian(),
+           chains = 4, iter = 2000, seed = 42)
+
+# Export draws as data.frame
+draws &lt;- as_draws_df(fit)   # all parameters (incl. .chain, .iteration, .draw)
+
+# Tip: Export only relevant columns — please adjust individually.
+# e.g. (only if your parameters start with "b_" and are named "sigma"):
+draws_clean &lt;- draws |&gt;
+  dplyr::select(starts_with("b_"), sigma)   # Example! Use your own column names.
+
+write.csv(draws_clean, "draws.csv", row.names = FALSE)
+
+# ── For Stan / rstanarm ─────────────────────────────────────────────────────
+# Stan: posterior::as_draws_df(fit$draws())
+# rstanarm: as.data.frame(fit) or posterior_samples(fit)</div>
+      <button class="cbtn" onclick="copyCode(this)">Copy</button>
+    </div>
+  </div>
+
+  <!-- ② VARIABLE BUILDER -->
+  <div class="sec">
+    <div class="sec-hd">
+      <span class="sec-title"><em>②</em> Define Analysis Variables</span>
+      <button class="help-btn" id="hbtn-vars" onclick="toggleHelp('vars', this)">? Help</button>
+    </div>
+
+    <div id="slots-container"></div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="addSlot()" id="btn-add-slot">+ Variable hinzufügen</button>
+      <select class="field-select" id="preset-select" style="width:auto;min-width:200px"
+              onchange="applyPreset(this.value)">
+        <option value="">— Insert preset —</option>
+        <option value="direct">Direct coefficient (b_x)</option>
+        <option value="exp">Log → Odds/Rate Ratio: exp(b_x)</option>
+        <option value="plogis">Logit → Probability: plogis(b_x)</option>
+        <option value="cohend">Cohen's d: b_x / sigma</option>
+        <option value="contrast">Contrast: b_x1 - b_x2</option>
+        <option value="percent">Percent change: (exp(b_x) - 1) * 100</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ③ EINSTELLUNGEN -->
+  <div class="sec">
+    <div class="sec-hd">
+      <span class="sec-title"><em>③</em> Settings</span>
+      <button class="help-btn" id="hbtn-settings" onclick="toggleHelp('settings', this)">? Help</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <div class="field-lbl">Credible Interval (CrI)</div>
+        <div class="tbtn-group">
+          <button class="tbtn" id="cri-89" onclick="setCri(89)">89%</button>
+          <button class="tbtn on" id="cri-95" onclick="setCri(95)">95%</button>
+          <button class="tbtn" id="cri-99" onclick="setCri(99)">99%</button>
+        </div>
+        <div class="hint-text" id="cri-hint">95% — Kruschke's standard, widely used in publications</div>
+      </div>
+      <div>
+        <div class="field-lbl">Show interval <span style="color:var(--ink3);font-weight:300">(Plot)</span></div>
+        <div class="tbtn-group">
+          <button class="tbtn on" id="iv-hdi" onclick="setIvType('hdi')">HDI</button>
+          <button class="tbtn" id="iv-eti" onclick="setIvType('eti')">ETI</button>
+          <button class="tbtn" id="iv-both" onclick="setIvType('both')">Beide</button>
+        </div>
+        <div class="hint-text" id="iv-hint">HDI = shortest interval. Especially informative for skewed posteriors.</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--grid)">
+      <div>
+        <div class="field-lbl">Decision rule <span style="color:var(--ink3);font-weight:300">(ROPE logic)</span></div>
+        <div class="tbtn-group">
+          <button class="tbtn on" id="dr-hdi" onclick="setDecRule('hdi_rope')">HDI vs ROPE</button>
+          <button class="tbtn" id="dr-eti" onclick="setDecRule('eti_rope')">ETI vs ROPE</button>
+          <button class="tbtn" id="dr-full" onclick="setDecRule('full_rope')">Full ROPE %</button>
+        </div>
+        <div class="hint-text" id="dr-hint">Kruschke: HDI entirely outside → effect; entirely inside → null.</div>
+      </div>
+      <div id="full-rope-thresh-wrap" style="display:none">
+        <div class="field-lbl">Full-ROPE threshold</div>
+        <div style="display:flex;align-items:center;gap:.5rem;margin-top:.2rem">
+          <input class="field-input" type="number" id="rope-thresh" min="0.1" max="20" step="0.5"
+            value="2.5" style="width:80px" oninput="setRopeThresh(parseFloat(this.value))">
+          <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3)">
+            % — Effect if &lt; threshold, null if &gt; (100 − threshold)
+          </span>
+        </div>
+        <div class="hint-text">2.5% → Effect if &lt;2.5% in ROPE, null if &gt;97.5% in ROPE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYSE BUTTON -->
+  <div class="btn-row">
+    <button class="btn btn-primary" id="btn-analyse" onclick="analyse()" disabled>
+      Analysieren →
+    </button>
+    <span id="analyse-hint" style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3)">
+      Load a CSV and define at least one variable first
+    </span>
+  </div>
+
+  <!-- ④ RESULTS -->
+  <div id="results-section" style="display:none">
+    <div class="sec-hd" style="margin-top:1rem">
+      <span class="sec-title"><em>④</em> Results</span>
+      <button class="help-btn" id="hbtn-results" onclick="toggleHelp('results', this)">? Help</button>
+    </div>
+    <div id="results-container"></div>
+    <div id="summary-wrap" style="display:none" class="sec">
+      <div class="sec-hd" style="margin-bottom:.6rem">
+        <span class="sec-title">Overview of all variables</span>
+        <button class="btn" onclick="exportTableCSV()" style="font-size:.72rem;padding:.18rem .55rem">↓ CSV</button>
+        <button class="btn" onclick="exportTableHTML()" style="font-size:.72rem;padding:.18rem .55rem">↓ APA table (HTML)</button>
+      </div>
+      <table class="sum-table" id="sum-table">
+        <thead>
+          <tr>
+            <th>Variable</th><th>Unit</th><th>n Draws</th><th>Median</th>
+            <th>HDI lo</th><th>HDI hi</th><th>ETI lo</th><th>ETI hi</th>
+            <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th><th>Decision</th>
+          </tr>
+        </thead>
+        <tbody id="sum-tbody"></tbody>
+      </table>
+      <div style="margin-top:.8rem">
+        <div class="collap-hd" onclick="toggleCollap(this)">
+          <span>▸ R-Code: bayestestR for all variables</span>
+          <span class="arr">▶</span>
+        </div>
+        <div class="collap-body">
+          <div class="rcode" id="summary-rcode"></div>
+          <button class="cbtn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEARN CARDS -->
+  <div class="learn-section">
+    <div class="learn-title">Background Knowledge</div>
+    <div class="lcard-grid">
+      <div class="lcard">
+        <div class="lcard-h">Why Posterior Draws?</div>
+        <div class="lcard-body">Instead of summarising parameter estimates, the <strong>posterior</strong> encodes complete uncertainty. Each draw is a plausible parameter value — from the full picture, HDI, ROPE, and any conceivable transformation can be computed without a normality assumption.</div>
+      </div>
+      <div class="lcard">
+        <div class="lcard-h">HDI vs. ETI</div>
+        <div class="lcard-body">The <strong>HDI</strong> (Highest Density Interval) is the shortest interval containing X% of the mass — ideal for skewed posteriors. The <strong>ETI</strong> (Equal-Tailed Interval) is quantile-based and invariant under monotone transformations. For symmetric posteriors, both are identical.</div>
+      </div>
+      <div class="lcard">
+        <div class="lcard-h">ROPE & SESOI</div>
+        <div class="lcard-body">The <strong>Region of Practical Equivalence</strong> (ROPE) defines a range around zero that would be practically meaningless. It corresponds to the <em>Smallest Effect Size of Interest</em> (SESOI). Lakens (2018) recommends: for standardised effects, ROPE = [−0.1, 0.1] as a starting point.</div>
+      </div>
+      <div class="lcard">
+        <div class="lcard-h">Kruschke Decision</div>
+        <div class="lcard-body">Kruschke's trichotomous logic: if the HDI lies <strong>entirely outside</strong> the ROPE → effect present. If it lies <strong>entirely inside</strong> → practically null. Otherwise → withhold judgement. This approach avoids binary p-value logic and quantifies uncertainty explicitly.</div>
+      </div>
+      <div class="lcard">
+        <div class="lcard-h">Transformationen & Link-Funktionen</div>
+        <div class="lcard-body">In models with a log-link (Poisson, Gamma) or logit-link (Binomial), coefficients are <em>not</em> on the original scale. <code>exp(b)</code> yields rate/odds ratios, <code>plogis(b)</code> probabilities. Decisions should always be made on the substantively meaningful scale.</div>
+      </div>
+      <div class="lcard">
+        <div class="lcard-h">Derived Quantities (Cohen's d)</div>
+        <div class="lcard-body">The advantage of real draws: any quantity can be computed. <strong>Cohen's d</strong> as <code>b_treatment / sigma</code> propagates uncertainty across both parameters. The resulting HDI is a fully Bayesian credible band for the standardised effect — no delta-method standard error required.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- EXPORT MODAL -->
+<div class="modal-bg" id="export-modal" onclick="closeExportModal(event)">
+  <div class="modal">
+    <div class="modal-title">Export plot</div>
+    <div class="modal-row">
+      <label>Format</label>
+      <div class="radio-group" id="exp-format">
+        <div class="radio-opt sel" onclick="selectOpt(this,'exp-format')">PNG</div>
+        <div class="radio-opt" onclick="selectOpt(this,'exp-format')">JPEG</div>
+      </div>
+    </div>
+    <div class="modal-row">
+      <label>Style</label>
+      <div class="radio-group" id="exp-style">
+        <div class="radio-opt sel" onclick="selectOpt(this,'exp-style')">Tool style</div>
+        <div class="radio-opt" onclick="selectOpt(this,'exp-style')">APA Publication</div>
+        <div class="radio-opt" onclick="selectOpt(this,'exp-style')">Presentation</div>
+      </div>
+    </div>
+    <div class="modal-row" id="exp-style-info" style="display:none">
+      <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);line-height:1.6;
+        background:var(--panel);padding:.5rem .7rem;border-left:3px solid var(--a2)" id="exp-style-desc"></div>
+    </div>
+    <div class="modal-row">
+      <label>Resolution</label>
+      <div class="radio-group" id="exp-res">
+        <div class="radio-opt sel" onclick="selectOpt(this,'exp-res')">1x (Screen)</div>
+        <div class="radio-opt" onclick="selectOpt(this,'exp-res')">2x (Print)</div>
+        <div class="radio-opt" onclick="selectOpt(this,'exp-res')">3x (High resolution)</div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="doExport()">Export</button>
+      <button class="btn" onclick="closeExportModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════
+let DARK = true;
+let CSV_DATA = null;       // parsed rows (array of objects)
+let COL_NAMES = [];        // original column names
+let COL_MAP = {};          // originalName → safeName
+let COL_MAP_REV = {};      // safeName → originalName
+let NUMERIC_COLS = [];     // safe names of numeric columns
+let SYSTEM_COLS = new Set(['.chain','.iteration','.draw','.divergent__']);
+let SLOTS = [];            // variable slot descriptors
+let RESULTS = [];          // computed results per slot
+let ACTIVE_HELP = null;    // currently open help topic
+let CRI = 95;
+let IV_TYPE = 'hdi';      // visualization: 'hdi' | 'eti' | 'both'
+let DEC_RULE = 'hdi_rope'; // decision rule: 'hdi_rope' | 'eti_rope' | 'full_rope'
+let FULL_ROPE_THRESH = 2.5; // % for full_rope rule
+let EXPORT_TARGET = null;  // slot index to export
+
+// ══════════════════════════════════════════════════════════════════════
+// THEME
+// ══════════════════════════════════════════════════════════════════════
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-th').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  if (RESULTS.length) redrawAllPlots();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// HELP SYSTEM
+// ══════════════════════════════════════════════════════════════════════
+const HELP_CONTENT = {
+  import: {
+    title: 'Import — CSV format',
+    html: `
+<h4>What does the tool expect?</h4>
+<p>A <strong>CSV file</strong> with posterior draws: each column is a model parameter, each row is a draw (one sample from the posterior). Typically 1000–8000 rows.</p>
+<h4>as_draws_df() — the standard format</h4>
+<p>In brms, <code>as_draws_df(fit)</code> is the recommended method. It exports all chains combined. Columns with a <code>.</code> prefix (<code>.chain</code>, <code>.iteration</code>, <code>.draw</code>) are metadata and are detected automatically.</p>
+<pre>library(brms)
+draws &lt;- as_draws_df(fit)
+write.csv(draws, "draws.csv",
+          row.names = FALSE)</pre>
+<h4>Column name mapping</h4>
+<p>brms column names often contain special characters (<code>b_x[1]</code>, <code>r_group[2,Intercept]</code>). These are automatically converted to formula-safe names — the mapping is shown below the column preview.</p>
+<h4>Other packages</h4>
+<p><strong>Stan:</strong> <code>posterior::as_draws_df(fit$draws())</code><br>
+<strong>rstanarm:</strong> <code>as.data.frame(fit)</code><br>
+<strong>JAGS/coda:</strong> <code>as.data.frame(as.matrix(coda_obj))</code></p>
+<div class="note">Tip: Export only relevant columns — please adjust individually. e.g.: <code>select(starts_with("b_"), sigma)</code> — but column names depend on your model and may differ completely.</div>
+<h4>Divergences</h4>
+<p>If the model has divergences, as_draws_df includes a <code>.divergent__</code> column. The tool detects this and shows a warning. Divergent draws can be excluded.</p>`
+  },
+  vars: {
+    title: 'Variables — Slots & Formulas',
+    html: `
+<h4>What is a variable slot?</h4>
+<p>Each slot defines a quantity to be analysed. This does not have to be a direct column from the CSV — it can be a <strong>transformation</strong> or a <strong>derived quantity</strong> from multiple columns.</p>
+<h4>Slot fields</h4>
+<p><strong>Label:</strong> Freely chosen name, appears in plot and table.<br>
+<strong>Formula:</strong> Mathematical expression (see below).<br>
+<strong>ROPE:</strong> Region of Practical Equivalence — lower and upper bound.<br>
+<strong>Unit:</strong> Optional, for plot labelling (e.g. "Odds Ratio").</p>
+<h4>Formula syntax</h4>
+<p>Use column names from the CSV directly (special characters → sanitised names, see mapping):</p>
+<pre>b_age              → direct column
+exp(b_treatment)   → Log → Odds Ratio
+plogis(b_group)    → Logit → P(y=1)
+b_age / sigma      → Cohen's d-like
+b_x - b_z          → contrast
+(exp(b_x) - 1) * 100  → % change</pre>
+<h4>Available functions</h4>
+<p><code>exp()</code> <code>log()</code> <code>sqrt()</code> <code>abs()</code> <code>plogis()</code> <code>qlogis()</code> sowie alle Grundrechenarten (<code>+ - * / ^</code>).</p>
+<div class="note">Click column chips below the formula field → name is inserted at cursor position.</div>
+<h4>Setting ROPE bounds</h4>
+<p>For standardised effects (Cohen's d): Lakens (2018) recommends <strong>[−0.1, 0.1]</strong> as a pragmatic starting point. For odds ratios: <strong>[0.9, 1.1]</strong>. For raw-data scales: choose a substantively justified SESOI.</p>`
+  },
+  settings: {
+    title: 'Settings — CrI & Interval Type',
+    html: `
+<h4>Credible Interval (CrI)</h4>
+<p>Determines the width of HDI and ETI.<br>
+<strong>89%:</strong> McElreath's recommendation — largest prime below 90%, communicates that boundaries are not magical.<br>
+<strong>95%:</strong> Kruschke's standard, directly comparable to frequentist CIs.<br>
+<strong>99%:</strong> Conservative, very wide intervals.</p>
+<h4>HDI — Highest Density Interval</h4>
+<p>The <strong>shortest</strong> interval containing X% of the posterior mass. Always includes the most plausible values. For multimodal posteriors it may consist of multiple segments. Recommended for skewed distributions.</p>
+<h4>ETI — Equal-Tailed Interval</h4>
+<p>Quantile-based: cuts off (1−X)/2 at each end. <strong>Invariant under monotone transformations:</strong> ETI of exp(b) = exp(ETI of b). This makes ETI particularly useful when decisions are made on a transformed scale.</p>
+<h4>Both simultaneously</h4>
+<p>For symmetric posteriors, HDI = ETI. Differences are only visible for skewed distributions (e.g. odds ratios, Gamma-distributed parameters). In those cases, the comparison is informative.</p>
+<div class="note">The ROPE decision is based on the HDI by default (Kruschke 2018). In ETI mode, the ETI boundary is used for the decision.</div>`
+  },
+  results: {
+    title: 'Results — Plots & Decision',
+    html: `
+<h4>KDE Plot</h4>
+<p>The plot shows a <strong>Kernel Density Estimate</strong> of the computed posterior values. Bandwidth follows Silverman's rule. The coloured area under the curve is the posterior.</p>
+<p>Shown: <strong>HDI</strong> (coloured bracket), <strong>ETI</strong> (dashed lines), <strong>ROPE</strong> (grey shaded region). Vertical line = median.</p>
+<h4>Statistics boxes</h4>
+<p><strong>HDI/ETI:</strong> Lower and upper bound of the interval, and the width in between.<br>
+<strong>ROPE:</strong> Percentage of draws inside the ROPE bounds. 0% = effect clearly present. 100% = practically null.</p>
+<h4>Kruschke Decision</h4>
+<p>Based on the relationship between HDI (or ETI) and ROPE:<br>
+<strong>Effect present:</strong> HDI entirely outside ROPE.<br>
+<strong>Practically null:</strong> HDI entirely inside ROPE.<br>
+<strong>Withhold judgement:</strong> HDI overlaps with ROPE.</p>
+<h4>R-Code</h4>
+<p>Each variable card contains the corresponding bayestestR code for reproduction. Use the copy button to quickly transfer it to your script.</p>
+<h4>Export</h4>
+<p>Each plot can be exported as <strong>PNG or JPEG</strong> in two styles:<br>
+<strong>Tool style:</strong> Farben wie im Tool (Dark/Light).<br>
+<strong>APA Publication:</strong> White background, black axes, greyscale, Arial font — ready for manuscript submission.</p>`
+  }
+};
+
+function toggleHelp(topic, btn) {
+  const panel = document.getElementById('help-panel');
+  if (ACTIVE_HELP === topic && panel.classList.contains('open')) {
+    closeHelp();
+    return;
+  }
+  openHelp(topic, btn);
+}
+
+function openHelp(topic, btn) {
+  // Deactivate previous button
+  if (ACTIVE_HELP) {
+    const prevBtn = document.getElementById('hbtn-' + ACTIVE_HELP);
+    if (prevBtn) prevBtn.classList.remove('active');
+  }
+  ACTIVE_HELP = topic;
+  const content = HELP_CONTENT[topic];
+  if (!content) return;
+  document.getElementById('help-title').textContent = content.title;
+  document.getElementById('help-body').innerHTML = content.html;
+  document.getElementById('help-panel').classList.add('open');
+  if (btn) btn.classList.add('active');
+}
+
+function closeHelp() {
+  document.getElementById('help-panel').classList.remove('open');
+  if (ACTIVE_HELP) {
+    const btn = document.getElementById('hbtn-' + ACTIVE_HELP);
+    if (btn) btn.classList.remove('active');
+  }
+  ACTIVE_HELP = null;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════════════════════════════
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// CSV PARSING
+// ══════════════════════════════════════════════════════════════════════
+function sanitizeColName(name) {
+  let safe = name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1');
+  if (!safe || safe === '_') safe = 'col';
+  return safe;
+}
+
+function buildColMap(cols) {
+  const seen = {};
+  const map = {}, mapRev = {};
+  cols.forEach(name => {
+    let safe = sanitizeColName(name);
+    if (seen[safe] !== undefined) { seen[safe]++; safe = safe + '_' + seen[safe]; }
+    else seen[safe] = 0;
+    map[name] = safe;
+    mapRev[safe] = name;
+  });
+  return { map, mapRev };
+}
+
+function handleFile(file) {
+  if (!file) return;
+  Papa.parse(file, {
+    header: true, dynamicTyping: true, skipEmptyLines: true,
+    complete(result) {
+      if (!result.data.length) { showParseError('File is empty or invalid.'); return; }
+      processCSV(result.data, result.meta.fields, file.name);
+    },
+    error(err) { showParseError('Parse error: ' + err.message); }
+  });
+}
+
+function showParseError(msg) {
+  document.getElementById('col-status').innerHTML =
+    `<span class="badge badge-err">Fehler</span> <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a1)">${msg}</span>`;
+  document.getElementById('col-preview').style.display = 'block';
+}
+
+function processCSV(data, fields, filename) {
+  CSV_DATA = data;
+  COL_NAMES = fields;
+  const { map, mapRev } = buildColMap(fields);
+  COL_MAP = map; COL_MAP_REV = mapRev;
+
+  // Determine numeric columns
+  NUMERIC_COLS = [];
+  fields.forEach(name => {
+    const safe = map[name];
+    const vals = data.slice(0, 50).map(r => r[name]);
+    if (vals.every(v => typeof v === 'number' && isFinite(v))) {
+      NUMERIC_COLS.push(safe);
+    }
+  });
+
+  // Divergence check
+  let divWarn = false, nDivergent = 0;
+  if (fields.includes('.divergent__')) {
+    nDivergent = data.filter(r => r['.divergent__'] > 0).length;
+    if (nDivergent > 0) divWarn = true;
+  }
+
+  // rhat check (look for any column with rhat in data? No — brms puts rhat in summary, not draws)
+  // Just check draws count
+  const nDraws = data.length;
+  const warnFewDraws = nDraws < 400;
+
+  // Render status
+  let statusHTML = `<span class="badge badge-ok">${nDraws} Draws</span>
+    <span class="badge badge-ok">${NUMERIC_COLS.length} numeric columns</span>`;
+  if (divWarn) statusHTML += `<span class="badge badge-warn">⚠ ${nDivergent} divergent draws</span>`;
+  if (warnFewDraws) statusHTML += `<span class="badge badge-warn">⚠ &lt; 400 Draws — estimates may be unreliable</span>`;
+  document.getElementById('col-status').innerHTML = statusHTML;
+
+  // Render column chips
+  const chipsEl = document.getElementById('col-chips');
+  chipsEl.innerHTML = '';
+  fields.forEach(name => {
+    const safe = COL_MAP[name];
+    const isSystem = SYSTEM_COLS.has(name);
+    const isNum = NUMERIC_COLS.includes(safe);
+    if (!isNum && !isSystem) return; // skip non-numeric, non-system
+    const chip = document.createElement('span');
+    chip.className = 'col-chip' + (isSystem ? ' system' : ' numeric');
+    chip.textContent = safe;
+    chip.title = isSystem ? `Metadata: ${name}` : `Original column: "${name}"`;
+    if (!isSystem) chip.onclick = () => copyToClipboard(safe, chip);
+    chipsEl.appendChild(chip);
+  });
+
+  // Render mapping if any names were changed
+  const mappingPairs = fields.filter(n => COL_MAP[n] !== n && !SYSTEM_COLS.has(n));
+  const mapEl = document.getElementById('col-mapping');
+  if (mappingPairs.length) {
+    mapEl.style.display = 'block';
+    mapEl.innerHTML = '<span style="color:var(--ink3)">Renames: </span>' +
+      mappingPairs.map(n => `<code style="font-family:\'DM Mono\',monospace;font-size:.68rem;background:var(--panel);padding:.1rem .3rem;color:var(--ink2)">"${n}" → ${COL_MAP[n]}</code>`).join(' ');
+  } else {
+    mapEl.style.display = 'none';
+  }
+
+  document.getElementById('col-preview').style.display = 'block';
+  document.getElementById('dropzone').querySelector('.dz-label').textContent = `✓ ${filename || 'Loaded'} — ${nDraws} Draws`;
+
+  // Re-render all slots so column chips appear in all existing slots
+  if (SLOTS.length) renderSlots();
+  checkAnalyseReady();
+}
+
+function copyToClipboard(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = el.style.borderColor;
+    el.style.borderColor = 'var(--a2)';
+    setTimeout(() => { el.style.borderColor = old; }, 800);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// VARIABLE SLOTS
+// ══════════════════════════════════════════════════════════════════════
+let slotCounter = 0;
+
+function addSlot(prefill) {
+  if (SLOTS.length >= 5) {
+    alert('Maximum 5 variables at a time.'); return;
+  }
+  const id = slotCounter++;
+  const slot = { id, label: '', formula: '', ropeLo: -0.1, ropeHi: 0.1, unit: '' };
+  if (prefill) Object.assign(slot, prefill);
+  SLOTS.push(slot);
+  renderSlots();
+  checkAnalyseReady();
+}
+
+function removeSlot(id) {
+  SLOTS = SLOTS.filter(s => s.id !== id);
+  renderSlots();
+  checkAnalyseReady();
+}
+
+function renderSlots() {
+  const container = document.getElementById('slots-container');
+  if (!SLOTS.length) {
+    container.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3);padding:.5rem 0">
+      No variables yet — click "+ Variable hinzufügen" or select a preset.</div>`;
+    return;
+  }
+  container.innerHTML = '';
+  SLOTS.forEach((slot, idx) => {
+    const div = document.createElement('div');
+    div.className = 'slot';
+    div.id = `slot-${slot.id}`;
+    div.innerHTML = `
+      <span class="slot-num">${idx + 1} / ${SLOTS.length}</span>
+      <button class="slot-del" onclick="removeSlot(${slot.id})" title="Remove slot">✕</button>
+      <div class="slot-row">
+        <div>
+          <label class="field-lbl">Label (display name)</label>
+          <input class="field-input" type="text" placeholder="e.g. Treatment effect (OR)"
+            value="${escHtml(slot.label)}"
+            oninput="updateSlot(${slot.id}, 'label', this.value)">
+        </div>
+        <div>
+          <label class="field-lbl">Unit (optional)</label>
+          <input class="field-input" type="text" placeholder="e.g. Odds Ratio"
+            value="${escHtml(slot.unit)}"
+            oninput="updateSlot(${slot.id}, 'unit', this.value)">
+        </div>
+      </div>
+      <div>
+        <label class="field-lbl">Formula <span style="color:var(--ink3);font-weight:300">(column name or expression)</span></label>
+        <div class="formula-wrap">
+          <input class="field-input" type="text" id="formula-${slot.id}"
+            placeholder="e.g.  exp(b_treatment)  or  b_x / sigma"
+            value="${escHtml(slot.formula)}"
+            oninput="updateSlot(${slot.id}, 'formula', this.value)">
+        </div>
+        <div class="formula-chips" id="chips-${slot.id}"></div>
+      </div>
+      <div class="slot-row3" style="margin-top:.5rem">
+        <div>
+          <label class="field-lbl">ROPE lower bound</label>
+          <input class="field-input" type="number" step="any"
+            value="${slot.ropeLo}"
+            oninput="updateSlot(${slot.id}, 'ropeLo', parseFloat(this.value)||0)">
+        </div>
+        <div>
+          <label class="field-lbl">ROPE upper bound</label>
+          <input class="field-input" type="number" step="any"
+            value="${slot.ropeHi}"
+            oninput="updateSlot(${slot.id}, 'ropeHi', parseFloat(this.value)||0)">
+        </div>
+        <div>
+          <label class="field-lbl">ROPE tip</label>
+          <select class="field-select" onchange="applyRopeTip(${slot.id}, this.value)">
+            <option value="">— Template —</option>
+            <option value="cohend">Cohen's d [±0.1]</option>
+            <option value="or">Odds Ratio [0.9, 1.1]</option>
+            <option value="prob">P-change [±0.05]</option>
+            <option value="raw0">Raw scale — enter own SESOI</option>
+          </select>
+        </div>
+      </div>
+      <div class="slot-err" id="err-${slot.id}"></div>
+    `;
+    container.appendChild(div);
+    updateSlotChips(idx);
+  });
+}
+
+function updateSlot(id, field, value) {
+  const slot = SLOTS.find(s => s.id === id);
+  if (slot) slot[field] = value;
+  checkAnalyseReady();
+}
+
+function updateSlotChips(idx) {
+  const slot = SLOTS[idx];
+  if (!slot) return;
+  const el = document.getElementById(`chips-${slot.id}`);
+  if (!el) return;
+  el.innerHTML = '';
+  if (!NUMERIC_COLS.length) return;
+  NUMERIC_COLS.filter(c => !SYSTEM_COLS.has(COL_MAP_REV[c])).forEach(safe => {
+    const chip = document.createElement('span');
+    chip.className = 'fcol-chip';
+    chip.textContent = safe;
+    chip.title = `Click: "${safe}" to insert into formula`;
+    chip.onclick = () => insertIntoFormula(slot.id, safe);
+    el.appendChild(chip);
+  });
+}
+
+function insertIntoFormula(slotId, text) {
+  const input = document.getElementById(`formula-${slotId}`);
+  if (!input) return;
+  const pos = input.selectionStart;
+  const val = input.value;
+  input.value = val.slice(0, pos) + text + val.slice(input.selectionEnd);
+  input.focus();
+  input.setSelectionRange(pos + text.length, pos + text.length);
+  const slot = SLOTS.find(s => s.id === slotId);
+  if (slot) slot.formula = input.value;
+  checkAnalyseReady();
+}
+
+function applyRopeTip(slotId, tip) {
+  const slot = SLOTS.find(s => s.id === slotId);
+  if (!slot) return;
+  const tips = { cohend: [-0.1, 0.1], or: [0.9, 1.1], prob: [-0.05, 0.05], raw0: [-0.001, 0.001] };
+  if (!tips[tip]) return;
+  slot.ropeLo = tips[tip][0]; slot.ropeHi = tips[tip][1];
+  renderSlots();
+}
+
+function applyPreset(value) {
+  if (!value) return;
+  const presets = {
+    direct:  { label: 'Coefficient', formula: 'b_x', unit: '' },
+    exp:     { label: 'Odds/Rate Ratio', formula: 'exp(b_x)', unit: 'Ratio', ropeLo: 0.9, ropeHi: 1.1 },
+    plogis:  { label: 'Probability', formula: 'plogis(b_x)', unit: 'P', ropeLo: -0.05, ropeHi: 0.05 },
+    cohend:  { label: "Cohen's d", formula: 'b_x / sigma', unit: 'SD', ropeLo: -0.1, ropeHi: 0.1 },
+    contrast:{ label: 'Contrast', formula: 'b_x1 - b_x2', unit: '', ropeLo: -0.1, ropeHi: 0.1 },
+    percent: { label: 'Percent change', formula: '(exp(b_x) - 1) * 100', unit: '%', ropeLo: -5, ropeHi: 5 },
+  };
+  if (presets[value]) addSlot(presets[value]);
+  document.getElementById('preset-select').value = '';
+}
+
+function checkAnalyseReady() {
+  const ready = CSV_DATA && SLOTS.length > 0 && SLOTS.some(s => s.formula.trim());
+  document.getElementById('btn-analyse').disabled = !ready;
+  document.getElementById('analyse-hint').textContent = ready ? '' :
+    (!CSV_DATA ? 'Load a CSV and define at least one variable first' :
+     SLOTS.length === 0 ? 'Define at least one variable' :
+     'Enter a formula for at least one variable');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════════
+function setCri(v) {
+  CRI = v;
+  [89, 95, 99].forEach(x => document.getElementById('cri-' + x).classList.remove('on'));
+  document.getElementById('cri-' + v).classList.add('on');
+  const hints = {
+    89: '89% — McElreath\'s recommendation: largest prime below 90%, communicates boundaries are not magical.',
+    95: '95% — Kruschke's standard, widely used in publications.',
+    99: '99% — conservative, very wide interval, rarely used outside pilot studies.'
+  };
+  document.getElementById('cri-hint').textContent = hints[v];
+  if (RESULTS.length) renderResults();
+}
+
+function setIvType(t) {
+  IV_TYPE = t;
+  ['hdi','eti','both'].forEach(x => {
+    const b = document.getElementById('iv-' + x);
+    b.className = 'tbtn' + (x === t ? ' on' : '');
+  });
+  const hints = {
+    hdi: 'HDI = shortest interval. Especially informative for skewed posteriors.',
+    eti: 'ETI = quantile-based, invariant under transformations. Consistent for exp()-transformed values.',
+    both: 'Show both. Differences only visible for skewed distributions.'
+  };
+  document.getElementById('iv-hint').textContent = hints[t];
+  if (RESULTS.length) { renderResults(); }
+}
+
+function setDecRule(rule) {
+  DEC_RULE = rule;
+  ['hdi_rope','eti_rope','full_rope'].forEach(r => {
+    const b = document.getElementById('dr-' + (r === 'hdi_rope' ? 'hdi' : r === 'eti_rope' ? 'eti' : 'full'));
+    if (b) b.className = 'tbtn' + (r === rule ? ' on' : '');
+  });
+  const hints = {
+    hdi_rope: 'Kruschke: HDI entirely outside ROPE → effect; entirely inside → null.',
+    eti_rope: 'ETI bounds vs ROPE. Useful for transformed variables (invariant under exp()).',
+    full_rope: 'Proportion of draws in ROPE as decision criterion. Threshold freely configurable.'
+  };
+  document.getElementById('dr-hint').textContent = hints[rule];
+  document.getElementById('full-rope-thresh-wrap').style.display = rule === 'full_rope' ? 'block' : 'none';
+  if (RESULTS.length) { renderResults(); }
+}
+
+function setRopeThresh(v) {
+  if (!isNaN(v) && v > 0 && v < 50) FULL_ROPE_THRESH = v;
+  const el = document.getElementById('dr-hint');
+  if (el) el.textContent = `${FULL_ROPE_THRESH}% — Effect if <${FULL_ROPE_THRESH}% in ROPE, null if >${100-FULL_ROPE_THRESH}% in ROPE`;
+  if (RESULTS.length) { renderResults(); }
+}
+
+function applyDecision(r) {
+  if (DEC_RULE === 'full_rope') {
+    if (r.ropePct > (100 - FULL_ROPE_THRESH)) return 'null';
+    if (r.ropePct < FULL_ROPE_THRESH) return 'effect';
+    return 'withhold';
+  }
+  if (DEC_RULE === 'eti_rope') return kruschkeDecision(r.eti[0], r.eti[1], r.slot.ropeLo, r.slot.ropeHi);
+  return kruschkeDecision(r.hdi[0], r.hdi[1], r.slot.ropeLo, r.slot.ropeHi);
+}
+
+function decRuleLabel() {
+  return DEC_RULE === 'full_rope' ? `Full ROPE % (threshold: ${FULL_ROPE_THRESH}%)` :
+    DEC_RULE === 'eti_rope' ? `ETI ${CRI}% vs ROPE` : `HDI ${CRI}% vs ROPE`;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STATISTICS FROM SAMPLES
+// ══════════════════════════════════════════════════════════════════════
+function computeHDI(sorted, credMass) {
+  const n = sorted.length;
+  const nIn = Math.floor(credMass * n);
+  let bestLo = sorted[0], bestHi = sorted[n - 1], bestW = Infinity;
+  for (let i = 0; i <= n - nIn; i++) {
+    const w = sorted[i + nIn - 1] - sorted[i];
+    if (w < bestW) { bestW = w; bestLo = sorted[i]; bestHi = sorted[i + nIn - 1]; }
+  }
+  return [bestLo, bestHi];
+}
+
+function computeETI(sorted, credMass) {
+  const n = sorted.length;
+  const tail = (1 - credMass) / 2;
+  return [sorted[Math.max(0, Math.floor(tail * n))], sorted[Math.min(n - 1, Math.floor((1 - tail) * n))]];
+}
+
+function computeRopePct(samples, lo, hi) {
+  const n = samples.length;
+  const inside = samples.filter(x => x >= lo && x <= hi).length;
+  return (inside / n) * 100;
+}
+
+function kruschkeDecision(hdiLo, hdiHi, ropeLo, ropeHi) {
+  if (hdiHi < ropeLo || hdiLo > ropeHi) return 'effect';
+  if (hdiLo >= ropeLo && hdiHi <= ropeHi) return 'null';
+  return 'withhold';
+}
+
+function computeKDE(samples, nGrid) {
+  nGrid = nGrid || 256;
+  const n = samples.length;
+  // Silverman bandwidth
+  const sorted = Float64Array.from(samples).sort((a,b) => a-b);
+  const q25 = sorted[Math.floor(0.25 * n)];
+  const q75 = sorted[Math.floor(0.75 * n)];
+  const iqr = q75 - q25;
+  let mean = 0; for (let v of samples) mean += v; mean /= n;
+  let variance = 0; for (let v of samples) variance += (v - mean) ** 2; variance /= n;
+  const std = Math.sqrt(variance);
+  const s = Math.min(std, iqr > 0 ? iqr / 1.34 : std);
+  const bw = Math.max(1.06 * s * Math.pow(n, -0.2), 1e-10);
+
+  // Subsample for KDE if very large
+  let kdeSamples = samples;
+  if (n > 6000) {
+    const step = Math.ceil(n / 5000);
+    kdeSamples = samples.filter((_, i) => i % step === 0);
+  }
+
+  const lo = sorted[0] - 3.5 * bw;
+  const hi = sorted[n - 1] + 3.5 * bw;
+  const xs = Array.from({ length: nGrid }, (_, i) => lo + (hi - lo) * i / (nGrid - 1));
+  const m = kdeSamples.length;
+  const ys = xs.map(x => {
+    let sum = 0;
+    for (let i = 0; i < m; i++) { const z = (x - kdeSamples[i]) / bw; sum += Math.exp(-0.5 * z * z); }
+    return sum / (m * bw * Math.sqrt(2 * Math.PI));
+  });
+  return { xs, ys, bw };
+}
+
+function median(sorted) { const n = sorted.length; return n % 2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2; }
+function mean(arr) { return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function fmt(v, d) { if (d === undefined) d = 3; return Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ══════════════════════════════════════════════════════════════════════
+// FORMULA EVALUATION (mathjs)
+// ══════════════════════════════════════════════════════════════════════
+// Register plogis / qlogis as aliases
+math.import({
+  plogis: x => 1 / (1 + Math.exp(-x)),
+  qlogis: p => Math.log(p / (1 - p))
+}, { override: true });
+
+function evalFormula(formula, row) {
+  // Build scope: safe column names → values
+  const scope = {};
+  COL_NAMES.forEach(name => {
+    const safe = COL_MAP[name];
+    const v = row[name];
+    if (typeof v === 'number') scope[safe] = v;
+  });
+  return math.evaluate(formula, scope);
+}
+
+function computeSamples(slot) {
+  const formula = slot.formula.trim();
+  const results = [];
+  let errorMsg = null;
+  // Try on first row to catch formula errors early
+  try { evalFormula(formula, CSV_DATA[0]); } catch(e) { throw new Error(`Formula error: ${e.message}`); }
+  for (let i = 0; i < CSV_DATA.length; i++) {
+    try {
+      const v = evalFormula(formula, CSV_DATA[i]);
+      if (typeof v !== 'number' || !isFinite(v)) continue;
+      results.push(v);
+    } catch(e) { /* skip bad rows */ }
+  }
+  if (results.length < 10) throw new Error('Too few valid values. Check formula.');
+  return results;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ANALYSIS PIPELINE
+// ══════════════════════════════════════════════════════════════════════
+function analyse() {
+  const btn = document.getElementById('btn-analyse');
+  btn.disabled = true; btn.textContent = 'Computing…';
+
+  // Clear old errors
+  SLOTS.forEach(s => {
+    const errEl = document.getElementById(`err-${s.id}`);
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  });
+
+  setTimeout(() => {
+    RESULTS = [];
+    let hasError = false;
+    const credMass = CRI / 100;
+
+    SLOTS.forEach(slot => {
+      if (!slot.formula.trim()) return;
+      try {
+        const samples = computeSamples(slot);
+        const sorted = Float64Array.from(samples).sort((a,b)=>a-b);
+        const hdi = computeHDI(sorted, credMass);
+        const eti = computeETI(sorted, credMass);
+        const ropePct = computeRopePct(samples, slot.ropeLo, slot.ropeHi);
+        const med = median(sorted);
+        const mn = mean(samples);
+        const kde = computeKDE(samples);
+        const decHDI = kruschkeDecision(hdi[0], hdi[1], slot.ropeLo, slot.ropeHi);
+        const decETI = kruschkeDecision(eti[0], eti[1], slot.ropeLo, slot.ropeHi);
+        RESULTS.push({ slot, samples, sorted, hdi, eti, ropePct, med, mn, kde, decHDI, decETI });
+      } catch(e) {
+        const errEl = document.getElementById(`err-${slot.id}`);
+        if (errEl) { errEl.style.display = 'block'; errEl.textContent = '⚠ ' + e.message; }
+        hasError = true;
+      }
+    });
+
+    btn.disabled = false; btn.textContent = 'Analyse →';
+    renderResults();
+  }, 20);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// RENDER RESULTS
+// ══════════════════════════════════════════════════════════════════════
+function renderResults() {
+  const section = document.getElementById('results-section');
+  const container = document.getElementById('results-container');
+  if (!RESULTS.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  container.innerHTML = '';
+
+  RESULTS.forEach((r, idx) => {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.id = `result-${idx}`;
+    const label = r.slot.label || r.slot.formula;
+    const unit = r.slot.unit ? ` <span class="result-unit">[${escHtml(r.slot.unit)}]</span>` : '';
+    const activeDec = applyDecision(r);
+    const vclass = activeDec === 'effect' ? 'v-effect' : activeDec === 'null' ? 'v-null' : 'v-withhold';
+    const vlabel = activeDec === 'effect' ? 'Effect present' : activeDec === 'null' ? 'Practically null (ROPE)' : 'Withhold judgement';
+    const hdiShow = IV_TYPE !== 'eti';
+    const etiShow = IV_TYPE !== 'hdi';
+    const ropePctRounded = Math.round(r.ropePct * 10) / 10;
+    const rcode = genRCode(r);
+    const decDetail = DEC_RULE === 'full_rope'
+      ? `${fmt(ropePctRounded,1)}% in ROPE (threshold: ${FULL_ROPE_THRESH}%)`
+      : activeDec === 'effect' ? `${DEC_RULE==='eti_rope'?'ETI':'HDI'} entirely outside ROPE`
+      : activeDec === 'null' ? `${DEC_RULE==='eti_rope'?'ETI':'HDI'} entirely inside ROPE`
+      : `${DEC_RULE==='eti_rope'?'ETI':'HDI'} overlaps with ROPE`;
+
+    card.innerHTML = `
+      <div class="result-hd">
+        <div class="result-label">${escHtml(label)}${unit}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">
+          n = ${r.samples.length.toLocaleString('en-US')} Draws &nbsp;·&nbsp; Median: ${fmt(r.med)}
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas class="plot-canvas" id="canvas-${idx}" height="240"></canvas>
+      </div>
+      <div class="stats-row">
+        ${hdiShow ? `<div class="stat-box">
+          <div class="stat-label">HDI ${CRI}%</div>
+          <div class="stat-value">[${fmt(r.hdi[0])}, ${fmt(r.hdi[1])}]</div>
+          <div class="stat-sub">Width: ${fmt(r.hdi[1] - r.hdi[0])}</div>
+        </div>` : ''}
+        ${etiShow ? `<div class="stat-box">
+          <div class="stat-label">ETI ${CRI}%</div>
+          <div class="stat-value">[${fmt(r.eti[0])}, ${fmt(r.eti[1])}]</div>
+          <div class="stat-sub">Width: ${fmt(r.eti[1] - r.eti[0])}</div>
+        </div>` : ''}
+        <div class="stat-box">
+          <div class="stat-label">ROPE [${fmt(r.slot.ropeLo,2)}, ${fmt(r.slot.ropeHi,2)}]</div>
+          <div style="font-family:'DM Mono',monospace;font-size:.82rem;color:var(--ink);margin-bottom:.2rem">
+            ${fmt(ropePctRounded, 1)}% of draws in ROPE</div>
+          <div class="rope-bar-bg"><div class="rope-bar-fill" style="width:${Math.min(ropePctRounded,100)}%"></div></div>
+        </div>
+      </div>
+      <div class="verdict-row">
+        <span class="verdict ${vclass}">${vlabel}</span>
+        <span class="verdict-detail">${decDetail} &nbsp;·&nbsp; Regel: ${decRuleLabel()}</span>
+      </div>
+      <div class="collap-hd" onclick="toggleCollap(this)">
+        <span>▸ R-Code (bayestestR)</span><span class="arr">▶</span>
+      </div>
+      <div class="collap-body">
+        <div class="rcode">${escHtml(rcode)}</div>
+        <button class="cbtn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <div class="export-row">
+        <button class="btn" onclick="openExportModal(${idx})">↓ Export plot</button>
+        <span class="export-hint">PNG · JPEG · APA style available</span>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  // Draw all plots
+  requestAnimationFrame(() => {
+    RESULTS.forEach((r, idx) => drawPlot(idx, 'tool'));
+    renderSummary();
+  });
+}
+
+function redrawAllPlots() {
+  RESULTS.forEach((_, idx) => drawPlot(idx, 'tool'));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CANVAS DRAWING
+// ══════════════════════════════════════════════════════════════════════
+function getColors(styleMode) {
+  if (styleMode === 'apa') return {
+    bg: '#ffffff', fg: '#111111', fgMid: '#444444', fgLight: '#888888',
+    tailFill: 'rgba(0,0,0,0.07)',
+    hdiCiFill: 'rgba(0,0,0,0.22)',
+    etiCiFill: 'rgba(80,80,80,0.18)',
+    ropeShade: 'rgba(0,0,0,0.06)',
+    kdeLine: '#111111',
+    ropeBoundLine: '#999999', ropeBoundText: '#777777',
+    medianColor: '#333333',
+    gridLine: '#e8e8e8',
+    font: 'Arial, Helvetica, sans-serif'
+  };
+  if (styleMode === 'presentation') return {
+    bg: '#0d1117', fg: '#e8e4d8', fgMid: '#9a9080', fgLight: '#5a5448',
+    tailFill: 'rgba(74,176,216,0.10)',
+    hdiCiFill: 'rgba(74,176,216,0.45)',
+    etiCiFill: 'rgba(224,120,48,0.40)',
+    ropeShade: 'rgba(255,255,255,0.05)',
+    kdeLine: '#4ab0d8',
+    ropeBoundLine: '#80cb52', ropeBoundText: '#80cb52',
+    medianColor: '#4ab0d8',
+    gridLine: 'rgba(255,255,255,0.06)',
+    font: "'DM Mono', monospace"
+  };
+  // Tool style — follows dark/light theme
+  return {
+    bg: DARK ? '#111520' : '#f8f3e8',
+    fg: DARK ? '#ece6d8' : '#18130e',
+    fgMid: DARK ? '#8a8070' : '#5a4f42',
+    fgLight: DARK ? '#5a5448' : '#8a7f72',
+    tailFill: DARK ? 'rgba(74,176,216,0.08)' : 'rgba(42,110,138,0.07)',
+    hdiCiFill: DARK ? 'rgba(74,176,216,0.38)' : 'rgba(42,110,138,0.28)',
+    etiCiFill: DARK ? 'rgba(224,120,48,0.35)' : 'rgba(184,92,0,0.28)',
+    ropeShade: DARK ? 'rgba(180,180,180,0.07)' : 'rgba(100,100,100,0.08)',
+    kdeLine: DARK ? '#4ab0d8' : '#2a6e8a',
+    ropeBoundLine: DARK ? '#80cb52' : '#5a8a2a',
+    ropeBoundText: DARK ? '#80cb52' : '#5a8a2a',
+    medianColor: DARK ? '#4ab0d8' : '#2a6e8a',
+    gridLine: DARK ? '#1e242e' : '#ddd5c5',
+    font: "'DM Mono', monospace"
+  };
+}
+
+// Interpolate KDE y-value at arbitrary x
+function kdeInterp(xs, ys, x) {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[xs.length - 1];
+  let lo = 0, hi = xs.length - 1;
+  while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+  const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+  return ys[lo] + t * (ys[hi] - ys[lo]);
+}
+
+// Fill the area under the KDE curve between x0 and x1
+function fillCIRegion(ctx, xs, ys, x0, x1, tx, ty, baseline, fillStyle) {
+  const clampedX0 = Math.max(xs[0], x0);
+  const clampedX1 = Math.min(xs[xs.length - 1], x1);
+  if (clampedX1 <= clampedX0) return;
+  ctx.beginPath();
+  ctx.moveTo(tx(clampedX0), baseline);
+  ctx.lineTo(tx(clampedX0), ty(kdeInterp(xs, ys, clampedX0)));
+  for (let i = 0; i < xs.length; i++) {
+    if (xs[i] > clampedX0 && xs[i] < clampedX1) ctx.lineTo(tx(xs[i]), ty(ys[i]));
+  }
+  ctx.lineTo(tx(clampedX1), ty(kdeInterp(xs, ys, clampedX1)));
+  ctx.lineTo(tx(clampedX1), baseline);
+  ctx.closePath();
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+}
+
+// Nice axis ticks: no scientific notation, clean intervals
+function niceAxisTicks(domLo, domHi, targetN) {
+  const range = domHi - domLo;
+  if (range <= 0) return [domLo];
+  const rough = range / targetN;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  const nice = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+  const interval = nice * mag;
+  const start = Math.ceil(domLo / interval) * interval;
+  const ticks = [];
+  for (let v = start; v <= domHi + interval * 0.01; v += interval) {
+    const rounded = Math.round(v / interval) * interval; // fix floating point
+    if (rounded >= domLo - interval * 0.01 && rounded <= domHi + interval * 0.01) ticks.push(rounded);
+  }
+  return ticks;
+}
+
+function fmtTick(v, interval) {
+  if (v === 0) return '0';
+  if (!interval) interval = Math.abs(v);
+  // Never use scientific notation — choose fixed decimal places
+  const dec = interval >= 100 ? 0 : interval >= 10 ? 1 : interval >= 1 ? 2 : interval >= 0.1 ? 3 : 4;
+  const s = v.toFixed(Math.min(dec, 6));
+  // Remove trailing zeros after decimal
+  return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
+}
+
+function drawPlot(idx, styleMode, exportCanvas) {
+  const r = RESULTS[idx];
+  if (!r) return;
+  const canvas = exportCanvas || document.getElementById(`canvas-${idx}`);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const scaleMul = exportCanvas ? (exportCanvas._scaleMul || 1) : 1;
+  const scale = !exportCanvas ? dpr : scaleMul;
+
+  const displayW = canvas.parentElement ? canvas.parentElement.clientWidth - 32 : 900;
+  const displayH = 240;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = Math.round(displayW * scale);
+  canvas.height = Math.round(displayH * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const W = displayW, H = displayH;
+
+  const C = getColors(styleMode);
+  const PAD = { top: 30, right: 24, bottom: 46, left: 56 };
+  const pW = W - PAD.left - PAD.right;
+  const pH = H - PAD.top - PAD.bottom;
+
+  // Background
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const { xs, ys } = r.kde;
+  const hdiLo = r.hdi[0], hdiHi = r.hdi[1];
+  const etiLo = r.eti[0], etiHi = r.eti[1];
+  const ropeLo = r.slot.ropeLo, ropeHi = r.slot.ropeHi;
+
+  // Determine CI bounds to show
+  const showHDI = IV_TYPE !== 'eti';
+  const showETI = IV_TYPE !== 'hdi';
+  const ciLo = showHDI ? hdiLo : etiLo;
+  const ciHi = showHDI ? hdiHi : etiHi;
+
+  // X domain: cover kde data + rope, with small margin
+  const kdeSpan = xs[xs.length-1] - xs[0];
+  const margin = kdeSpan * 0.04;
+  const xDomLo = Math.min(xs[0] - margin, ropeLo - kdeSpan * 0.06);
+  const xDomHi = Math.max(xs[xs.length-1] + margin, ropeHi + kdeSpan * 0.06);
+  const yMax = Math.max(...ys) * 1.18;
+
+  const tx = x => PAD.left + (x - xDomLo) / (xDomHi - xDomLo) * pW;
+  const ty = y => PAD.top + (1 - y / yMax) * pH;
+  const baseline = ty(0);
+
+  // Subtle horizontal grid
+  ctx.strokeStyle = C.gridLine;
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i <= 3; i++) {
+    const yp = ty(yMax * i / 4);
+    ctx.beginPath(); ctx.moveTo(PAD.left, yp); ctx.lineTo(PAD.left + pW, yp); ctx.stroke();
+  }
+
+  // ── 1. Tail fill (entire curve, very light) ──────────────────────
+  ctx.beginPath();
+  ctx.moveTo(tx(xs[0]), baseline);
+  xs.forEach((x, i) => ctx.lineTo(tx(x), ty(ys[i])));
+  ctx.lineTo(tx(xs[xs.length - 1]), baseline);
+  ctx.closePath();
+  ctx.fillStyle = C.tailFill;
+  ctx.fill();
+
+  // ── 1b. ROPE shaded background region ────────────────────────────
+  const rx0 = Math.max(PAD.left, tx(ropeLo));
+  const rx1 = Math.min(PAD.left + pW, tx(ropeHi));
+  if (rx1 > rx0) {
+    ctx.fillStyle = C.ropeShade;
+    ctx.fillRect(rx0, PAD.top, rx1 - rx0, pH);
+  }
+
+  // ── 2. CI fill (HDI region, saturated) ───────────────────────────
+  if (showHDI) {
+    fillCIRegion(ctx, xs, ys, hdiLo, hdiHi, tx, ty, baseline, C.hdiCiFill);
+  }
+  // ETI fill (if ETI or both — different colour)
+  if (showETI && IV_TYPE === 'both') {
+    fillCIRegion(ctx, xs, ys, etiLo, etiHi, tx, ty, baseline, C.etiCiFill);
+  } else if (showETI && !showHDI) {
+    fillCIRegion(ctx, xs, ys, etiLo, etiHi, tx, ty, baseline, C.etiCiFill);
+  }
+
+  // ── 3. ROPE boundary lines + value labels (bottom margin) ─────────
+  const ropeVals = [ropeLo, ropeHi];
+  const ropeTickInterval = Math.abs(ropeHi - ropeLo) / 2 || 0.1;
+  ropeVals.forEach(rv => {
+    const rxp = tx(rv);
+    if (rxp < PAD.left - 2 || rxp > PAD.left + pW + 2) return;
+    ctx.strokeStyle = C.ropeBoundLine;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(rxp, PAD.top); ctx.lineTo(rxp, baseline); ctx.stroke();
+    ctx.setLineDash([]);
+    // Value label BELOW tick labels (bottom margin), with background for readability
+    const labelText = fmtTick(rv, ropeTickInterval);
+    ctx.font = `11px ${C.font}`;
+    const tw = ctx.measureText(labelText).width;
+    // background pill
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(rxp - tw / 2 - 2, baseline + 26, tw + 4, 13);
+    ctx.fillStyle = C.ropeBoundText;
+    ctx.textAlign = 'center';
+    ctx.fillText(labelText, rxp, baseline + 37);
+  });
+
+  // ── 4. KDE outline ───────────────────────────────────────────────
+  ctx.beginPath();
+  xs.forEach((x, i) => i === 0 ? ctx.moveTo(tx(x), ty(ys[i])) : ctx.lineTo(tx(x), ty(ys[i])));
+  ctx.strokeStyle = C.kdeLine;
+  ctx.lineWidth = styleMode === 'apa' ? 1.8 : 2.2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // ── 5. Median line (dark blue) ────────────────────────────────────
+  const medX = tx(r.med);
+  const medY = ty(kdeInterp(xs, ys, r.med));
+  ctx.strokeStyle = C.medianColor;
+  ctx.lineWidth = styleMode === 'apa' ? 1.5 : 2;
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(medX, medY); ctx.lineTo(medX, baseline); ctx.stroke();
+
+  // Median dot where line meets curve
+  ctx.fillStyle = C.medianColor;
+  ctx.beginPath(); ctx.arc(medX, medY, 3, 0, Math.PI * 2); ctx.fill();
+
+  // ── 6. CI boundary markers (small ticks on baseline) ─────────────
+  const ciBounds = showHDI && showETI
+    ? [[hdiLo, 'HDI'], [hdiHi, 'HDI'], [etiLo, 'ETI'], [etiHi, 'ETI']]
+    : showHDI ? [[hdiLo,'HDI'],[hdiHi,'HDI']] : [[etiLo,'ETI'],[etiHi,'ETI']];
+  ciBounds.forEach(([bv, kind]) => {
+    const bx = tx(bv);
+    if (bx < PAD.left || bx > PAD.left + pW) return;
+    const col = kind === 'ETI' ? C.etiCiFill.replace(/[\d.]+\)$/, '0.9)') : C.hdiCiFill.replace(/[\d.]+\)$/, '0.9)');
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx, baseline); ctx.lineTo(bx, baseline + 5); ctx.stroke();
+  });
+
+  // ── 7. Axes ──────────────────────────────────────────────────────
+  ctx.strokeStyle = C.fgMid;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD.left, PAD.top);
+  ctx.lineTo(PAD.left, baseline);
+  ctx.lineTo(PAD.left + pW, baseline);
+  ctx.stroke();
+
+  // ── 8. X-axis ticks with nice numbers ────────────────────────────
+  const ticks = niceAxisTicks(xDomLo, xDomHi, 7);
+  const tickInterval = ticks.length > 1 ? ticks[1] - ticks[0] : Math.abs(xDomHi - xDomLo);
+  ctx.fillStyle = C.fgMid;
+  ctx.font = `11px ${C.font}`;
+  ctx.textAlign = 'center';
+  ticks.forEach(tv => {
+    const txp = tx(tv);
+    if (txp < PAD.left - 1 || txp > PAD.left + pW + 1) return;
+    ctx.strokeStyle = C.fgMid;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(txp, baseline); ctx.lineTo(txp, baseline + 4); ctx.stroke();
+    ctx.fillText(fmtTick(tv, tickInterval), txp, baseline + 16);
+  });
+
+  // ── 9. Y-axis label ──────────────────────────────────────────────
+  ctx.save();
+  ctx.translate(13, PAD.top + pH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.fgLight;
+  ctx.font = `11px ${C.font}`;
+  ctx.fillText('Density', 0, 0);
+  ctx.restore();
+
+  // ── 10. Legend top-right ─────────────────────────────────────────
+  ctx.font = `11px ${C.font}`;
+  ctx.textAlign = 'right';
+  let legendY = PAD.top + 14;
+  if (showHDI) {
+    ctx.fillStyle = C.hdiCiFill.replace(/[\d.]+\)$/, '1)');
+    ctx.fillRect(PAD.left + pW - 68, legendY - 9, 10, 10);
+    ctx.fillStyle = C.fgMid;
+    ctx.fillText(`HDI ${CRI}%`, PAD.left + pW, legendY);
+    legendY += 16;
+  }
+  if (showETI) {
+    ctx.fillStyle = C.etiCiFill.replace(/[\d.]+\)$/, '1)');
+    ctx.fillRect(PAD.left + pW - 68, legendY - 9, 10, 10);
+    ctx.fillStyle = C.fgMid;
+    ctx.fillText(`ETI ${CRI}%`, PAD.left + pW, legendY);
+    legendY += 16;
+  }
+  // Median legend
+  ctx.strokeStyle = C.medianColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(PAD.left + pW - 68, legendY - 4); ctx.lineTo(PAD.left + pW - 58, legendY - 4); ctx.stroke();
+  ctx.fillStyle = C.medianColor;
+  ctx.beginPath(); ctx.arc(PAD.left + pW - 63, legendY - 4, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = C.fgMid;
+  ctx.fillText('Median', PAD.left + pW, legendY);
+
+  // ── 11. Variable title (export only — in-screen title is in card header) ─
+  if (exportCanvas) {
+    const labelText = (r.slot.label || r.slot.formula) + (r.slot.unit ? ` [${r.slot.unit}]` : '');
+    ctx.fillStyle = C.fg;
+    ctx.font = `bold 12px ${C.font}`;
+    ctx.textAlign = 'left';
+    ctx.fillText(labelText.length > 55 ? labelText.slice(0, 52) + '…' : labelText, PAD.left + 2, PAD.top - 10);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SUMMARY TABLE & R-CODE
+// ══════════════════════════════════════════════════════════════════════
+function renderSummary() {
+  const wrap = document.getElementById('summary-wrap');
+  const tbody = document.getElementById('sum-tbody');
+  if (!RESULTS.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  tbody.innerHTML = RESULTS.map(r => {
+    const dec = applyDecision(r);
+    const vclass = dec === 'effect' ? 'v-effect' : dec === 'null' ? 'v-null' : 'v-withhold';
+    const vlabel = dec === 'effect' ? 'Effect' : dec === 'null' ? 'Pract. null' : 'Withhold';
+    return `<tr>
+      <td><strong>${escHtml(r.slot.label || r.slot.formula)}</strong></td>
+      <td>${escHtml(r.slot.unit || '—')}</td>
+      <td>${r.samples.length.toLocaleString('en-US')}</td>
+      <td>${fmt(r.med)}</td>
+      <td>${fmt(r.hdi[0])}</td><td>${fmt(r.hdi[1])}</td>
+      <td>${fmt(r.eti[0])}</td><td>${fmt(r.eti[1])}</td>
+      <td>${fmt(r.slot.ropeLo)}</td><td>${fmt(r.slot.ropeHi)}</td>
+      <td>${fmt(r.ropePct, 1)}%</td>
+      <td><span class="sum-verdict ${vclass}">${vlabel}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Summary R-code
+  let rcode = `library(bayestestR)\ndraws <- read.csv("draws.csv")\n\n`;
+  RESULTS.forEach(r => {
+    const lbl = r.slot.label || 'Variable';
+    rcode += `# ── ${lbl} ─────────────────────────────────────────\n`;
+    rcode += `${sanitizeLabel(lbl)} <- with(draws, ${r.slot.formula})\n`;
+    rcode += `hdi(${sanitizeLabel(lbl)}, ci = ${CRI/100})\n`;
+    rcode += `eti(${sanitizeLabel(lbl)}, ci = ${CRI/100})\n`;
+    rcode += `rope(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))\n`;
+    rcode += `equivalence_test(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})\n\n`;
+  });
+  document.getElementById('summary-rcode').textContent = rcode;
+}
+
+function genRCode(r) {
+  const lbl = sanitizeLabel(r.slot.label || 'variable');
+  return `library(bayestestR)
+draws <- read.csv("draws.csv")
+
+# ${r.slot.label || r.slot.formula}
+${lbl} <- with(draws, ${r.slot.formula})
+
+hdi(${lbl}, ci = ${CRI/100})
+eti(${lbl}, ci = ${CRI/100})
+rope(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))
+equivalence_test(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})
+
+# Visualise
+plot(hdi(${lbl}, ci = ${CRI/100}))`;
+}
+
+function sanitizeLabel(s) {
+  return String(s).replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_$&') || 'variable';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════
+// ── TABLE EXPORTS ─────────────────────────────────────────────────────────
+function tableRowData(r) {
+  const dec = applyDecision(r);
+  const dlbl = dec === 'effect' ? 'Effect present' : dec === 'null' ? 'Praktisch null' : 'Withhold judgement';
+  return {
+    label:   r.slot.label || r.slot.formula,
+    unit:    r.slot.unit || '',
+    formula: r.slot.formula,
+    n:       r.samples.length,
+    median:  r.med,
+    hdiLo:   r.hdi[0], hdiHi: r.hdi[1],
+    etiLo:   r.eti[0], etiHi: r.eti[1],
+    ropeLo:  r.slot.ropeLo, ropeHi: r.slot.ropeHi,
+    ropePct: r.ropePct,
+    decision: dlbl
+  };
+}
+
+function exportTableCSV() {
+  if (!RESULTS.length) return;
+  const cols = ['Variable','Unit','Formula','n_Draws','Median',
+    `HDI_${CRI}pct_lo`,`HDI_${CRI}pct_hi`,`ETI_${CRI}pct_lo`,`ETI_${CRI}pct_hi`,
+    'ROPE_lo','ROPE_hi','ROPE_pct','Decision','Decision_rule'];
+  const rows = RESULTS.map(r => {
+    const d = tableRowData(r);
+    return [d.label, d.unit, d.formula, d.n,
+      d.median.toFixed(4), d.hdiLo.toFixed(4), d.hdiHi.toFixed(4),
+      d.etiLo.toFixed(4), d.etiHi.toFixed(4),
+      d.ropeLo, d.ropeHi, d.ropePct.toFixed(2), d.decision, decRuleLabel()
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const meta = [`# Decision Maker Export — ${new Date().toLocaleDateString('en-US')}`,
+    `# CrI: ${CRI}% | Decision rule: ${decRuleLabel()}`, ''];
+  const csv = meta.join('\n') + cols.join(',') + '\n' + rows.join('\n');
+  downloadText(csv, 'decision_maker_results.csv', 'text/csv');
+}
+
+function exportTableHTML() {
+  if (!RESULTS.length) return;
+  const date = new Date().toLocaleDateString('en-US');
+  const rows = RESULTS.map(r => {
+    const d = tableRowData(r);
+    const decStyle = d.decision.includes('Effect') ? 'color:#1a5e1a' :
+      d.decision.includes('null') ? 'color:#1a3a6e' : 'color:#7a4200';
+    return `<tr>
+      <td>${d.label}${d.unit ? ` <em>[${d.unit}]</em>` : ''}</td>
+      <td style="text-align:right">${d.n.toLocaleString()}</td>
+      <td style="text-align:right">${d.median.toFixed(3)}</td>
+      <td style="text-align:right">${d.hdiLo.toFixed(3)}</td>
+      <td style="text-align:right">${d.hdiHi.toFixed(3)}</td>
+      <td style="text-align:right">${d.etiLo.toFixed(3)}</td>
+      <td style="text-align:right">${d.etiHi.toFixed(3)}</td>
+      <td style="text-align:right">${d.ropeLo}</td>
+      <td style="text-align:right">${d.ropeHi}</td>
+      <td style="text-align:right">${d.ropePct.toFixed(1)}%</td>
+      <td style="${decStyle};font-style:italic">${d.decision}</td>
+    </tr>`;
+  }).join('\n');
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Decision Maker — Results</title>
+<style>
+  body{font-family:Times New Roman,serif;font-size:12pt;margin:2.5cm;color:#000}
+  h2{font-size:14pt;font-weight:bold;margin-bottom:.3em}
+  p.note{font-size:10pt;margin:.2em 0}
+  table{border-collapse:collapse;width:100%;margin-top:1em;font-size:11pt}
+  th{border-top:2px solid #000;border-bottom:1px solid #000;padding:.35em .6em;
+    text-align:center;font-weight:bold;background:#fff}
+  td{padding:.3em .6em;border-bottom:none}
+  tr:last-child td{border-bottom:2px solid #000}
+  .fn{font-size:9.5pt;margin-top:.8em;color:#333}
+  @media print{body{margin:2cm}}
+</style></head><body>
+<h2>Bayesian Posterior Analysis</h2>
+<p class="note"><em>Table 1.</em> Results of the posterior decision analysis (Decision Maker, Bayes Thinking Lab)</p>
+<table>
+  <thead><tr>
+    <th>Variable</th><th><em>n</em></th><th>Median</th>
+    <th>HDI ${CRI}% lo</th><th>HDI ${CRI}% hi</th>
+    <th>ETI ${CRI}% lo</th><th>ETI ${CRI}% hi</th>
+    <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th>
+    <th>Decision</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="fn">
+  <em>Notes.</em>
+  HDI = Highest Density Interval; ETI = Equal-Tailed Interval; ROPE = Region of Practical Equivalence.
+  CrI = ${CRI}%. Decision rule: ${decRuleLabel()}.
+  Analyse: Decision Maker, Bayes Thinking Lab (© Dr. Rainer Düsing). Date: ${date}.
+</div>
+</body></html>`;
+  downloadText(html, 'decision_maker_table_apa.html', 'text/html');
+}
+
+function downloadText(content, filename, mime) {
+  const blob = new Blob([content], { type: mime + ';charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── PLOT EXPORT MODAL ─────────────────────────────────────────────────────
+function openExportModal(idx) {
+  EXPORT_TARGET = idx;
+  document.getElementById('export-modal').classList.add('open');
+  // Reset
+  document.getElementById('exp-style').querySelectorAll('.radio-opt').forEach((el, i) => {
+    el.classList.toggle('sel', i === 0);
+  });
+  document.getElementById('exp-style-info').style.display = 'none';
+}
+
+function closeExportModal(e) {
+  if (e && e.target !== document.getElementById('export-modal')) return;
+  document.getElementById('export-modal').classList.remove('open');
+}
+
+const STYLE_DESCRIPTIONS = {
+  'APA Publication': 'White background, black axes and lines, greyscale fill, Arial font. Suitable for manuscript submissions (APA, APS, etc.).',
+  'Presentation': 'Dark background, bright curves, bold colours. Ideal for slides, posters, and digital reports.'
+};
+
+function selectOpt(el, groupId) {
+  document.getElementById(groupId).querySelectorAll('.radio-opt').forEach(o => o.classList.remove('sel'));
+  el.classList.add('sel');
+  if (groupId === 'exp-style') {
+    const desc = STYLE_DESCRIPTIONS[el.textContent.trim()];
+    const infoEl = document.getElementById('exp-style-info');
+    if (desc) {
+      document.getElementById('exp-style-desc').textContent = desc;
+      infoEl.style.display = 'block';
+    } else {
+      infoEl.style.display = 'none';
+    }
+  }
+}
+
+function getSelected(groupId) {
+  const sel = document.getElementById(groupId).querySelector('.sel');
+  return sel ? sel.textContent.trim() : '';
+}
+
+function doExport() {
+  if (EXPORT_TARGET === null) return;
+  const fmt = getSelected('exp-format');
+  const style = getSelected('exp-style');
+  const res = getSelected('exp-res');
+  const mimeType = fmt === 'JPEG' ? 'image/jpeg' : 'image/png';
+  const ext = fmt === 'JPEG' ? '.jpg' : '.png';
+  const scaleMul = res === '3x' ? 3 : res === '2x' ? 2 : 1;
+  const styleMode = style === 'APA Publication' ? 'apa' : style === 'Presentation' ? 'presentation' : 'tool';
+
+  const r = RESULTS[EXPORT_TARGET];
+  if (!r) return;
+
+  const offscreen = document.createElement('canvas');
+  offscreen._scaleMul = scaleMul;
+
+  // Temporarily override DARK for non-tool styles
+  const prevDark = DARK;
+  if (styleMode === 'apa') DARK = false;
+  drawPlot(EXPORT_TARGET, styleMode, offscreen);
+  DARK = prevDark;
+
+  offscreen.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const label = sanitizeLabel(r.slot.label || r.slot.formula);
+    a.href = url; a.download = `decision_maker_${label}${ext}`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, mimeType, fmt === 'JPEG' ? 0.92 : undefined);
+
+  document.getElementById('export-modal').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// COLLAPSIBLE & COPY
+// ══════════════════════════════════════════════════════════════════════
+function toggleCollap(hd) {
+  hd.classList.toggle('open');
+  hd.nextElementSibling.classList.toggle('open');
+}
+
+function copyCode(btn) {
+  const code = btn.previousElementSibling.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════
+window.addEventListener('resize', () => { if (RESULTS.length) requestAnimationFrame(() => RESULTS.forEach((_,i) => drawPlot(i,'tool'))); });
+addSlot({ label: '', formula: '', ropeLo: -0.1, ropeHi: 0.1, unit: '' }); // Start with one empty slot
+</script>
+</body>
+</html>
