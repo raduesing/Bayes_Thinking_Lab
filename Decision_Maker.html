@@ -211,7 +211,7 @@ nav{position:sticky;top:0;z-index:300;background:var(--paper);border-bottom:1.5p
 .result-unit{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)}
 .canvas-wrap{padding:1rem 1.1rem;overflow:hidden}
 .plot-canvas{display:block;width:100%;max-width:100%}
-.stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:.8rem;
   padding:.6rem 1.1rem;border-top:1px solid var(--grid)}
 .stat-box{background:var(--panel);border:1px solid var(--grid);padding:.65rem .8rem}
 .stat-label{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;
@@ -486,7 +486,7 @@ write.csv(draws_clean, "draws.csv", row.names = FALSE)
           <tr>
             <th>Variable</th><th>Einheit</th><th>n Draws</th><th>Median</th>
             <th>HDI lo</th><th>HDI hi</th><th>ETI lo</th><th>ETI hi</th>
-            <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th><th>Entscheidung</th>
+            <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th><th>pd %</th><th>Entscheidung</th>
           </tr>
         </thead>
         <tbody id="sum-tbody"></tbody>
@@ -499,6 +499,27 @@ write.csv(draws_clean, "draws.csv", row.names = FALSE)
         <div class="collap-body">
           <div class="rcode" id="summary-rcode"></div>
           <button class="cbtn" onclick="copyCode(this)">Kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ BEFUNDBERICHT -->
+    <div id="report-sec" style="display:none;margin-top:1rem">
+      <div class="sec">
+        <div class="sec-hd" style="margin-bottom:.7rem">
+          <span class="sec-title"><em>⑤</em> Befundbericht</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:.8rem;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);white-space:nowrap">Variable auswählen:</span>
+          <select class="field-select" id="report-var-sel" style="max-width:340px;width:auto" onchange="updateReport()"></select>
+        </div>
+        <div id="report-text-box" style="font-family:'Fraunces',Georgia,serif;font-size:.9rem;
+          line-height:1.95;color:var(--ink);background:var(--panel);border:1px solid var(--grid);
+          border-left:3px solid var(--a2);padding:.9rem 1.2rem;margin-bottom:.6rem;
+          font-style:italic;min-height:2rem"></div>
+        <button class="cbtn" id="btn-copy-report" onclick="copyReport()">Bericht kopieren</button>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);margin-top:.5rem;line-height:1.7">
+          Sprachlich anpassen und mit inhaltlichem Kontext ergänzen vor der Übernahme in eine Publikation.
         </div>
       </div>
     </div>
@@ -1224,7 +1245,10 @@ function analyse() {
         const kde = computeKDE(samples);
         const decHDI = kruschkeDecision(hdi[0], hdi[1], slot.ropeLo, slot.ropeHi);
         const decETI = kruschkeDecision(eti[0], eti[1], slot.ropeLo, slot.ropeHi);
-        RESULTS.push({ slot, samples, sorted, hdi, eti, ropePct, med, mn, kde, decHDI, decETI });
+        const pdPos = samples.filter(x => x > 0).length / samples.length;
+        const pd = Math.max(pdPos, 1 - pdPos) * 100;
+        const pdDir = pdPos >= 0.5 ? 'positiv' : 'negativ';
+        RESULTS.push({ slot, samples, sorted, hdi, eti, ropePct, med, mn, kde, decHDI, decETI, pd, pdDir });
       } catch(e) {
         const errEl = document.getElementById(`err-${slot.id}`);
         if (errEl) { errEl.style.display = 'block'; errEl.textContent = '⚠ ' + e.message; }
@@ -1292,6 +1316,11 @@ function renderResults() {
           <div style="font-family:'DM Mono',monospace;font-size:.82rem;color:var(--ink);margin-bottom:.2rem">
             ${fmt(ropePctRounded, 1)}% der Draws in ROPE</div>
           <div class="rope-bar-bg"><div class="rope-bar-fill" style="width:${Math.min(ropePctRounded,100)}%"></div></div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Prob. of Direction</div>
+          <div class="stat-value">pd = ${fmt(r.pd, 1)}%</div>
+          <div class="stat-sub">${r.pdDir} · ${r.pd >= 99 ? 'stark' : r.pd >= 97.5 ? 'moderat' : r.pd >= 95 ? 'schwach' : r.pd >= 89 ? 'suggestiv' : 'unklar'}</div>
         </div>
       </div>
       <div class="verdict-row">
@@ -1661,6 +1690,7 @@ function renderSummary() {
       <td>${fmt(r.eti[0])}</td><td>${fmt(r.eti[1])}</td>
       <td>${fmt(r.slot.ropeLo)}</td><td>${fmt(r.slot.ropeHi)}</td>
       <td>${fmt(r.ropePct, 1)}%</td>
+      <td>${fmt(r.pd, 1)}%</td>
       <td><span class="sum-verdict ${vclass}">${vlabel}</span></td>
     </tr>`;
   }).join('');
@@ -1674,9 +1704,11 @@ function renderSummary() {
     rcode += `hdi(${sanitizeLabel(lbl)}, ci = ${CRI/100})\n`;
     rcode += `eti(${sanitizeLabel(lbl)}, ci = ${CRI/100})\n`;
     rcode += `rope(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))\n`;
-    rcode += `equivalence_test(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})\n\n`;
+    rcode += `equivalence_test(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})\n`;
+    rcode += `p_direction(${sanitizeLabel(lbl)})\n\n`;
   });
   document.getElementById('summary-rcode').textContent = rcode;
+  populateReportSelect();
 }
 
 function genRCode(r) {
@@ -1691,6 +1723,8 @@ hdi(${lbl}, ci = ${CRI/100})
 eti(${lbl}, ci = ${CRI/100})
 rope(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))
 equivalence_test(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})
+
+p_direction(${lbl})
 
 # Visualisieren
 plot(hdi(${lbl}, ci = ${CRI/100}))`;
@@ -1717,6 +1751,7 @@ function tableRowData(r) {
     etiLo:   r.eti[0], etiHi: r.eti[1],
     ropeLo:  r.slot.ropeLo, ropeHi: r.slot.ropeHi,
     ropePct: r.ropePct,
+    pd:      r.pd,
     decision: dlbl
   };
 }
@@ -1725,13 +1760,13 @@ function exportTableCSV() {
   if (!RESULTS.length) return;
   const cols = ['Variable','Einheit','Formel','n_Draws','Median',
     `HDI_${CRI}pct_lo`,`HDI_${CRI}pct_hi`,`ETI_${CRI}pct_lo`,`ETI_${CRI}pct_hi`,
-    'ROPE_lo','ROPE_hi','ROPE_pct','Entscheidung','Entscheidungsregel'];
+    'ROPE_lo','ROPE_hi','ROPE_pct','pd_pct','Entscheidung','Entscheidungsregel'];
   const rows = RESULTS.map(r => {
     const d = tableRowData(r);
     return [d.label, d.unit, d.formula, d.n,
       d.median.toFixed(4), d.hdiLo.toFixed(4), d.hdiHi.toFixed(4),
       d.etiLo.toFixed(4), d.etiHi.toFixed(4),
-      d.ropeLo, d.ropeHi, d.ropePct.toFixed(2), d.decision, decRuleLabel()
+      d.ropeLo, d.ropeHi, d.ropePct.toFixed(2), d.pd.toFixed(2), d.decision, decRuleLabel()
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
   const meta = [`# Decision Maker Export — ${new Date().toLocaleDateString('de-DE')}`,
@@ -1758,6 +1793,7 @@ function exportTableHTML() {
       <td style="text-align:right">${d.ropeLo}</td>
       <td style="text-align:right">${d.ropeHi}</td>
       <td style="text-align:right">${d.ropePct.toFixed(1)}%</td>
+      <td style="text-align:right">${d.pd.toFixed(1)}%</td>
       <td style="${decStyle};font-style:italic">${d.decision}</td>
     </tr>`;
   }).join('\n');
@@ -1783,7 +1819,7 @@ function exportTableHTML() {
     <th>Variable</th><th><em>n</em></th><th>Median</th>
     <th>HDI ${CRI}% lo</th><th>HDI ${CRI}% hi</th>
     <th>ETI ${CRI}% lo</th><th>ETI ${CRI}% hi</th>
-    <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th>
+    <th>ROPE lo</th><th>ROPE hi</th><th>ROPE %</th><th>pd %</th>
     <th>Entscheidung</th>
   </tr></thead>
   <tbody>${rows}</tbody>
@@ -1895,6 +1931,78 @@ function toggleCollap(hd) {
 function copyCode(btn) {
   const code = btn.previousElementSibling.textContent;
   navigator.clipboard.writeText(code).then(() => {
+    const old = btn.textContent;
+    btn.textContent = '✓ Kopiert';
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// VERBAL REPORT
+// ══════════════════════════════════════════════════════════════════════
+function populateReportSelect() {
+  const sec = document.getElementById('report-sec');
+  const sel = document.getElementById('report-var-sel');
+  if (!sec || !sel || !RESULTS.length) return;
+  sec.style.display = 'block';
+  sel.innerHTML = RESULTS.map((r, i) =>
+    `<option value="${i}">${escHtml(r.slot.label || r.slot.formula)}</option>`
+  ).join('');
+  updateReport();
+}
+
+function updateReport() {
+  const sel = document.getElementById('report-var-sel');
+  if (!sel || !RESULTS.length) return;
+  const idx = parseInt(sel.value);
+  if (isNaN(idx) || !RESULTS[idx]) return;
+  document.getElementById('report-text-box').textContent = generateReportText(idx);
+}
+
+function generateReportText(idx) {
+  const r = RESULTS[idx];
+  const label = r.slot.label || r.slot.formula;
+  const unit = r.slot.unit ? ` [${r.slot.unit}]` : '';
+  const n = r.samples.length;
+  const dec = applyDecision(r);
+  const useETI = DEC_RULE === 'eti_rope';
+  const ivLabel = useETI ? 'ETI' : 'HDI';
+  const iv = useETI ? r.eti : r.hdi;
+
+  let decSent;
+  if (dec === 'effect') {
+    if (DEC_RULE === 'full_rope') {
+      decSent = `Da lediglich ${r.ropePct.toFixed(1)} % der Posteriormasse im ROPE [${r.slot.ropeLo}, ${r.slot.ropeHi}] liegen (Schwelle: ${FULL_ROPE_THRESH} %), wird der Effekt als praktisch bedeutsam eingestuft.`;
+    } else {
+      decSent = `Da das ${CRI} %-${ivLabel} [${fmt(iv[0])}, ${fmt(iv[1])}] vollständig außerhalb der ROPE [${r.slot.ropeLo}, ${r.slot.ropeHi}] liegt, kann der Effekt als praktisch bedeutsam angesehen werden (Kruschke 2018).`;
+    }
+  } else if (dec === 'null') {
+    if (DEC_RULE === 'full_rope') {
+      decSent = `Da ${r.ropePct.toFixed(1)} % der Posteriormasse im ROPE [${r.slot.ropeLo}, ${r.slot.ropeHi}] liegen, ist der Effekt als praktisch äquivalent zu null einzustufen.`;
+    } else {
+      decSent = `Da das ${CRI} %-${ivLabel} [${fmt(iv[0])}, ${fmt(iv[1])}] vollständig innerhalb der ROPE [${r.slot.ropeLo}, ${r.slot.ropeHi}] liegt, ist der Parameter praktisch äquivalent zu null.`;
+    }
+  } else {
+    decSent = `Da das ${CRI} %-${ivLabel} [${fmt(iv[0])}, ${fmt(iv[1])}] die ROPE-Grenzen [${r.slot.ropeLo}, ${r.slot.ropeHi}] überlappt, lässt sich kein eindeutiges Urteil treffen (withhold judgement nach Kruschke 2018).`;
+  }
+
+  let pdStrength;
+  if      (r.pd >= 99)   pdStrength = 'starke Evidenz';
+  else if (r.pd >= 97.5) pdStrength = 'moderate Evidenz';
+  else if (r.pd >= 95)   pdStrength = 'schwache Evidenz';
+  else if (r.pd >= 89)   pdStrength = 'unsichere Evidenz';
+  else                   pdStrength = 'keine klare Richtungsaussage';
+  const dirStr = r.pdDir === 'positiv' ? 'positiv (θ > 0)' : 'negativ (θ < 0)';
+  const pdSent = `Die Probability of Direction beträgt pd = ${r.pd.toFixed(1)} %, was auf ${pdStrength} für eine ${dirStr} Richtung des Effekts hinweist.`;
+
+  return `Der Posterior von ${label}${unit} basiert auf ${n.toLocaleString('de-DE')} Draws (Mdn = ${fmt(r.med)}, M = ${fmt(r.mn)}). Das ${CRI} %-${ivLabel} liegt bei [${fmt(iv[0])}, ${fmt(iv[1])}] (Breite: ${fmt(iv[1] - iv[0])}). ${decSent} ${pdSent}`;
+}
+
+function copyReport() {
+  const box = document.getElementById('report-text-box');
+  if (!box || !box.textContent.trim()) return;
+  navigator.clipboard.writeText(box.textContent).then(() => {
+    const btn = document.getElementById('btn-copy-report');
     const old = btn.textContent;
     btn.textContent = '✓ Kopiert';
     setTimeout(() => { btn.textContent = old; }, 1500);

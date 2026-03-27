@@ -86,7 +86,7 @@ select:focus{border-color:var(--accent2)}
 #plot-area{overflow:hidden;min-width:0}
 
 /* DECISION PANELS */
-.decisions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-top:.8rem}
+.decisions{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.8rem;margin-top:.8rem}
 .dec-panel{background:var(--paper);border:1.5px solid var(--border);padding:.9rem 1rem;
   box-shadow:2px 2px 0 var(--shadow)}
 .dec-label{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.1em;
@@ -375,6 +375,18 @@ select:focus{border-color:var(--accent2)}
       <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);
            margin-top:.5rem;line-height:1.7" id="dc-explain">
         Invariant unter Transformationen. Bei Normalverteilung = HDI. Zeigt Unterschiede bei schiefen Posteriors.
+      </div>
+    </div>
+
+    <!-- D: Probability of Direction -->
+    <div class="dec-panel" id="dp-pd">
+      <div class="dec-label">Kennwert D — bayestestR</div>
+      <div class="dec-name">Probability of <em>Direction</em></div>
+      <div class="dec-value" id="dd-value">—</div>
+      <div class="dec-verdict v-neutral" id="dd-verdict">—</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);
+           margin-top:.5rem;line-height:1.7" id="dd-explain">
+        Anteil der Posteriormasse in der wahrscheinlicheren Richtung. pd ≥ 97.5% ≈ p ≤ .05 (zweiseitig).
       </div>
     </div>
 
@@ -729,6 +741,26 @@ function update(){
   const vK = kruschkeVerdict(ivForKruschke[0], ivForKruschke[1], rl, ru);
   const vE = kruschkeVerdict(eti[0], eti[1], rl, ru);
 
+  // Probability of Direction — wide grid centered to capture both sides of 0
+  let pd, pdDirection;
+  if (DIST === 'gamma') {
+    pd = 100; pdDirection = 'positiv';
+  } else {
+    const pdN = 500;
+    const pdHalf = Math.max(Math.abs(mu) + 8 * sigma, 8 * sigma);
+    const pdXs = Array.from({length: pdN}, (_, i) => -pdHalf + 2 * pdHalf * i / (pdN - 1));
+    const pdYs = getPDF(pdXs, params);
+    const pdTotal = trapz(pdXs, pdYs);
+    if (pdTotal < 1e-20) {
+      pd = 50; pdDirection = 'unklar';
+    } else {
+      const pdPosYs = pdYs.map((y, i) => pdXs[i] >= 0 ? y : 0);
+      const pdPosArea = trapz(pdXs, pdPosYs) / pdTotal;
+      pd = Math.max(pdPosArea, 1 - pdPosArea) * 100;
+      pdDirection = pdPosArea >= 0.5 ? 'positiv' : 'negativ';
+    }
+  }
+
   // ── Draw canvas ────────────────────────────────
   const canvas = document.getElementById('mainCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -889,6 +921,32 @@ function update(){
     ? `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — gleiche Entscheidung wie HDI bei dieser Verteilung.`
     : `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — ANDERE Entscheidung als HDI! Typisch für schiefe Posteriors.`;
 
+  // D: Probability of Direction
+  {
+    const ddVal  = document.getElementById('dd-value');
+    const ddVerd = document.getElementById('dd-verdict');
+    const ddExp  = document.getElementById('dd-explain');
+    ddVal.textContent = `pd = ${pd.toFixed(1)}%`;
+    if (DIST === 'gamma') {
+      ddVerd.textContent = '⊘ Nicht informativ';
+      ddVerd.className = 'dec-verdict v-neutral';
+      ddExp.textContent = 'Gamma: alle Werte > 0 — pd ist stets 100% und trägt keine Entscheidungsinformation.';
+    } else {
+      let pdTxt, pdCls;
+      if      (pd >= 99)   { pdTxt = '★ Starke Evidenz';    pdCls = 'v-accept'; }
+      else if (pd >= 97.5) { pdTxt = '◆ Moderate Evidenz';  pdCls = 'v-accept'; }
+      else if (pd >= 95)   { pdTxt = '○ Schwache Evidenz';  pdCls = 'v-withhold'; }
+      else if (pd >= 89)   { pdTxt = '– Unsichere Evidenz'; pdCls = 'v-withhold'; }
+      else                 { pdTxt = '✗ Keine Evidenz';     pdCls = 'v-reject'; }
+      ddVerd.textContent = pdTxt;
+      ddVerd.className = 'dec-verdict ' + pdCls;
+      const equiv = pd >= 99   ? ' — ≥ 99%' :
+                    pd >= 97.5 ? ' — ≥ 97.5% (≈ p ≤ .05 zweiseitig)' :
+                    pd >= 95   ? ' — ≥ 95% (≈ p ≤ .05 einseitig)' : '';
+      ddExp.textContent = `${pd.toFixed(1)}% der Masse in Richtung ${pdDirection} (θ ${pdDirection === 'positiv' ? '> 0' : '< 0'}).${equiv} Makowski et al. (2019).`;
+    }
+  }
+
   // ── Update R Code ──────────────────────────────
   let rcode = 'library(bayestestR)\n\n';
   if(DIST === 'normal'){
@@ -901,7 +959,8 @@ function update(){
   rcode += `\n# ${CRI}% HDI\nhdi(posterior, ci = ${CRI/100})\n\n`;
   rcode += `# ${CRI}% ETI\neti(posterior, ci = ${CRI/100})\n\n`;
   rcode += `# ROPE-Analyse (${CRI}% Intervall)\nrope(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
-  rcode += `# Vollständige Entscheidung\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})`;
+  rcode += `# Vollständige Entscheidung\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
+  rcode += `# Probability of Direction\np_direction(posterior)`;
   document.getElementById('rcode-block').textContent = rcode;
 }
 
