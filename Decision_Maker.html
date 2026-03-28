@@ -416,7 +416,7 @@ write.csv(draws_clean, "draws.csv", row.names = FALSE)
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       <div>
-        <div class="field-lbl">Kredibles Intervall (CrI)</div>
+        <div class="field-lbl">Credible Interval (CrI)</div>
         <div class="tbtn-group">
           <button class="tbtn" id="cri-89" onclick="setCri(89)">89%</button>
           <button class="tbtn on" id="cri-95" onclick="setCri(95)">95%</button>
@@ -678,7 +678,7 @@ b_x - b_z          → Kontrast
   settings: {
     title: 'Einstellungen — CrI & Intervall-Typ',
     html: `
-<h4>Kredibles Intervall (CrI)</h4>
+<h4>Credible Interval (CrI)</h4>
 <p>Bestimmt die Breite von HDI und ETI.<br>
 <strong>89%:</strong> McElreaths Empfehlung — größte Primzahl unter 90%, kommuniziert dass Grenzen nicht magisch sind.<br>
 <strong>95%:</strong> Kruschkes Standard, direkt vergleichbar mit frequentistischen CIs.<br>
@@ -705,6 +705,12 @@ b_x - b_z          → Kontrast
 <strong>Effekt vorhanden:</strong> HDI vollständig außerhalb ROPE.<br>
 <strong>Praktisch null:</strong> HDI vollständig innerhalb ROPE.<br>
 <strong>Urteil zurückhalten:</strong> HDI überlappt mit ROPE.</p>
+<h4>Probability of Direction (pd)</h4>
+<p>Die <strong>Probability of Direction</strong> gibt den Anteil der Posterior-Draws an, der auf einer Seite eines Referenzwerts liegt — standardmäßig 0, aber frei wählbar (z.B. 1 für Odds Ratios).</p>
+<p>pd = 95% bedeutet: 95% der Posterior-Masse liegt oberhalb (oder unterhalb) des Referenzwerts. Die Richtung (positiv/negativ) wird automatisch als die häufigere Seite gewählt.<br>
+<strong>Richtwerte:</strong> pd ≥ 97.5% ≈ moderate Evidenz · pd ≥ 95% ≈ schwach · pd ≥ 89% ≈ suggestiv · pd &lt; 89% = unklar.</p>
+<p>Im Gegensatz zur ROPE-Entscheidung trifft pd <em>keine</em> Aussage über die praktische Relevanz — nur über die Richtung. Für Effektgröße und Nullhypothesen-Test ist ROPE aussagekräftiger.</p>
+<div class="note">Bei transformierten Variablen (z.B. Odds Ratio = exp(b)): Referenzwert auf 1 setzen, nicht 0.</div>
 <h4>R-Code</h4>
 <p>Jede Variablen-Karte enthält den entsprechenden bayestestR-Code zum Reproduzieren. Copy-Button zum schnellen Übertragen ins Skript.</p>
 <h4>Export</h4>
@@ -752,8 +758,17 @@ function closeHelp() {
 // ══════════════════════════════════════════════════════════════════════
 const dz = document.getElementById('dropzone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag'); });
 dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+// Auch auf dem file-Input lauschen (manche Browser droppen auf dem Input, nicht dem Div)
+const fi = document.getElementById('file-input');
+fi.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+fi.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag'); });
+fi.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('drag');
   const f = e.dataTransfer.files[0];
   if (f) handleFile(f);
@@ -887,7 +902,7 @@ function addSlot(prefill) {
     alert('Maximal 5 Variablen gleichzeitig.'); return;
   }
   const id = slotCounter++;
-  const slot = { id, label: '', formula: '', ropeLo: -0.1, ropeHi: 0.1, unit: '' };
+  const slot = { id, label: '', formula: '', ropeLo: -0.1, ropeHi: 0.1, unit: '', pdRef: 0 };
   if (prefill) Object.assign(slot, prefill);
   SLOTS.push(slot);
   renderSlots();
@@ -963,6 +978,15 @@ function renderSlots() {
           </select>
         </div>
       </div>
+      <div class="slot-row" style="margin-top:.3rem">
+        <div>
+          <label class="field-lbl">pd-Referenzwert <span style="color:var(--ink3);font-weight:300">(Anteil Posterior &gt; diesem Wert)</span></label>
+          <input class="field-input" type="number" step="any"
+            value="${slot.pdRef}"
+            oninput="updateSlot(${slot.id}, 'pdRef', isNaN(parseFloat(this.value)) ? 0 : parseFloat(this.value))">
+        </div>
+        <div></div>
+      </div>
       <div class="slot-err" id="err-${slot.id}"></div>
     `;
     container.appendChild(div);
@@ -972,7 +996,19 @@ function renderSlots() {
 
 function updateSlot(id, field, value) {
   const slot = SLOTS.find(s => s.id === id);
-  if (slot) slot[field] = value;
+  if (!slot) { checkAnalyseReady(); return; }
+  slot[field] = value;
+  if (field === 'pdRef' && RESULTS.length) {
+    const r = RESULTS.find(res => res.slot.id === id);
+    if (r) {
+      const ref = value ?? 0;
+      const pdPos = r.samples.filter(x => x > ref).length / r.samples.length;
+      r.pd = Math.max(pdPos, 1 - pdPos) * 100;
+      r.pdDir = pdPos >= 0.5 ? 'positiv' : 'negativ';
+      r.pdRef = ref;
+      renderResults();
+    }
+  }
   checkAnalyseReady();
 }
 
@@ -1019,7 +1055,7 @@ function applyPreset(value) {
   if (!value) return;
   const presets = {
     direct:  { label: 'Koeffizient', formula: 'b_x', unit: '' },
-    exp:     { label: 'Odds/Rate Ratio', formula: 'exp(b_x)', unit: 'Ratio', ropeLo: 0.9, ropeHi: 1.1 },
+    exp:     { label: 'Odds/Rate Ratio', formula: 'exp(b_x)', unit: 'Ratio', ropeLo: 0.9, ropeHi: 1.1, pdRef: 1 },
     plogis:  { label: 'Wahrscheinlichkeit', formula: 'plogis(b_x)', unit: 'P', ropeLo: -0.05, ropeHi: 0.05 },
     cohend:  { label: "Cohen's d", formula: 'b_x / sigma', unit: 'SD', ropeLo: -0.1, ropeHi: 0.1 },
     contrast:{ label: 'Kontrast', formula: 'b_x1 - b_x2', unit: '', ropeLo: -0.1, ropeHi: 0.1 },
@@ -1245,10 +1281,11 @@ function analyse() {
         const kde = computeKDE(samples);
         const decHDI = kruschkeDecision(hdi[0], hdi[1], slot.ropeLo, slot.ropeHi);
         const decETI = kruschkeDecision(eti[0], eti[1], slot.ropeLo, slot.ropeHi);
-        const pdPos = samples.filter(x => x > 0).length / samples.length;
+        const pdRef = slot.pdRef ?? 0;
+        const pdPos = samples.filter(x => x > pdRef).length / samples.length;
         const pd = Math.max(pdPos, 1 - pdPos) * 100;
         const pdDir = pdPos >= 0.5 ? 'positiv' : 'negativ';
-        RESULTS.push({ slot, samples, sorted, hdi, eti, ropePct, med, mn, kde, decHDI, decETI, pd, pdDir });
+        RESULTS.push({ slot, samples, sorted, hdi, eti, ropePct, med, mn, kde, decHDI, decETI, pd, pdDir, pdRef });
       } catch(e) {
         const errEl = document.getElementById(`err-${slot.id}`);
         if (errEl) { errEl.style.display = 'block'; errEl.textContent = '⚠ ' + e.message; }
@@ -1318,9 +1355,9 @@ function renderResults() {
           <div class="rope-bar-bg"><div class="rope-bar-fill" style="width:${Math.min(ropePctRounded,100)}%"></div></div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Prob. of Direction</div>
+          <div class="stat-label">Prob. of Direction${r.pdRef !== 0 ? ` (Ref: ${fmt(r.pdRef)})` : ''}</div>
           <div class="stat-value">pd = ${fmt(r.pd, 1)}%</div>
-          <div class="stat-sub">${r.pdDir} · ${r.pd >= 99 ? 'stark' : r.pd >= 97.5 ? 'moderat' : r.pd >= 95 ? 'schwach' : r.pd >= 89 ? 'suggestiv' : 'unklar'}</div>
+          <div class="stat-sub">${r.pdDir} (θ ${r.pdDir === 'positiv' ? '>' : '<'} ${fmt(r.pdRef)}) · ${r.pd >= 99 ? 'stark' : r.pd >= 97.5 ? 'moderat' : r.pd >= 95 ? 'schwach' : r.pd >= 89 ? 'suggestiv' : 'unklar'}</div>
         </div>
       </div>
       <div class="verdict-row">
@@ -1361,7 +1398,7 @@ function getColors(styleMode) {
     bg: '#ffffff', fg: '#111111', fgMid: '#444444', fgLight: '#888888',
     tailFill: 'rgba(0,0,0,0.07)',
     hdiCiFill: 'rgba(0,0,0,0.22)',
-    etiCiFill: 'rgba(80,80,80,0.18)',
+    etiCiFill: 'rgba(0,0,0,0.22)',
     ropeShade: 'rgba(0,0,0,0.06)',
     kdeLine: '#111111',
     ropeBoundLine: '#999999', ropeBoundText: '#777777',
@@ -1373,7 +1410,7 @@ function getColors(styleMode) {
     bg: '#0d1117', fg: '#e8e4d8', fgMid: '#9a9080', fgLight: '#5a5448',
     tailFill: 'rgba(74,176,216,0.10)',
     hdiCiFill: 'rgba(74,176,216,0.45)',
-    etiCiFill: 'rgba(224,120,48,0.40)',
+    etiCiFill: 'rgba(74,176,216,0.45)',
     ropeShade: 'rgba(255,255,255,0.05)',
     kdeLine: '#4ab0d8',
     ropeBoundLine: '#80cb52', ropeBoundText: '#80cb52',
@@ -1389,7 +1426,7 @@ function getColors(styleMode) {
     fgLight: DARK ? '#5a5448' : '#8a7f72',
     tailFill: DARK ? 'rgba(74,176,216,0.08)' : 'rgba(42,110,138,0.07)',
     hdiCiFill: DARK ? 'rgba(74,176,216,0.38)' : 'rgba(42,110,138,0.28)',
-    etiCiFill: DARK ? 'rgba(224,120,48,0.35)' : 'rgba(184,92,0,0.28)',
+    etiCiFill: DARK ? 'rgba(74,176,216,0.38)' : 'rgba(42,110,138,0.28)',
     ropeShade: DARK ? 'rgba(180,180,180,0.07)' : 'rgba(100,100,100,0.08)',
     kdeLine: DARK ? '#4ab0d8' : '#2a6e8a',
     ropeBoundLine: DARK ? '#80cb52' : '#5a8a2a',
@@ -1529,6 +1566,26 @@ function drawPlot(idx, styleMode, exportCanvas) {
   if (rx1 > rx0) {
     ctx.fillStyle = C.ropeShade;
     ctx.fillRect(rx0, PAD.top, rx1 - rx0, pH);
+  }
+
+  // ── 1c. pd reference line (if pdRef ≠ 0) ────────────────────────
+  const pdRef = r.pdRef ?? 0;
+  if (pdRef !== 0) {
+    const prx = tx(pdRef);
+    if (prx >= PAD.left - 2 && prx <= PAD.left + pW + 2) {
+      ctx.strokeStyle = C.fgMid;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.moveTo(prx, PAD.top); ctx.lineTo(prx, baseline); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      // label
+      ctx.font = `10px ${C.font}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = C.fgMid;
+      ctx.fillText(fmtTick(pdRef, Math.abs(xDomHi - xDomLo) / 7), prx, PAD.top + 10);
+    }
   }
 
   // ── 2. CI fill (HDI region, saturated) ───────────────────────────
@@ -1705,7 +1762,12 @@ function renderSummary() {
     rcode += `eti(${sanitizeLabel(lbl)}, ci = ${CRI/100})\n`;
     rcode += `rope(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))\n`;
     rcode += `equivalence_test(${sanitizeLabel(lbl)}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})\n`;
-    rcode += `p_direction(${sanitizeLabel(lbl)})\n\n`;
+    const pdRefR = r.pdRef ?? 0;
+    if (pdRefR !== 0) {
+      rcode += `# pd mit Referenzwert ${pdRefR}: Anteil Posterior > ${pdRefR}\nmean(${sanitizeLabel(lbl)} > ${pdRefR})\n\n`;
+    } else {
+      rcode += `p_direction(${sanitizeLabel(lbl)})\n\n`;
+    }
   });
   document.getElementById('summary-rcode').textContent = rcode;
   populateReportSelect();
@@ -1724,7 +1786,9 @@ eti(${lbl}, ci = ${CRI/100})
 rope(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}))
 equivalence_test(${lbl}, range = c(${r.slot.ropeLo}, ${r.slot.ropeHi}), ci = ${CRI/100})
 
-p_direction(${lbl})
+${(r.pdRef ?? 0) !== 0
+  ? `# pd mit Referenzwert ${r.pdRef}: Anteil Posterior > ${r.pdRef}\nmean(${lbl} > ${r.pdRef})`
+  : `p_direction(${lbl})`}
 
 # Visualisieren
 plot(hdi(${lbl}, ci = ${CRI/100}))`;
@@ -1752,6 +1816,7 @@ function tableRowData(r) {
     ropeLo:  r.slot.ropeLo, ropeHi: r.slot.ropeHi,
     ropePct: r.ropePct,
     pd:      r.pd,
+    pdRef:   r.pdRef ?? 0,
     decision: dlbl
   };
 }
@@ -1760,13 +1825,13 @@ function exportTableCSV() {
   if (!RESULTS.length) return;
   const cols = ['Variable','Einheit','Formel','n_Draws','Median',
     `HDI_${CRI}pct_lo`,`HDI_${CRI}pct_hi`,`ETI_${CRI}pct_lo`,`ETI_${CRI}pct_hi`,
-    'ROPE_lo','ROPE_hi','ROPE_pct','pd_pct','Entscheidung','Entscheidungsregel'];
+    'ROPE_lo','ROPE_hi','ROPE_pct','pd_ref','pd_pct','Entscheidung','Entscheidungsregel'];
   const rows = RESULTS.map(r => {
     const d = tableRowData(r);
     return [d.label, d.unit, d.formula, d.n,
       d.median.toFixed(4), d.hdiLo.toFixed(4), d.hdiHi.toFixed(4),
       d.etiLo.toFixed(4), d.etiHi.toFixed(4),
-      d.ropeLo, d.ropeHi, d.ropePct.toFixed(2), d.pd.toFixed(2), d.decision, decRuleLabel()
+      d.ropeLo, d.ropeHi, d.ropePct.toFixed(2), d.pdRef, d.pd.toFixed(2), d.decision, decRuleLabel()
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
   const meta = [`# Decision Maker Export — ${new Date().toLocaleDateString('de-DE')}`,
@@ -1992,7 +2057,8 @@ function generateReportText(idx) {
   else if (r.pd >= 95)   pdStrength = 'schwache Evidenz';
   else if (r.pd >= 89)   pdStrength = 'unsichere Evidenz';
   else                   pdStrength = 'keine klare Richtungsaussage';
-  const dirStr = r.pdDir === 'positiv' ? 'positiv (θ > 0)' : 'negativ (θ < 0)';
+  const pdRefVal = r.pdRef ?? 0;
+  const dirStr = r.pdDir === 'positiv' ? `positiv (θ > ${pdRefVal})` : `negativ (θ < ${pdRefVal})`;
   const pdSent = `Die Probability of Direction beträgt pd = ${r.pd.toFixed(1)} %, was auf ${pdStrength} für eine ${dirStr} Richtung des Effekts hinweist.`;
 
   return `Der Posterior von ${label}${unit} basiert auf ${n.toLocaleString('de-DE')} Draws (Mdn = ${fmt(r.med)}, M = ${fmt(r.mn)}). Das ${CRI} %-${ivLabel} liegt bei [${fmt(iv[0])}, ${fmt(iv[1])}] (Breite: ${fmt(iv[1] - iv[0])}). ${decSent} ${pdSent}`;
