@@ -297,6 +297,21 @@ select:focus{border-color:var(--accent2)}
     </div>
   </div>
 
+  <!-- pd-Referenzwert -->
+  <div class="scard">
+    <h3>pd-Referenzwert</h3>
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+      <label style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);white-space:nowrap">θ &gt;</label>
+      <input type="number" id="inp-pdref" step="any" value="0"
+        oninput="update()"
+        style="font-family:'DM Mono',monospace;font-size:.78rem;width:100%;padding:.25rem .4rem;
+               border:1px solid var(--border);background:var(--paper);color:var(--ink);border-radius:2px">
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);line-height:1.6">
+      Referenzwert für pd (Standard: 0). Z.B. 1 für Odds Ratios oder 100 für IQ-Skala.
+    </div>
+  </div>
+
 
 </div><!-- /sidebar -->
 
@@ -741,20 +756,30 @@ function update(){
   const vK = kruschkeVerdict(ivForKruschke[0], ivForKruschke[1], rl, ru);
   const vE = kruschkeVerdict(eti[0], eti[1], rl, ru);
 
-  // Probability of Direction — wide grid centered to capture both sides of 0
+  // Probability of Direction
+  const pdRef = parseFloat(document.getElementById('inp-pdref').value) || 0;
   let pd, pdDirection;
-  if (DIST === 'gamma') {
-    pd = 100; pdDirection = 'positiv';
-  } else {
-    const pdN = 500;
-    const pdHalf = Math.max(Math.abs(mu) + 8 * sigma, 8 * sigma);
-    const pdXs = Array.from({length: pdN}, (_, i) => -pdHalf + 2 * pdHalf * i / (pdN - 1));
+  {
+    const pdN = 1000;
+    let center, spread;
+    if (DIST === 'gamma') {
+      center = params.shape / params.rate;
+      spread = Math.sqrt(params.shape) / params.rate;
+    } else if (DIST === 't') {
+      center = mu; spread = sigma;
+    } else {
+      center = mu; spread = sigma;
+    }
+    const pdHalf = Math.max(Math.abs(center - pdRef) + 7 * spread, 4 * spread);
+    const pdLo = Math.min(center, pdRef) - pdHalf;
+    const pdHi = Math.max(center, pdRef) + pdHalf;
+    const pdXs = Array.from({length: pdN}, (_, i) => pdLo + (pdHi - pdLo) * i / (pdN - 1));
     const pdYs = getPDF(pdXs, params);
     const pdTotal = trapz(pdXs, pdYs);
     if (pdTotal < 1e-20) {
       pd = 50; pdDirection = 'unklar';
     } else {
-      const pdPosYs = pdYs.map((y, i) => pdXs[i] >= 0 ? y : 0);
+      const pdPosYs = pdYs.map((y, i) => pdXs[i] >= pdRef ? y : 0);
       const pdPosArea = trapz(pdXs, pdPosYs) / pdTotal;
       pd = Math.max(pdPosArea, 1 - pdPosArea) * 100;
       pdDirection = pdPosArea >= 0.5 ? 'positiv' : 'negativ';
@@ -943,7 +968,8 @@ function update(){
       const equiv = pd >= 99   ? ' — ≥ 99%' :
                     pd >= 97.5 ? ' — ≥ 97.5% (≈ p ≤ .05 zweiseitig)' :
                     pd >= 95   ? ' — ≥ 95% (≈ p ≤ .05 einseitig)' : '';
-      ddExp.textContent = `${pd.toFixed(1)}% der Masse in Richtung ${pdDirection} (θ ${pdDirection === 'positiv' ? '> 0' : '< 0'}).${equiv} Makowski et al. (2019).`;
+      const pdRefLabel = pdDirection === 'positiv' ? `> ${pdRef}` : `< ${pdRef}`;
+      ddExp.textContent = `${pd.toFixed(1)}% der Masse in Richtung ${pdDirection} (θ ${pdRefLabel}).${equiv} Makowski et al. (2019).`;
     }
   }
 
@@ -961,6 +987,9 @@ function update(){
   rcode += `# ROPE-Analyse (${CRI}% Intervall)\nrope(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
   rcode += `# Vollständige Entscheidung\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
   rcode += `# Probability of Direction\np_direction(posterior)`;
+  if (pdRef !== 0) {
+    rcode += `\n\n# pd relativ zu Referenzwert ${pdRef}\nmean(posterior > ${pdRef})  # Anteil positiv`;
+  }
   document.getElementById('rcode-block').textContent = rcode;
 }
 
