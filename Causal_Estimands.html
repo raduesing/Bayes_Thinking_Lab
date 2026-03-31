@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Causal Calculator — G-Computation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+:root{
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --accent:#5a8a2a;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#7a3a8a;--accent5:#b85c00;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--shadow:#c0b8a4;
+  --gc-col:#5a8a2a;--ipw-col:#2a6e8a;--true-col:#c94a2a;--naive-col:#7a3a8a;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --accent:#80cb52;--accent2:#4ab0d8;--accent3:#80cb52;--accent4:#c87ad8;--accent5:#e07830;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--shadow:#080b10;
+  --gc-col:#80cb52;--ipw-col:#4ab0d8;--true-col:#e8614a;--naive-col:#c87ad8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px;-webkit-font-smoothing:antialiased}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;font-weight:300;overflow-x:hidden}
+nav{position:sticky;top:0;z-index:100;background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.6rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.nb{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.nb:hover{border-color:var(--accent2);color:var(--accent2)}
+.nav-title{font-size:1rem;font-weight:300}.nav-title em{font-style:italic;color:var(--accent)}
+.nav-back{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);text-decoration:none;
+  border-bottom:1px dotted var(--border);transition:color .15s}
+.nav-back:hover{color:var(--accent2)}
+.wrap{max-width:none;margin:0;padding:1.2rem 1.5rem}
+.outer{display:grid;grid-template-columns:230px 1fr;gap:1.2rem;align-items:start}
+.sidebar{display:flex;flex-direction:column;gap:.7rem;position:sticky;top:3.5rem;
+  max-height:calc(100vh - 4rem);overflow-y:scroll}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.main{display:flex;flex-direction:column;gap:1rem}
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.6rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid);color:var(--ink3)}
+.panel{background:var(--paper);border:1.5px solid var(--border);padding:1rem 1.2rem;box-shadow:2px 2px 0 var(--shadow)}
+.panel-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:.8rem;padding-bottom:.3rem;border-bottom:1px solid var(--grid)}
+.pg{margin-bottom:.65rem}.pg:last-child{margin-bottom:0}
+.pl{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem}
+.pl span:first-child{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink)}
+.pv{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--grid);outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--ink);border-radius:50%;cursor:pointer}
+input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
+.btn-group{display:flex;gap:2px}
+.tbtn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.25rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;flex:1;text-align:center}
+.tbtn:hover{border-color:var(--gc-col);color:var(--gc-col)}
+.tbtn.on{background:var(--gc-col);color:var(--paper);border-color:var(--gc-col)}
+.est-toggle{display:flex;gap:3px;margin-bottom:.5rem}
+.etbtn{font-family:'DM Mono',monospace;font-size:.78rem;padding:.4rem 1rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;flex:1;text-align:center;letter-spacing:.04em}
+.etbtn:hover{border-color:var(--gc-col);color:var(--gc-col)}
+.etbtn.active{background:var(--gc-col);color:var(--paper);border-color:var(--gc-col)}
+.est-desc{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);
+  line-height:1.6;padding:.35rem .5rem;background:var(--panel);border:1px solid var(--grid);margin-bottom:.8rem}
+.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.7rem;margin-top:.7rem}
+.mbox{background:var(--paper);border:1.5px solid var(--border);padding:.75rem .9rem;box-shadow:2px 2px 0 var(--shadow)}
+.mbox-label{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.3rem}
+.mbox-val{font-family:'DM Mono',monospace;font-size:.9rem;font-weight:500;margin-bottom:.2rem}
+.mbox-ci{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2)}
+.mbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.3rem;vertical-align:2px}
+.legend-row{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.5rem;
+  font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);align-items:center}
+.ld{display:inline-block;width:16px;height:3px;border-radius:1px;margin-right:.2rem;vertical-align:middle}
+.collap-hd{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+  font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.06em;color:var(--ink2);
+  padding:.55rem .75rem;background:var(--panel);border:1px solid var(--grid);user-select:none}
+.collap-hd:hover{color:var(--gc-col)}
+.collap-hd span.arr{transition:transform .2s}
+.collap-hd.open span.arr{transform:rotate(90deg)}
+.collap-body{display:none;padding:.8rem 1rem;border:1px solid var(--grid);border-top:none;
+  background:var(--paper);font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.85}
+.collap-body.open{display:block}
+.collap-body p{margin-bottom:.55rem}.collap-body p:last-child{margin-bottom:0}
+.collap-body strong{color:var(--ink)}
+.rcode{background:var(--panel);border:1px solid var(--grid);padding:.7rem .9rem;
+  font-family:'DM Mono',monospace;font-size:.65rem;color:var(--accent2);
+  line-height:1.7;white-space:pre;overflow-x:auto;margin-top:.5rem}
+.cbtn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;margin-top:.4rem}
+.cbtn:hover{background:var(--gc-col);color:var(--paper);border-color:var(--gc-col)}
+.hstrip{background:var(--paper);border-bottom:1.5px solid var(--border);padding:1rem 1.5rem;
+  display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap}
+.hstrip-title{font-size:1.4rem;font-weight:200;letter-spacing:-.02em}
+.hstrip-title em{font-style:italic;color:var(--accent)}
+.hstrip-sub{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);line-height:1.6}
+.hstrip-tags{display:flex;gap:.3rem;flex-wrap:wrap;margin-left:auto}
+.htag{font-family:'DM Mono',monospace;font-size:.55rem;padding:.1rem .35rem;border:1px solid var(--grid);color:var(--ink3)}
+.warn{font-family:'DM Mono',monospace;font-size:.68rem;padding:.3rem .6rem;
+  background:rgba(200,60,40,.12);color:var(--true-col);border:1px solid rgba(200,60,40,.3);display:none;margin-top:.4rem}
+.warn.show{display:block}
+.ck-row{display:flex;align-items:center;gap:.5rem;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);cursor:pointer;margin-top:.45rem}
+.ck-row input[type=checkbox]{accent-color:var(--gc-col);width:13px;height:13px;cursor:pointer}
+#help-float{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:300px;z-index:600;background:var(--paper);border:1.5px solid var(--border);box-shadow:4px 4px 0 rgba(0,0,0,.18)}
+#help-float.open{display:block}
+.hp-head{display:flex;justify-content:space-between;align-items:center;padding:.5rem .85rem;border-bottom:1px solid var(--grid)}
+.hp-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:none;border:none;cursor:pointer;color:var(--ink2);padding:0 .2rem;line-height:1}
+.hp-close:hover{color:var(--ink)}
+.hp-body{padding:.8rem .85rem;font-family:'DM Mono',monospace;font-size:.67rem;line-height:1.8;color:var(--ink2);max-height:75vh;overflow-y:auto}
+.hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;margin-top:.85rem;margin-bottom:.28rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.18rem;color:var(--ink2)}
+.hp-sect:first-child{margin-top:0}
+.hp-body strong{color:var(--ink)}.hp-body em{color:var(--accent);font-style:normal}
+.hp-seq{padding-left:.05rem}
+.hp-seq li{list-style:none;padding:.08rem 0}
+.hp-seq li::before{color:var(--accent);margin-right:.4rem;font-weight:600}
+.hp-seq li:nth-child(1)::before{content:'①'}
+.hp-seq li:nth-child(2)::before{content:'②'}
+.hp-seq li:nth-child(3)::before{content:'③'}
+.hp-seq li:nth-child(4)::before{content:'④'}
+.estimand-sticky{position:sticky;top:3.2rem;z-index:40;border-bottom:2px solid var(--border) !important}
+.hero-box{background:var(--panel);border:1.5px solid var(--border);padding:.65rem .9rem;box-shadow:2px 2px 0 var(--shadow);min-width:170px}
+.hero-box-title{font-family:'DM Mono',monospace;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:.4rem}
+.hero-row{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:2}
+.hero-val{font-weight:500;font-size:.85rem}
+.hero-div{border-top:1px solid var(--grid);margin-top:.3rem;padding-top:.3rem}
+.step-nr{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--accent2);margin-right:.4rem;letter-spacing:.02em}
+@media(max-width:900px){.outer{grid-template-columns:1fr}.sidebar{position:static;max-height:none;overflow-y:visible}.metrics{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index_de.html" class="nav-back">← Bayes Thinking Lab</a>
+  <span class="nav-title">Causal <em>Calculator</em></span>
+  <div style="display:flex;gap:.35rem">
+    <button class="nb" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+    <button class="nb" onclick="toggleHelpFloat()" style="border-color:var(--true-col);color:var(--true-col)">ℹ Hilfe</button>
+  </div>
+</nav>
+
+<div class="hstrip">
+  <div>
+    <div class="hstrip-title">Causal <em>Calculator</em></div>
+    <div class="hstrip-sub">G-Computation · ATE · ATT · ATU · Kontrafaktuale</div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);opacity:.5;margin-top:.15rem">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hstrip-tags">
+    <span class="htag">Interaktiv</span><span class="htag">Kausalinferenz</span>
+    <span class="htag">G-Computation</span><span class="htag">marginaleffects</span>
+  </div>
+</div>
+
+<div class="wrap"><div class="outer">
+
+<!-- ══ SIDEBAR ══ -->
+<div class="sidebar">
+
+  <div class="scard">
+    <h3>Szenario</h3>
+    <div class="btn-group" style="flex-direction:column">
+      <button class="tbtn on" id="sc-bal" onclick="setScenario('balanced')" style="font-size:.63rem;text-align:left;padding:.3rem .6rem">Basisfall</button>
+      <button class="tbtn" id="sc-str" onclick="setScenario('strong')" style="font-size:.63rem;text-align:left;padding:.3rem .6rem">Starkes Konfunding</button>
+      <button class="tbtn" id="sc-ov" onclick="setScenario('overlap')" style="font-size:.63rem;text-align:left;padding:.3rem .6rem">Kein Overlap</button>
+    </div>
+    <div id="sc-desc" style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);margin-top:.5rem;line-height:1.6">
+      γ_A=γ_Y=1: moderates Konfunding, guter Overlap. Naive Schätzung leicht verzerrt — G-Computation nah am wahren Wert θ=0.60.
+    </div>
+  </div>
+
+  <div class="scard">
+    <h3>Stichprobe n</h3>
+    <div class="btn-group">
+      <button class="tbtn" id="n-100" onclick="setN(100)">100</button>
+      <button class="tbtn on" id="n-250" onclick="setN(250)">250</button>
+      <button class="tbtn" id="n-500" onclick="setN(500)">500</button>
+    </div>
+  </div>
+
+  <div class="scard">
+    <h3>DGP-Parameter</h3>
+    <div class="pg">
+      <div class="pl"><span>Wahrer Effekt θ</span><span class="pv" id="v-theta" style="color:var(--true-col)">0.60</span></div>
+      <input type="range" id="sl-theta" min="-2" max="2" step=".05" value="0.6" oninput="onSlider()">
+    </div>
+    <div class="pg">
+      <div class="pl"><span>Konfund. L→A &nbsp;γ<sub>A</sub></span><span class="pv" id="v-gamma-a" style="color:var(--accent3)">1.00</span></div>
+      <input type="range" id="sl-gamma-a" min="-2.5" max="2.5" step=".05" value="1.0" oninput="onSlider()">
+    </div>
+    <div class="pg">
+      <div class="pl"><span>Konfund. L→Y &nbsp;γ<sub>Y</sub></span><span class="pv" id="v-gamma-y" style="color:var(--accent3)">1.00</span></div>
+      <input type="range" id="sl-gamma-y" min="-2.5" max="2.5" step=".05" value="1.0" oninput="onSlider()">
+    </div>
+    <label class="ck-row">
+      <input type="checkbox" id="ck-het" onchange="onSlider()">
+      Effekt-Heterogenität ξ
+    </label>
+    <div style="font-family:'DM Mono',monospace;font-size:.60rem;color:var(--ink3);margin-top:.3rem;line-height:1.5">
+      Mit ξ=0.5: Effekt hängt von L ab → ATE ≠ ATT ≠ ATU
+    </div>
+  </div>
+
+  <button onclick="update()" style="font-family:'DM Mono',monospace;font-size:.72rem;
+    padding:.5rem;border:1.5px solid var(--gc-col);background:transparent;width:100%;
+    color:var(--gc-col);cursor:pointer;transition:all .15s;letter-spacing:.04em"
+    onmouseover="this.style.background='var(--gc-col)';this.style.color='var(--paper)'"
+    onmouseout="this.style.background='transparent';this.style.color='var(--gc-col)'">
+    ↻ Neu simulieren
+  </button>
+
+
+
+</div><!-- /sidebar -->
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+
+  <!-- Narrative intro panel -->
+  <div class="panel" style="border-left:3px solid var(--accent2)">
+    <div class="panel-title">Das Problem — und die Lösung</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:1.2rem;align-items:start">
+      <div style="font-family:'DM Mono',monospace;font-size:.71rem;color:var(--ink2);line-height:1.9">
+        <strong style="color:var(--ink)">Szenario:</strong> L = Vorkenntnisse der Studierenden &nbsp;·&nbsp; A = freiwillige Tutorial-Teilnahme &nbsp;·&nbsp; Y = Prüfungsnote<br>
+        Wer mehr Vorkenntnisse hat (hohes L), meldet sich <em style="color:var(--gc-col)">häufiger zum Tutorial an</em> (L→A) und erzielt <em style="color:var(--true-col)">sowieso bessere Noten</em> (L→Y). Das erzeugt eine Scheinkorrelation: Tutorial-Teilnehmer schneiden besser ab — aber nicht nur wegen des Tutorials, sondern weil sie schon mehr wussten.<br><br>
+        <strong style="color:var(--ink)">Warum täuscht der naive Gruppenvergleich?</strong> Wer das Tutorial besucht (A=1), hat im Schnitt schon mehr Vorkenntnisse — bessere Noten kämen also zum Teil „von selbst“. Der naive Mittelwertsvergleich E[Y|A=1] − E[Y|A=0] mischt echten Tutorial-Effekt und Vorkenntnis-Vorteil: <em>Naiver Schätzer = Kausaler Effekt + Konfundierungs-Bias</em>. Nur in einem Experiment (RCT) wären beide Gruppen vergleichbar — in Beobachtungsstudien benötigen wir G-Computation.<br><br>
+        <strong style="color:var(--ink)">G-Computation</strong> stellt für jede Person die Gegenfrage: <em>„Was wäre die Note bei denselben Vorkenntnissen — einmal <u>mit</u>, einmal <u>ohne</u> Tutorial?"</em> Die gemittelte Differenz ist der kausale Effekt — bereinigt um die Vorkenntnisse.
+      </div>
+      <div class="hero-box">
+        <div class="hero-box-title">Aktuell im Tool</div>
+        <div class="hero-row">
+          <span style="color:var(--naive-col)">■</span> Naiv: <span class="hero-val" id="naive-hero" style="color:var(--naive-col)">—</span>
+        </div>
+        <div class="hero-row">
+          <span style="color:var(--accent2)">■</span> G-Comp: <span class="hero-val" id="gc-hero" style="color:var(--accent2)">—</span>
+        </div>
+        <div class="hero-row">
+          <span style="color:var(--true-col)">■</span> Wahr: <span class="hero-val" id="true-hero" style="color:var(--true-col)">—</span>
+        </div>
+        <div class="hero-div hero-row" style="color:var(--naive-col)">
+          Bias: <span class="hero-val" id="bias-hero">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Estimand selector — sticky -->
+  <div class="panel estimand-sticky" style="padding:.8rem 1.2rem">
+    <div class="panel-title">Estimand — Für welche Population?</div>
+    <div class="est-toggle">
+      <button class="etbtn active" id="est-ate" onclick="setEstimand('ATE')">ATE</button>
+      <button class="etbtn" id="est-att" onclick="setEstimand('ATT')">ATT</button>
+      <button class="etbtn" id="est-atu" onclick="setEstimand('ATU')">ATU</button>
+    </div>
+    <div class="est-desc" id="est-desc">
+      <strong>Average Treatment Effect</strong> — Durchschnittlicher Effekt in der Gesamtpopulation. Als ob jede Person zufällig behandelt worden wäre.
+    </div>
+  </div>
+
+  <!-- Plots vertical stack -->
+  <div class="panel" style="overflow:hidden">
+    <div class="panel-title"><span class="step-nr">① Warum täuscht der einfache Gruppenvergleich?</span></div>
+    <canvas id="scatterCanvas" style="display:block;width:100%;max-width:100%"></canvas>
+  </div>
+
+  <div class="panel" style="overflow:hidden">
+    <div class="panel-title"><span class="step-nr">② Was schätzt G-Computation für den kausalen Effekt?</span></div>
+    <div class="legend-row">
+      <span><span class="ld" style="background:var(--accent2);opacity:.35"></span><span class="ld" style="background:var(--accent2);opacity:.7;margin-left:-10px"></span>G-Computation (dunkel=50% HDI, hell=95% HDI)</span>
+      <span><span class="ld" style="background:var(--true-col)"></span>Wahr</span>
+      <span><span class="ld" style="background:var(--naive-col);opacity:.7"></span>Naiv</span>
+    </div>
+    <canvas id="postCanvas" style="display:block;width:100%;max-width:100%"></canvas>
+    <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);margin-top:.35rem;line-height:1.55">
+      ⓘ Browser-Approximation via Normal-Normal-Konjugiertheit — nicht MCMC-basiert; dient der konzeptuellen Illustration von G-Computation.
+    </div>
+  </div>
+
+
+  <!-- Bias-Anatomie panel -->
+  <div class="panel" id="bias-anatomy">
+    <div class="panel-title" style="margin-bottom:.8rem">Bias-Anatomie — Warum täuscht der naive Schätzer?</div>
+    <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.4rem;align-items:start">
+      <!-- DAG links -->
+      <div style="display:flex;flex-direction:column;align-self:stretch">
+        <svg id="bias-dag" viewBox="0 0 400 120" style="display:block;flex:1;min-height:0;width:100%"></svg>
+        <div style="font-family:'DM Mono',monospace;font-size:.60rem;color:var(--ink3);margin-top:.35rem;line-height:1.6;text-align:left;flex-shrink:0">
+          Pfeilbreite ∝ |Pfadstärke|  ·  Orange = Backdoor-Pfad  ·  Grün = kausaler Pfad
+        </div>
+      </div>
+      <!-- Zerlegung rechts -->
+      <div style="font-family:'DM Mono',monospace;font-size:.70rem;color:var(--ink2)">
+        <div style="font-size:.62rem;color:var(--ink3);margin-bottom:.4rem">Zerlegung des naiven Schätzers</div>
+        <div style="background:var(--paper2);border-radius:3px;padding:.45rem .7rem;margin-bottom:.65rem;font-size:.68rem;line-height:2">
+          β̂<sub>naiv</sub> = θ &nbsp;+&nbsp; γ<sub>Y</sub> &middot; δ<sub>A∼L</sub><br>
+          <span id="ba-formula" style="color:var(--naive-col)">&#8212;</span>
+        </div>
+        <div style="font-size:.60rem;color:var(--ink3);margin-bottom:.2rem">Zahlengerade (ATE)</div>
+        <svg id="bias-line" viewBox="0 0 240 56" width="100%" style="display:block;overflow:visible"></svg>
+        <div style="display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.35rem;font-size:.60rem;color:var(--ink2)">
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--true-col);vertical-align:middle;margin-right:3px"></span>θ (ATE)</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--naive-col);vertical-align:middle;margin-right:3px"></span>Naiv</span>
+        </div>
+        <div style="margin-top:.5rem;font-size:.64rem;color:var(--ink3);line-height:1.8">
+          OVB = <span id="ba-ovb-val" style="color:var(--naive-col)">&#8212;</span>
+          &nbsp;(γ<sub>Y</sub> = <span id="ba-gamma-val">&#8212;</span> &times; δ<sub>A∼L</sub> = <span id="ba-delta-val">&#8212;</span>)
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+   <div class="panel" style="overflow:hidden">
+    <div class="panel-title"><span class="step-nr">③ Wie funktioniert das?</span> — Kontrafaktuale Vorhersagen</div>
+    <div class="legend-row">
+      <span><span class="ld" style="background:var(--accent5)"></span>Ŷ(1) — unter Behandlung</span>
+      <span><span class="ld" style="background:var(--accent2)"></span>Ŷ(0) — ohne Behandlung</span>
+      <span style="opacity:.6"><span class="ld" style="background:var(--ink3)"></span>Rohdaten</span>
+    </div>
+    <canvas id="cfCanvas" style="display:block;width:100%;max-width:100%"></canvas>
+    <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.4rem;line-height:1.6">
+      Jede Person erhält eine modellbasierte Vorhersage unter A=1 (●) und A=0 (●). Der vertikale Abstand = individueller Behandlungseffekt. G-Computation mittelt diese Lücken über die Zielpopulation (je nach Estimand).
+    </div>
+  </div>
+
+  <div class="panel" style="overflow:hidden">
+    <div class="panel-title"><span class="step-nr">④ Hat die Behandlung für alle denselben Effekt?</span></div>
+    <div class="legend-row">
+      <span><span class="ld" style="background:var(--accent5)"></span>Behandelt (A=1)</span>
+      <span><span class="ld" style="background:var(--accent2)"></span>Kontrolle (A=0)</span>
+      <span><span class="ld" style="background:var(--true-col)"></span>Mittlerer Effekt (<span id="po-ate-label">ATE</span>)</span>
+    </div>
+    <div style="text-align:right;margin-bottom:.3rem">
+      <button class="tbtn" id="ldensity-btn" onclick="toggleLDensity()">L-Verteilung zeigen</button>
+    </div>
+    <canvas id="poCanvas" style="display:block;width:100%;max-width:100%"></canvas>
+    <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.4rem;line-height:1.6">
+      Jeder Punkt = individueller kausaler Effekt Ŷ(1)−Ŷ(0) nach Confounder L. Ohne Effekt-Heterogenität (ξ=0): alle Punkte auf einer Linie. Mit ξ≠0: Steigung sichtbar — Personen mit höherem L profitieren mehr. Die gefärbten Punkte zeigen die Zielpopulation des gewählten Estimands.
+    </div>
+  </div>
+
+  <!-- Metric boxes -->
+  <div class="metrics">
+    <div class="mbox">
+      <div class="mbox-label"><span class="mbox-dot" style="background:var(--accent2)"></span>G-Computation</div>
+      <div class="mbox-val" id="gc-val">—</div>
+      <div class="mbox-ci" id="gc-ci">95% HDI: —</div>
+    </div>
+    <div class="mbox">
+      <div class="mbox-label"><span class="mbox-dot" style="background:var(--true-col)"></span>Wahrer Wert (DGP)</div>
+      <div class="mbox-val" id="true-val">—</div>
+      <div class="mbox-ci" style="color:var(--ink3);font-size:.6rem">Datengenerierender Prozess</div>
+    </div>
+    <div class="mbox">
+      <div class="mbox-label"><span class="mbox-dot" style="background:var(--naive-col)"></span>Naiv (unkorrigiert)</div>
+      <div class="mbox-val" id="naive-val" style="color:var(--naive-col)">—</div>
+      <div class="mbox-ci" id="naive-bias" style="color:var(--naive-col)">Bias: —</div>
+    </div>
+  </div>
+
+  <!-- Collapsible: R-Code -->
+  <div>
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>R-Code (brms + marginaleffects)</span><span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+      <pre class="rcode" id="rcode-block"></pre>
+      <button class="cbtn" onclick="copyCode()">Code kopieren</button>
+    </div>
+  </div>
+
+  <!-- Collapsible: Methodik -->
+  <div>
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>Methodische Hintergründe</span><span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+      <p><strong>DGP dieses Tools.</strong><br>
+      Alle Daten werden nach folgendem Datengenerierenden Prozess simuliert:<br>
+      L ~ Normal(0,1) — Confounder (z.B. Gesundheitszustand)<br>
+      A | L ~ Bernoulli(σ(γ_A·L)) — Behandlung hängt von L ab<br>
+      Y | A, L ~ Normal((θ + ξ·L)·A + γ_Y·L, 1) — Outcome<br>
+      θ ist der wahre kausale Effekt von A auf Y. γ_A steuert wie stark L die Behandlungszuweisung beeinflusst; γ_Y wie stark L das Outcome beeinflusst. Je größer beide, desto stärker der Konfundierungs-Bias. In realen Daten sind θ, γ_A und γ_Y unbekannt; hier können wir alles einstellen.</p>
+
+      <p><strong>G-Computation: voll Bayesianisch.</strong><br>
+      Das Outcome-Modell Y ~ A + L (bzw. Y ~ A·L mit Heterogenität) wird bayesianisch gefittet: flache Priors, dann K Samples aus dem Posterior. Für jeden Sample berechnen wir für jede Person "Wie hoch wäre Y unter A=1 vs. A=0?" und mitteln die Differenz über die Zielpopulation. Das Ergebnis ist eine echte Posterior-Verteilung des Estimands.</p>
+
+      <p><strong>Warum unterschiedliche Populationen bei ATE, ATT, ATU?</strong><br>
+      Das Outcome-Modell gilt für alle, aber die Frage <em>für wen</em> wir mitteln, definiert den Estimand:<br>
+      — <strong>ATE</strong>: Ŷ(1)−Ŷ(0) wird über alle n Personen gemittelt → "Was wäre der Effekt in der Gesamtpopulation?" Im Code: <code>avg_comparisons(fit_gc, variables = "A")</code><br>
+      — <strong>ATT</strong>: nur die n₁ tatsächlich Behandelten (A=1) → "Hat das Treatment denen geholfen, die es bekamen?" Ihre L-Werte sind systematisch höher (da Behandlung mit L zusammenhängt). Im Code: <code>newdata = subset(dat, A==1)</code><br>
+      — <strong>ATU</strong>: nur die n₀ Unbehandelten (A=0) → "Was würde passieren, wenn wir das Treatment ausweiten?" Im Code: <code>newdata = subset(dat, A==0)</code><br>
+      Ohne Effekt-Heterogenität (ξ=0) sind alle drei Werte gleich. Mit ξ≠0 divergieren sie — weil die Subpopulationen unterschiedliche L-Werte haben und der Effekt von L abhängt.</p>
+
+      <p><strong>Approximation im Browser.</strong><br>
+      Zur Illustration nutzt dieses Tool die Normal-Normal-Konjugiertheit: Bei Normalverteilungs-Likelihood und Normalprior ist der Posterior analytisch berechenbar, kein MCMC nötig. Der R-Code zeigt brms mit vollständigem MCMC — das ist die empfohlene Vorgehensweise für eigene Analysen.</p>
+
+      <p><strong>Effekt-Heterogenität (ξ).</strong><br>
+      Ohne Heterogenität (ξ=0): Y = θ·A + γ_Y·L + ε — der kausale Effekt θ ist für jede Person gleich, unabhängig von L. ATE = ATT = ATU = θ, und im Effektdiagramm (4. Grafik) liegen alle Punkte auf einer horizontalen Linie.<br>
+      Mit ξ=0.5: Y = (θ + 0.5·L)·A + γ_Y·L + ε — Personen mit höherem L profitieren mehr. Im Effektdiagramm entsteht eine positive Steigung. Da bei positivem Konfunding die Behandelten im Schnitt höhere L-Werte haben (sie wurden häufiger behandelt), gilt: ATT &gt; ATE &gt; ATU. Dieselben Daten, dieselbe Methode, drei verschiedene richtige Antworten — weil drei verschiedene Populationsfragen gestellt werden.</p>
+
+      <p><strong>Overlap (Positivity-Annahme).</strong><br>
+      Overlap bedeutet: Für jeden beobachteten L-Wert gibt es sowohl Behandelte als auch Unbehandelte — 0 &lt; P(A=1|L=l) &lt; 1. Im ersten Streudiagramm ist das sichtbar: Bei gutem Overlap mischen sich orange (A=1) und blaue (A=0) Punkte über den gesamten L-Bereich. Beim Szenario "Kein Overlap" sind die Gruppen fast vollständig getrennt — Personen mit hohem L werden fast immer behandelt.<br>
+      Das ist ein Problem, weil G-Computation dann das Outcome-Modell in L-Bereiche extrapoliert, in denen keine (oder kaum) Kontrollen beobachtet wurden. Die Schätzung hängt stark vom Modell ab — sichtbar als breiterer Posterior und größere Unsicherheit.</p>
+
+      <p><strong>Wann ist G-Computation unverzichtbar — und wann reicht der Regressionskoeffizient?</strong><br>
+      Im linearen Modell <em>ohne</em> Interaktion (Y ~ A + L) entspricht der G-Computation-ATE exakt dem Regressionskoeffizienten β̂_A: Die Linearität bewirkt, dass bedingter und marginaler Effekt übereinstimmen (ohne Konfundierung ist die G-Computation sogar identisch mit einem t-Test).<br><br>
+      Im linearen Modell <em>mit</em> Interaktion (Y ~ A + L + A:L) gilt das nicht mehr allgemein: β̂_A ist nur der Effekt bei L=0, während G-Computation korrekt über die tatsächliche L-Verteilung der Zielpopulation mittelt (ATE = β̂_A + β̂_{AL}·Ē[L]). Zudem berechnet G-Computation ATT und ATU durch Einschränkung auf die jeweilige Subpopulation — das ist mit dem Koeffizienten allein nicht möglich.<br><br>
+      <strong>Formelwahl: Y &#126; A + L versus Y &#126; A * L</strong><br>
+      Standard-DAGs kodieren <em>kausale Struktur</em> (welche Variable beeinflusst welche) — aber keine funktionale Form der Beziehungen. Ob der Effekt von A auf Y für verschiedene L-Werte unterschiedlich groß ist (Effekt-Heterogenität, A:L-Interaktion), ist eine inhaltliche Behauptung, die über den Graphen hinausgeht: <em>„Ist es plausibel, dass L den Effekt von A moderiert?“</em><br><br>
+      Im Tool wird das Outcome-Modell deshalb immer als <code>Y ~ A * L</code> spezifiziert — als konservativer Default, der Heterogenität zulässt ohne sie vorauszusetzen. Ob A:L tatsächlich nötig ist, lässt sich empirisch mit <code>loo_compare(loo(fit_gc), loo(fit_add))</code> prüfen (s. R-Code). Fehlt Evidenz für die Interaktion, ist <code>Y ~ A + L</code> das sparsamere Modell. Der <em>Golem Builder</em> hilft zu entscheiden, ob eine Moderationsbeziehung im DAG theoretisch begründbar ist.</p>
+
+      <p><strong>Entscheidend wird G-Computation bei GLMs mit nicht-linearem Link</strong> (z.B. logit bei logistischer Regression, log bei Poisson): Dort ist der Koeffizient ein bedingter Effekt auf der Link-Skala (z.B. Log-Odds-Ratio). Wegen der <em>Nicht-Kollapsierbarkeit</em> des logit-Links weichen bedingter und marginaler Effekt grundsätzlich voneinander ab — selbst ohne Konfundierung. G-Computation liefert den marginalen Effekt auf der Antwortskala (z.B. Risikodifferenz in Wahrscheinlichkeitspunkten), den der Koeffizient allein nicht geben kann. <code>avg_comparisons()</code> in marginaleffects realisiert genau das, modellklassenunabhängig.<br><br>
+      Umfangreiche Beispiele für G-Computation mit brms für verschiedene GLMs (logistisch, Poisson, multinomial u.a.) finden sich im Blog von <a href="https://solomonkurz.netlify.app/blog/2023-04-12-boost-your-power-with-baseline-covariates/" target="_blank" style="color:var(--accent2)">Solomon Kurz: <em>Boost your power with baseline covariates</em></a>.</p>
+    </div>
+  </div>
+
+  <!-- Collapsible: Naiver Vergleich -->
+  <div>
+    <div class="collap-hd" onclick="toggleCollap(this)">
+      <span>Bias Deep Dive — OVB &amp; Heckman-Zerlegung</span><span class="arr">▶</span>
+    </div>
+    <div class="collap-body">
+
+      <p><strong>Das Omitted Variable Bias (OVB) Framework.</strong><br>
+      Wird nur <code>Y ~ A</code> geschätzt (ohne L zu kontrollieren), gilt für den OLS-Schätzer:</p>
+
+      <div style="font-family:'DM Mono',monospace;background:var(--paper2);padding:.5rem .8rem;border-radius:3px;margin:.4rem 0 .7rem 0;font-size:.70rem;line-height:2.1">
+        β̂<sub>naiv</sub> = Cov(Y, A) / Var(A)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= θ + γ<sub>Y</sub> &middot; Cov(L, A) / Var(A)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:var(--true-col)">θ &nbsp;(wahrer Effekt)</span>
+           &nbsp;+&nbsp; <span style="color:var(--naive-col)">γ<sub>Y</sub> &middot; δ<sub>A∼L</sub> &nbsp;(Konfundierungs-Bias)</span>
+      </div>
+
+      <p>δ<sub>A∼L</sub> = Cov(L,A)/Var(A) ist der Steigungskoeffizient aus der Hilfsregression <code>A ~ L</code> — er misst, wie stark L die Behandlungszuweisung vorhersagt. Das Produkt γ<sub>Y</sub> &middot; δ<sub>A∼L</sub> ist der Omitted Variable Bias: er verschwindet genau dann, wenn entweder L das Outcome nicht beeinflusst (γ<sub>Y</sub>=0) oder L unabhängig von A ist (bestimmt durch γ<sub>A</sub>) (δ<sub>A∼L</sub>=0).</p>
+
+      <p><strong>Vorzeichen des Bias.</strong> Im Tool können γ_A (L→A) und γ_Y (L→Y) getrennt eingestellt werden, was folgende Vorzeichenstruktur ergibt:</p>
+
+      <table style="font-family:'DM Mono',monospace;font-size:.66rem;border-collapse:collapse;margin:.4rem 0 .7rem 0;width:100%">
+        <tr style="background:var(--paper2)">
+          <th style="padding:.3rem .5rem;text-align:left;border-bottom:1px solid var(--ink3);font-weight:600">L→A</th>
+          <th style="padding:.3rem .5rem;text-align:left;border-bottom:1px solid var(--ink3);font-weight:600">L→Y</th>
+          <th style="padding:.3rem .5rem;text-align:left;border-bottom:1px solid var(--ink3);font-weight:600">Bias = (L→Y)&times;(L→A)</th>
+          <th style="padding:.3rem .5rem;text-align:left;border-bottom:1px solid var(--ink3);font-weight:600">Naiv vs. Wahr</th>
+        </tr>
+        <tr>
+          <td style="padding:.25rem .5rem">+</td><td style="padding:.25rem .5rem">+</td>
+          <td style="padding:.25rem .5rem;color:var(--naive-col)">+ (&Uuml;berschätzung)</td>
+          <td style="padding:.25rem .5rem">Naiv <strong>größer</strong></td>
+        </tr>
+        <tr style="background:var(--paper2)">
+          <td style="padding:.25rem .5rem">&minus;</td><td style="padding:.25rem .5rem">&minus;</td>
+          <td style="padding:.25rem .5rem;color:var(--naive-col)">+ (−×− = +)</td>
+          <td style="padding:.25rem .5rem">Naiv <strong>größer</strong> (oft überraschend!)</td>
+        </tr>
+        <tr>
+          <td style="padding:.25rem .5rem">+</td><td style="padding:.25rem .5rem">&minus;</td>
+          <td style="padding:.25rem .5rem;color:var(--gc-col)">&minus; (Unterschätzung)</td>
+          <td style="padding:.25rem .5rem">Naiv <strong>kleiner</strong></td>
+        </tr>
+        <tr style="background:var(--paper2)">
+          <td style="padding:.25rem .5rem">&minus;</td><td style="padding:.25rem .5rem">+</td>
+          <td style="padding:.25rem .5rem;color:var(--gc-col)">&minus; (Unterschätzung)</td>
+          <td style="padding:.25rem .5rem">Naiv <strong>kleiner</strong> (falsches Vorzeichen möglich!)</td>
+        </tr>
+      </table>
+
+      <p><em>Merkregel:</em> Bias > 0 wenn beide Pfade gleichsinnig sind (beide + oder beide −). Bias < 0 bei entgegengesetzten Vorzeichen. Im Tool kann man γ_A und γ_Y jetzt getrennt einstellen — bei gleichem Vorzeichen ist der Bias positiv, bei entgegengesetzten Vorzeichen negativ.</p>
+
+      <p><strong>Heckman-Zerlegung: Naiver Vergleich = ATE + Selection Bias + HTEB.</strong><br>
+      Der naive Vergleich E[Y(1)|A=1] &minus; E[Y(0)|A=0] entspricht i.d.R. <em>nicht</em> dem ATE (Cunningham, 2021; Morgan &amp; Winship, 2007). Der <strong>ATE</strong> ist zunächst eine gewichtete Summe aus ATT und ATU (&pi; = P(A=1)):</p>
+
+      <div style="font-family:'DM Mono',monospace;background:var(--paper2);padding:.45rem .8rem;border-radius:3px;margin:.3rem 0 .5rem 0;font-size:.68rem;line-height:1.9">
+        ATE = &pi; &middot; ATT + (1&minus;&pi;) &middot; ATU
+      </div>
+
+      <p>Nach algebraischer Umstellung (E[Y(0)|A=1] addieren und subtrahieren) gilt direkt:</p>
+
+      <div style="font-family:'DM Mono',monospace;background:var(--paper2);padding:.5rem .8rem;border-radius:3px;margin:.4rem 0 .7rem 0;font-size:.68rem;line-height:2.1">
+        <div style="color:var(--naive-col);margin-bottom:.35rem;font-size:.65rem;letter-spacing:.04em">Naiver Vergleich</div>
+        E[Y(1)|A=1] &minus; E[Y(0)|A=0] = <strong>ATE</strong><br><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <span style="color:var(--naive-col)">{E[Y(0)|A=1] &minus; E[Y(0)|A=0]}</span>
+        <span style="font-size:.60rem;color:var(--naive-col);opacity:.85"> &larr; Selection Bias / Baseline Bias</span><br><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <span style="color:var(--accent5)">(1&minus;&pi;) &middot; (ATT &minus; ATU)</span>
+        <span style="font-size:.60rem;color:var(--accent5);opacity:.85"> &larr; Heterogenous Treatment Effect Bias (HTEB)</span>
+      </div>
+
+      <p><strong>Interpretation der Terme:</strong><br>
+      &mdash; <strong style="color:var(--naive-col)">Selection Bias / Baseline Bias</strong> = E[Y(0)|A=1] &minus; E[Y(0)|A=0]: Wie unterscheiden sich die beiden Gruppen, wenn es von Anfang an keine Behandlung gäbe? Es ist lediglich eine Beschreibung der Unterschiede zwischen den beiden Gruppen unter der Kontrollbedingung.<br>
+      &mdash; <strong style="color:var(--accent5)">HTEB (Heterogenous Treatment Effect Bias)</strong> = (1&minus;&pi;)&middot;(ATT&minus;ATU): Entspricht dem erwarteten Unterschied im Behandlungseffekt zwischen denjenigen in der Behandlungs- und denjenigen in der Kontrollgruppe (multipliziert mit dem Anteil der Population). Entsteht wenn &xi;&ne;0 in diesem Tool.</p>
+
+      <p><strong>Wann gilt Naiv = ATE?</strong> Genau dann, wenn beide Terme verschwinden:<br>
+      &mdash; <span style="color:var(--naive-col)">Selection Bias</span> = 0 &#10234; E[Y(0)|A=1] = E[Y(0)|A=0] &#10234; Y(0) &perp; A &nbsp;(keine Baseline-Konfundierung)<br>
+      &mdash; <span style="color:var(--accent5)">HTEB</span> = 0 &#10234; ATT = ATU &nbsp;(kein Heterogenitätsproblem) oder &pi; = 1<br><br>
+      In einem RCT ist A zufällig zugewiesen &rarr; Y(0) &perp; A (<span style="color:var(--naive-col)">Selection Bias</span> = 0) und ATT &asymp; ATU (<span style="color:var(--accent5)">HTEB</span> &asymp; 0) &rarr; Naiv = ATE &checkmark;</p>
+
+      <p><strong>Quelle:</strong> Cunningham, S. (2021). <em>Causal Inference: The Mixtape.</em> Yale University Press.
+      <a href="https://mixtape.scunning.com/" target="_blank" style="color:var(--accent2)">Frei online verfügbar</a> —
+      mit vielen weiteren Techniken für Kausalanalysen: IPW, Difference-in-Differences, Regression Discontinuity, Instrumental Variables u.a. Eine exzellente Einführung in die gesamte Breite kausaler Inferenzmethoden.</p>
+
+    </div>
+  </div>
+
+</div><!-- /main -->
+</div><!-- /outer -->
+</div><!-- /wrap -->
+
+<script>
+// ─── State ──────────────────────────────────────────────────────
+let DATA = null, LAST_GC = null;
+let ESTIMAND = 'ATE', N = 250, OVERLAP_SHIFT = 0;
+let SHOW_LDENSITY = false;
+const K = 600;
+
+// ─── Math ────────────────────────────────────────────────────────
+function randn() {
+  let u = 0, v = 0;
+  while(!u) u = Math.random();
+  while(!v) v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function sigmoid(x) { return 1/(1+Math.exp(-Math.max(-20,Math.min(20,x)))); }
+function cssv(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function arr_mean(a) { return a.reduce((s,x)=>s+x,0)/a.length; }
+function arr_median(a) { const s=[...a].sort((x,y)=>x-y); const n=s.length; return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2; }
+
+function luSolve(A, b) {
+  const n = A.length;
+  const aug = A.map((row,i) => [...row, b[i]]);
+  for(let c=0;c<n;c++){
+    let mx=Math.abs(aug[c][c]),mr=c;
+    for(let r=c+1;r<n;r++) if(Math.abs(aug[r][c])>mx){mx=Math.abs(aug[r][c]);mr=r;}
+    [aug[c],aug[mr]]=[aug[mr],aug[c]];
+    if(Math.abs(aug[c][c])<1e-14) continue;
+    for(let r=c+1;r<n;r++){
+      const f=aug[r][c]/aug[c][c];
+      for(let j=c;j<=n;j++) aug[r][j]-=f*aug[c][j];
+    }
+  }
+  const x=new Array(n).fill(0);
+  for(let i=n-1;i>=0;i--){
+    x[i]=aug[i][n];
+    for(let j=i+1;j<n;j++) x[i]-=aug[i][j]*x[j];
+    if(Math.abs(aug[i][i])>1e-14) x[i]/=aug[i][i];
+  }
+  return x;
+}
+
+function cholesky(A) {
+  const n=A.length, L=Array.from({length:n},()=>new Array(n).fill(0));
+  for(let i=0;i<n;i++) for(let j=0;j<=i;j++){
+    let s=A[i][j]; for(let k=0;k<j;k++) s-=L[i][k]*L[j][k];
+    L[i][j]=i===j?Math.sqrt(Math.max(s,1e-12)):(L[j][j]>1e-12?s/L[j][j]:0);
+  }
+  return L;
+}
+
+function mvnSample(mean, L) {
+  const n=mean.length, z=Array.from({length:n},()=>randn()), x=mean.slice();
+  for(let i=0;i<n;i++) for(let j=0;j<=i;j++) x[i]+=L[i][j]*z[j];
+  return x;
+}
+
+function kde(samples, nPts=250) {
+  if(!samples.length) return {xs:[],ys:[],lo:0,hi:1};
+  const n=samples.length, m=arr_mean(samples);
+  const std=Math.sqrt(samples.reduce((s,x)=>s+(x-m)**2,0)/(n-1));
+  const h=Math.max(1.06*std*Math.pow(n,-0.2),0.02);
+  const sorted=[...samples].sort((a,b)=>a-b);
+  const lo=sorted[0]-2.5*h, hi=sorted[n-1]+2.5*h;
+  const xs=Array.from({length:nPts},(_,i)=>lo+(hi-lo)*i/(nPts-1));
+  const ys=xs.map(x=>{let s=0;for(const xi of samples)s+=Math.exp(-0.5*((x-xi)/h)**2);return s/(n*h*Math.sqrt(2*Math.PI));});
+  return {xs,ys,lo,hi};
+}
+
+function hdi(samples, cred=0.94) {
+  const s=[...samples].sort((a,b)=>a-b), n=s.length, nIn=Math.floor(cred*n);
+  let minW=Infinity, lo=s[0], hi=s[nIn-1];
+  for(let i=0;i<=n-nIn;i++){const w=s[i+nIn-1]-s[i];if(w<minW){minW=w;lo=s[i];hi=s[i+nIn-1];}}
+  return [lo,hi];
+}
+
+// ─── DGP ─────────────────────────────────────────────────────────
+function simulateData() {
+  const theta = parseFloat(document.getElementById('sl-theta').value);
+  const gammaA = parseFloat(document.getElementById('sl-gamma-a').value);
+  const gammaY = parseFloat(document.getElementById('sl-gamma-y').value);
+  const xi = document.getElementById('ck-het').checked ? 0.5 : 0;
+  const L=[],A=[],Y=[];
+  for(let i=0;i<N;i++){
+    const l=randn();
+    const pi=sigmoid(OVERLAP_SHIFT + gammaA*l);
+    const a=Math.random()<pi?1:0;
+    const y=(theta+xi*l)*a + gammaY*l + randn();
+    L.push(l);A.push(a);Y.push(y);
+  }
+  const L1=L.filter((_,i)=>A[i]===1), L0=L.filter((_,i)=>A[i]===0);
+  const mL=arr_mean(L), mL1=L1.length?arr_mean(L1):0, mL0=L0.length?arr_mean(L0):0;
+  const trueATE=theta+xi*mL, trueATT=theta+xi*mL1, trueATU=theta+xi*mL0;
+  const Y1=Y.filter((_,i)=>A[i]===1), Y0=Y.filter((_,i)=>A[i]===0);
+  const naive=arr_mean(Y1)-arr_mean(Y0);
+  return {L,A,Y,n:N,trueATE,trueATT,trueATU,naive,theta,gammaA,gammaY,xi,n1:L1.length,n0:L0.length};
+}
+
+// ─── OLS ─────────────────────────────────────────────────────────
+function olsFit(Y,A,L,withInter) {
+  const n=Y.length, p=withInter?4:3;
+  const gX=i=>withInter?[1,A[i],L[i],A[i]*L[i]]:[1,A[i],L[i]];
+  const XtX=Array.from({length:p},()=>new Array(p).fill(0)), Xty=new Array(p).fill(0);
+  for(let i=0;i<n;i++){
+    const x=gX(i);
+    for(let r=0;r<p;r++){for(let c=0;c<p;c++)XtX[r][c]+=x[r]*x[c];Xty[r]+=x[r]*Y[i];}
+  }
+  const beta=luSolve(XtX,Xty);
+  let rss=0;
+  for(let i=0;i<n;i++){const x=gX(i);const yh=x.reduce((s,xi,j)=>s+xi*beta[j],0);rss+=(Y[i]-yh)**2;}
+  const sigma2=rss/(n-p);
+  const cols=Array.from({length:p},(_,j)=>{const e=new Array(p).fill(0);e[j]=1;return luSolve(XtX,e);});
+  const betaCov=Array.from({length:p},(_,i)=>Array.from({length:p},(_,j)=>cols[j][i]*sigma2));
+  return {beta,betaCov,p};
+}
+
+// ─── G-Computation ───────────────────────────────────────────────
+function runGComp(data,estimand) {
+  const {L,A,Y,n,xi}=data;
+  const wi=xi!==0;
+  const ols=olsFit(Y,A,L,wi);
+  const Lch=cholesky(ols.betaCov);
+  const samples=[];
+  for(let k=0;k<K;k++){
+    const b=mvnSample(ols.beta,Lch);
+    let s=0,cnt=0;
+    for(let i=0;i<n;i++){
+      if(estimand==='ATT'&&A[i]!==1) continue;
+      if(estimand==='ATU'&&A[i]!==0) continue;
+      const y1=wi?b[0]+b[1]*1+b[2]*L[i]+b[3]*L[i]:b[0]+b[1]*1+b[2]*L[i];
+      const y0=wi?b[0]+b[1]*0+b[2]*L[i]+b[3]*0  :b[0]+b[1]*0+b[2]*L[i];
+      s+=y1-y0;cnt++;
+    }
+    samples.push(cnt>0?s/cnt:0);
+  }
+  return {samples,ols};
+}
+
+// ─── Canvas helpers ──────────────────────────────────────────────
+function setupCanvas(id,h) {
+  const cv=document.getElementById(id), dpr=window.devicePixelRatio||1;
+  cv.style.width='1px';cv.width=1;
+  const W=Math.max(200,cv.parentElement.clientWidth);
+  cv.width=W*dpr;cv.height=h*dpr;cv.style.width=W+'px';cv.style.height=h+'px';
+  const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);
+  return {ctx,W,H:h};
+}
+
+// ─── Scatter ─────────────────────────────────────────────────────
+function drawScatter(data,olsBeta,wi) {
+  const {ctx,W,H}=setupCanvas('scatterCanvas',310);
+  const {L,A,Y,n}=data;
+  const ml=46,mr=12,mt=12,mb=34;
+  const pw=W-ml-mr,ph=H-mt-mb;
+  const xlo=-3.2,xhi=3.2;
+  const ylo=Math.min(...Y)-0.3,yhi=Math.max(...Y)+0.3;
+  const toX=v=>ml+(v-xlo)/(xhi-xlo)*pw;
+  const toY=v=>mt+ph-(v-ylo)/(yhi-ylo)*ph;
+  const cGrid=cssv('--grid'),cInk3=cssv('--ink3');
+  const cT=cssv('--accent5'),cC=cssv('--accent2'),cGC=cssv('--gc-col');
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle=cGrid;ctx.lineWidth=.7;
+  for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(ml,mt+ph/4*i);ctx.lineTo(ml+pw,mt+ph/4*i);ctx.stroke();}
+  for(let i=0;i<n;i++){
+    ctx.beginPath();ctx.arc(toX(L[i]),toY(Y[i]),2.2,0,2*Math.PI);
+    ctx.fillStyle=A[i]===1?cT+'bb':cC+'88';ctx.fill();
+  }
+  if(olsBeta){
+    for(const a of[0,1]){
+      ctx.beginPath();
+      for(let j=0;j<80;j++){
+        const l=xlo+(xhi-xlo)*j/79;
+        const yh=wi?olsBeta[0]+olsBeta[1]*a+olsBeta[2]*l+olsBeta[3]*a*l:olsBeta[0]+olsBeta[1]*a+olsBeta[2]*l;
+        j===0?ctx.moveTo(toX(l),toY(yh)):ctx.lineTo(toX(l),toY(yh));
+      }
+      ctx.strokeStyle=a===1?cT:cC;ctx.lineWidth=1.8;
+      ctx.setLineDash(a===1?[]:[5,3]);ctx.stroke();ctx.setLineDash([]);
+    }
+  }
+  ctx.strokeStyle=cInk3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+  ctx.fillStyle=cInk3;ctx.font=`12px 'DM Mono',monospace`;ctx.textAlign='center';
+  ctx.fillText('L (Confounder)',ml+pw/2,H-3);
+  ctx.save();ctx.translate(14,mt+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Y (Outcome)',0,0);ctx.restore();
+  for(let v=-3;v<=3;v++){ctx.font=`11px 'DM Mono',monospace`;ctx.fillStyle=cInk3;ctx.fillText(v,toX(v),mt+ph+15);}
+  ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='left';
+  ctx.fillStyle=cT;ctx.fillRect(W-62,mt+3,8,8);ctx.fillText('A=1',W-51,mt+11);
+  ctx.fillStyle=cC;ctx.fillRect(W-62,mt+18,8,8);ctx.fillText('A=0',W-51,mt+26);
+}
+
+// ─── Posterior G-Computation ──────────────────────────────────────
+function drawPosteriors(gcRes,data) {
+  const {ctx,W,H}=setupCanvas('postCanvas',310);
+  const trueVal=ESTIMAND==='ATE'?data.trueATE:ESTIMAND==='ATT'?data.trueATT:data.trueATU;
+  const gcK=kde(gcRes.samples);
+  const lo=Math.min(gcK.lo,trueVal-0.5,data.naive-0.5);
+  const hi=Math.max(gcK.hi,trueVal+0.5,data.naive+0.5);
+  const maxY=Math.max(...gcK.ys)*1.15;
+  const ml=46,mr=12,mt=16,mb=34;
+  const pw=W-ml-mr,ph=H-mt-mb;
+  const toX=v=>ml+(v-lo)/(hi-lo)*pw, toY=v=>mt+ph-v/maxY*ph;
+  const cGrid=cssv('--grid'),cInk3=cssv('--ink3');
+  const cC=cssv('--accent2'),cTrue=cssv('--true-col'),cNaive=cssv('--naive-col');
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle=cGrid;ctx.lineWidth=.7;
+  for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(ml,mt+ph/4*i);ctx.lineTo(ml+pw,mt+ph/4*i);ctx.stroke();}
+
+  // helper: trace density path (returns path, does not stroke/fill)
+  function traceDens(){
+    ctx.beginPath();
+    gcK.xs.forEach((x,i)=>{const px=toX(x);if(px<ml||px>ml+pw)return;i===0||toX(gcK.xs[i-1])<ml?ctx.moveTo(px,toY(gcK.ys[i])):ctx.lineTo(px,toY(gcK.ys[i]));});
+    ctx.lineTo(toX(gcK.xs[gcK.xs.length-1]),toY(0));ctx.lineTo(toX(gcK.xs[0]),toY(0));ctx.closePath();
+  }
+
+  // 95% HDI fill — clipped to HDI bounds so boundary is visible
+  const [h95lo,h95hi]=hdi(gcRes.samples,0.95);
+  ctx.save();
+  ctx.beginPath();ctx.rect(toX(h95lo),mt,toX(h95hi)-toX(h95lo),ph+2);ctx.clip();
+  ctx.globalAlpha=0.28;traceDens();ctx.fillStyle=cC;ctx.fill();ctx.globalAlpha=1;
+  ctx.restore();
+
+  // 50% HDI fill — darker inner region
+  const [h50lo,h50hi]=hdi(gcRes.samples,0.50);
+  ctx.save();
+  ctx.beginPath();ctx.rect(toX(h50lo),mt,toX(h50hi)-toX(h50lo),ph+2);ctx.clip();
+  ctx.globalAlpha=0.60;traceDens();ctx.fillStyle=cC;ctx.fill();ctx.globalAlpha=1;
+  ctx.restore();
+
+  // Density line
+  ctx.beginPath();let st=false;
+  gcK.xs.forEach((x,i)=>{const px=toX(x);if(px<ml||px>ml+pw)return;if(!st){ctx.moveTo(px,toY(gcK.ys[i]));st=true;}else ctx.lineTo(px,toY(gcK.ys[i]));});
+  ctx.strokeStyle=cC;ctx.lineWidth=2.5;ctx.stroke();
+
+  // vertical lines
+  function vline(val,col,dash,label,side){
+    const vx=toX(val); if(vx<ml||vx>ml+pw) return;
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash(dash||[]);
+    ctx.beginPath();ctx.moveTo(vx,mt);ctx.lineTo(vx,mt+ph);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=col;ctx.font=`11px 'DM Mono',monospace`;
+    ctx.textAlign=side==='left'?'left':'right';
+    ctx.fillText(label,side==='left'?vx+4:vx-4,mt+14);
+  }
+  vline(trueVal,cTrue,[6,3],'wahr','left');
+  ctx.globalAlpha=.7;vline(data.naive,cNaive,[3,4],'naiv','right');ctx.globalAlpha=1;
+
+  // Zero line
+  const zx=toX(0);
+  if(zx>=ml&&zx<=ml+pw){ctx.strokeStyle=cInk3;ctx.lineWidth=.7;ctx.globalAlpha=.4;
+    ctx.beginPath();ctx.moveTo(zx,mt);ctx.lineTo(zx,mt+ph);ctx.stroke();ctx.globalAlpha=1;}
+
+  ctx.strokeStyle=cInk3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+  ctx.fillStyle=cInk3;ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='center';
+  for(let t=0;t<=5;t++){const v=lo+(hi-lo)*t/5;ctx.fillText(v.toFixed(1),toX(v),mt+ph+15);}
+  ctx.fillText(ESTIMAND,ml+pw/2,H-3);
+}
+
+// ─── Counterfactual Mechanism ────────────────────────────────────
+function drawCounterfactuals(data,gcRes) {
+  const {ctx,W,H}=setupCanvas('cfCanvas',310);
+  const {L,A,Y,n}=data;
+  const b=gcRes.ols.beta;
+  const wi=data.xi!==0;
+  const yH1=i=>wi?b[0]+b[1]+b[2]*L[i]+b[3]*L[i]:b[0]+b[1]+b[2]*L[i];
+  const yH0=i=>wi?b[0]+b[2]*L[i]:b[0]+b[2]*L[i];
+  const ml=46,mr=12,mt=20,mb=38;
+  const pw=W-ml-mr,ph=H-mt-mb;
+  const xlo=-3.2,xhi=3.2;
+  const preds=[...L.map((_,i)=>yH1(i)),...L.map((_,i)=>yH0(i))];
+  const ylo=Math.min(...Y,...preds)-0.3,yhi=Math.max(...Y,...preds)+0.3;
+  const toX=v=>ml+(v-xlo)/(xhi-xlo)*pw;
+  const toY=v=>mt+ph-(v-ylo)/(yhi-ylo)*ph;
+  const cGrid=cssv('--grid'),cInk3=cssv('--ink3');
+  const cT=cssv('--accent5'),cC=cssv('--accent2');
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle=cGrid;ctx.lineWidth=.7;
+  for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(ml,mt+ph/4*i);ctx.lineTo(ml+pw,mt+ph/4*i);ctx.stroke();}
+  // raw data (dim)
+  ctx.globalAlpha=0.2;
+  for(let i=0;i<n;i++){
+    ctx.beginPath();ctx.arc(toX(L[i]),toY(Y[i]),2,0,2*Math.PI);
+    ctx.fillStyle=A[i]===1?cT:cC;ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // regression lines
+  for(const a of[0,1]){
+    ctx.beginPath();
+    for(let j=0;j<80;j++){
+      const l=xlo+(xhi-xlo)*j/79;
+      const yh=wi?b[0]+b[1]*a+b[2]*l+b[3]*a*l:b[0]+b[1]*a+b[2]*l;
+      j===0?ctx.moveTo(toX(l),toY(yh)):ctx.lineTo(toX(l),toY(yh));
+    }
+    ctx.strokeStyle=a===1?cT:cC;ctx.lineWidth=2;
+    ctx.setLineDash(a===1?[]:[5,3]);ctx.stroke();ctx.setLineDash([]);
+  }
+  // counterfactual connectors for estimand population (subsample ~48)
+  const idx=[];
+  for(let i=0;i<n;i++){
+    if(ESTIMAND==='ATT'&&A[i]!==1) continue;
+    if(ESTIMAND==='ATU'&&A[i]!==0) continue;
+    idx.push(i);
+  }
+  const step=Math.max(1,Math.floor(idx.length/48));
+  const shown=idx.filter((_,j)=>j%step===0).slice(0,48);
+  for(const i of shown){
+    const x=toX(L[i]),py1=toY(yH1(i)),py0=toY(yH0(i));
+    // connector
+    ctx.strokeStyle=cT+'70';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+    ctx.beginPath();ctx.moveTo(x,py0);ctx.lineTo(x,py1);ctx.stroke();ctx.setLineDash([]);
+    // Y(0) marker
+    ctx.beginPath();ctx.arc(x,py0,3.5,0,2*Math.PI);
+    ctx.fillStyle=cC;ctx.fill();
+    // Y(1) marker
+    ctx.beginPath();ctx.arc(x,py1,3.5,0,2*Math.PI);
+    ctx.fillStyle=cT;ctx.fill();
+  }
+  // axes
+  ctx.strokeStyle=cInk3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+  ctx.fillStyle=cInk3;ctx.font=`12px 'DM Mono',monospace`;ctx.textAlign='center';
+  ctx.fillText('L (Confounder)',ml+pw/2,H-3);
+  ctx.save();ctx.translate(14,mt+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Y (Outcome)',0,0);ctx.restore();
+  for(let v=-3;v<=3;v++){ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='center';ctx.fillStyle=cInk3;ctx.fillText(v,toX(v),mt+ph+15);}
+  // legend
+  ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='left';
+  ctx.fillStyle=cT;ctx.beginPath();ctx.arc(W-100,mt+11,4,0,2*Math.PI);ctx.fill();ctx.fillText('Ŷ(1)',W-93,mt+15);
+  ctx.fillStyle=cC;ctx.beginPath();ctx.arc(W-100,mt+27,4,0,2*Math.PI);ctx.fill();ctx.fillText('Ŷ(0)',W-93,mt+31);
+}
+
+// ─── Individual Treatment Effects ────────────────────────────────
+function drawPotentialOutcomes(data,gcRes) {
+  const {ctx,W,H}=setupCanvas('poCanvas',SHOW_LDENSITY?325:260);
+  const {L,A,n}=data;
+  const b=gcRes.ols.beta;
+  const wi=data.xi!==0;
+  const ites=L.map((l,i)=>{
+    const y1=wi?b[0]+b[1]+b[2]*l+b[3]*l:b[0]+b[1]+b[2]*l;
+    const y0=wi?b[0]+b[2]*l:b[0]+b[2]*l;
+    return y1-y0;
+  });
+  // estimand population
+  const popIdx=[];
+  for(let i=0;i<n;i++){
+    if(ESTIMAND==='ATT'&&A[i]!==1) continue;
+    if(ESTIMAND==='ATU'&&A[i]!==0) continue;
+    popIdx.push(i);
+  }
+  const ate=arr_mean(popIdx.map(i=>ites[i]));
+  const ml=52,mr=12,mt=24,mb=38;
+  const pw=W-ml-mr,ph=SHOW_LDENSITY?198:H-mt-mb;
+  const xlo=-3.2,xhi=3.2;
+  const iteMin=Math.min(...ites)-0.25,iteMax=Math.max(...ites)+0.25;
+  const toX=v=>ml+(v-xlo)/(xhi-xlo)*pw;
+  const toY=v=>mt+ph-(v-iteMin)/(iteMax-iteMin)*ph;
+  const cGrid=cssv('--grid'),cInk3=cssv('--ink3');
+  const cT=cssv('--accent5'),cC=cssv('--accent2'),cTrue=cssv('--true-col');
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle=cGrid;ctx.lineWidth=.7;
+  for(let i=0;i<=4;i++){ctx.beginPath();ctx.moveTo(ml,mt+ph/4*i);ctx.lineTo(ml+pw,mt+ph/4*i);ctx.stroke();}
+  // zero line
+  if(iteMin<0&&iteMax>0){
+    const zy=toY(0);
+    ctx.strokeStyle=cInk3;ctx.lineWidth=1;ctx.globalAlpha=.35;
+    ctx.beginPath();ctx.moveTo(ml,zy);ctx.lineTo(ml+pw,zy);ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+  // dots — dim out-of-estimand
+  for(let i=0;i<n;i++){
+    const inPop=ESTIMAND==='ATE'||(ESTIMAND==='ATT'&&A[i]===1)||(ESTIMAND==='ATU'&&A[i]===0);
+    ctx.beginPath();ctx.arc(toX(L[i]),toY(ites[i]),2.8,0,2*Math.PI);
+    ctx.fillStyle=A[i]===1?cT:cC;
+    ctx.globalAlpha=inPop?0.72:0.15;
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // ATE line
+  const atey=toY(ate);
+  ctx.strokeStyle=cTrue;ctx.lineWidth=2.5;ctx.setLineDash([7,4]);
+  ctx.beginPath();ctx.moveTo(ml,atey);ctx.lineTo(ml+pw,atey);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=cTrue;ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='left';
+  ctx.fillText(`${ESTIMAND} = ${ate.toFixed(2)}`,ml+6,atey-8);
+  document.getElementById('po-ate-label').textContent=ESTIMAND;
+  // axes
+  ctx.strokeStyle=cInk3;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+  ctx.fillStyle=cInk3;ctx.font=`12px 'DM Mono',monospace`;ctx.textAlign='center';
+  ctx.fillText('L (Confounder)',ml+pw/2,mt+ph+mb-6);
+  ctx.save();ctx.translate(14,mt+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Ŷ(1)−Ŷ(0)',0,0);ctx.restore();
+  for(let v=-3;v<=3;v++){ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='center';ctx.fillStyle=cInk3;ctx.fillText(v,toX(v),mt+ph+15);}
+  // y axis ticks
+  const nTk=5;
+  for(let t=0;t<=nTk;t++){
+    const v=iteMin+(iteMax-iteMin)*t/nTk;
+    ctx.font=`11px 'DM Mono',monospace`;ctx.textAlign='right';ctx.fillStyle=cInk3;
+    ctx.fillText(v.toFixed(1),ml-5,toY(v)+4);
+  }
+  // ── L-density strip (toggle) ──────────────────────
+  if(SHOW_LDENSITY){
+    const dsSep=mt+ph+mb+2; // separator y
+    const dsTop=dsSep+5;
+    const dsBot=H-6;
+    const dsH=dsBot-dsTop;
+    // separator line
+    ctx.strokeStyle=cGrid;ctx.lineWidth=0.8;ctx.globalAlpha=0.7;
+    ctx.beginPath();ctx.moveTo(ml,dsSep);ctx.lineTo(ml+pw,dsSep);ctx.stroke();
+    ctx.globalAlpha=1;
+    // strip label
+    ctx.font=`10px 'DM Mono',monospace`;ctx.textAlign='left';ctx.fillStyle=cInk3;
+    ctx.fillText('L-Verteilung (A=1 vs A=0):',ml,dsTop+12);
+    // KDE per group
+    const lA1=L.filter((_,i)=>A[i]===1), lA0=L.filter((_,i)=>A[i]===0);
+    const kA1=kde(lA1,120), kA0=kde(lA0,120);
+    const maxD=Math.max(...kA1.ys,...kA0.ys)*1.05;
+    const toYD=v=>dsTop+16+(dsH-18)*(1-v/maxD);
+    for(const [kd,col] of [[kA0,cC],[kA1,cT]]){
+      // fill
+      ctx.beginPath();let fs=false;
+      kd.xs.forEach((x,i)=>{const px=toX(x);if(px<ml||px>ml+pw)return;
+        if(!fs){ctx.moveTo(px,toYD(kd.ys[i]));fs=true;}else ctx.lineTo(px,toYD(kd.ys[i]));});
+      ctx.lineTo(toX(kd.xs[kd.xs.length-1]),toYD(0));ctx.lineTo(toX(kd.xs[0]),toYD(0));ctx.closePath();
+      ctx.fillStyle=col;ctx.globalAlpha=0.18;ctx.fill();ctx.globalAlpha=1;
+      // curve
+      ctx.beginPath();fs=false;
+      kd.xs.forEach((x,i)=>{const px=toX(x);if(px<ml||px>ml+pw)return;
+        if(!fs){ctx.moveTo(px,toYD(kd.ys[i]));fs=true;}else ctx.lineTo(px,toYD(kd.ys[i]));});
+      ctx.strokeStyle=col;ctx.lineWidth=1.8;ctx.stroke();
+    }
+    // legend
+    ctx.font=`10px 'DM Mono',monospace`;ctx.textAlign='right';
+    ctx.fillStyle=cT;ctx.beginPath();ctx.arc(W-mr-38,dsTop+8,3,0,2*Math.PI);ctx.fill();
+    ctx.fillText('A=1',W-mr-2,dsTop+12);
+    ctx.fillStyle=cC;ctx.beginPath();ctx.arc(W-mr-38,dsTop+22,3,0,2*Math.PI);ctx.fill();
+    ctx.fillText('A=0',W-mr-2,dsTop+26);
+  }
+}
+
+// ─── Metrics & R-Code ────────────────────────────────────────────
+function updateMetrics(gc,data) {
+  const trueVal=ESTIMAND==='ATE'?data.trueATE:ESTIMAND==='ATT'?data.trueATT:data.trueATU;
+  const gcM=arr_median(gc.samples);
+  const [gl,gh]=hdi(gc.samples);
+  const bias=data.naive-trueVal;
+  document.getElementById('gc-val').textContent=gcM.toFixed(3);
+  document.getElementById('gc-ci').textContent=`95% HDI: [${gl.toFixed(2)}, ${gh.toFixed(2)}]`;
+  document.getElementById('true-val').textContent=trueVal.toFixed(3);
+  document.getElementById('naive-val').textContent=data.naive.toFixed(3);
+  document.getElementById('naive-bias').textContent=`Bias: ${bias>=0?'+':''}${bias.toFixed(3)}`;
+  // Hero box
+  document.getElementById('gc-hero').textContent=gcM.toFixed(2);
+  document.getElementById('naive-hero').textContent=data.naive.toFixed(2);
+  document.getElementById('true-hero').textContent=trueVal.toFixed(2);
+  document.getElementById('bias-hero').textContent=(bias>=0?'+':'')+bias.toFixed(2);
+}
+
+function updateRCode(data) {
+  const {theta,gammaA,gammaY,xi,n}=data;
+  const wi=xi!==0;  // nur für DGP-Zeile
+  const formula='Y ~ A * L';  // immer: konservativer Default (s. Methodik)
+  const est=ESTIMAND;
+  let r=`library(tidyverse)\nlibrary(brms)\nlibrary(marginaleffects)\n\n`;
+  r+=`# ── DGP simulieren (entspricht den Schieberegler-Einstellungen) ──\n`;
+  r+=`set.seed(42)\nn <- ${n}\nL <- rnorm(n)\n`;
+  r+=`A <- rbinom(n, 1, plogis(${gammaA.toFixed(2)} * L))\n`;
+  r+=wi?`Y <- (${theta.toFixed(2)} + 0.5 * L) * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`
+       :`Y <- ${theta.toFixed(2)} * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`;
+  r+=`dat <- data.frame(L, A = factor(A), Y)\n\n`;
+  r+=`# ── Naiver Vergleich (zum Vergleich / Baseline) ─────\n`;
+  r+=`# Ignoriert den Confounder L — zeigt den Confounding-Bias:\n`;
+  r+=`mean(dat$Y[dat$A == 1]) - mean(dat$Y[dat$A == 0])\n`;
+  r+=`# oder:\nlm(Y ~ A, data = dat) |> summary()\n\n`;
+  r+=`# ── Formelwahl: Y ~ A * L als konservativer Default ────────\n`;
+  r+=`# Der DAG kodiert keine funktionale Form. Ob A:L n\u00f6tig ist,\n`;
+  r+=`# entscheidet Dom\u00e4nenwissen: Moderiert L den Effekt von A auf Y?\n`;
+  r+=`# Empirisch pr\u00fcfen mit loo_compare() — fehlt Evidenz, ist A+L sparsamer.\n\n`;
+  r+=`# ── G-Computation (voll Bayesianisch mit brms) ───────\n`;
+  r+=`fit_gc <- brm(\n  formula = ${formula},\n  data = dat,\n  prior = c(\n    prior(normal(0, 2),  class = b),\n    prior(normal(0, 10), class = Intercept)\n  )\n)\n\n`;
+  r+=`# Kausaler Effekt via Standardisierung (marginaleffects):\n`;
+  if(est==='ATE') r+=`avg_comparisons(fit_gc, variables = "A")           # ATE\n`;
+  else if(est==='ATT') r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 1))                   # ATT\n`;
+  else r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 0))                   # ATU\n`;
+  r+=`\n# Modellvergleich — ist die Interaktion A:L n\u00f6tig?\n`;
+  r+=`fit_add <- update(fit_gc, formula. = Y ~ A + L)  # additives Modell\n`;
+  r+=`loo_compare(loo(fit_gc), loo(fit_add))            # neg. elpd_diff: A*L bevorzugt\n\n`;
+  r+=`\n# Kontrafaktuale Vorhersagen + individuelle Behandlungseffekte:\n`;
+  r+=`dat1 <- transform(dat, A = factor(1))  # alle auf A=1 setzen\n`;
+  r+=`dat0 <- transform(dat, A = factor(0))  # alle auf A=0 setzen\n`;
+  r+=`po1 <- posterior_epred(fit_gc, newdata = dat1)  # draws × n Matrix\n`;
+  r+=`po0 <- posterior_epred(fit_gc, newdata = dat0)\n`;
+  r+=`ite_mat <- po1 - po0                            # individuelle kausale Effekte\n`;
+  r+=`ate_post <- rowMeans(ite_mat)                   # ATE-Posterior (ein Wert pro Draw)\n`;
+  r+=`quantile(ate_post, c(0.025, 0.5, 0.975))        # Median + 95% HDI`;
+  document.getElementById('rcode-block').textContent=r;
+}
+
+// ─── Main update ─────────────────────────────────────────────────
+// ─── Bias-Anatomie Panel ──────────────────────────────────────────
+function updateBiasPanel(data) {
+  const {L, A, theta, gammaA, gammaY, naive, trueATE} = data;
+  const n = L.length;
+  const mL = arr_mean(L), mA = arr_mean(A);
+  const covLA = L.reduce((s,l,i) => s + (l-mL)*(A[i]-mA), 0) / n;
+  const varA  = A.reduce((s,a) => s + (a-mA)**2, 0) / n;
+  const dAL = varA > 1e-10 ? covLA / varA : 0;
+  const ovb = gammaY * dAL;
+  const sign = ovb >= 0 ? "+" : "";
+  document.getElementById("ba-formula").textContent =
+    "= " + trueATE.toFixed(3) + " " + sign + ovb.toFixed(3) + " ≈ " + naive.toFixed(3);
+  document.getElementById("ba-ovb-val").textContent = (ovb>=0?"+":"")+ovb.toFixed(3);
+  document.getElementById("ba-gamma-val").textContent = gammaY.toFixed(2);
+  document.getElementById("ba-delta-val").textContent = dAL.toFixed(3);
+  updateBiasDAG(gammaA, gammaY, theta);
+  updateBiasLine(trueATE, naive, ovb);
+}
+
+function updateBiasDAG(gammaA, gammaY, theta) {
+  const el = document.getElementById("bias-dag");
+  if (!el) return;
+  const wA = Math.max(0.8, Math.min(5.5, Math.abs(gammaA) * 1.6));
+  const wY = Math.max(0.8, Math.min(5.5, Math.abs(gammaY) * 1.6));
+  const wT = Math.max(0.8, Math.min(5.5, Math.abs(theta) * 1.6));
+  const cBD = cssv("--accent3"), cT = cssv("--true-col");
+  el.innerHTML = `<defs>
+  <marker id="bd-arl" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="${cBD}"/></marker>
+  <marker id="bd-art" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="${cT}"/></marker>
+</defs>
+<circle cx="90" cy="16" r="12" fill="none" stroke="${cBD}" stroke-width="1.4"/>
+<text x="90" y="21" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="${cBD}">L</text>
+<circle cx="28" cy="100" r="12" fill="none" stroke="${cBD}" stroke-width="1.4"/>
+<text x="28" y="105" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="${cBD}">A</text>
+<circle cx="152" cy="100" r="12" fill="none" stroke="${cT}" stroke-width="1.4"/>
+<text x="152" y="105" text-anchor="middle" font-family="DM Mono,monospace" font-size="11" fill="${cT}">Y</text>
+<line x1="80" y1="26" x2="40" y2="88" stroke="${cBD}" stroke-width="${wA.toFixed(1)}" marker-end="url(#bd-arl)" opacity=".9"/>
+<line x1="100" y1="26" x2="140" y2="88" stroke="${cBD}" stroke-width="${wY.toFixed(1)}" marker-end="url(#bd-arl)" opacity=".9"/>
+<line x1="40" y1="100" x2="140" y2="100" stroke="${cT}" stroke-width="${wT.toFixed(1)}" marker-end="url(#bd-art)"/>
+<text x="36" y="63" font-family="DM Mono,monospace" font-size="8.5" fill="${cBD}">γA=${gammaA.toFixed(1)}</text>
+<text x="110" y="63" font-family="DM Mono,monospace" font-size="8.5" fill="${cBD}">γY=${gammaY.toFixed(1)}</text>
+<text x="81" y="94" font-family="DM Mono,monospace" font-size="8.5" fill="${cT}">θ=${theta.toFixed(1)}</text>`;
+}
+
+function updateBiasLine(trueATE, naive, ovb) {
+  const el = document.getElementById("bias-line");
+  if (!el) return;
+  const W=240, py=28;
+  const cT=cssv("--true-col"), cN=cssv("--naive-col"), ci=cssv("--ink3");
+  const vals=[0, trueATE, naive];
+  const lo=Math.min(...vals)-0.2, hi=Math.max(...vals)+0.2;
+  const rng=hi-lo||0.5;
+  const toX=v=>14+(v-lo)/rng*(W-28);
+  const x0=toX(0), xT=toX(trueATE), xN=toX(naive);
+  let s="";
+  s+=`<line x1="8" y1="${py}" x2="${W-8}" y2="${py}" stroke="${ci}" stroke-width="1" opacity=".3"/>`;
+  s+=`<line x1="${x0}" y1="${py-5}" x2="${x0}" y2="${py+5}" stroke="${ci}" stroke-width="1.2" opacity=".5"/>`;
+  s+=`<text x="${x0}" y="${py+15}" text-anchor="middle" font-family="DM Mono,monospace" font-size="8.5" fill="${ci}" opacity=".6">0</text>`;
+  if(Math.abs(ovb)>0.01){
+    s+=`<line x1="${xT}" y1="${py}" x2="${xN}" y2="${py}" stroke="${cN}" stroke-width="3" opacity=".5"/>`;
+    s+=`<text x="${(xT+xN)/2}" y="${py-7}" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="${cN}">OVB</text>`;
+  }
+  s+=`<circle cx="${xT}" cy="${py}" r="5.5" fill="${cT}" opacity=".9"/>`;
+  s+=`<text x="${xT}" y="${py-9}" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="${cT}">θ</text>`;
+  s+=`<circle cx="${xN}" cy="${py}" r="5.5" fill="${cN}" opacity=".9"/>`;
+  s+=`<text x="${xN}" y="${py+20}" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="${cN}">naiv</text>`;
+  el.innerHTML=s;
+}
+
+function update() {
+  document.getElementById('v-theta').textContent=parseFloat(document.getElementById('sl-theta').value).toFixed(2);
+  document.getElementById('v-gamma-a').textContent=parseFloat(document.getElementById('sl-gamma-a').value).toFixed(2);
+  document.getElementById('v-gamma-y').textContent=parseFloat(document.getElementById('sl-gamma-y').value).toFixed(2);
+  DATA=simulateData();
+  LAST_GC=runGComp(DATA,ESTIMAND);
+  drawScatter(DATA,LAST_GC.ols.beta,DATA.xi!==0);
+  drawPosteriors(LAST_GC,DATA);
+  drawCounterfactuals(DATA,LAST_GC);
+  drawPotentialOutcomes(DATA,LAST_GC);
+  updateMetrics(LAST_GC,DATA);
+  updateBiasPanel(DATA);
+  updateRCode(DATA);
+}
+
+function onSlider() { update(); }
+
+// ─── UI ──────────────────────────────────────────────────────────
+const EST_DESC={
+  ATE:'<strong>Average Treatment Effect</strong> — Durchschnittlicher Effekt in der Gesamtpopulation. Als ob jede Person zufällig behandelt worden wäre.',
+  ATT:'<strong>Average Treatment Effect on the Treated</strong> — Effekt bei den tatsächlich Behandelten. Hat das Treatment geholfen, denen die es bekamen? Stabiler bei schlechtem Overlap.',
+  ATU:'<strong>Average Treatment Effect on the Untreated</strong> — Effekt bei den Unbehandelten. Würde das Treatment helfen, wenn wir es auf sie ausweiten würden?'
+};
+function setEstimand(e) {
+  ESTIMAND=e;
+  ['ATE','ATT','ATU'].forEach(id=>document.getElementById('est-'+id.toLowerCase()).classList.toggle('active',id===e));
+  document.getElementById('est-desc').innerHTML=EST_DESC[e];
+  if(!DATA) return;
+  LAST_GC=runGComp(DATA,ESTIMAND);
+  drawPosteriors(LAST_GC,DATA);
+  drawCounterfactuals(DATA,LAST_GC);
+  drawPotentialOutcomes(DATA,LAST_GC);
+  updateMetrics(LAST_GC,DATA);
+  updateRCode(DATA);
+}
+
+function setN(n) {
+  N=n;
+  ['100','250','500'].forEach(id=>document.getElementById('n-'+id).classList.toggle('on',parseInt(id)===n));
+  update();
+}
+
+const SC={
+  balanced:{theta:0.6,gammaA:1.0,gammaY:1.0,overlap:0,   desc:'γ_A=γ_Y=1: moderates Konfunding, guter Overlap. Naive Schätzung leicht verzerrt — G-Computation nah am wahren Wert θ=0.60.'},
+  strong:  {theta:0.6,gammaA:2.2,gammaY:2.2,overlap:0,   desc:'γ_A=γ_Y=2.2: starkes Konfunding. Orange und blaue Punkte unterscheiden sich stark in Y — naiver Bias groß. G-Computation korrigiert ihn vollständig.'},
+  overlap: {theta:0.6,gammaA:1.5,gammaY:1.5,overlap:1.8, desc:'Kein Overlap: Personen mit hohem L werden fast immer behandelt — im Streudiagramm kaum Überlappung. G-Computation extrapoliert in unbeobachtete Bereiche → Posterior breiter, Schätzung modellabhängiger.'},
+};
+function setScenario(sc) {
+  const s=SC[sc];
+  document.getElementById('sl-theta').value=s.theta;
+  document.getElementById('sl-gamma-a').value=s.gammaA;
+  document.getElementById('sl-gamma-y').value=s.gammaY;
+  OVERLAP_SHIFT=s.overlap;
+  document.getElementById('sc-desc').textContent=s.desc;
+  ['bal','str','ov'].forEach((id,i)=>document.getElementById('sc-'+id).classList.toggle('on',['balanced','strong','overlap'][i]===sc));
+  update();
+}
+
+function toggleCollap(hd) {
+  hd.classList.toggle('open');
+  hd.nextElementSibling.classList.toggle('open');
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(document.getElementById('rcode-block').textContent).then(()=>{
+    const b=event.target;b.textContent='Kopiert ✓';setTimeout(()=>b.textContent='Code kopieren',1800);
+  });
+}
+
+function toggleTheme() {
+  const d=document.documentElement, dark=d.getAttribute('data-theme')==='dark';
+  d.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('btn-th').textContent=dark?'☾ Dark':'☀ Light';
+  if(DATA){drawScatter(DATA,LAST_GC.ols.beta,DATA.xi!==0);drawPosteriors(LAST_GC,DATA);drawCounterfactuals(DATA,LAST_GC);drawPotentialOutcomes(DATA,LAST_GC);}
+}
+
+let helpOpen=false;
+function toggleLDensity(){
+  SHOW_LDENSITY=!SHOW_LDENSITY;
+  const btn=document.getElementById('ldensity-btn');
+  btn.textContent=SHOW_LDENSITY?'L-Verteilung ausblenden':'L-Verteilung zeigen';
+  btn.classList.toggle('on',SHOW_LDENSITY);
+  if(DATA&&LAST_GC)drawPotentialOutcomes(DATA,LAST_GC);
+}
+function toggleHelpFloat(){helpOpen=!helpOpen;document.getElementById('help-float').classList.toggle('open',helpOpen);}
+document.addEventListener('click',e=>{
+  if(helpOpen&&!e.target.closest('#help-float')&&!e.target.closest('[onclick="toggleHelpFloat()"]'))
+    {helpOpen=false;document.getElementById('help-float').classList.remove('open');}
+});
+window.addEventListener('resize',()=>{if(DATA){drawScatter(DATA,LAST_GC.ols.beta,DATA.xi!==0);drawPosteriors(LAST_GC,DATA);drawCounterfactuals(DATA,LAST_GC);drawPotentialOutcomes(DATA,LAST_GC);}});
+
+// Init
+setScenario('balanced');
+</script>
+
+<!-- HELP PANEL -->
+<div id="help-float">
+  <div class="hp-head">
+    <span class="hp-title">ℹ Causal Calculator — Hilfe</span>
+    <button class="hp-close" onclick="toggleHelpFloat()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect">Was lerne ich hier?</div>
+    Das fundamentale Problem kausaler Inferenz: Wir beobachten nie denselben Menschen gleichzeitig unter Behandlung und ohne Behandlung. <strong>G-Computation</strong> löst das durch ein Outcome-Modell: Schätze Y für jede Person unter beiden Treatment-Armen — und vergleiche. Voraussetzung: <em>No unmeasured confounding</em> (welche Variablen nötig sind, zeigt der <a href="Golem_Builder.html" style="color:var(--accent2)"><em>Golem Builder</em></a>).
+
+    <div class="hp-sect">Was bedeutet "Confounder" hier?</div>
+    L beeinflusst sowohl <em>wer behandelt wird</em> (L → A) als auch <em>das Outcome</em> (L → Y). Das erzeugt eine Scheinkorrelation. Die <em>naive</em> Schätzung (bloße Differenz behandelt − unbehandelt) vermischt diesen Confounder-Einfluss mit dem echten Effekt. G-Computation korrigiert das durch explizite Kontrolle von L im Outcome-Modell.
+
+    <div class="hp-sect">Empfohlene Schritte</div>
+    <ul class="hp-seq">
+      <li>Basisfall: Wie weit liegt die naive Schätzung (Posterior-Panel, gestrichelt) vom wahren Wert entfernt?</li>
+      <li>Starkes Konfunding (γ hoch): naiver Bias wächst stark — G-Computation korrigiert ihn</li>
+      <li>Kein Overlap: die beiden Gruppen im Streudiagramm mischen sich kaum — G-Computation extrapoliert</li>
+      <li>Effekt-Heterogenität einschalten, dann ATE / ATT / ATU wechseln — Steigung im Effektdiagramm sichtbar</li>
+    </ul>
+
+    <div class="hp-sect">ATE · ATT · ATU</div>
+    Drei verschiedene Fragen an dieselben Daten:<br><br>
+    <strong>ATE</strong>: "Was wäre der Effekt, wenn die gesamte Population zufällig behandelt würde?" — bevölkerungsweite Entscheidungen.<br><br>
+    <strong>ATT</strong>: "Wie stark hat das Treatment denen geholfen, die es bekamen?" — Programmevaluation.<br><br>
+    <strong>ATU</strong>: "Was würde bei Ausweitung auf Unbehandelte passieren?" — Skalierungsentscheidungen.<br><br>
+    Ohne Effekt-Heterogenität (ξ=0) sind alle drei gleich. Mit ξ≠0 weichen sie ab — weil die Subpopulationen unterschiedliche L-Verteilungen haben (sichtbar im Effektdiagramm: orange = Behandelte, blau = Kontrollen).
+
+    <div class="hp-sect">G-Computation (Standardisierung)</div>
+    Schritt 1: Outcome-Modell fitten — Y ~ A + L (oder Y ~ A * L mit Heterogenität).<br>
+    Schritt 2: Für jeden Posterior-Sample alle Ŷ(1) und Ŷ(0) berechnen und über die Zielpopulation mitteln.<br>
+    Schritt 3: Differenz Ŷ(1) − Ŷ(0) = kausaler Effekt für diesen Sample.<br>
+    Ergebnis: Eine Posterior-Verteilung des ATE/ATT/ATU — sichtbar im Posterior-Panel und als individuelle Punkte im Effektdiagramm (vierte Grafik).
+
+    <div class="hp-sect">Verwandte Tools</div>
+    <a href="Golem_Builder.html" style="color:var(--accent2)"><strong>Golem Builder</strong></a> — DAG-basierte Kausalanalyse: Welche Variablen müssen im Modell kontrolliert werden? (Backdoor-Kriterium, Collider-Warnung, Datensimulation)<br><br>
+    <a href="Brms_model_builder.html" style="color:var(--accent2)"><strong>brms Model Builder</strong></a> — brms-Formel und Priors aus dem Golem Builder in R-Code überführen
+  </div>
+</div>
+
+</body>
+</html>
