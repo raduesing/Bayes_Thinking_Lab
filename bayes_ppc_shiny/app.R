@@ -12,8 +12,8 @@ library(posterior)
 library(dplyr)
 library(lme4)
 
-# Allow large file uploads (brms objects can be 100-300 MB)
-options(shiny.maxRequestSize = 500 * 1024^2)
+# Allow uploads up to 100 MB (full brms objects > 100 MB should use compact export)
+options(shiny.maxRequestSize = 100 * 1024^2)
 
 # ── Design tokens (matching the Lab) ────────────────────────
 LAB_COLORS <- list(
@@ -422,28 +422,31 @@ ui <- fluidPage(
 
         # Mode selector
         div(style = "display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:1rem",
+          div(id = "mode-compact-box",
+            style = "border:2px solid var(--a3);padding:.7rem .9rem;cursor:pointer;background:var(--panel)",
+            onclick = "selectMode('compact')",
+            div(style = "font-size:.85rem;color:var(--a3);font-weight:500;margin-bottom:.25rem",
+                "● Kompakt-Export (empfohlen)"),
+            div(style = "font-size:.72rem;color:var(--ink2);line-height:1.6",
+                "Exportiere nur yrep + y aus R (Skript unten herunterladen). Kleine Datei,
+                 schnell, stabil — kein RAM-Problem.")
+          ),
           div(id = "mode-full-box",
-            style = "border:2px solid var(--a2);padding:.7rem .9rem;cursor:pointer;background:var(--panel)",
+            style = "border:2px solid var(--grid);padding:.7rem .9rem;cursor:pointer",
             onclick = "selectMode('full')",
-            div(style = "font-size:.85rem;color:var(--a2);font-weight:500;margin-bottom:.25rem",
-                "● Vollständiges brms-Objekt"),
+            div(style = "font-size:.85rem;color:var(--ink2);font-weight:500;margin-bottom:.25rem",
+                "○ Vollständiges brms-Objekt"),
             div(style = "font-size:.72rem;color:var(--ink2);line-height:1.6",
                 "Lade dein gespeichertes Modell (.rds) hoch. Die App berechnet
-                 posterior_predict() selbst. Dateigröße: 50–300 MB. Braucht mehr RAM.")
-          ),
-          div(id = "mode-compact-box",
-            style = "border:2px solid var(--grid);padding:.7rem .9rem;cursor:pointer",
-            onclick = "selectMode('compact')",
-            div(style = "font-size:.85rem;color:var(--ink2);font-weight:500;margin-bottom:.25rem",
-                "○ Kompakt-Export (empfohlen)"),
-            div(style = "font-size:.72rem;color:var(--ink2);line-height:1.6",
-                "Exportiere nur yrep + y aus R (Skript unten herunterladen).
-                 Dateigröße: 5–15 MB. Schnell, stabil, kein RAM-Problem.")
+                 posterior_predict() selbst."),
+            div(style = "font-size:.66rem;color:var(--a1);margin-top:.35rem;line-height:1.5",
+                "⚠ Bei großen Modellen kann es zu Server-Disconnects kommen.
+                 Nur für kleinere Modelle geeignet.")
           )
         ),
 
-        # Hidden mode selector input
-        tags$input(type = "hidden", id = "upload_mode_val", value = "full"),
+        # Hidden mode selector input — default: compact
+        tags$input(type = "hidden", id = "upload_mode_val", value = "compact"),
         tags$script(HTML("
           function selectMode(mode) {
             document.getElementById('upload_mode_val').value = mode;
@@ -458,14 +461,18 @@ ui <- fluidPage(
               compactBox.style.background  = 'transparent';
               compactBox.querySelector('div').style.color = 'var(--ink2)';
             } else {
-              compactBox.style.borderColor = 'var(--a2)';
+              compactBox.style.borderColor = 'var(--a3)';
               compactBox.style.background  = 'var(--panel)';
-              compactBox.querySelector('div').style.color = 'var(--a2)';
+              compactBox.querySelector('div').style.color = 'var(--a3)';
               fullBox.style.borderColor    = 'var(--grid)';
               fullBox.style.background     = 'transparent';
               fullBox.querySelector('div').style.color = 'var(--ink2)';
             }
           }
+          // Initialize compact as selected once Shiny is connected
+          $(document).on('shiny:connected', function() {
+            Shiny.setInputValue('upload_mode', 'compact');
+          });
         ")),
 
         # Compact mode: download script
@@ -734,7 +741,7 @@ server <- function(input, output, session) {
 
   # ── Reactive: upload mode ─────────────────────────────
   upload_mode <- reactive({
-    if (is.null(input$upload_mode)) "full" else input$upload_mode
+    if (is.null(input$upload_mode)) "compact" else input$upload_mode
   })
 
   # ── Reactive: export R script ─────────────────────────
@@ -753,7 +760,8 @@ server <- function(input, output, session) {
           "library(brms)\n",
           "# Dein Modell:  fit <- readRDS(\"mein_modell.rds\")\n\n",
           "# Kompakt-Export fuer PPC-App\n",
-          "yrep <- posterior_predict(fit, ndraws = 500)\n",
+          "nd   <- min(200, posterior::ndraws(fit))\n",
+          "yrep <- posterior_predict(fit, ndraws = nd)\n",
           "y    <- fit$data[[as.character(fit$formula$resp)]]\n",
           "fam  <- family(fit)$family\n\n",
           "# Gruppen-Variable (optional, NULL wenn nicht vorhanden):\n",
@@ -784,6 +792,10 @@ server <- function(input, output, session) {
   # ── Reactive: load model ──────────────────────────────
   fit_data <- reactive({
     req(input$rds_file)
+    validate(
+      need(input$rds_file$size < 100 * 1024^2,
+           "Datei zu groß für den direkten Upload. Bitte verwende den Kompakt-Export.")
+    )
     withProgress(message = "Datei wird verarbeitet...", {
       tryCatch({
         obj <- readRDS(input$rds_file$datapath)
@@ -802,9 +814,19 @@ server <- function(input, output, session) {
                grp_data = grp_data)
         } else {
           # Full brms object
+          if (object.size(obj) >= 200 * 1024^2) {
+            stop("Modell zu groß für die direkte Verarbeitung. Bitte verwende den Kompakt-Export.")
+          }
           fit  <- obj
           y    <- fit$data[[as.character(fit$formula$resp)]]
-          yrep <- posterior_predict(fit, ndraws = 500)
+          nd   <- min(200, posterior::ndraws(fit))
+          yrep <- posterior_predict(fit, ndraws = nd)
+          # Subsample for large datasets to keep plots fast
+          if (length(y) > 2000) {
+            idx  <- sample(seq_along(y), 2000)
+            y    <- y[idx]
+            yrep <- yrep[, idx]
+          }
           list(fit = fit, y = y, yrep = yrep, ok = TRUE, error = NULL,
                compact = FALSE)
         }
@@ -828,6 +850,7 @@ server <- function(input, output, session) {
   output$upload_status <- renderUI({
     req(input$rds_file)
     fd <- fit_data()
+    req(!is.null(fd))
     if (!fd$ok) {
       div(class = "narr-box",
         style = sprintf("border-color:%s", LAB_COLORS$a1),
@@ -837,6 +860,15 @@ server <- function(input, output, session) {
         tags$br(), tags$br(),
         "Stelle sicher, dass du ein mit ", tags$code("saveRDS()"), " gespeichertes
         brms-Modellobjekt hochlädst."
+      )
+    } else if (isTRUE(fd$compact)) {
+      div(
+        style = sprintf("border-left:3px solid %s;padding:.5rem .8rem;
+                         background:%s;font-size:.68rem;color:%s",
+                        LAB_COLORS$a3, LAB_COLORS$panel, LAB_COLORS$ink2),
+        tags$b(style = sprintf("color:%s", LAB_COLORS$a3), "✓ Kompakt-Export geladen"),
+        tags$br(),
+        sprintf("Familie: %s · %d Beobachtungen", fd$family_str, fd$n_obs)
       )
     } else {
       s <- model_summary_text(fd$fit)
@@ -855,6 +887,32 @@ server <- function(input, output, session) {
   # ── Model diagnosis ────────────────────────────────────
   output$model_diagnosis <- renderUI({
     req(fit_data()$ok)
+
+    if (isTRUE(fit_data()$compact)) {
+      fd <- fit_data()
+      return(div(
+        div(style = sprintf("background:%s;padding:.75rem 1rem;
+                             font-size:.68rem;margin-bottom:.75rem", LAB_COLORS$panel),
+          div(style = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem",
+            div(tags$span(style = sprintf("color:%s;font-size:.58rem;display:block", LAB_COLORS$ink2),
+                          "MODUS"),
+                tags$b("Kompakt-Export")),
+            div(tags$span(style = sprintf("color:%s;font-size:.58rem;display:block", LAB_COLORS$ink2),
+                          "FAMILIE"),
+                tags$b(fd$family_str)),
+            div(tags$span(style = sprintf("color:%s;font-size:.58rem;display:block", LAB_COLORS$ink2),
+                          "BEOBACHTUNGEN"),
+                tags$b(fd$n_obs))
+          )
+        ),
+        div(class = "narr-box",
+          style = sprintf("border-color:%s;font-size:.67rem", LAB_COLORS$ink2),
+          "Konvergenzinformationen (R̂, Divergenzen) sind im Kompakt-Export nicht verfügbar.
+          Prüfe diese in R mit ", tags$code("summary(fit)"), " vor dem Export."
+        )
+      ))
+    }
+
     s <- model_summary_text(fit_data()$fit)
 
     div(
@@ -898,6 +956,12 @@ server <- function(input, output, session) {
 
   output$convergence_detail <- renderUI({
     req(fit_data()$ok)
+    if (isTRUE(fit_data()$compact)) {
+      return(div(class = "narr-box",
+        style = sprintf("border-color:%s;font-size:.67rem", LAB_COLORS$ink2),
+        "Konvergenzdetails sind im Kompakt-Export nicht verfügbar."
+      ))
+    }
     s <- model_summary_text(fit_data()$fit)
     if (s$rhat_ok && s$divs_ok) {
       div(class = "narr-box", style = sprintf("border-color:%s", LAB_COLORS$a3),
@@ -1209,7 +1273,8 @@ server <- function(input, output, session) {
   output$ppc_grouped_section <- renderUI({
     req(fit_data()$ok)
     # Check if there are factor/group variables
-    dat    <- fit_data()$fit$data
+    dat <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+    if (is.null(dat)) return(NULL)
     groups <- names(dat)[sapply(dat, function(x) is.factor(x) | is.character(x))]
     if (length(groups) == 0) return(NULL)
 
@@ -1230,7 +1295,9 @@ server <- function(input, output, session) {
 
   output$ppc_grouped <- renderPlot({
     req(fit_data()$ok, input$group_var)
-    group <- fit_data()$fit$data[[input$group_var]]
+    dat   <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+    req(!is.null(dat))
+    group <- dat[[input$group_var]]
     bayesplot::ppc_stat_grouped(
       fit_data()$y, fit_data()$yrep,
       group = group, stat = "mean"
@@ -1278,7 +1345,7 @@ server <- function(input, output, session) {
     req(fit_data()$ok)
     y    <- fit_data()$y
     yrep <- fit_data()$yrep
-    fam  <- family(fit_data()$fit)$family
+    fam  <- get_fam(fit_data())
 
     p_sd  <- bayes_pval(yrep, y, sd)
     p_max <- bayes_pval(yrep, y, max)
@@ -1343,7 +1410,8 @@ server <- function(input, output, session) {
     req(fit_data()$ok)
     plt <- input$free_plot_type
     if (grepl("grouped", plt)) {
-      dat    <- fit_data()$fit$data
+      dat <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+      if (is.null(dat)) return(NULL)
       groups <- names(dat)[sapply(dat, function(x) is.factor(x) | is.character(x))]
       if (length(groups) > 0)
         selectInput("free_group", "Gruppe:", choices = groups)
@@ -1401,7 +1469,9 @@ server <- function(input, output, session) {
           bayesplot::ppc_stat(y, yrep, stat = stat)
         } else if (plt == "ppc_stat_grouped") {
           req(input$free_group)
-          grp <- fit_data()$fit$data[[input$free_group]]
+          dat_free <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+          req(!is.null(dat_free))
+          grp <- dat_free[[input$free_group]]
           bayesplot::ppc_stat_grouped(y, yrep, group = grp, stat = stat)
         } else if (plt == "ppc_intervals") {
           n   <- length(y)
