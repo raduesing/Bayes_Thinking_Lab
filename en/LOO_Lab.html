@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOO Lab — Model Comparison · Bayes Thinking Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+:root{
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --accent:#7a3a8a;--accent2:#2a6e8a;--accent3:#5a8a2a;--accent4:#7a3a8a;--accent5:#b85c00;--accent6:#0e7c7b;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--shadow:#c0b8a4;
+  --good:#5a8a2a;--ok:#b85c00;--bad:#c94a2a;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --accent:#c87ad8;--accent2:#4ab0d8;--accent3:#80cb52;--accent4:#c87ad8;--accent5:#e07830;--accent6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--shadow:#080b10;
+  --good:#80cb52;--ok:#e07830;--bad:#e8614a;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px;-webkit-font-smoothing:antialiased}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;font-weight:300;overflow-x:hidden}
+nav{position:sticky;top:0;z-index:100;background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.52rem 1.5rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.nav-back{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);text-decoration:none;
+  border-bottom:1px dotted var(--border);transition:color .15s;white-space:nowrap}
+.nav-back:hover{color:var(--accent2)}
+.nav-title{font-size:1rem;font-weight:300;white-space:nowrap}
+.nav-title em{font-style:italic;color:var(--accent)}
+.nav-btns{display:flex;gap:.3rem;flex-shrink:0}
+.nb{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s;white-space:nowrap}
+.nb:hover{border-color:var(--accent2);color:var(--accent2)}
+.hstrip{padding:.8rem 1.5rem .65rem;border-bottom:1.5px solid var(--border)}
+.hstrip-title{font-size:1.42rem;font-weight:300;letter-spacing:-.02em}
+.hstrip-title em{font-style:italic;color:var(--accent)}
+.hstrip-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.18rem}
+.hstrip-auth{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);opacity:.42;margin-top:.1rem}
+.tab-bar{display:flex;gap:0;border-bottom:1.5px solid var(--border);background:var(--paper);
+  position:sticky;top:var(--nav-h,44px);z-index:90;overflow-x:auto}
+.tab{font-family:'DM Mono',monospace;font-size:.75rem;padding:.48rem 1.1rem;
+  background:transparent;border:none;border-bottom:3px solid transparent;
+  cursor:pointer;color:var(--ink2);transition:all .15s;letter-spacing:.04em;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.stage{display:none;padding:1.3rem 1.5rem 3.5rem;max-width:1060px;margin:0 auto}
+.stage.active{display:block}
+.sec-lbl{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:.55rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid)}
+.learn-card{background:var(--paper);border:1.5px solid var(--border);padding:.85rem 1rem;
+  margin-bottom:1rem;box-shadow:2px 2px 0 var(--shadow);font-size:.88rem;line-height:1.68;color:var(--ink2)}
+.learn-card strong{color:var(--ink)}
+.learn-card+.learn-card{margin-top:-.5rem}
+.s1-ctrl{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.9rem}
+.abtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem .75rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink);transition:all .15s;letter-spacing:.04em;white-space:nowrap;min-width:0}
+.abtn:hover{background:var(--ink);color:var(--bg)}
+.abtn.primary{border-color:var(--accent);color:var(--accent)}
+.abtn.primary:hover{background:var(--accent);color:white}
+.abtn.active{background:var(--accent);color:white;border-color:var(--accent)}
+.step-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);min-width:96px;text-align:center}
+input[type=range]{flex:1;max-width:180px;-webkit-appearance:none;height:3px;
+  background:var(--grid);outline:none;cursor:pointer;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  background:var(--ink);border-radius:50%;cursor:pointer}
+input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
+.canvas-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.9rem}
+.cv-wrap{background:var(--paper);border:1.5px solid var(--border);padding:.6rem .75rem .55rem;
+  box-shadow:2px 2px 0 var(--shadow)}
+.cv-label{font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.38rem;
+  color:var(--ink2);display:flex;justify-content:space-between;align-items:center}
+.cv-label strong{color:var(--ink)}
+canvas{display:block;width:100%;max-width:420px;height:auto}
+.elpd-bar{font-family:'DM Mono',monospace;font-size:.75rem;margin-top:.38rem;
+  padding:.28rem .5rem;background:var(--panel);border:1px solid var(--grid);
+  display:flex;justify-content:space-between;align-items:center}
+.elpd-val{font-weight:500}
+.step-text{border-left:3px solid var(--accent);padding:.65rem 1rem;margin-bottom:.8rem;
+  font-size:.87rem;line-height:1.65;color:var(--ink2);background:var(--panel)}
+.step-text strong{color:var(--ink)}
+.formula-box{background:var(--paper);border:1.5px solid var(--accent);
+  padding:.9rem 1.2rem;text-align:center;margin-top:.8rem}
+.formula{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--accent);
+  letter-spacing:.03em;margin-bottom:.48rem}
+.formula-note{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.65}
+.legend{display:flex;gap:1.2rem;font-family:'DM Mono',monospace;font-size:.72rem;
+  color:var(--ink2);margin-bottom:.7rem;flex-wrap:wrap}
+.leg-item{display:flex;align-items:center;gap:.32rem}
+.leg-line{width:22px;height:2px;display:inline-block}
+.leg-dash{width:22px;height:0;border-top:2px dashed;display:inline-block}
+.leg-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.paste-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.8rem}
+.paste-block label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  display:block;margin-bottom:.3rem;letter-spacing:.04em}
+textarea{width:100%;height:114px;font-family:'DM Mono',monospace;font-size:.75rem;
+  background:var(--panel);border:1.5px solid var(--border);color:var(--ink);
+  padding:.5rem .65rem;resize:vertical;outline:none;line-height:1.58}
+textarea:focus{border-color:var(--accent)}
+textarea::placeholder{color:var(--ink3);font-size:.7rem}
+.btn-row{display:flex;gap:.45rem;margin-top:.6rem;flex-wrap:wrap}
+.parse-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.36rem 1.05rem;
+  border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;
+  color:white;transition:all .15s;letter-spacing:.05em}
+.parse-btn:hover{filter:brightness(1.1)}
+.ex-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.36rem .9rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s}
+.ex-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.msg-ok{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--good);
+  margin-top:.4rem;padding:.35rem .55rem;border:1px solid var(--good)}
+.msg-err{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--bad);
+  margin-top:.4rem;padding:.35rem .55rem;border:1px solid var(--bad)}
+.plot-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.8rem}
+.plot-card{background:var(--paper);border:1.5px solid var(--border);padding:.72rem .9rem;
+  box-shadow:2px 2px 0 var(--shadow)}
+.plot-card.full{grid-column:1/-1}
+.plot-title{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink2);margin-bottom:.55rem;padding-bottom:.22rem;
+  border-bottom:1px solid var(--grid)}
+svg.plot{display:block;width:100%;overflow:visible}
+.verdict-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:.8rem;margin-bottom:1.3rem}
+.verdict-card{background:var(--paper);border:1.5px solid var(--border);padding:.72rem .88rem;
+  box-shadow:2px 2px 0 var(--shadow)}
+.verdict-pair{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);
+  font-weight:500;margin-bottom:.35rem}
+.verdict-nums{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);
+  line-height:1.65;margin-bottom:.42rem}
+.tl{display:inline-block;font-family:'DM Mono',monospace;font-size:.68rem;
+  padding:.2rem .55rem;letter-spacing:.07em;text-transform:uppercase;font-weight:500}
+.tl-green{background:var(--good);color:#fff}
+.tl-yellow{background:var(--ok);color:#fff}
+.tl-red{background:var(--bad);color:#fff}
+.slider-card{background:var(--paper);border:1.5px solid var(--border);
+  padding:.88rem 1.05rem;margin-bottom:1.2rem;box-shadow:2px 2px 0 var(--shadow)}
+.s3-row{display:flex;align-items:center;gap:.75rem;margin-bottom:.55rem;flex-wrap:wrap}
+.s3-row label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);min-width:90px}
+.s3-row input[type=range]{flex:1;max-width:200px}
+.s3-row .val{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--accent);min-width:46px;text-align:right}
+.ratio-box{font-family:'DM Mono',monospace;font-size:.75rem;text-align:center;
+  padding:.6rem;border:1px solid var(--grid);margin-top:.6rem;line-height:1.9}
+.ratio-big{font-size:1.05rem;font-weight:500}
+.accordion{margin-bottom:1.2rem}
+.acc-item{border:1.5px solid var(--border);margin-bottom:.38rem}
+.acc-head{width:100%;background:var(--paper);border:none;cursor:pointer;
+  padding:.6rem .88rem;display:flex;justify-content:space-between;align-items:center;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);text-align:left;transition:background .15s}
+.acc-head:hover{background:var(--panel)}
+.acc-arrow{color:var(--ink2);transition:transform .2s;flex-shrink:0}
+.acc-body{display:none;padding:.7rem .88rem;font-family:'DM Mono',monospace;
+  font-size:.75rem;line-height:1.75;color:var(--ink2);border-top:1px solid var(--grid)}
+.acc-body.open{display:block}
+.acc-body strong{color:var(--ink)}
+.info-box{background:var(--panel);border:1.5px solid var(--border);border-left:3px solid var(--accent2);
+  padding:.82rem 1rem;margin-bottom:1.2rem}
+.info-title{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent2);margin-bottom:.38rem}
+.info-box p{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.68}
+.rcode{background:var(--panel);border:1px solid var(--grid);padding:.72rem .88rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.7;overflow-x:auto;margin-bottom:1.2rem}
+.rc{color:var(--ink3)}.rf{color:var(--accent2)}.rs{color:var(--good)}
+.foot-nav{display:flex;justify-content:space-between;padding:1rem 1.5rem;
+  border-top:1.5px solid var(--border);background:var(--paper)}
+.fn-lnk{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  text-decoration:none;border-bottom:1px dotted var(--border);transition:color .15s}
+.fn-lnk:hover{color:var(--accent2)}
+#help-float{display:none;position:fixed;right:1.4rem;top:50%;transform:translateY(-50%);
+  width:296px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
+  box-shadow:4px 4px 0 rgba(0,0,0,.2)}
+#help-float.open{display:block}
+.hp-head{display:flex;justify-content:space-between;align-items:center;
+  padding:.48rem .82rem;border-bottom:1px solid var(--grid)}
+.hp-title{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink2)}
+.hp-close{font-family:'DM Mono',monospace;font-size:.88rem;background:none;border:none;
+  cursor:pointer;color:var(--ink2);line-height:1;padding:0 .15rem}
+.hp-close:hover{color:var(--ink)}
+.hp-body{padding:.75rem .82rem;font-family:'DM Mono',monospace;font-size:.7rem;
+  line-height:1.75;color:var(--ink2);max-height:72vh;overflow-y:auto}
+.hp-sect{font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;
+  margin-top:.85rem;margin-bottom:.26rem;border-bottom:1px solid var(--grid);
+  padding-bottom:.16rem;color:var(--ink3)}
+.hp-sect:first-child{margin-top:0}
+.hp-body strong{color:var(--ink)}
+.hp-body em{color:var(--accent);font-style:normal}
+@media(max-width:680px){
+  .canvas-grid,.paste-grid,.plot-grid{grid-template-columns:1fr}
+  .plot-card.full{grid-column:1}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="../index.html" class="nav-back">← Bayes Thinking Lab</a>
+  <span class="nav-title">LOO <em>Lab</em></span>
+  <div class="nav-btns">
+    <button class="nb" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+    <button class="nb" onclick="toggleHelp()" style="border-color:var(--bad);color:var(--bad)">ℹ Help</button>
+  </div>
+</nav>
+
+<div class="hstrip">
+  <div class="hstrip-title">LOO <em>Lab</em></div>
+  <div class="hstrip-sub">Bayesian Model Comparison via Leave-One-Out Cross-Validation</div>
+  <div class="hstrip-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab active" onclick="switchTab(1)">Stage 1 — The Concept</button>
+  <button class="tab" onclick="switchTab(2)">Stage 2 — Analyse R Output</button>
+  <button class="tab" onclick="switchTab(3)">Stage 3 — Decision Logic</button>
+</div>
+
+<!-- ===================== STAGE 1 ===================== -->
+<div id="stage1" class="stage active">
+
+  <div class="learn-card" style="margin-bottom:.9rem;border-left:3px solid var(--accent)">
+    <strong>LOO-CV asks: How well does my model predict a data point it has never seen?</strong>
+    That is the most honest question you can ask a model — and it exposes overfitting that stays invisible in-sample.
+  </div>
+
+  <div class="s1-ctrl">
+    <button class="abtn" id="btn-prev" onclick="stepChange(-1)">← Back</button>
+    <span class="step-lbl" id="stepLbl">Overview</span>
+    <button class="abtn primary" id="btn-next" onclick="stepChange(1)">Next →</button>
+    <input type="range" id="stepSlider" min="-1" max="11" value="-1" oninput="setStep(+this.value)">
+    <button class="abtn" id="btn-play" onclick="togglePlay()">▶ Animate</button>
+    <button class="abtn" onclick="setStep(-1)">↺ Reset</button>
+  </div>
+
+  <div class="legend">
+    <span class="leg-item">
+      <span class="leg-line" style="background:var(--ink2);opacity:.4"></span>
+      Full-data fit
+    </span>
+    <span class="leg-item">
+      <span class="leg-dash" style="border-color:var(--accent2)"></span>
+      <span style="color:var(--accent2)">Model A LOO fit</span>
+    </span>
+    <span class="leg-item">
+      <span class="leg-dash" style="border-color:var(--accent)"></span>
+      <span style="color:var(--accent)">Model B LOO fit</span>
+    </span>
+    <span class="leg-item">
+      <span class="leg-dot" style="background:var(--ink)"></span>
+      Data point
+    </span>
+    <span class="leg-item">
+      <span class="leg-dot" style="background:var(--accent);border-radius:0;transform:rotate(45deg)"></span>
+      LOO prediction ŷ
+    </span>
+  </div>
+
+  <div class="canvas-grid">
+    <div class="cv-wrap">
+      <div class="cv-label">
+        <strong>Model A</strong>
+        <span style="color:var(--accent2)">Linear (degree 1)</span>
+      </div>
+      <canvas id="canvasA" width="420" height="275"></canvas>
+      <div class="elpd-bar" id="elpdA">
+        <span>elpd<sub>loo</sub> (A)</span>
+        <span class="elpd-val" style="color:var(--accent2)">—</span>
+      </div>
+    </div>
+    <div class="cv-wrap">
+      <div class="cv-label">
+        <strong>Model B</strong>
+        <span style="color:var(--accent)">Polynomial (degree 4)</span>
+      </div>
+      <canvas id="canvasB" width="420" height="275"></canvas>
+      <div class="elpd-bar" id="elpdB">
+        <span>elpd<sub>loo</sub> (B)</span>
+        <span class="elpd-val" style="color:var(--accent)">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-text" id="stepText">
+    <strong>Why fit a model if you only evaluate it on training data?</strong>
+    LOO asks more honestly: how well does the model generalise to points it never saw?
+    Click <em>Next →</em> or start the animation to step through the data point by point.
+  </div>
+
+  <div class="formula-box" id="formulaBox" style="display:none">
+    <div class="formula">elpd<sub>loo</sub> = Σᵢ log p(yᵢ | y₋ᵢ, M)</div>
+    <div class="formula-note">
+      Each term measures how well the model predicts the <em>i</em>-th point when trained on all others.<br>
+      In practice, <strong>loo()</strong> computes this efficiently via Pareto Importance Sampling (PSIS) —<br>
+      without refitting the model N times.
+    </div>
+  </div>
+
+</div><!-- /stage1 -->
+
+<!-- ===================== STAGE 2 ===================== -->
+<div id="stage2" class="stage">
+
+  <div class="learn-card" style="margin-bottom:1rem;border-left:3px solid var(--accent)">
+    <strong>Important:</strong> In brms, LOO is written directly into the model object —
+    <code style="font-family:'DM Mono',monospace;font-size:.82em">model.1 &lt;- add_criterion(model.1, c("loo"))</code> —
+    and is then available for comparison:
+    <code style="font-family:'DM Mono',monospace;font-size:.82em">loo_compare(model.1, model.2, model.3)</code>.
+    Paste that output below.
+  </div>
+
+  <div class="sec-lbl">Input</div>
+  <div class="paste-grid">
+    <div class="paste-block">
+      <label>loo_compare() output from R — required</label>
+      <textarea id="pasteCmp" placeholder="       elpd_diff se_diff&#10;model.2   0.0       0.0&#10;model.1  -3.2       2.1&#10;model.3  -8.7       3.4"></textarea>
+    </div>
+    <div class="paste-block">
+      <label>print(model.1$criteria$loo) — optional, Pareto-k of a single model</label>
+      <textarea id="pastePareto" placeholder="Pareto k diagnostic values:&#10;                         Count Pct.&#10;(-Inf, 0.5]   (good)      108   90.0%&#10;(0.5, 0.7]    (ok)          8    6.7%&#10;(0.7, 1]      (bad)         3    2.5%&#10;(1, Inf)      (very bad)    1    0.8%"></textarea>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="ex-btn" onclick="loadExample()">Load example</button>
+    <button class="parse-btn" onclick="parseAndPlot()">Analyse</button>
+  </div>
+  <div id="parseMsg" style="display:none"></div>
+
+  <div id="plotSection" style="display:none">
+    <div class="sec-lbl" style="margin-top:1.3rem">Results</div>
+    <div class="plot-grid">
+      <div class="plot-card full" id="plotForestCard">
+        <div class="plot-title">elpd_diff ± 2·SE — Model comparison</div>
+        <svg class="plot" id="svgForest"></svg>
+        <div id="forestNote" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);margin-top:.5rem;line-height:1.65"></div>
+      </div>
+      <div class="plot-card" id="plotWeightsCard" style="display:none">
+        <div class="plot-title">Stacking Weights</div>
+        <svg class="plot" id="svgWeights"></svg>
+      </div>
+      <div class="plot-card" id="plotKCard" style="display:none">
+        <div class="plot-title">Pareto-k Diagnostics</div>
+        <svg class="plot" id="svgPareto"></svg>
+        <div id="paretoNote" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);margin-top:.45rem;line-height:1.65"></div>
+      </div>
+    </div>
+    <div class="learn-card" style="margin-top:.9rem;border-left:3px solid var(--accent)">
+      This is your model comparison — no longer a table, but a decision.
+      Go to <strong>Stage 3</strong> to see what the findings mean.
+    </div>
+  </div>
+
+</div><!-- /stage2 -->
+
+<!-- ===================== STAGE 3 ===================== -->
+<div id="stage3" class="stage">
+
+  <div id="verdictSection" style="display:none">
+    <div class="sec-lbl">Model decisions — from Stage 2</div>
+    <div class="verdict-grid" id="verdictGrid"></div>
+  </div>
+
+  <div class="sec-lbl">Threshold Explorer — When is a difference reliable?</div>
+  <div class="slider-card">
+    <div class="s3-row">
+      <label>elpd_diff</label>
+      <input type="range" id="sl-elpd" min="-20" max="0" step="0.1" value="-5" oninput="updateDecision()">
+      <span class="val" id="val-elpd">–5.0</span>
+    </div>
+    <div class="s3-row">
+      <label>se_diff</label>
+      <input type="range" id="sl-se" min="0.2" max="8" step="0.1" value="2.5" oninput="updateDecision()">
+      <span class="val" id="val-se">2.5</span>
+    </div>
+    <div class="ratio-box" id="ratioBox"></div>
+  </div>
+
+  <div class="sec-lbl">The three decision scenarios</div>
+  <div class="accordion">
+    <div class="acc-item">
+      <button class="acc-head" onclick="toggleAcc(this)">
+        <span><span class="tl tl-green" style="margin-right:.5rem">Green</span> Clear winner — |elpd_diff| &gt; 2·SE</span>
+        <span class="acc-arrow">▸</span>
+      </button>
+      <div class="acc-body">
+        The difference exceeds its own uncertainty. This is a <strong>reliable finding</strong>.<br><br>
+        Example: elpd_diff = −8.7, SE = 3.4 → ratio = 2.56 → Model A is clearly better.<br><br>
+        <strong>Recommendation:</strong> Use the better model. Report elpd_diff and SE in your paper.
+        Ask substantively why the model fits better — that is the real question.
+      </div>
+    </div>
+    <div class="acc-item">
+      <button class="acc-head" onclick="toggleAcc(this)">
+        <span><span class="tl tl-yellow" style="margin-right:.5rem">Yellow</span> Practically equivalent — |elpd_diff| &lt; 2·SE</span>
+        <span class="acc-arrow">▸</span>
+      </button>
+      <div class="acc-body">
+        The models cannot be clearly separated. This is <strong>not a failure</strong> — it means both explain the data
+        similarly well. The measurement uncertainty of LOO itself does not permit a clear decision.<br><br>
+        <strong>Recommendation:</strong> Choose by parsimony (simpler model) or substantive grounds.
+        Report the similarity transparently. Consider model stacking via <code style="font-family:'DM Mono',monospace">loo_model_weights()</code>.
+      </div>
+    </div>
+    <div class="acc-item">
+      <button class="acc-head" onclick="toggleAcc(this)">
+        <span><span class="tl tl-red" style="margin-right:.5rem">Red</span> Unreliable LOO estimate — Pareto-k &gt; 0.7</span>
+        <span class="acc-arrow">▸</span>
+      </button>
+      <div class="acc-body">
+        High Pareto-k values indicate <strong>influential observations</strong> — the PSIS approximation is unreliable there.
+        The LOO result itself should be interpreted with caution.<br><br>
+        <strong>Recommendation:</strong> Refit with <code style="font-family:'DM Mono',monospace">reloo()</code> for the problematic observations
+        (exact LOO, costs N additional fits). Check whether single outliers dominate the model.
+        Report the proportion of problematic k values.
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-title">WAIC vs. LOO</div>
+    <p>WAIC and LOO-CV estimate the same target: out-of-sample predictive accuracy.
+    LOO via PSIS is more robust and is today's standard (Vehtari et al. 2017).
+    The numerical difference between them is usually small in practice — as long as there are no extreme k values.
+    Use LOO, and check the Pareto-k diagnostics as a quality control.</p>
+  </div>
+
+  <div class="sec-lbl">brms code for the LOO workflow</div>
+  <div class="rcode">
+<span class="rc"># 1. Fit models (save_pars required for LOO/WAIC)</span><br>
+model.1 &lt;- <span class="rf">brm</span>(y ~ x,         data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
+model.2 &lt;- <span class="rf">brm</span>(y ~ x + z,     data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
+model.3 &lt;- <span class="rf">brm</span>(y ~ x + z + w, data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
+<br>
+<span class="rc"># 2. Write LOO directly into the model object (no separate loo object needed)</span><br>
+model.1 &lt;- <span class="rf">add_criterion</span>(model.1, <span class="rs">c("loo")</span>)<br>
+model.2 &lt;- <span class="rf">add_criterion</span>(model.2, <span class="rs">c("loo")</span>)<br>
+model.3 &lt;- <span class="rf">add_criterion</span>(model.3, <span class="rs">c("loo")</span>)<br>
+<br>
+<span class="rc"># 3. Compare models — LOO is read directly from the objects</span><br>
+<span class="rf">loo_compare</span>(model.1, model.2, model.3)  <span class="rc"># → elpd_diff, se_diff  ← paste this output into Stage 2</span><br>
+<br>
+<span class="rc"># 4. Check Pareto-k diagnostics for a single model</span><br>
+<span class="rf">print</span>(model.1$criteria$loo)  <span class="rc"># ← paste this output optionally into Stage 2</span><br>
+<br>
+<span class="rc"># 5. Model Stacking — ensemble weights instead of choosing one model (optional)</span><br>
+<span class="rc">#    Asks: which combination of models predicts new data best?</span><br>
+<span class="rc">#    Weights sum to 1; model with w ≈ 0 contributes nothing.</span><br>
+<span class="rf">loo_model_weights</span>(model.1, model.2, model.3)  <span class="rc"># → e.g. model.1=0.12, model.2=0.73, model.3=0.15</span><br>
+<br>
+<span class="rc"># 6. For high k values: reloo() directly into the object</span><br>
+model.1 &lt;- <span class="rf">add_criterion</span>(model.1, <span class="rs">c("loo")</span>, reloo = <span class="rs">TRUE</span>, k_threshold = <span class="rs">0.7</span>)
+  </div>
+
+  <div class="learn-card" style="border-left:3px solid var(--accent3)">
+    <strong>Next step:</strong> A model has been selected — now it is time to interpret the posterior substantively. →
+    <a href="Decision_Lab.html" style="color:var(--accent2);font-family:'DM Mono',monospace;font-size:.85em">Decision Lab</a>
+  </div>
+
+</div><!-- /stage3 -->
+
+<div class="foot-nav">
+  <a href="Bayesian_PP_Check.html" class="fn-lnk">← Prior Predictive Check</a>
+  <a href="Decision_Lab.html" class="fn-lnk">Decision Lab →</a>
+</div>
+
+<div id="help-float">
+  <div class="hp-head">
+    <span class="hp-title">LOO Lab — Help</span>
+    <button class="hp-close" onclick="toggleHelp()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect">What does this tool do?</div>
+    LOO-CV (Leave-One-Out Cross-Validation) measures the out-of-sample predictive accuracy of a Bayesian model.
+    The tool has three stages: concept → analyse R output → make a decision.<br><br>
+    <strong>Note:</strong> This tool <em>does not compute LOO</em> — that is not feasible in a browser.
+    You compute LOO in R with <em>add_criterion()</em> and paste the output into Stage 2.
+
+    <div class="hp-sect">Stage 1 — The concept</div>
+    <strong>Model A</strong> (linear) vs. <strong>Model B</strong> (polynomial degree 4) on the same dataset.
+    Each step: one point is held out, both models are refitted on N−1 points, then predictions are compared.
+    Dashed line = LOO fit; ◆ = LOO prediction; arrow = residual.
+
+    <div class="hp-sect">Stage 2 — R output</div>
+    In R, LOO is written directly into the model object:<br>
+    <em>model.1 &lt;- add_criterion(model.1, c("loo"))</em><br>
+    Then: <em>loo_compare(model.1, model.2, ...)</em> → paste output into the first field.<br>
+    The second field (optional) takes the output of <em>print(model.1$criteria$loo)</em>
+    for the Pareto-k diagnostics of a <strong>single</strong> model.
+    <strong>Load example</strong> shows the expected format.
+
+    <div class="hp-sect">Model Stacking</div>
+    <strong>Model Stacking</strong> is a form of model averaging — but without model priors.
+    Instead of choosing one model, an ensemble is formed:<br><br>
+    Ŷ = w₁·Ŷ₁ + w₂·Ŷ₂ + w₃·Ŷ₃ (weights sum to 1)<br><br>
+    Weights are optimised directly from LOO predictive performance
+    (Yao et al. 2018). Redundant models automatically receive weight ≈ 0.<br><br>
+    <strong>vs. classical model averaging (BMA):</strong><br>
+    BMA weights by model posterior probability — stacking by
+    out-of-sample predictive accuracy. Stacking is more robust against similar models
+    and prior-sensitive BMA problems (McElreath Ch. 7).
+
+    <div class="hp-sect">Decision rule</div>
+    <strong>|elpd_diff| > 2·SE</strong> → clear difference<br>
+    <strong>|elpd_diff| &lt; 2·SE</strong> → practically indistinguishable<br>
+    <strong>k > 0.7</strong> → LOO estimate unreliable, reloo() recommended
+
+    <div class="hp-sect">Prerequisites</div>
+    brms Model Builder (model structure) · Posterior PPC (model diagnostics)
+  </div>
+</div>
+
+<script>
+/* ======================================================== MATH */
+function matMul(A, B) {
+  return A.map(row => B[0].map((_, j) => row.reduce((s, v, k) => s + v * B[k][j], 0)));
+}
+function matT(A) { return A[0].map((_, j) => A.map(r => r[j])); }
+function solveGE(A, b) {
+  const n = A.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let mx = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[mx][col])) mx = r;
+    [M[col], M[mx]] = [M[mx], M[col]];
+    if (Math.abs(M[col][col]) < 1e-12) continue;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col] / M[col][col];
+      for (let j = col; j <= n; j++) M[r][j] -= f * M[col][j];
+    }
+    const pv = M[col][col];
+    for (let j = col; j <= n; j++) M[col][j] /= pv;
+  }
+  return M.map(row => row[n]);
+}
+function polyfit(xn, ys, deg) {
+  const X = xn.map(x => Array.from({ length: deg + 1 }, (_, d) => Math.pow(x, d)));
+  const Xt = matT(X);
+  const XtX = matMul(Xt, X);
+  const Xty = Xt.map(row => row.reduce((s, v, i) => s + v * ys[i], 0));
+  return solveGE(XtX, Xty);
+}
+function polyeval(coefs, x) { return coefs.reduce((s, c, d) => s + c * Math.pow(x, d), 0); }
+function logNormal(y, mu, sigma) {
+  return -0.5 * Math.log(2 * Math.PI) - Math.log(sigma) - 0.5 * ((y - mu) / sigma) ** 2;
+}
+
+/* ======================================================== DATA */
+const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const ys = [2.1, 3.8, 2.6, 4.9, 3.8, 6.0, 4.7, 6.9, 5.8, 8.1, 7.0, 9.2];
+const N = xs.length;
+const xMin = xs[0], xRange = xs[N - 1] - xs[0];
+const xn = xs.map(x => (x - xMin) / xRange);
+const coefsLinFull = polyfit(xn, ys, 1);
+const residLin = ys.map((y, i) => y - polyeval(coefsLinFull, xn[i]));
+const sigma = Math.sqrt(residLin.reduce((s, r) => s + r * r, 0) / (N - 2));
+function computeLOO(deg) {
+  const coefsAll = polyfit(xn, ys, deg);
+  const items = xs.map((_, i) => {
+    const xLoo = xn.filter((_, j) => j !== i);
+    const yLoo = ys.filter((_, j) => j !== i);
+    const coefs = polyfit(xLoo, yLoo, deg);
+    const yhat = polyeval(coefs, xn[i]);
+    const logp = logNormal(ys[i], yhat, sigma);
+    return { coefs, yhat, logp };
+  });
+  return { coefsAll, items, elpd: items.reduce((s, d) => s + d.logp, 0) };
+}
+const looA = computeLOO(1);
+const looB = computeLOO(4);
+
+/* ======================================================== CANVAS */
+function getCss(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function hex2rgba(hex, a) {
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function drawCanvas(id, looData, accentColor, stepIdx) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { t: 26, r: 18, b: 38, l: 44 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const xPl = [0.5, 12.5], yPl = [0.5, 9.8];
+  const tx = x => pad.l + (x - xPl[0]) / (xPl[1] - xPl[0]) * pw;
+  const ty = y => H - pad.b - (y - yPl[0]) / (yPl[1] - yPl[0]) * ph;
+  const C = { bg: getCss('--paper'), grid: getCss('--grid'), ink: getCss('--ink'), ink2: getCss('--ink2'), good: getCss('--good'), bad: getCss('--bad') };
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.lineWidth = 0.5; ctx.strokeStyle = C.grid;
+  [3,6,9,12].forEach(x => { ctx.beginPath(); ctx.moveTo(tx(x),pad.t); ctx.lineTo(tx(x),H-pad.b); ctx.stroke(); });
+  [2,4,6,8].forEach(y => { ctx.beginPath(); ctx.moveTo(pad.l,ty(y)); ctx.lineTo(W-pad.r,ty(y)); ctx.stroke(); });
+  ctx.strokeStyle = C.ink2; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,H-pad.b); ctx.lineTo(W-pad.r,H-pad.b); ctx.stroke();
+  ctx.font = '9px "DM Mono", monospace'; ctx.fillStyle = C.ink2;
+  ctx.textAlign = 'center';
+  [2,4,6,8,10,12].forEach(x => ctx.fillText(x, tx(x), H-pad.b+13));
+  ctx.textAlign = 'right';
+  [2,4,6,8].forEach(y => ctx.fillText(y, pad.l-4, ty(y)+3));
+  ctx.lineWidth = 1; ctx.strokeStyle = hex2rgba(C.ink2, 0.3); ctx.setLineDash([]);
+  ctx.beginPath(); let first = true;
+  for (let xi = 0.5; xi <= 12.5; xi += 0.07) {
+    const yn = polyeval(looData.coefsAll, (xi-xMin)/xRange);
+    if (yn < yPl[0]-1.5 || yn > yPl[1]+1.5) { first=true; continue; }
+    if (first) { ctx.moveTo(tx(xi),ty(yn)); first=false; } else ctx.lineTo(tx(xi),ty(yn));
+  }
+  ctx.stroke();
+  if (stepIdx >= 0) {
+    const item = looData.items[stepIdx];
+    ctx.strokeStyle = accentColor; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); first = true;
+    for (let xi = 0.5; xi <= 12.5; xi += 0.07) {
+      const yn = polyeval(item.coefs, (xi-xMin)/xRange);
+      if (yn < yPl[0]-2 || yn > yPl[1]+2) { first=true; continue; }
+      if (first) { ctx.moveTo(tx(xi),ty(yn)); first=false; } else ctx.lineTo(tx(xi),ty(yn));
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  for (let i = 0; i < N; i++) {
+    const [xi,yi] = [xs[i],ys[i]];
+    const isHeld = i === stepIdx, isPast = stepIdx >= 0 && i < stepIdx;
+    ctx.beginPath(); ctx.arc(tx(xi),ty(yi),isHeld?6:4,0,2*Math.PI);
+    if (isHeld) {
+      ctx.strokeStyle=accentColor; ctx.lineWidth=1.5; ctx.setLineDash([3,2]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='rgba(128,128,128,0.18)'; ctx.fill();
+    } else {
+      ctx.fillStyle=isPast?C.good:C.ink; ctx.strokeStyle=isPast?C.good:C.ink2;
+      ctx.lineWidth=0.8; ctx.fill(); ctx.stroke();
+    }
+  }
+  if (stepIdx >= 0) {
+    const item = looData.items[stepIdx];
+    const xi=xs[stepIdx], yi=ys[stepIdx], yhat=item.yhat;
+    const yhatCl=Math.max(yPl[0]+0.1,Math.min(yPl[1]-0.1,yhat));
+    const px=tx(xi), py=ty(yhatCl), pa=ty(yi), r=5;
+    ctx.fillStyle=accentColor;
+    ctx.beginPath(); ctx.moveTo(px,py-r); ctx.lineTo(px+r,py); ctx.lineTo(px,py+r); ctx.lineTo(px-r,py); ctx.closePath(); ctx.fill();
+    const residual=yi-yhat, arrowCol=Math.abs(residual)>1.2*sigma?C.bad:C.good;
+    if (Math.abs(pa-py)>4) {
+      ctx.strokeStyle=arrowCol; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,pa); ctx.stroke();
+      const dir=pa>py?1:-1;
+      ctx.fillStyle=arrowCol; ctx.beginPath(); ctx.moveTo(px,pa); ctx.lineTo(px-4,pa-dir*7); ctx.lineTo(px+4,pa-dir*7); ctx.closePath(); ctx.fill();
+      ctx.font='9px "DM Mono", monospace'; ctx.fillStyle=arrowCol;
+      const rs=px<W*0.6; ctx.textAlign=rs?'left':'right';
+      ctx.fillText((residual>=0?'+':'')+residual.toFixed(2),px+(rs?9:-9),(py+pa)/2+3);
+    }
+    ctx.font='bold 9px "DM Mono", monospace'; ctx.fillStyle=accentColor; ctx.textAlign='center';
+    ctx.fillText('log p = '+item.logp.toFixed(2),px,pad.t-6);
+  }
+}
+
+/* ======================================================== ANIMATION */
+let currentStep = -1, isPlaying = false, animTimer = null;
+function setStep(step) {
+  currentStep = Math.max(-1, Math.min(N-1, step));
+  document.getElementById('stepSlider').value = currentStep;
+  document.getElementById('stepLbl').textContent = currentStep < 0 ? 'Overview' : `Point ${currentStep+1} of ${N}`;
+  const accA = getCss('--accent2'), accB = getCss('--accent');
+  drawCanvas('canvasA', looA, accA, currentStep);
+  drawCanvas('canvasB', looB, accB, currentStep);
+  const elpdAval = currentStep >= 0 ? looA.items.slice(0,currentStep+1).reduce((s,d)=>s+d.logp,0) : null;
+  const elpdBval = currentStep >= 0 ? looB.items.slice(0,currentStep+1).reduce((s,d)=>s+d.logp,0) : null;
+  const sl = currentStep >= 0 ? ` (${currentStep+1}/${N})` : '';
+  document.getElementById('elpdA').innerHTML =
+    `<span>elpd<sub>loo</sub> (A)${sl}</span><span class="elpd-val" style="color:var(--accent2)">${elpdAval!==null?elpdAval.toFixed(2):'—'}</span>`;
+  document.getElementById('elpdB').innerHTML =
+    `<span>elpd<sub>loo</sub> (B)${sl}</span><span class="elpd-val" style="color:var(--accent)">${elpdBval!==null?elpdBval.toFixed(2):'—'}</span>`;
+  updateStepText(currentStep);
+  const fb = document.getElementById('formulaBox');
+  if (currentStep === N-1) { fb.style.display='block'; setTimeout(()=>fb.scrollIntoView({behavior:'smooth',block:'nearest'}),80); }
+  else fb.style.display='none';
+}
+function updateStepText(step) {
+  const el = document.getElementById('stepText');
+  if (step < 0) {
+    el.innerHTML = `<strong>The LOO principle:</strong> For each of the ${N} data points we ask: how well does the model predict this point — when it has <em>not seen</em> it? Click <strong>Next →</strong> or start the animation.`;
+    return;
+  }
+  const a=looA.items[step], b=looB.items[step], diff=a.logp-b.logp;
+  const diffStr = Math.abs(diff)<0.05
+    ? `Both models are equal at this point (Δ = ${Math.abs(diff).toFixed(2)}).`
+    : diff>0
+    ? `Model A is better (Δ log p = <strong style="color:var(--accent2)">+${diff.toFixed(2)}</strong>).`
+    : `Model B is better (Δ log p = <strong style="color:var(--accent)">+${(-diff).toFixed(2)}</strong>).`;
+  if (step === N-1) {
+    const eA=looA.elpd, eB=looB.elpd, winner=eA>eB?'A':'B';
+    el.innerHTML = `<strong>All ${N} steps complete.</strong><br>
+      elpd<sub>loo</sub>(A) = <strong style="color:var(--accent2)">${eA.toFixed(2)}</strong> &nbsp;|&nbsp;
+      elpd<sub>loo</sub>(B) = <strong style="color:var(--accent)">${eB.toFixed(2)}</strong><br>
+      Difference: <strong>${(eA-eB).toFixed(2)}</strong> — Model ${winner} generalises better to unseen data points.
+      The polynomial (degree 4) fits the training data more tightly but predicts held-out points <em>worse</em>.`;
+  } else {
+    el.innerHTML = `<strong>Step ${step+1}:</strong> Point (x = ${xs[step]}, y = ${ys[step]}).
+      Model A predicts <strong>${a.yhat.toFixed(2)}</strong> (log p = <strong style="color:var(--accent2)">${a.logp.toFixed(2)}</strong>),
+      Model B predicts <strong>${b.yhat.toFixed(2)}</strong> (log p = <strong style="color:var(--accent)">${b.logp.toFixed(2)}</strong>).
+      ${diffStr}`;
+  }
+}
+function stepChange(dir) { setStep(currentStep+dir); }
+function togglePlay() {
+  isPlaying = !isPlaying;
+  const btn = document.getElementById('btn-play');
+  if (isPlaying) {
+    btn.textContent='⏸ Pause'; btn.classList.add('active');
+    if (currentStep>=N-1) setStep(-1);
+    animTimer = setInterval(()=>{ if(currentStep>=N-1){stopPlay();return;} setStep(currentStep+1); },1200);
+  } else stopPlay();
+}
+function stopPlay() {
+  isPlaying=false; clearInterval(animTimer);
+  const btn=document.getElementById('btn-play'); btn.textContent='▶ Animate'; btn.classList.remove('active');
+}
+
+/* ======================================================== PARSER */
+let parsedModels=null, parsedK=null;
+function parseLooCmp(text) {
+  const lines=text.trim().split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const headerIdx=lines.findIndex(l=>/elpd_diff/i.test(l));
+  if(headerIdx<0) throw new Error('No "elpd_diff" column found. Is this a loo_compare() output?');
+  const models=[];
+  for(let i=headerIdx+1;i<lines.length;i++){
+    const m=lines[i].match(/^(\S+)\s+(-?\d+\.?\d*(?:e[+-]?\d+)?)\s+(\d+\.?\d*(?:e[+-]?\d+)?)/);
+    if(m) models.push({name:m[1],elpd_diff:parseFloat(m[2]),se_diff:parseFloat(m[3])});
+  }
+  if(models.length<2) throw new Error('At least 2 models required. Please run loo_compare() with ≥ 2 models.');
+  if(Math.abs(models[0].elpd_diff)>0.5) throw new Error('The reference model (first model) should have elpd_diff ≈ 0.');
+  return models;
+}
+function parseParetoK(text) {
+  if(!text.trim()) return null;
+  const good=text.match(/\(good\)\s+(\d+)/i)?.[1];
+  const ok=text.match(/\(ok\)\s+(\d+)/i)?.[1];
+  const bad=text.match(/(?<!\w)\(bad\)\s+(\d+)/i)?.[1];
+  const vbad=text.match(/very bad\)\s+(\d+)/i)?.[1];
+  if(good===undefined){
+    if(/all pareto k estimates are good/i.test(text)){
+      const nm=text.match(/by\s+\d+\s+by\s+(\d+)\s+log-likelihood/i)?.[1]||text.match(/by\s+\d+\s+by\s+(\d+)/i)?.[1];
+      return {good:nm?parseInt(nm):100,ok:0,bad:0,vbad:0};
+    }
+    return null;
+  }
+  return {good:parseInt(good)||0,ok:parseInt(ok)||0,bad:parseInt(bad)||0,vbad:parseInt(vbad)||0};
+}
+function parseAndPlot() {
+  const msgEl=document.getElementById('parseMsg');
+  msgEl.style.display='none';
+  try { parsedModels=parseLooCmp(document.getElementById('pasteCmp').value); }
+  catch(e){ parsedModels=null; msgEl.className='msg-err'; msgEl.textContent='✗ '+e.message; msgEl.style.display='block'; return; }
+  parsedK=parseParetoK(document.getElementById('pastePareto').value);
+  msgEl.className='msg-ok'; msgEl.textContent=`✓ ${parsedModels.length} models successfully parsed.`; msgEl.style.display='block';
+  document.getElementById('plotSection').style.display='block';
+  renderForestPlot(parsedModels);
+  if(parsedK){ renderParetoPlot(parsedK); document.getElementById('plotKCard').style.display='block'; document.getElementById('plotForestCard').classList.remove('full'); }
+  else { document.getElementById('plotKCard').style.display='none'; document.getElementById('plotForestCard').classList.add('full'); }
+  document.getElementById('plotWeightsCard').style.display='none';
+  buildVerdicts(parsedModels,parsedK);
+}
+function loadExample() {
+  document.getElementById('pasteCmp').value=
+`       elpd_diff se_diff
+model.2   0.0       0.0
+model.1  -4.3       2.9
+model.3  -12.1      4.2`;
+  document.getElementById('pastePareto').value=
+`Computed from 4000 by 120 log-likelihood matrix
+
+         Estimate   SE
+elpd_loo  -54.2   4.8
+p_loo       5.3   0.7
+looic     108.4   9.6
+
+Pareto k diagnostic values:
+                         Count Pct.    Min. n_eff
+(-Inf, 0.5]   (good)      108   90.0%   423
+(0.5, 0.7]    (ok)          8    6.7%   256
+(0.7, 1]      (bad)         3    2.5%    89
+(1, Inf)      (very bad)    1    0.8%    34`;
+}
+
+/* ======================================================== SVG PLOTS */
+function svgEl(tag,attrs){const el=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));return el;}
+function renderForestPlot(models) {
+  const svg=document.getElementById('svgForest');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const C={ink:getCss('--ink'),ink2:getCss('--ink2'),ink3:getCss('--ink3'),accent:getCss('--accent'),good:getCss('--good'),bad:getCss('--bad'),grid:getCss('--grid'),accent2:getCss('--accent2')};
+  const W=560,rowH=44,pad={t:20,r:24,b:38,l:100};
+  const H=pad.t+models.length*rowH+pad.b;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const allDiffs=models.map(m=>m.elpd_diff),allSE=models.map(m=>m.se_diff);
+  const xLo=Math.min(...allDiffs.map((d,i)=>d-2.5*allSE[i]))-1;
+  const xHi=Math.max(0,...allDiffs.map((d,i)=>d+2.5*allSE[i]))+1;
+  const pw=W-pad.l-pad.r,tx=x=>pad.l+(x-xLo)/(xHi-xLo)*pw,zeroX=tx(0);
+  svg.appendChild(svgEl('line',{x1:zeroX,y1:pad.t-5,x2:zeroX,y2:H-pad.b+5,stroke:C.ink2,'stroke-width':1,'stroke-dasharray':'3,2',opacity:0.5}));
+  svg.appendChild(svgEl('line',{x1:pad.l,y1:H-pad.b,x2:W-pad.r,y2:H-pad.b,stroke:C.ink2,'stroke-width':0.8}));
+  const step=xHi-xLo>30?10:xHi-xLo>15?5:2;
+  for(let x=Math.ceil(xLo/step)*step;x<=xHi;x+=step){
+    const xt=tx(x);
+    svg.appendChild(svgEl('line',{x1:xt,y1:H-pad.b,x2:xt,y2:H-pad.b+3,stroke:C.ink2,'stroke-width':0.6}));
+    const t=svgEl('text',{x:xt,y:H-pad.b+13,'text-anchor':'middle',fill:C.ink2,'font-family':'DM Mono, monospace','font-size':9});
+    t.textContent=x.toFixed(0); svg.appendChild(t);
+  }
+  const axLbl=svgEl('text',{x:(pad.l+W-pad.r)/2,y:H-4,'text-anchor':'middle',fill:C.ink3,'font-family':'DM Mono, monospace','font-size':8});
+  axLbl.textContent='elpd_diff (reference = 0)'; svg.appendChild(axLbl);
+  const noteLines=[];
+  models.forEach((m,i)=>{
+    const y=pad.t+i*rowH+rowH/2,isRef=i===0;
+    const ratio=m.se_diff>0?Math.abs(m.elpd_diff)/m.se_diff:0;
+    const color=isRef?C.accent2:ratio>=2?C.bad:C.good;
+    const verdict=isRef?'(reference)':ratio>=2?`clear difference (ratio ${ratio.toFixed(1)})`:`unclear difference (ratio ${ratio.toFixed(1)})`;
+    if(!isRef&&m.se_diff>0){
+      const xLow=tx(m.elpd_diff-2*m.se_diff),xHigh=tx(m.elpd_diff+2*m.se_diff);
+      svg.appendChild(svgEl('line',{x1:xLow,y1:y,x2:xHigh,y2:y,stroke:color,'stroke-width':1.5}));
+      [xLow,xHigh].forEach(xi=>svg.appendChild(svgEl('line',{x1:xi,y1:y-4,x2:xi,y2:y+4,stroke:color,'stroke-width':1.5})));
+    }
+    svg.appendChild(svgEl('circle',{cx:tx(m.elpd_diff),cy:y,r:5,fill:color,stroke:'none'}));
+    const lbl=svgEl('text',{x:pad.l-6,y:y+3.5,'text-anchor':'end',fill:C.ink,'font-family':'DM Mono, monospace','font-size':10,'font-weight':500});
+    lbl.textContent=m.name; svg.appendChild(lbl);
+    const valLbl=svgEl('text',{x:tx(m.elpd_diff)+8,y:y+14,'text-anchor':'start',fill:color,'font-family':'DM Mono, monospace','font-size':9});
+    valLbl.textContent=isRef?'0.0':m.elpd_diff.toFixed(1); svg.appendChild(valLbl);
+    noteLines.push(`${m.name}: elpd_diff = ${m.elpd_diff.toFixed(1)}, SE = ${m.se_diff.toFixed(1)} → ${verdict}`);
+  });
+  document.getElementById('forestNote').innerHTML=noteLines.join('<br>');
+}
+function renderParetoPlot(k) {
+  const svg=document.getElementById('svgPareto');
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const C={good:getCss('--good'),ok:getCss('--ok'),bad:getCss('--bad'),ink:getCss('--ink'),ink2:getCss('--ink2'),ink3:getCss('--ink3')};
+  const total=k.good+k.ok+k.bad+k.vbad;
+  if(total===0) return;
+  const W=340,H=80,barH=28,barY=22,pad={l:8,r:8};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const bw=W-pad.l-pad.r;
+  const cats=[{label:'good',count:k.good,color:C.good},{label:'ok',count:k.ok,color:C.ok},{label:'bad',count:k.bad,color:C.bad},{label:'very bad',count:k.vbad,color:'#c0392b'}];
+  let x=pad.l;
+  cats.forEach(cat=>{
+    if(cat.count===0) return;
+    const w=(cat.count/total)*bw;
+    svg.appendChild(svgEl('rect',{x,y:barY,width:w,height:barH,fill:cat.color}));
+    if(w>24){const t=svgEl('text',{x:x+w/2,y:barY+barH/2+4,'text-anchor':'middle',fill:'#fff','font-family':'DM Mono, monospace','font-size':9,'font-weight':500});t.textContent=((cat.count/total)*100).toFixed(0)+'%';svg.appendChild(t);}
+    x+=w;
+  });
+  x=pad.l;
+  cats.forEach(cat=>{
+    if(cat.count===0) return;
+    const w=(cat.count/total)*bw;
+    if(w>18){const t=svgEl('text',{x:pad.l+(x-pad.l)+w/2,y:barY+barH+12,'text-anchor':'middle',fill:C.ink2,'font-family':'DM Mono, monospace','font-size':8});t.textContent=cat.label+' ('+cat.count+')';svg.appendChild(t);}
+    x+=w;
+  });
+  const probK=k.bad+k.vbad,probPct=((probK/total)*100).toFixed(1);
+  const note=document.getElementById('paretoNote');
+  if(probK===0) note.innerHTML=`<span style="color:var(--good)">✓</span> All k values are good or acceptable. LOO estimate reliable.`;
+  else note.innerHTML=`<span style="color:var(--bad)">⚠</span> ${probK} observations (${probPct}%) have k > 0.7. PSIS is unreliable for these — <code style="font-family:'DM Mono',monospace">reloo()</code> recommended.`;
+}
+
+/* ======================================================== STAGE 3 */
+function buildVerdicts(models,kData) {
+  const grid=document.getElementById('verdictGrid'); grid.innerHTML='';
+  const ref=models[0];
+  for(let i=1;i<models.length;i++){
+    const m=models[i],ratio=m.se_diff>0?Math.abs(m.elpd_diff)/m.se_diff:0;
+    const probK=kData?kData.bad+kData.vbad:0,total=kData?kData.good+kData.ok+kData.bad+kData.vbad:0;
+    const kPct=total>0?(probK/total)*100:0;
+    let verdict,cls,explanation;
+    if(kPct>10){ verdict='Pareto-k warning'; cls='tl-red'; explanation=`${kPct.toFixed(0)}% of k values > 0.7. Interpret LOO result with caution. reloo() recommended.`; }
+    else if(ratio>=2){ verdict='Clear difference'; cls='tl-green'; explanation=`|elpd_diff| / SE = ${ratio.toFixed(2)} ≥ 2. ${ref.name} is clearly better.`; }
+    else { verdict='Unclear difference'; cls='tl-yellow'; explanation=`|elpd_diff| / SE = ${ratio.toFixed(2)} < 2. Models not clearly separable — parsimony or substantive reasoning decides.`; }
+    const card=document.createElement('div'); card.className='verdict-card';
+    card.innerHTML=`<div class="verdict-pair">${ref.name} vs. ${m.name}</div><div class="verdict-nums">elpd_diff = ${m.elpd_diff.toFixed(1)}<br>se_diff = ${m.se_diff.toFixed(1)}<br>Ratio = ${ratio.toFixed(2)}</div><span class="tl ${cls}">${verdict}</span><div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);margin-top:.45rem;line-height:1.6">${explanation}</div>`;
+    grid.appendChild(card);
+  }
+  document.getElementById('verdictSection').style.display='block';
+}
+function updateDecision() {
+  const elpd=parseFloat(document.getElementById('sl-elpd').value);
+  const se=parseFloat(document.getElementById('sl-se').value);
+  document.getElementById('val-elpd').textContent=elpd.toFixed(1);
+  document.getElementById('val-se').textContent=se.toFixed(1);
+  const ratio=se>0?Math.abs(elpd)/se:0,isGreen=ratio>=2;
+  const color=isGreen?'var(--good)':ratio>1.2?'var(--ok)':'var(--bad)';
+  const verdict=isGreen?'Clear difference':ratio>1.2?'Borderline':'Not distinguishable';
+  const advice=isGreen?'The difference exceeds its own measurement uncertainty. Reliable finding.'
+    :ratio>1.2?'Borderline — substantive considerations should contribute.'
+    :'No clear difference. Both models explain the data equally well.';
+  document.getElementById('ratioBox').innerHTML=
+    `|elpd_diff| / SE = <span class="ratio-big" style="color:${color}">${ratio.toFixed(2)}</span><br>
+    <span class="tl ${isGreen?'tl-green':ratio>1.2?'tl-yellow':'tl-red'}" style="margin-top:.3rem;display:inline-block">${verdict}</span><br>
+    <span style="font-size:.7rem;color:var(--ink2);margin-top:.4rem;display:inline-block">${advice}</span>`;
+}
+
+/* ======================================================== UI */
+const tabs=document.querySelectorAll('.tab');
+function switchTab(n) {
+  tabs.forEach((t,i)=>t.classList.toggle('active',i===n-1));
+  [1,2,3].forEach(i=>{ const s=document.getElementById('stage'+i); s.classList.toggle('active',i===n); });
+  if(n===1) setStep(currentStep);
+}
+function toggleTheme() {
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('btn-theme').textContent=dark?'☾ Dark':'☀ Light';
+  setTimeout(()=>setStep(currentStep),20);
+  if(parsedModels){ setTimeout(()=>{ renderForestPlot(parsedModels); if(parsedK) renderParetoPlot(parsedK); },20); }
+}
+function toggleHelp() { document.getElementById('help-float').classList.toggle('open'); }
+function toggleAcc(btn) {
+  const body=btn.nextElementSibling,arrow=btn.querySelector('.acc-arrow');
+  body.classList.toggle('open'); arrow.textContent=body.classList.contains('open')?'▾':'▸';
+}
+window.addEventListener('load',()=>{
+  const navEl=document.querySelector('nav');
+  document.documentElement.style.setProperty('--nav-h',navEl.offsetHeight+'px');
+  setStep(-1); updateDecision();
+});
+window.addEventListener('resize',()=>{ if(document.getElementById('stage1').classList.contains('active')) setStep(currentStep); });
+</script>
+</body>
+</html>
