@@ -389,8 +389,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     <div class="lcard-body">
       <b>Schaue auf die Natur der Outcome-Variable:</b><br><br>
       <b>Bernoulli</b> (Szenario 1): Hat jemand nach KVT eine klinisch bedeutsame Verbesserung
-      der Körperbildstörung erreicht? (0=nein, 1=ja). Allgemein: binäre Outcomes,
-      Diagnosen, Entscheidungen.<br><br>
+      der Körperbildstörung erreicht? (0=nein, 1=ja). Prädiktor: Therapeutische Allianz
+      (WAI-S, z-transformiert). Allgemein: binäre Outcomes, Diagnosen, Entscheidungen.<br><br>
       <b>Poisson</b> (Szenario 2): Wie oft täglich schaut jemand negativ bewertete
       Körperregionen im Spiegel an? (Body Checking, 0, 1, 2, …). Allgemein: Zähldaten,
       Ereignishäufigkeiten. Cave: Bei Überdispersion → Negativ-Binomial.<br><br>
@@ -467,29 +467,29 @@ const SCENARIOS = [
   {
     id:0, name:'Therapieerfolg nach KVT (0/1)',
     glmName:'Logistisches Modell (Bernoulli + Logit)',
-    lmProblem:'<b>Beispiel:</b> Therapieerfolg nach KVT — hat die Person eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja). Prädiktor: Ausgangsschwere (BSQ-Score).<br>LM-Vorhersagen verlassen den Bereich [0,1] — als Wahrscheinlichkeit unmöglich.',
-    glmSolution:'<b>Logit-Link:</b> log(p/(1−p)) = a + b·BSQ → p bleibt immer in (0,1). Die S-förmige Kurve zeigt: bei niedrigem BSQ-Score hohe Erfolgswahrscheinlichkeit, bei hohem Ausgangsschweregrad geringere. MLE unter Bernoulli-Likelihood.',
+    lmProblem:'<b>Beispiel:</b> Therapieerfolg nach KVT — hat die Person eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja). Prädiktor: Therapeutische Allianz (WAI-S, z-transformiert). Höhere Allianz → höhere Erfolgswahrscheinlichkeit.<br>LM-Vorhersagen verlassen den Bereich [0,1] — als Wahrscheinlichkeit unmöglich.',
+    glmSolution:'<b>Logit-Link:</b> log(p/(1−p)) = a + b·z(WAI-S) → p bleibt immer in (0,1). Die S-förmige Kurve zeigt: bei höherer therapeutischer Allianz steigt die Erfolgswahrscheinlichkeit. MLE unter Bernoulli-Likelihood.',
     residLabel:'Residuen sollen normalverteilt sein — hier unmöglich (nur 0/1)',
     narr:{tag:'c1',
-      text:'<b>Beispiel — Therapieerfolg nach KVT:</b> Hat eine Person nach 12 Sitzungen kognitiver Verhaltenstherapie eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja). Prädiktor: Ausgangsschwere (BSQ — Body Shape Questionnaire, 0–200).<br><br><b>Das Problem:</b> Das LM zieht eine Gerade durch 0/1-Daten — <em>und die Gerade verlässt den Bereich [0,1]</em> für extreme BSQ-Werte. Vorhersagen von 1.3 oder −0.2 sind als Erfolgswahrscheinlichkeiten sinnlos.<br><br><b>Die Lösung:</b> Logistisches Modell (Bernoulli + Logit-Link). Die S-Kurve bleibt immer in (0,1). MLE unter Bernoulli-Likelihood ergibt deutlich besseren AIC.'},
+      text:'<b>Beispiel — Therapieerfolg nach KVT:</b> Hat eine Person nach 12 Sitzungen kognitiver Verhaltenstherapie eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja).<br><br>Prädiktor: Therapeutische Allianz (WAI-S — Working Alliance Inventory, Kurzform, Hatcher &amp; Gillaspy 2006), <b>z-transformiert</b> (x-Achse: SD-Einheiten). Stärkere therapeutische Allianz → höhere Erfolgswahrscheinlichkeit.<br><br><b>Das Problem:</b> Das LM zieht eine Gerade durch 0/1-Daten — <em>und die Gerade verlässt den Bereich [0,1]</em> für extreme WAI-S-Werte. Vorhersagen von 1.3 oder −0.2 sind als Erfolgswahrscheinlichkeiten sinnlos.<br><br><b>Die Lösung:</b> Logistisches Modell (Bernoulli + Logit-Link). Die S-Kurve bleibt immer in (0,1). MLE unter Bernoulli-Likelihood ergibt deutlich besseren AIC.'},
   },
   {
     id:1, name:'Body Checking (Zähldaten)',
     glmName:'Poisson-Modell (Log-Link)',
-    lmProblem:'<b>Beispiel:</b> Body Checking — wie oft schaut eine Person täglich negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …). Prädiktor: Stärke der Körperbildstörung (BSQ-Score).<br>LM-Vorhersagen können negativ werden — für Zähldaten unmöglich.',
-    glmSolution:'<b>Log-Link:</b> log(λ) = a + b·BSQ → λ = e^(a+b·BSQ) immer > 0. Bei höherem BSQ-Score steigt die erwartete Checking-Frequenz exponentiell. Poisson-Likelihood passt zur ganzzahligen Natur der Daten.',
+    lmProblem:'<b>Beispiel:</b> Body Checking — wie oft schaut eine Person täglich negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …). Prädiktor: Stärke der Körperbildstörung (BSQ-Score, z-transformiert).<br>LM-Vorhersagen können negativ werden — für Zähldaten unmöglich.',
+    glmSolution:'<b>Log-Link:</b> log(λ) = a + b·z(BSQ) → λ = e^(a+b·z) immer > 0. Bei höherem z(BSQ) steigt die erwartete Checking-Frequenz exponentiell. Poisson-Likelihood passt zur ganzzahligen Natur der Daten.',
     residLabel:'Residuen rechtsskief — Normalverteilungsannahme verletzt',
     narr:{tag:'c1',
-      text:'<b>Beispiel — Body Checking:</b> Wie oft schaut eine Person täglich bestimmte negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …). Prädiktor: Stärke der Körperbildstörung (BSQ-Score).<br><br><b>Das Problem:</b> Zähldaten können nicht negativ sein — das LM kann aber negative Vorhersagen produzieren, besonders bei kleinen erwarteten Häufigkeiten. Außerdem sind die Residuen typisch rechtsschief, nicht normalverteilt.<br><br><b>Die Lösung:</b> Poisson-Modell mit Log-Link. λ = e^(a+b·BSQ) ist immer positiv. Poisson-Likelihood modelliert die diskrete, ganzzahlige Natur der Checking-Häufigkeit korrekt.'},
+      text:'<b>Beispiel — Body Checking:</b> Wie oft schaut eine Person täglich bestimmte negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …).<br><br>Prädiktor: Stärke der Körperbildstörung (BSQ — Body Shape Questionnaire), <b>z-transformiert</b> (x-Achse: SD-Einheiten). Höherer BSQ-Wert → häufigeres Checking erwartet.<br><br><b>Das Problem:</b> Zähldaten können nicht negativ sein — das LM kann aber negative Vorhersagen produzieren, besonders bei kleinen erwarteten Häufigkeiten. Die Residuen sind außerdem typisch rechtsschief, nicht normalverteilt.<br><br><b>Die Lösung:</b> Poisson-Modell mit Log-Link. λ = e^(a+b·z) ist immer positiv. Poisson-Likelihood modelliert die diskrete, ganzzahlige Natur der Checking-Häufigkeit korrekt.'},
   },
   {
     id:2, name:'Reaktionszeit Stroop-Test (ms)',
     glmName:'Gamma-Modell (Log-Link)',
-    lmProblem:'<b>Beispiel:</b> Reaktionszeit im emotionalen Stroop-Test mit körperbezogenen Wörtern (ms). Prädiktor: Angstniveau (STAI-State-Score). RT-Daten sind immer positiv und typisch rechtsschief.<br>LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt nicht.',
-    glmSolution:'<b>Gamma + Log-Link:</b> Gamma-Verteilung ist per Definition auf positive Werte beschränkt und modelliert Rechtschiefe direkt. Höheres Angstniveau → längere, stärker streuende Reaktionszeiten. Log-Link stellt Positivität sicher.',
+    lmProblem:'<b>Beispiel:</b> Reaktionszeit im emotionalen Stroop-Test mit körperbezogenen Wörtern (ms). Prädiktor: Angstniveau (STAI-State-Score, z-transformiert). RT-Daten sind immer positiv und typisch rechtsschief.<br>LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt nicht.',
+    glmSolution:'<b>Gamma + Log-Link:</b> Gamma-Verteilung ist per Definition auf positive Werte beschränkt und modelliert Rechtschiefe direkt. Höheres z(STAI) → längere, stärker streuende Reaktionszeiten. Log-Link stellt Positivität sicher.',
     residLabel:'Rechtsschiefe Residuen beim LM — Gamma-Residuen deutlich symmetrischer',
     narr:{tag:'c5',
-      text:'<b>Beispiel — Reaktionszeit im emotionalen Stroop-Test:</b> Wie lange (ms) benötigt eine Person, um die Farbe eines körperbezogenen Wortes zu benennen? Prädiktor: Angstniveau (STAI-State-Score). Reaktionszeiten sind immer positiv und typisch rechtsschief — kürzeste Zeiten häufen sich links, der lange Schwanz rechts ist typisch.<br><br><b>Das Problem:</b> Das LM kann negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch — die Normalverteilungsannahme ist strukturell verletzt.<br><br><b>Die Lösung:</b> Gamma-Verteilung mit Log-Link. Gamma ist per Definition positiv, modelliert Rechtschiefe direkt, und der AIC-Vergleich zeigt den klaren Vorteil gegenüber dem LM.'},
+      text:'<b>Beispiel — Reaktionszeit im emotionalen Stroop-Test:</b> Wie lange (ms) benötigt eine Person, um die Farbe eines körperbezogenen Wortes zu benennen?<br><br>Prädiktor: Angstniveau (STAI — State-Trait Anxiety Inventory, State-Skala), <b>z-transformiert</b> (x-Achse: SD-Einheiten). Höheres Angstniveau → längere Reaktionszeit erwartet.<br><br><b>Das Problem:</b> Reaktionszeiten sind immer positiv und typisch rechtsschief. Das LM kann negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch — die Normalverteilungsannahme ist strukturell verletzt.<br><br><b>Die Lösung:</b> Gamma-Verteilung mit Log-Link. Gamma ist per Definition positiv, modelliert Rechtschiefe direkt, und der AIC-Vergleich zeigt den klaren Vorteil gegenüber dem LM.'},
   }
 ];
 
@@ -647,8 +647,11 @@ function drawAxisLines(ctx,W,H,m,xr,yr,xStep,yStep){
   }
   ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='13px DM Mono,monospace';
   ctx.textAlign='center';
-  for(let v=xr[0];v<=xr[1]+1e-9;v+=xStep*2)
-    ctx.fillText(v.toFixed(v%1?1:0), toX(v), H-m.b+13);
+  const xLabelStart=Math.ceil(xr[0]/xStep-1e-9)*xStep;
+  for(let v=xLabelStart;v<=xr[1]+1e-9;v+=xStep){
+    const vr=Math.round(v*100)/100;
+    ctx.fillText(vr.toFixed(vr%1?1:0),toX(v),H-m.b+13);
+  }
   ctx.textAlign='right';
   for(let v=yr[0];v<=yr[1]+1e-9;v+=yStep*2){
     const py=toY(v); if(py<m.t+4||py>H-m.b) continue;
@@ -831,7 +834,7 @@ function drawLM(xs, ys, lm){
   // Clamp yr sensibly
   const yrFinal=[Math.max(yr[0],-1.5), Math.min(yr[1], currentScen===0?1.8:Math.max(yMax*1.3,yr[1]))];
   const yStep=+(Math.max(0.5,(yrFinal[1]-yrFinal[0])/5)).toFixed(1);
-  drawAxisLines(ctx,W,H,m,xr,yrFinal,1,yStep);
+  drawAxisLines(ctx,W,H,m,xr,yrFinal,0.5,yStep);
 
   const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
   const toY=v=>H-m.b-(v-yrFinal[0])/(yrFinal[1]-yrFinal[0])*Hp;
@@ -896,7 +899,7 @@ function drawLM(xs, ys, lm){
   });
 
   ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='13px DM Mono,monospace';
-  ctx.textAlign='center';ctx.fillText('x',W/2,H-2);
+  ctx.textAlign='center';ctx.fillText('z-Wert',W/2,H-2);
 }
 
 function drawGLM(xs, ys, lm, glm){
@@ -911,7 +914,7 @@ function drawGLM(xs, ys, lm, glm){
   const yMin=currentScen===0?-0.1:0;
   const yr=[yMin, Math.max(1.1, yMax)];
   const yStep=+(Math.max(0.2,(yr[1]-yr[0])/5)).toFixed(1);
-  drawAxisLines(ctx,W,H,m,xr,yr,1,yStep);
+  drawAxisLines(ctx,W,H,m,xr,yr,0.5,yStep);
 
   const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
   const toY=v=>H-m.b-(v-yr[0])/(yr[1]-yr[0])*Hp;

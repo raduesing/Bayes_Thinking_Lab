@@ -389,8 +389,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     <div class="lcard-body">
       <b>Look at the nature of the outcome variable:</b><br><br>
       <b>Bernoulli</b> (Scenario 1): Did someone achieve a clinically significant improvement
-      in body image disorder after CBT? (0=no, 1=yes). Generally: binary outcomes,
-      diagnoses, decisions.<br><br>
+      in body image disorder after CBT? (0=no, 1=yes). Predictor: therapeutic alliance
+      (WAI-S, z-transformed). Generally: binary outcomes, diagnoses, decisions.<br><br>
       <b>Poisson</b> (Scenario 2): How many times per day does someone inspect negatively
       rated body parts in the mirror? (Body checking, 0, 1, 2, …). Generally: count data,
       event frequencies. Note: with overdispersion → Negative Binomial.<br><br>
@@ -467,29 +467,29 @@ const SCENARIOS = [
   {
     id:0, name:'Therapy outcome after CBT (0/1)',
     glmName:'Logistic model (Bernoulli + logit)',
-    lmProblem:'<b>Example:</b> Therapy outcome after CBT — has someone achieved a clinically significant improvement in body image disorder after 12 sessions? (0 = no, 1 = yes). Predictor: baseline severity (BSQ score).<br>LM predictions leave the range [0,1] — meaningless as probabilities.',
-    glmSolution:'<b>Logit link:</b> log(p/(1−p)) = a + b·BSQ → p always in (0,1). The S-shaped curve shows: low baseline BSQ = high success probability; high initial severity = lower probability. MLE under Bernoulli likelihood.',
+    lmProblem:'<b>Example:</b> Therapy outcome after CBT — has someone achieved a clinically significant improvement in body image disorder after 12 sessions? (0 = no, 1 = yes). Predictor: therapeutic alliance (WAI-S, z-transformed). Higher alliance → higher success probability.<br>LM predictions leave the range [0,1] — meaningless as probabilities.',
+    glmSolution:'<b>Logit link:</b> log(p/(1−p)) = a + b·z(WAI-S) → p always in (0,1). The S-shaped curve shows: higher therapeutic alliance → increasing success probability. MLE under Bernoulli likelihood.',
     residLabel:'Residuals should be normally distributed — impossible here (only 0/1)',
     narr:{tag:'c1',
-      text:'<b>Example — Therapy outcome after CBT:</b> Has someone achieved a clinically significant improvement in their body image disorder after 12 sessions of cognitive behavioural therapy? (0 = no, 1 = yes). Predictor: baseline severity (BSQ — Body Shape Questionnaire, 0–200).<br><br><b>The problem:</b> The LM fits a straight line through 0/1 data — <em>and the line leaves the range [0,1]</em> for extreme BSQ values. Predictions of 1.3 or −0.2 are meaningless as success probabilities.<br><br><b>The solution:</b> Logistic model (Bernoulli + logit link). The S-curve always stays in (0,1). MLE under Bernoulli likelihood yields a clearly better AIC.'},
+      text:'<b>Example — Therapy outcome after CBT:</b> Has someone achieved a clinically significant improvement in their body image disorder after 12 sessions of cognitive behavioural therapy? (0 = no, 1 = yes).<br><br>Predictor: therapeutic alliance (WAI-S — Working Alliance Inventory, short form, Hatcher &amp; Gillaspy 2006), <b>z-transformed</b> (x-axis: SD units). Stronger therapeutic alliance → higher success probability.<br><br><b>The problem:</b> The LM fits a straight line through 0/1 data — <em>and the line leaves the range [0,1]</em> for extreme WAI-S values. Predictions of 1.3 or −0.2 are meaningless as success probabilities.<br><br><b>The solution:</b> Logistic model (Bernoulli + logit link). The S-curve always stays in (0,1). MLE under Bernoulli likelihood yields a clearly better AIC.'},
   },
   {
     id:1, name:'Body Checking (count data)',
     glmName:'Poisson model (log link)',
-    lmProblem:'<b>Example:</b> Body checking — how many times per day does someone inspect negatively rated body parts in the mirror? (0, 1, 2, …). Predictor: severity of body image disorder (BSQ score).<br>LM predictions can become negative — impossible for count data.',
-    glmSolution:'<b>Log link:</b> log(λ) = a + b·BSQ → λ = e^(a+b·BSQ) always > 0. Higher BSQ score leads to exponentially increasing expected checking frequency. Poisson likelihood fits the integer nature of the data.',
+    lmProblem:'<b>Example:</b> Body checking — how many times per day does someone inspect negatively rated body parts in the mirror? (0, 1, 2, …). Predictor: severity of body image disorder (BSQ score, z-transformed).<br>LM predictions can become negative — impossible for count data.',
+    glmSolution:'<b>Log link:</b> log(λ) = a + b·z(BSQ) → λ = e^(a+b·z) always > 0. Higher z(BSQ) leads to exponentially increasing expected checking frequency. Poisson likelihood fits the integer nature of the data.',
     residLabel:'Residuals often right-skewed — normal distribution assumption violated',
     narr:{tag:'c1',
-      text:'<b>Example — Body Checking:</b> How many times per day does someone inspect specific negatively rated body parts in the mirror? (0, 1, 2, …). Predictor: severity of body image disorder (BSQ score).<br><br><b>The problem:</b> Count data cannot be negative — but the LM can produce negative predictions, especially for small expected frequencies. Residuals are also typically right-skewed, not normally distributed.<br><br><b>The solution:</b> Poisson model with log link. λ = e^(a+b·BSQ) is always positive. Poisson likelihood correctly models the discrete, integer nature of body checking frequency.'},
+      text:'<b>Example — Body Checking:</b> How many times per day does someone inspect specific negatively rated body parts in the mirror? (0, 1, 2, …).<br><br>Predictor: severity of body image disorder (BSQ — Body Shape Questionnaire), <b>z-transformed</b> (x-axis: SD units). Higher BSQ → more frequent checking expected.<br><br><b>The problem:</b> Count data cannot be negative — but the LM can produce negative predictions, especially for small expected frequencies. Residuals are also typically right-skewed, not normally distributed.<br><br><b>The solution:</b> Poisson model with log link. λ = e^(a+b·z) is always positive. Poisson likelihood correctly models the discrete, integer nature of body checking frequency.'},
   },
   {
     id:2, name:'Reaction time Stroop test (ms)',
     glmName:'Gamma model (log link)',
-    lmProblem:'<b>Example:</b> Reaction time in an emotional Stroop test with body-related words (ms). Predictor: anxiety level (STAI-State score). RT data are always positive and typically right-skewed.<br>LM residuals show strong right skew — normal distribution does not fit.',
-    glmSolution:'<b>Gamma + log link:</b> Gamma distribution is by definition restricted to positive values and directly models right skew. Higher anxiety → longer, more variable reaction times. Log link ensures positivity.',
+    lmProblem:'<b>Example:</b> Reaction time in an emotional Stroop test with body-related words (ms). Predictor: anxiety level (STAI-State score, z-transformed). RT data are always positive and typically right-skewed.<br>LM residuals show strong right skew — normal distribution does not fit.',
+    glmSolution:'<b>Gamma + log link:</b> Gamma distribution is by definition restricted to positive values and directly models right skew. Higher z(STAI) → longer, more variable reaction times. Log link ensures positivity.',
     residLabel:'Right-skewed LM residuals — Gamma residuals markedly more symmetric',
     narr:{tag:'c5',
-      text:'<b>Example — Reaction time in emotional Stroop test:</b> How long (ms) does someone take to name the colour of a body-related word? Predictor: anxiety level (STAI-State score). Reaction times are always positive and typically right-skewed — shortest times cluster on the left, the long tail to the right is characteristic.<br><br><b>The problem:</b> The LM can produce negative predictions and residuals are systematically non-symmetric — the normal distribution assumption is structurally violated.<br><br><b>The solution:</b> Gamma distribution with log link. Gamma is by definition positive, models right skew directly, and the AIC comparison shows the clear advantage over the LM.'},
+      text:'<b>Example — Reaction time in emotional Stroop test:</b> How long (ms) does someone take to name the colour of a body-related word?<br><br>Predictor: anxiety level (STAI — State-Trait Anxiety Inventory, State scale), <b>z-transformed</b> (x-axis: SD units). Higher anxiety → longer reaction time expected.<br><br><b>The problem:</b> Reaction times are always positive and typically right-skewed. The LM can produce negative predictions and residuals are systematically non-symmetric — the normal distribution assumption is structurally violated.<br><br><b>The solution:</b> Gamma distribution with log link. Gamma is by definition positive, models right skew directly, and the AIC comparison shows the clear advantage over the LM.'},
   }
 ];
 
@@ -647,8 +647,11 @@ function drawAxisLines(ctx,W,H,m,xr,yr,xStep,yStep){
   }
   ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='13px DM Mono,monospace';
   ctx.textAlign='center';
-  for(let v=xr[0];v<=xr[1]+1e-9;v+=xStep*2)
-    ctx.fillText(v.toFixed(v%1?1:0), toX(v), H-m.b+13);
+  const xLabelStart=Math.ceil(xr[0]/xStep-1e-9)*xStep;
+  for(let v=xLabelStart;v<=xr[1]+1e-9;v+=xStep){
+    const vr=Math.round(v*100)/100;
+    ctx.fillText(vr.toFixed(vr%1?1:0),toX(v),H-m.b+13);
+  }
   ctx.textAlign='right';
   for(let v=yr[0];v<=yr[1]+1e-9;v+=yStep*2){
     const py=toY(v); if(py<m.t+4||py>H-m.b) continue;
@@ -831,7 +834,7 @@ function drawLM(xs, ys, lm){
   // Clamp yr sensibly
   const yrFinal=[Math.max(yr[0],-1.5), Math.min(yr[1], currentScen===0?1.8:Math.max(yMax*1.3,yr[1]))];
   const yStep=+(Math.max(0.5,(yrFinal[1]-yrFinal[0])/5)).toFixed(1);
-  drawAxisLines(ctx,W,H,m,xr,yrFinal,1,yStep);
+  drawAxisLines(ctx,W,H,m,xr,yrFinal,0.5,yStep);
 
   const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
   const toY=v=>H-m.b-(v-yrFinal[0])/(yrFinal[1]-yrFinal[0])*Hp;
@@ -896,7 +899,7 @@ function drawLM(xs, ys, lm){
   });
 
   ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='13px DM Mono,monospace';
-  ctx.textAlign='center';ctx.fillText('x',W/2,H-2);
+  ctx.textAlign='center';ctx.fillText('z-score',W/2,H-2);
 }
 
 function drawGLM(xs, ys, lm, glm){
@@ -911,7 +914,7 @@ function drawGLM(xs, ys, lm, glm){
   const yMin=currentScen===0?-0.1:0;
   const yr=[yMin, Math.max(1.1, yMax)];
   const yStep=+(Math.max(0.2,(yr[1]-yr[0])/5)).toFixed(1);
-  drawAxisLines(ctx,W,H,m,xr,yr,1,yStep);
+  drawAxisLines(ctx,W,H,m,xr,yr,0.5,yStep);
 
   const toX=v=>m.l+(v-xr[0])/(xr[1]-xr[0])*Wp;
   const toY=v=>H-m.b-(v-yr[0])/(yr[1]-yr[0])*Hp;
