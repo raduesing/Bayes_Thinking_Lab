@@ -41,7 +41,7 @@ i18n <- list(
     tb_auth   = "© Dr. Rainer Düsing · Interactive Tools by Claude",
     btn_back  = "\u2190 Zum Lab",
     btn_model = "\u2b21 Model Builder",
-    btn_lang  = "EN",
+    btn_lang  = '<svg width="18" height="12" viewBox="0 0 18 12" style="vertical-align:middle;margin-right:4px"><rect width="18" height="12" fill="#012169"/><polygon points="0,0 2,0 18,10 18,12 16,12 0,2" fill="#fff"/><polygon points="0,2 0,0 2,0" fill="#fff"/><polygon points="16,12 18,12 18,10" fill="#fff"/><polygon points="0,10 0,12 2,12 18,2 18,0 16,0" fill="#fff"/><polygon points="0,12 2,12 0,10" fill="#fff"/><polygon points="16,0 18,0 18,2" fill="#fff"/><polygon points="0,0 1,0 18,11 18,12 17,12 0,1" fill="#C8102E"/><polygon points="17,0 18,0 18,1" fill="#C8102E"/><polygon points="0,11 0,12 1,12" fill="#C8102E"/><polygon points="0,10 0,12 1,12 18,2 18,0 17,0" fill="#C8102E"/><rect x="7.5" width="3" height="12" fill="#fff"/><rect y="4.5" width="18" height="3" fill="#fff"/><rect x="8" width="2" height="12" fill="#C8102E"/><rect y="5" width="18" height="2" fill="#C8102E"/></svg> EN',
     prog_label = "Fortschritt:",
     prog_0 = "0 \u00b7 Einf\u00fchrung", prog_1 = "1 \u00b7 Upload",
     prog_2 = "2 \u00b7 Diagnose",      prog_3 = "3 \u00b7 PPC Tour",
@@ -212,7 +212,7 @@ i18n <- list(
     tb_auth   = "\u00a9 Dr. Rainer D\u00fcsing \u00b7 Interactive Tools by Claude",
     btn_back  = "\u2190 Back to Lab",
     btn_model = "\u2b21 Model Builder",
-    btn_lang  = "DE",
+    btn_lang  = '<svg width="18" height="12" viewBox="0 0 18 12" style="vertical-align:middle;margin-right:4px"><rect width="18" height="4" fill="#000"/><rect y="4" width="18" height="4" fill="#DD0000"/><rect y="8" width="18" height="4" fill="#FFCE00"/></svg> DE',
     prog_label = "Progress:",
     prog_0 = "0 \u00b7 Intro",         prog_1 = "1 \u00b7 Upload",
     prog_2 = "2 \u00b7 Diagnostics",   prog_3 = "3 \u00b7 PPC Tour",
@@ -936,7 +936,7 @@ server <- function(input, output, session) {
         class = "lab-btn",
         style = "border-color:var(--a6);color:var(--a6)",
         onclick = "Shiny.setInputValue('lang_toggle', Math.random(), {priority:'event'})",
-        t$btn_lang
+        HTML(t$btn_lang)
       )
     )
   })
