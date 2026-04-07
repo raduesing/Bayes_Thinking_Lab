@@ -193,25 +193,28 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 <div class="narr" style="margin-bottom:1px;border-color:var(--a3)">
   <b>Das Problem:</b> Ein lineares Modell nimmt immer normalverteilte Residuen an.
   Was wenn die Daten <em>binär</em>, <em>Zähldaten</em> oder <em>positiv-schief</em> sind?
-  Drei Szenarien zeigen, was passiert wenn man trotzdem ein LM erzwingt —
-  und wie ein GLM mit passender Verteilung die Situation löst.
+  Drei Szenarien aus der Körperbildforschung zeigen, was passiert wenn man trotzdem ein LM erzwingt —
+  und wie ein GLM mit passender Verteilung die Situation löst.<br><br>
+  <b>Szenario 1:</b> Therapieerfolg (KVT) — 0/1 &nbsp;·&nbsp;
+  <b>Szenario 2:</b> Body Checking — Zähldaten &nbsp;·&nbsp;
+  <b>Szenario 3:</b> Reaktionszeiten (Stroop) — positiv-schief
 </div>
 
 <!-- SCENARIO TABS -->
 <div class="scen-tabs">
   <button class="sctab sel" id="sctab-0" onclick="setScen(0)">
-    <span class="sct-n">Szenario 1</span>
-    Binäre Daten (0/1)
+    <span class="sct-n">Szenario 1 — Bernoulli</span>
+    Therapieerfolg nach KVT (0/1)
     <span class="sct-warn">⚠</span>
   </button>
   <button class="sctab" id="sctab-1" onclick="setScen(1)">
-    <span class="sct-n">Szenario 2</span>
-    Zähldaten (0, 1, 2, …)
+    <span class="sct-n">Szenario 2 — Poisson</span>
+    Body Checking (Zähldaten)
     <span class="sct-warn">⚠</span>
   </button>
   <button class="sctab" id="sctab-2" onclick="setScen(2)">
-    <span class="sct-n">Szenario 3</span>
-    Positive, schiefe Daten
+    <span class="sct-n">Szenario 3 — Gamma</span>
+    Reaktionszeit Stroop-Test (ms)
     <span class="sct-warn">⚠</span>
   </button>
 </div>
@@ -385,16 +388,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     <div class="lcard-h cg">Wie wählt man die richtige Familie — mit Beispielen</div>
     <div class="lcard-body">
       <b>Schaue auf die Natur der Outcome-Variable:</b><br><br>
-      <b>Bernoulli:</b> Hat jemand bestanden? (0=nein, 1=ja). Hat eine Maus
-      den Stimulus gehört? Überlebt der Patient das erste Jahr?<br><br>
-      <b>Poisson:</b> Wie oft hat jemand den Arzt besucht? Wie viele Fehler
-      in einem Text? Wie viele Ereignisse in einem Zeitfenster?
-      (Cave: Bei Überdispersion → Negativ-Binomial.)<br><br>
-      <b>Gamma:</b> Wie lange dauerte eine Reaktion (ms)? Wie teuer war
-      eine Behandlung? Wie lange bis zum Rückfall?
-      Immer positiv, rechtsschief.<br><br>
-      <b>Normal/LM:</b> Körpergröße, IQ-Werte, z-standardisierte Maße —
-      stetig, symmetrisch, kein natürlicher Nullpunkt als Grenze.<br><br>
+      <b>Bernoulli</b> (Szenario 1): Hat jemand nach KVT eine klinisch bedeutsame Verbesserung
+      der Körperbildstörung erreicht? (0=nein, 1=ja). Allgemein: binäre Outcomes,
+      Diagnosen, Entscheidungen.<br><br>
+      <b>Poisson</b> (Szenario 2): Wie oft täglich schaut jemand negativ bewertete
+      Körperregionen im Spiegel an? (Body Checking, 0, 1, 2, …). Allgemein: Zähldaten,
+      Ereignishäufigkeiten. Cave: Bei Überdispersion → Negativ-Binomial.<br><br>
+      <b>Gamma</b> (Szenario 3): Wie lange (ms) braucht jemand im emotionalen Stroop-Test
+      mit körperbezogenen Wörtern? Allgemein: Reaktionszeiten, Wartezeiten, Kosten —
+      immer positiv, rechtsschief.<br><br>
+      <b>Normal/LM:</b> z-standardisierte Fragebogenwerte, IQ, stetige symmetrische Maße
+      ohne natürlichen Nullpunkt als harte Grenze.<br><br>
       Residuen prüfen via Posterior Predictive Check — AIC/BIC für Vergleich
       alternativer Familien auf denselben Daten.
     </div>
@@ -461,31 +465,31 @@ function newSeed(){ setSeed(Math.floor(Math.random()*1e6)); drawAll(); }
 // ── Scenarios config ───────────────────────────────────
 const SCENARIOS = [
   {
-    id:0, name:'Binär (0/1)',
+    id:0, name:'Therapieerfolg nach KVT (0/1)',
     glmName:'Logistisches Modell (Bernoulli + Logit)',
-    lmProblem:'LM-Vorhersagen außerhalb [0,1] — unmöglich als Wahrscheinlichkeit',
-    glmSolution:'Logit-Link: log(p/(1-p)) = a + b·x → p immer in (0,1)',
+    lmProblem:'<b>Beispiel:</b> Therapieerfolg nach KVT — hat die Person eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja). Prädiktor: Ausgangsschwere (BSQ-Score).<br>LM-Vorhersagen verlassen den Bereich [0,1] — als Wahrscheinlichkeit unmöglich.',
+    glmSolution:'<b>Logit-Link:</b> log(p/(1−p)) = a + b·BSQ → p bleibt immer in (0,1). Die S-förmige Kurve zeigt: bei niedrigem BSQ-Score hohe Erfolgswahrscheinlichkeit, bei hohem Ausgangsschweregrad geringere. MLE unter Bernoulli-Likelihood.',
     residLabel:'Residuen sollen normalverteilt sein — hier unmöglich (nur 0/1)',
     narr:{tag:'c1',
-      text:'<b>Das Problem:</b> Die Outcome-Variable ist binär (0=nein, 1=ja). Das LM zieht eine Gerade durch 0/1-Daten — <em>und die Gerade verlässt den Bereich [0,1]</em> für extreme x-Werte. Vorhersagen von 1.3 oder −0.2 sind als Wahrscheinlichkeiten sinnlos.<br><br><b>Die Lösung:</b> Logistisches Modell (Bernoulli + Logit-Link). Die Kurve bleibt immer in (0,1). MLE unter Bernoulli-Likelihood ergibt viel besseren AIC.'},
+      text:'<b>Beispiel — Therapieerfolg nach KVT:</b> Hat eine Person nach 12 Sitzungen kognitiver Verhaltenstherapie eine klinisch bedeutsame Verbesserung ihrer Körperbildstörung erreicht? (0 = nein, 1 = ja). Prädiktor: Ausgangsschwere (BSQ — Body Shape Questionnaire, 0–200).<br><br><b>Das Problem:</b> Das LM zieht eine Gerade durch 0/1-Daten — <em>und die Gerade verlässt den Bereich [0,1]</em> für extreme BSQ-Werte. Vorhersagen von 1.3 oder −0.2 sind als Erfolgswahrscheinlichkeiten sinnlos.<br><br><b>Die Lösung:</b> Logistisches Modell (Bernoulli + Logit-Link). Die S-Kurve bleibt immer in (0,1). MLE unter Bernoulli-Likelihood ergibt deutlich besseren AIC.'},
   },
   {
-    id:1, name:'Zähldaten',
+    id:1, name:'Body Checking (Zähldaten)',
     glmName:'Poisson-Modell (Log-Link)',
-    lmProblem:'LM-Vorhersagen können negativ werden — für Zähldaten unmöglich',
-    glmSolution:'Log-Link: log(λ) = a + b·x → λ immer > 0, ganzzahlige Daten korrekt modelliert',
-    residLabel:'Residuen oft rechtsskief — Normalverteilungsannahme verletzt',
+    lmProblem:'<b>Beispiel:</b> Body Checking — wie oft schaut eine Person täglich negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …). Prädiktor: Stärke der Körperbildstörung (BSQ-Score).<br>LM-Vorhersagen können negativ werden — für Zähldaten unmöglich.',
+    glmSolution:'<b>Log-Link:</b> log(λ) = a + b·BSQ → λ = e^(a+b·BSQ) immer > 0. Bei höherem BSQ-Score steigt die erwartete Checking-Frequenz exponentiell. Poisson-Likelihood passt zur ganzzahligen Natur der Daten.',
+    residLabel:'Residuen rechtsskief — Normalverteilungsannahme verletzt',
     narr:{tag:'c1',
-      text:'<b>Das Problem:</b> Zähldaten (0, 1, 2, ...) können nicht negativ sein — das LM kann aber negative Vorhersagen produzieren, besonders bei kleinen Mittelwerten. Außerdem sind die Residuen typisch rechtsschief, nicht normalverteilt.<br><br><b>Die Lösung:</b> Poisson-Modell mit Log-Link. Log-Transformation stellt sicher dass λ = e^(a+b·x) immer positiv ist. Poisson-Likelihood passt zur ganzzahligen Natur der Daten.'},
+      text:'<b>Beispiel — Body Checking:</b> Wie oft schaut eine Person täglich bestimmte negativ bewertete Körperregionen im Spiegel an? (0, 1, 2, …). Prädiktor: Stärke der Körperbildstörung (BSQ-Score).<br><br><b>Das Problem:</b> Zähldaten können nicht negativ sein — das LM kann aber negative Vorhersagen produzieren, besonders bei kleinen erwarteten Häufigkeiten. Außerdem sind die Residuen typisch rechtsschief, nicht normalverteilt.<br><br><b>Die Lösung:</b> Poisson-Modell mit Log-Link. λ = e^(a+b·BSQ) ist immer positiv. Poisson-Likelihood modelliert die diskrete, ganzzahlige Natur der Checking-Häufigkeit korrekt.'},
   },
   {
-    id:2, name:'Positive, schiefe Daten',
+    id:2, name:'Reaktionszeit Stroop-Test (ms)',
     glmName:'Gamma-Modell (Log-Link)',
-    lmProblem:'LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt nicht',
-    glmSolution:'Gamma mit Log-Link modelliert rechtsschiefe positive Daten korrekt',
-    residLabel:'Rechtsschiefe Residuen beim LM — Gamma-Residuen symmetrischer',
+    lmProblem:'<b>Beispiel:</b> Reaktionszeit im emotionalen Stroop-Test mit körperbezogenen Wörtern (ms). Prädiktor: Angstniveau (STAI-State-Score). RT-Daten sind immer positiv und typisch rechtsschief.<br>LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt nicht.',
+    glmSolution:'<b>Gamma + Log-Link:</b> Gamma-Verteilung ist per Definition auf positive Werte beschränkt und modelliert Rechtschiefe direkt. Höheres Angstniveau → längere, stärker streuende Reaktionszeiten. Log-Link stellt Positivität sicher.',
+    residLabel:'Rechtsschiefe Residuen beim LM — Gamma-Residuen deutlich symmetrischer',
     narr:{tag:'c5',
-      text:'<b>Das Problem:</b> Positive, rechtsschiefe Daten (z.B. Reaktionszeiten, Kosten, Wartezeiten). Das LM kann wieder negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch.<br><br><b>Die Lösung:</b> Gamma-Verteilung mit Log-Link. Die Gamma-Verteilung ist per Definition auf positive Werte beschränkt und kann starke Rechtschiefe modellieren. Der AIC-Vergleich zeigt den Vorteil.'},
+      text:'<b>Beispiel — Reaktionszeit im emotionalen Stroop-Test:</b> Wie lange (ms) benötigt eine Person, um die Farbe eines körperbezogenen Wortes zu benennen? Prädiktor: Angstniveau (STAI-State-Score). Reaktionszeiten sind immer positiv und typisch rechtsschief — kürzeste Zeiten häufen sich links, der lange Schwanz rechts ist typisch.<br><br><b>Das Problem:</b> Das LM kann negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch — die Normalverteilungsannahme ist strukturell verletzt.<br><br><b>Die Lösung:</b> Gamma-Verteilung mit Log-Link. Gamma ist per Definition positiv, modelliert Rechtschiefe direkt, und der AIC-Vergleich zeigt den klaren Vorteil gegenüber dem LM.'},
   }
 ];
 
