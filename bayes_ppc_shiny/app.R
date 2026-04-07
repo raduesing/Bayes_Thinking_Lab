@@ -603,14 +603,14 @@ ui <- fluidPage(
         font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
       }
       .prog-step { color: var(--ink2); opacity: .4; }
-      .prog-step.done { color: var(--a3); opacity: .75; }
+      .prog-step.done  { opacity: .7; }
       .prog-step.active { opacity: 1; font-weight: 600; }
-      #prog-0.active { color: var(--ink2); }
-      #prog-1.active { color: var(--a2); }
-      #prog-2.active { color: var(--a6); }
-      #prog-3.active { color: var(--a5); }
-      #prog-4.active { color: var(--a3); }
-      #prog-5.active { color: var(--a4); }
+      #prog-0.active, #prog-0.done { color: var(--ink2); }
+      #prog-1.active, #prog-1.done { color: var(--a2); }
+      #prog-2.active, #prog-2.done { color: var(--a6); }
+      #prog-3.active, #prog-3.done { color: var(--a5); }
+      #prog-4.active, #prog-4.done { color: var(--a3); }
+      #prog-5.active, #prog-5.done { color: var(--a4); }
 
       /* ── File input ── */
       .form-control { background: var(--panel) !important; border-color: var(--border) !important;
@@ -942,29 +942,27 @@ server <- function(input, output, session) {
   })
 
   output$progress_bar_ui <- renderUI({
-    t <- tr()
+    t  <- tr()
+    c0 <- LAB_COLORS$ink2; c1 <- LAB_COLORS$a2; c2 <- LAB_COLORS$a6
+    c3 <- LAB_COLORS$a5;   c4 <- LAB_COLORS$a3; c5 <- LAB_COLORS$a4
+    sep <- span(style = "color:var(--grid)", "\u00b7")
     tagList(
       span(style = "color:var(--ink2);opacity:.6", t$prog_label),
-      tags$span(id = "prog-0", class = "prog-step active", t$prog_0),
-      span(style = "color:var(--grid)", "\u00b7"),
-      tags$span(id = "prog-1", class = "prog-step", t$prog_1),
-      span(style = "color:var(--grid)", "\u00b7"),
-      tags$span(id = "prog-2", class = "prog-step", t$prog_2),
-      span(style = "color:var(--grid)", "\u00b7"),
-      tags$span(id = "prog-3", class = "prog-step", t$prog_3),
-      span(style = "color:var(--grid)", "\u00b7"),
-      tags$span(id = "prog-4", class = "prog-step", t$prog_4),
-      span(style = "color:var(--grid)", "\u00b7"),
-      tags$span(id = "prog-5", class = "prog-step", t$prog_5)
+      tags$span(id = "prog-0", class = "prog-step active", style = sprintf("color:%s", c0), t$prog_0), sep,
+      tags$span(id = "prog-1", class = "prog-step",        style = sprintf("color:%s", c1), t$prog_1), sep,
+      tags$span(id = "prog-2", class = "prog-step",        style = sprintf("color:%s", c2), t$prog_2), sep,
+      tags$span(id = "prog-3", class = "prog-step",        style = sprintf("color:%s", c3), t$prog_3), sep,
+      tags$span(id = "prog-4", class = "prog-step",        style = sprintf("color:%s", c4), t$prog_4), sep,
+      tags$span(id = "prog-5", class = "prog-step",        style = sprintf("color:%s", c5), t$prog_5)
     )
   })
 
-  output$phase0_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase0_title) })
-  output$phase1_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase1_title) })
-  output$phase2_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase2_title) })
-  output$phase3_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase3_title) })
-  output$phase4_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase4_title) })
-  output$phase5_title_ui  <- renderUI({ span(class = "phase-title", tr()$phase5_title) })
+  output$phase0_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$ink2), tr()$phase0_title) })
+  output$phase1_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$a2),   tr()$phase1_title) })
+  output$phase2_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$a6),   tr()$phase2_title) })
+  output$phase3_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$a5),   tr()$phase3_title) })
+  output$phase4_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$a3),   tr()$phase4_title) })
+  output$phase5_title_ui  <- renderUI({ span(class = "phase-title", style = sprintf("color:%s", LAB_COLORS$a4),   tr()$phase5_title) })
   output$phase5_sub_ui    <- renderUI({
     span(style = "font-size:.6rem;color:var(--ink2);margin-left:auto", tr()$phase5_sub)
   })
