@@ -1093,12 +1093,15 @@ server <- function(input, output, session) {
         column(4,
           selectInput("free_plot_type",
             label   = t$p5_type,
-            choices = list(
-              setNames(list(c("ppc_dens_overlay", "ppc_ecdf_overlay", "ppc_hist")), t$p5_dist),
-              setNames(list(c("ppc_stat", "ppc_stat_grouped")), t$p5_stats),
-              setNames(list(c("ppc_intervals", "ppc_ribbon")), t$p5_intv),
-              setNames(list(c("ppc_scatter_avg", "ppc_error_hist")), t$p5_scat),
-              setNames(list(c("ppc_rootogram", "ppc_pit_ecdf")), t$p5_spec)
+            choices = setNames(
+              list(
+                c("ppc_dens_overlay", "ppc_ecdf_overlay", "ppc_hist"),
+                c("ppc_stat", "ppc_stat_grouped"),
+                c("ppc_intervals", "ppc_ribbon"),
+                c("ppc_scatter_avg", "ppc_error_hist"),
+                c("ppc_rootogram", "ppc_pit_ecdf")
+              ),
+              c(t$p5_dist, t$p5_stats, t$p5_intv, t$p5_scat, t$p5_spec)
             )
           ),
           uiOutput("free_group_ui"),
