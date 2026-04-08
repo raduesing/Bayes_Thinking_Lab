@@ -965,41 +965,71 @@ function updateMetrics(gc,data) {
 
 function updateRCode(data) {
   const {theta,gammaA,gammaY,xi,n}=data;
-  const wi=xi!==0;  // nur für DGP-Zeile
-  const formula='Y ~ A * L';  // immer: konservativer Default (s. Methodik)
+  const wi=xi!==0;
+  const formula='Y ~ A * L';
   const est=ESTIMAND;
+  const estVar=est==='ATE'?'ate_post':est==='ATT'?'att_post':'atu_post';
+  const estFile=est.toLowerCase()+'_draws.csv';
+
   let r=`library(tidyverse)\nlibrary(brms)\nlibrary(marginaleffects)\n\n`;
-  r+=`# ── DGP simulieren (entspricht den Schieberegler-Einstellungen) ──\n`;
+
+  r+=`# ── 1 · DGP simulieren (entspricht den Schieberegler-Einstellungen) ──────────\n`;
   r+=`set.seed(42)\nn <- ${n}\nL <- rnorm(n)\n`;
   r+=`A <- rbinom(n, 1, plogis(${gammaA.toFixed(2)} * L))\n`;
   r+=wi?`Y <- (${theta.toFixed(2)} + 0.5 * L) * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`
        :`Y <- ${theta.toFixed(2)} * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`;
   r+=`dat <- data.frame(L, A = factor(A), Y)\n\n`;
-  r+=`# ── Naiver Vergleich (zum Vergleich / Baseline) ─────\n`;
-  r+=`# Ignoriert den Confounder L — zeigt den Confounding-Bias:\n`;
+
+  r+=`# ── 2 · Naiver Vergleich (Baseline — zeigt Confounding-Bias) ─────────────────\n`;
+  r+=`# Ignoriert den Confounder L:\n`;
   r+=`mean(dat$Y[dat$A == 1]) - mean(dat$Y[dat$A == 0])\n`;
-  r+=`# oder:\nlm(Y ~ A, data = dat) |> summary()\n\n`;
-  r+=`# ── Formelwahl: Y ~ A * L als konservativer Default ────────\n`;
-  r+=`# Der DAG kodiert keine funktionale Form. Ob A:L n\u00f6tig ist,\n`;
-  r+=`# entscheidet Dom\u00e4nenwissen: Moderiert L den Effekt von A auf Y?\n`;
-  r+=`# Empirisch pr\u00fcfen mit loo_compare() — fehlt Evidenz, ist A+L sparsamer.\n\n`;
-  r+=`# ── G-Computation (voll Bayesianisch mit brms) ───────\n`;
-  r+=`fit_gc <- brm(\n  formula = ${formula},\n  data = dat,\n  prior = c(\n    prior(normal(0, 2),  class = b),\n    prior(normal(0, 10), class = Intercept)\n  )\n)\n\n`;
-  r+=`# Kausaler Effekt via Standardisierung (marginaleffects):\n`;
-  if(est==='ATE') r+=`avg_comparisons(fit_gc, variables = "A")           # ATE\n`;
-  else if(est==='ATT') r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 1))                   # ATT\n`;
-  else r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 0))                   # ATU\n`;
-  r+=`\n# Modellvergleich — ist die Interaktion A:L n\u00f6tig?\n`;
-  r+=`fit_add <- update(fit_gc, formula. = Y ~ A + L)  # additives Modell\n`;
-  r+=`loo_compare(loo(fit_gc), loo(fit_add))            # neg. elpd_diff: A*L bevorzugt\n\n`;
-  r+=`\n# Kontrafaktuale Vorhersagen + individuelle Behandlungseffekte:\n`;
-  r+=`dat1 <- transform(dat, A = factor(1))  # alle auf A=1 setzen\n`;
-  r+=`dat0 <- transform(dat, A = factor(0))  # alle auf A=0 setzen\n`;
-  r+=`po1 <- posterior_epred(fit_gc, newdata = dat1)  # draws × n Matrix\n`;
-  r+=`po0 <- posterior_epred(fit_gc, newdata = dat0)\n`;
-  r+=`ite_mat <- po1 - po0                            # individuelle kausale Effekte\n`;
-  r+=`ate_post <- rowMeans(ite_mat)                   # ATE-Posterior (ein Wert pro Draw)\n`;
-  r+=`quantile(ate_post, c(0.025, 0.5, 0.975))        # Median + 95% HDI`;
+  r+=`lm(Y ~ A, data = dat) |> summary()\n\n`;
+
+  r+=`# ── 3 · Modellformel w\u00e4hlen ──────────────────────────────────────────────────\n`;
+  r+=`# Y ~ A * L als konservativer Default (kodiert m\u00f6gliche Effekt-Heterogenit\u00e4t).\n`;
+  r+=`# Ob A:L n\u00f6tig ist, entscheidet Dom\u00e4nenwissen: Moderiert L den Effekt von A?\n`;
+  r+=`# Empirisch pr\u00fcfen mit loo_compare() — fehlt Evidenz, ist Y ~ A + L sparsamer.\n\n`;
+
+  r+=`# ── 4 · G-Computation (voll Bayesianisch mit brms) ───────────────────────────\n`;
+  r+=`fit_gc <- brm(\n  formula = ${formula},\n  data    = dat,\n  prior   = c(\n    prior(normal(0, 2),  class = b),\n    prior(normal(0, 10), class = Intercept)\n  )\n)\n\n`;
+
+  r+=`# ── 5 · Kausaler Effekt via Standardisierung (${est}) ──────────────────────────\n`;
+  r+=`# avg_comparisons() f\u00fchrt G-Computation intern durch:\n`;
+  r+=`# F\u00fcr jeden Posterior-Draw → E[Y(A=1)] − E[Y(A=0)] \u00fcber die Zielpopulation.\n`;
+  r+=`# Die Draws liegen auf der Response-Skala — auch bei GLMs korrekt.\n`;
+  if(est==='ATE') r+=`comp <- avg_comparisons(fit_gc, variables = "A")           # ATE: gesamte Population\n`;
+  else if(est==='ATT') r+=`comp <- avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 1))                         # ATT: nur Behandelte\n`;
+  else r+=`comp <- avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 0))                         # ATU: nur Unbehandelte\n`;
+  r+=`comp                                                   # Zusammenfassung: Median + 95% CI\n\n`;
+
+  r+=`# ── 6 · Export f\u00fcr Decision Maker (HDI / ETI / ROPE) ───────────────────────\n`;
+  r+=`# posteriordraws() extrahiert die Draw-Verteilung direkt aus comp:\n`;
+  r+=`${estVar} <- posteriordraws(comp)$draw\n\n`;
+  r+=`# \u26a0 Rohe Parameter-Draws (z. B. \u03b2_A) NICHT verwenden wenn das Modell einen\n`;
+  r+=`#   GLM-Link nutzt (Logit, Log etc.) — diese liegen auf der Link-Skala, nicht\n`;
+  r+=`#   auf der Response-Skala. G-Computation-Draws sind dann die korrekte Wahl.\n`;
+  r+=`write.csv(\n  data.frame(draw = ${estVar}),\n  "${estFile}",\n  row.names = FALSE\n)\n`;
+  r+=`# Im Decision Maker: Draws importieren \u2192 ${estFile} hochladen.\n\n`;
+
+  r+=`# ── 7 · Modellvergleich \u2014 Interaktion A:L n\u00f6tig? (optional) ────────────────\n`;
+  r+=`fit_add <- update(fit_gc, formula. = Y ~ A + L)     # additives Modell\n`;
+  r+=`loo_compare(loo(fit_gc), loo(fit_add))              # neg. elpd_diff: A*L bevorzugt\n\n`;
+
+  r+=`# ── 8 · Kontrafaktuale + individuelle Effekte (didaktisch, nicht zwingend) ──\n`;
+  r+=`# Zeigt was avg_comparisons() intern tut. N\u00fctzlich um Effekt-Heterogenit\u00e4t\n`;
+  r+=`# auf Personenebene zu visualisieren — f\u00fcr den Standardworkflow nicht n\u00f6tig.\n`;
+  r+=`dat1    <- transform(dat, A = factor(1))            # alle auf A=1 setzen\n`;
+  r+=`dat0    <- transform(dat, A = factor(0))            # alle auf A=0 setzen\n`;
+  r+=`po1     <- posterior_epred(fit_gc, newdata = dat1)  # draws \u00d7 n Matrix\n`;
+  r+=`po0     <- posterior_epred(fit_gc, newdata = dat0)\n`;
+  r+=`ite_mat <- po1 - po0                                # individuelle kausale Effekte\n`;
+  if(est==='ATE')
+    r+=`rowMeans(ite_mat)                                   # ATE: Mittel \u00fcber alle n\n`;
+  else if(est==='ATT')
+    r+=`rowMeans(ite_mat[, dat$A == 1, drop=FALSE])         # ATT: Mittel \u00fcber Behandelte\n`;
+  else
+    r+=`rowMeans(ite_mat[, dat$A == 0, drop=FALSE])         # ATU: Mittel \u00fcber Unbehandelte\n`;
+
   document.getElementById('rcode-block').textContent=r;
 }
 

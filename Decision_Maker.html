@@ -355,30 +355,45 @@ nav{position:sticky;top:0;z-index:300;background:var(--paper);border-bottom:1.5p
     </div>
 
     <div class="collap-hd" onclick="toggleCollap(this)">
-      <span>▸ R-Code: as_draws_df() — wie exportiere ich Draws aus brms?</span>
+      <span>▸ R-Code: Draws exportieren (brms · G-Computation)</span>
       <span class="arr">▶</span>
     </div>
     <div class="collap-body">
-      <div class="rcode"># ── Draws aus brms exportieren ─────────────────────────────────────────────
+      <div class="rcode"># ── 1 · Standard: Parameter-Draws aus brms ──────────────────────────────────
+# Geeignet für lineare Modelle (Gaussian family, Identity-Link).
 library(brms)
 
-# Modell anpassen
-fit &lt;- brm(y ~ age + treatment, data = d, family = gaussian(),
-           chains = 4, iter = 2000, seed = 42)
-
-# Draws als data.frame exportieren
-draws &lt;- as_draws_df(fit)   # alle Parameter (inkl. .chain, .iteration, .draw)
-
-# Tipp: Für diese Analyse nur relevante Spalten exportieren — bitte individuell anpassen.
-# z.B. (nur wenn deine Parameter tatsächlich mit "b_" beginnen und "sigma" heißen):
-draws_clean &lt;- draws |&gt;
-  dplyr::select(starts_with("b_"), sigma)   # Beispiel! Eigene Spaltennamen verwenden.
-
+draws &lt;- as_draws_df(fit)                      # alle Parameter als data.frame
+draws_clean &lt;- dplyr::select(draws,
+  starts_with("b_"), sigma)                    # nur relevante Spalten — anpassen!
 write.csv(draws_clean, "draws.csv", row.names = FALSE)
 
-# ── Für Stan / rstanarm ──────────────────────────────────────────────────────
-# Stan: posterior::as_draws_df(fit$draws())
-# rstanarm: as.data.frame(fit) oder posterior_samples(fit)</div>
+# Stan:    posterior::as_draws_df(fit$draws())
+# rstanarm: as.data.frame(fit)
+
+# ── 2 · G-Computation-Draws aus brms (ATE) ──────────────────────────────────
+# Verwende diese Option wenn dein Modell einen GLM-Link nutzt (Logit, Log etc.).
+# Rohe β-Draws liegen dann auf der Link-Skala — inhaltlich oft falsch.
+# G-Computation-Draws liegen immer auf der Response-Skala (z. B. Prozentpunkte).
+# Hinweis: Dieser Code schätzt nur den ATE (gesamte Population).
+# Für ATT oder ATU: siehe Causal Calculator → Abschnitt 5 & 6.
+library(marginaleffects)
+
+comp     &lt;- avg_comparisons(fit_gc, variables = "A")  # ATE: gesamte Population
+comp                                                   # Zusammenfassung: Median + 95% CI
+
+# posteriordraws() extrahiert die Draw-Verteilung direkt aus comp:
+ate_post &lt;- posteriordraws(comp)$draw
+
+# ⚠ Rohe Parameter-Draws (z. B. β_A) NICHT verwenden: bei GLMs oder
+#   Interaktionen liegen diese auf der falschen Skala. Nur G-Computation-Draws
+#   (aus posteriordraws(avg_comparisons(...))) sind inhaltlich korrekt.
+write.csv(
+  data.frame(draw = ate_post),
+  "ate_draws.csv",
+  row.names = FALSE
+)
+# Dann hier hochladen — die Spalte heißt "draw".</div>
       <button class="cbtn" onclick="copyCode(this)">Kopieren</button>
     </div>
   </div>
@@ -635,6 +650,13 @@ const HELP_CONTENT = {
     html: `
 <h4>Was erwartet das Tool?</h4>
 <p>Eine <strong>CSV-Datei</strong> mit Posterior Draws: jede Spalte ist ein Modellparameter, jede Zeile ein Draw (eine Stichprobe aus dem Posterior). Typischerweise 1000–8000 Zeilen.</p>
+<h4>Welche Draws importieren?</h4>
+<p><strong>Standardfall — Parameter-Draws aus brms:</strong><br>
+<code>as_draws_df(fit)</code> exportiert alle Parameter. Geeignet für lineare Modelle mit Identity-Link (Gaussian family).</p>
+<p><strong>G-Computation-Draws (Causal Calculator):</strong><br>
+Wenn du ATE/ATT/ATU mit dem Causal Calculator geschätzt hast und dein Modell einen <em>GLM-Link</em> nutzt (Logit, Log etc.), verwende die G-Computation-Draws — nicht die rohen β-Draws. Rohe β-Draws liegen auf der Link-Skala, nicht auf der inhaltlich relevanten Response-Skala.<br>
+Workflow: Causal Calculator → Abschnitt 6 → <code>ate_draws.csv</code> herunterladen → hier hochladen. Die Spalte heißt <code>draw</code>.</p>
+<div class="note">Lineare Modelle (Identity-Link): rohe β-Draws sind korrekt. Bei GLMs (Logit, Log, …): G-Computation-Draws aus dem Causal Calculator nutzen.</div>
 <h4>as_draws_df() — das Standardformat</h4>
 <p>In brms ist <code>as_draws_df(fit)</code> die empfohlene Methode. Sie exportiert alle Chains kombiniert. Spalten mit <code>.</code>-Präfix (<code>.chain</code>, <code>.iteration</code>, <code>.draw</code>) sind Metadaten und werden automatisch erkannt.</p>
 <pre>library(brms)

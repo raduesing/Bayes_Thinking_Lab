@@ -964,41 +964,71 @@ function updateMetrics(gc,data) {
 
 function updateRCode(data) {
   const {theta,gammaA,gammaY,xi,n}=data;
-  const wi=xi!==0;  // only for DGP line
-  const formula='Y ~ A * L';  // always: conservative default (see Methodology)
+  const wi=xi!==0;
+  const formula='Y ~ A * L';
   const est=ESTIMAND;
+  const estVar=est==='ATE'?'ate_post':est==='ATT'?'att_post':'atu_post';
+  const estFile=est.toLowerCase()+'_draws.csv';
+
   let r=`library(tidyverse)\nlibrary(brms)\nlibrary(marginaleffects)\n\n`;
-  r+=`# ── Simulate DGP (matches slider settings) ──\n`;
+
+  r+=`# ── 1 · Simulate DGP (matches slider settings) ──────────────────────────────\n`;
   r+=`set.seed(42)\nn <- ${n}\nL <- rnorm(n)\n`;
   r+=`A <- rbinom(n, 1, plogis(${gammaA.toFixed(2)} * L))\n`;
   r+=wi?`Y <- (${theta.toFixed(2)} + 0.5 * L) * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`
        :`Y <- ${theta.toFixed(2)} * A + ${gammaY.toFixed(2)} * L + rnorm(n)\n`;
   r+=`dat <- data.frame(L, A = factor(A), Y)\n\n`;
-  r+=`# ── Naive comparison (baseline / reference) ─────\n`;
-  r+=`# Ignores confounder L — shows confounding bias:\n`;
+
+  r+=`# ── 2 · Naive comparison (baseline — shows confounding bias) ─────────────────\n`;
+  r+=`# Ignores confounder L:\n`;
   r+=`mean(dat$Y[dat$A == 1]) - mean(dat$Y[dat$A == 0])\n`;
-  r+=`# or:\nlm(Y ~ A, data = dat) |> summary()\n\n`;
-  r+=`# ── Formula choice: Y ~ A * L as conservative default ────────\n`;
-  r+=`# The DAG encodes no functional form. Whether A:L is needed\n`;
-  r+=`# is decided by domain knowledge: does L moderate the effect of A on Y?\n`;
-  r+=`# Test empirically with loo_compare() — if no evidence, A+L is more parsimonious.\n\n`;
-  r+=`# ── G-Computation (fully Bayesian via brms) ───────\n`;
-  r+=`fit_gc <- brm(\n  formula = ${formula},\n  data = dat,\n  prior = c(\n    prior(normal(0, 2),  class = b),\n    prior(normal(0, 10), class = Intercept)\n  )\n)\n\n`;
-  r+=`# Causal effect via standardisation (marginaleffects):\n`;
-  if(est==='ATE') r+=`avg_comparisons(fit_gc, variables = "A")           # ATE\n`;
-  else if(est==='ATT') r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 1))                   # ATT\n`;
-  else r+=`avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 0))                   # ATU\n`;
-  r+=`\n# Model comparison — is the A:L interaction needed?\n`;
-  r+=`fit_add <- update(fit_gc, formula. = Y ~ A + L)  # additive model\n`;
-  r+=`loo_compare(loo(fit_gc), loo(fit_add))            # neg. elpd_diff: A*L preferred\n\n`;
-  r+=`\n# Counterfactual predictions + individual treatment effects:\n`;
-  r+=`dat1 <- transform(dat, A = factor(1))  # set everyone to A=1\n`;
-  r+=`dat0 <- transform(dat, A = factor(0))  # set everyone to A=0\n`;
-  r+=`po1 <- posterior_epred(fit_gc, newdata = dat1)  # draws × n matrix\n`;
-  r+=`po0 <- posterior_epred(fit_gc, newdata = dat0)\n`;
-  r+=`ite_mat <- po1 - po0                            # individual causal effects\n`;
-  r+=`ate_post <- rowMeans(ite_mat)                   # ATE posterior (one value per draw)\n`;
-  r+=`quantile(ate_post, c(0.025, 0.5, 0.975))        # Median + 95% HDI`;
+  r+=`lm(Y ~ A, data = dat) |> summary()\n\n`;
+
+  r+=`# ── 3 · Choose model formula ─────────────────────────────────────────────────\n`;
+  r+=`# Y ~ A * L as conservative default (allows for effect heterogeneity).\n`;
+  r+=`# Whether A:L is needed is decided by domain knowledge: does L moderate A's effect?\n`;
+  r+=`# Test empirically with loo_compare() — if no evidence, Y ~ A + L is more parsimonious.\n\n`;
+
+  r+=`# ── 4 · G-Computation (fully Bayesian via brms) ──────────────────────────────\n`;
+  r+=`fit_gc <- brm(\n  formula = ${formula},\n  data    = dat,\n  prior   = c(\n    prior(normal(0, 2),  class = b),\n    prior(normal(0, 10), class = Intercept)\n  )\n)\n\n`;
+
+  r+=`# ── 5 · Causal effect via standardisation (${est}) ───────────────────────────────\n`;
+  r+=`# avg_comparisons() performs G-Computation internally:\n`;
+  r+=`# For each posterior draw → E[Y(A=1)] − E[Y(A=0)] over the target population.\n`;
+  r+=`# Draws are on the response scale — correct even for GLMs.\n`;
+  if(est==='ATE') r+=`comp <- avg_comparisons(fit_gc, variables = "A")           # ATE: entire population\n`;
+  else if(est==='ATT') r+=`comp <- avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 1))                         # ATT: treated only\n`;
+  else r+=`comp <- avg_comparisons(fit_gc, variables = "A",\n  newdata = subset(dat, A == 0))                         # ATU: untreated only\n`;
+  r+=`comp                                                   # Summary: median + 95% CI\n\n`;
+
+  r+=`# ── 6 · Export for Decision Maker (HDI / ETI / ROPE) ────────────────────────\n`;
+  r+=`# posteriordraws() extracts the draw distribution directly from comp:\n`;
+  r+=`${estVar} <- posteriordraws(comp)$draw\n\n`;
+  r+=`# \u26a0 Do NOT use raw parameter draws (e.g. \u03b2_A) if the model uses a GLM link\n`;
+  r+=`#   (logit, log etc.) — these are on the link scale, not the response scale.\n`;
+  r+=`#   G-Computation draws are the correct choice in that case.\n`;
+  r+=`write.csv(\n  data.frame(draw = ${estVar}),\n  "${estFile}",\n  row.names = FALSE\n)\n`;
+  r+=`# In the Decision Maker: import draws \u2192 upload ${estFile}.\n\n`;
+
+  r+=`# ── 7 · Model comparison \u2014 is the A:L interaction needed? (optional) ────────\n`;
+  r+=`fit_add <- update(fit_gc, formula. = Y ~ A + L)     # additive model\n`;
+  r+=`loo_compare(loo(fit_gc), loo(fit_add))              # neg. elpd_diff: A*L preferred\n\n`;
+
+  r+=`# ── 8 · Counterfactuals + individual effects (didactic, not required) ────────\n`;
+  r+=`# Shows what avg_comparisons() does internally. Useful for visualising\n`;
+  r+=`# effect heterogeneity at the person level — not needed for the standard workflow.\n`;
+  r+=`dat1    <- transform(dat, A = factor(1))            # set everyone to A=1\n`;
+  r+=`dat0    <- transform(dat, A = factor(0))            # set everyone to A=0\n`;
+  r+=`po1     <- posterior_epred(fit_gc, newdata = dat1)  # draws \u00d7 n matrix\n`;
+  r+=`po0     <- posterior_epred(fit_gc, newdata = dat0)\n`;
+  r+=`ite_mat <- po1 - po0                                # individual causal effects\n`;
+  if(est==='ATE')
+    r+=`rowMeans(ite_mat)                                   # ATE: mean over all n\n`;
+  else if(est==='ATT')
+    r+=`rowMeans(ite_mat[, dat$A == 1, drop=FALSE])         # ATT: mean over treated\n`;
+  else
+    r+=`rowMeans(ite_mat[, dat$A == 0, drop=FALSE])         # ATU: mean over untreated\n`;
+
   document.getElementById('rcode-block').textContent=r;
 }
 

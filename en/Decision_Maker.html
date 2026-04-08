@@ -356,30 +356,45 @@ nav{position:sticky;top:0;z-index:300;background:var(--paper);border-bottom:1.5p
     </div>
 
     <div class="collap-hd" onclick="toggleCollap(this)">
-      <span>▸ R code: as_draws_df() — how to export draws from brms?</span>
+      <span>▸ R code: Export draws (brms · G-Computation)</span>
       <span class="arr">▶</span>
     </div>
     <div class="collap-body">
-      <div class="rcode"># ── Export draws from brms ─────────────────────────────────────────────
+      <div class="rcode"># ── 1 · Standard: parameter draws from brms ─────────────────────────────────
+# Suitable for linear models (Gaussian family, identity link).
 library(brms)
 
-# Fit model
-fit &lt;- brm(y ~ age + treatment, data = d, family = gaussian(),
-           chains = 4, iter = 2000, seed = 42)
-
-# Export draws as data.frame
-draws &lt;- as_draws_df(fit)   # all parameters (incl. .chain, .iteration, .draw)
-
-# Tip: For this analysis, export only relevant columns — adjust individually.
-# e.g. (only if your parameters actually start with "b_" and are named "sigma"):
-draws_clean &lt;- draws |&gt;
-  dplyr::select(starts_with("b_"), sigma)   # Example! Use your own column names.
-
+draws &lt;- as_draws_df(fit)                      # all parameters as data.frame
+draws_clean &lt;- dplyr::select(draws,
+  starts_with("b_"), sigma)                    # relevant columns only — adjust!
 write.csv(draws_clean, "draws.csv", row.names = FALSE)
 
-# ── For Stan / rstanarm ──────────────────────────────────────────────────────
-# Stan: posterior::as_draws_df(fit$draws())
-# rstanarm: as.data.frame(fit) or posterior_samples(fit)</div>
+# Stan:    posterior::as_draws_df(fit$draws())
+# rstanarm: as.data.frame(fit)
+
+# ── 2 · G-Computation draws from brms (ATE) ─────────────────────────────────
+# Use this option if your model uses a GLM link (logit, log etc.).
+# Raw β draws are on the link scale — substantively incorrect in that case.
+# G-Computation draws are always on the response scale (e.g. percentage points).
+# Note: this code estimates the ATE (entire population) only.
+# For ATT or ATU: see Causal Calculator → sections 5 & 6.
+library(marginaleffects)
+
+comp     &lt;- avg_comparisons(fit_gc, variables = "A")  # ATE: entire population
+comp                                                   # Summary: median + 95% CI
+
+# posteriordraws() extracts the draw distribution directly from comp:
+ate_post &lt;- posteriordraws(comp)$draw
+
+# ⚠ Do NOT use raw parameter draws (e.g. β_A) if the model uses a GLM link
+#   (logit, log etc.) — these are on the link scale, not the response scale.
+#   G-Computation draws are the correct choice in that case.
+write.csv(
+  data.frame(draw = ate_post),
+  "ate_draws.csv",
+  row.names = FALSE
+)
+# Then upload here — the column is named "draw".</div>
       <button class="cbtn" onclick="copyCode(this)">Copy</button>
     </div>
   </div>
@@ -636,6 +651,13 @@ const HELP_CONTENT = {
     html: `
 <h4>What does the tool expect?</h4>
 <p>A <strong>CSV file</strong> with posterior draws: each column is a model parameter, each row is a draw (a sample from the posterior). Typically 1000–8000 rows.</p>
+<h4>Which draws to import?</h4>
+<p><strong>Standard — parameter draws from brms:</strong><br>
+<code>as_draws_df(fit)</code> exports all parameters. Suitable for linear models with identity link (Gaussian family).</p>
+<p><strong>G-Computation draws (Causal Calculator):</strong><br>
+If you estimated ATE/ATT/ATU with the Causal Calculator and your model uses a <em>GLM link</em> (logit, log etc.), use G-Computation draws — not raw β draws. Raw β draws are on the link scale, not on the substantively relevant response scale.<br>
+Workflow: Causal Calculator → section 6 → download <code>ate_draws.csv</code> → upload here. The column is named <code>draw</code>.</p>
+<div class="note">Linear models (identity link): raw β draws are correct. GLMs (logit, log, …): use G-Computation draws from the Causal Calculator.</div>
 <h4>as_draws_df() — the standard format</h4>
 <p>In brms, <code>as_draws_df(fit)</code> is the recommended method. It exports all chains combined. Columns with a <code>.</code>-prefix (<code>.chain</code>, <code>.iteration</code>, <code>.draw</code>) are metadata and are detected automatically.</p>
 <pre>library(brms)
