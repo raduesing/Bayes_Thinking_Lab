@@ -4,14 +4,14 @@
 
 <div align="center">
 
-# Bayes Thinking Lab `v0.7`
+# Bayes Thinking Lab `v1.0`
 ### Statistical Intuition, Reimagined.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Static Badge](https://img.shields.io/badge/Status-Academic_Project-blue)]()
 [![Static Badge](https://img.shields.io/badge/Tech-Vanilla_JS-orange)]()
 
-**A comprehensive, interactive suite that guides users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making.**
+**18 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation and GLM-scale prior specification.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -38,11 +38,10 @@ The lab is organized into five sections that build on each other. Work through t
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | GLM Conditional Distributions · GLM 3D · Interactive GLMM |
 | **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
-| **III · Bayesian Workflow** | How to specify, build, check, and export hierarchical Bayesian models | Model Architect · brms Model Builder · Prior & Posterior Predictive Check |
-| **IV · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Decision Lab · Decision Maker |
+| **III · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Golem Builder · Model Architect · brms Builder · Prior & Posterior PPC · LOO Lab |
+| **IV · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · Decision Lab · Decision Maker |
 
-> **⬡ Recommended alongside Section III — not obligatory:**
-> The **[Golem Builder](Golem_builder.html)** supports causal reasoning via DAGs before model specification. Many workflows do not require DAGs, but when causal questions matter, starting here pays off. See Section III below.
+> **⬡ Workflow tip:** The **Golem Builder** (Section III) feeds directly into the **Causal Calculator** (Section IV). Draw your DAG, identify the adjustment set — then estimate ATE, ATT, and ATU via G-Computation on the correct outcome scale.
 
 ---
 
@@ -70,7 +69,7 @@ The lab is organized into five sections that build on each other. Work through t
 *Learn to think in probability distributions.*
 
 * **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
-* **Prior Lab** — Translate verbal uncertainty statements into mathematical priors. A real-time CI-solver maps your beliefs onto distribution parameters.
+* **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode** (new in v1.0): enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios).
 * **MCMC Visualizer** — Watch the Metropolis-Hastings sampler navigate the posterior landscape — the "animated hiker" analogy made interactive.
 * **Bayes Interactive** — Manipulate prior strength, likelihood, and sample size and see how they jointly shape the posterior. Includes CI and PPI bands for the full posterior predictive.
 
@@ -80,21 +79,23 @@ The lab is organized into five sections that build on each other. Work through t
 *Tools for the applied scientist.*
 
 * **Bayesian Model Architect** — Build hierarchical Bayesian model structures visually in Kruschke-diagram style. See how priors, hyperpriors, and random effects (intercepts and slopes: u₀ⱼ, u₁ⱼ, τ₀, τ₁) connect in a live diagram — then generate R simulation code for prior predictive checking.
-* **brms Model Builder** — Specify complex hierarchical models step by step across 15+ likelihood families, polynomial terms, interactions, and distributional parameters. Export production-ready `brms` code for R.
+* **brms Model Builder** — Specify complex hierarchical models step by step across 15+ likelihood families, polynomial terms, interactions, and distributional parameters. Export production-ready `brms` code for R. The generated code includes a commented-out `posterior_predict()` export block — ready to load into the Posterior Predictive Check app.
 * **Prior Predictive Check** — Import your brms model specification, explore the prior predictive distribution, and validate that your priors generate plausible data before fitting.
-* **Posterior Predictive Check** — Evaluate model fit and posterior behavior via a dedicated Shiny app with visual diagnostics and feedback.
+* **Posterior Predictive Check** — Evaluate model fit and posterior behavior via a dedicated Shiny app (R/bayesplot). Upload a saved `brms` object (`saveRDS(fit, "model.rds")`), walk through KDE overlay, summary statistics, error structure, and prediction intervals with guided evaluation.
+* **LOO Lab** — Compare models after fitting. Paste `loo_compare()` output directly from R and receive an annotated forest plot, Pareto-k diagnostics, and a traffic-light decision rule. Includes an animated LOO walkthrough (Stage 1) that requires no R.
 
 > **⬡ Recommended: Causal Reasoning with the Golem Builder**
 >
-> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and front-door criteria, and generate brms simulation code — all in the browser. Causal reasoning is not a required step in the workflow, but when the causal question matters, starting here pays off.
+> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**, and generate brms simulation code — all in the browser. The Golem Builder feeds directly into the **Causal Calculator** (Section IV): its adjustment set defines the estimand, its simulation code seeds the model.
 
 ---
 
 ### IV. Posterior Decision
 *Move from estimation to decision.*
 
+* **Causal Calculator** — Estimate causal effects via **G-Computation (standardization)**. Make confounding visible, correct naive regression bias, and compare ATE (Average Treatment Effect), ATT, and ATU — visualized as counterfactual distributions. Requires a DAG adjustment set from the Golem Builder and a fitted brms model. Exports draws in a format compatible with the Decision Maker.
 * **Decision Lab** — Apply three principled decision frameworks to any posterior distribution: **Kruschke's HDI vs. ROPE trichotomy** (accept / reject / undecided), **Full ROPE %** (probability of practical equivalence), and **ETI vs. ROPE**. Supports Normal, Student-t, and Gamma posteriors with analytically correct HDI and ETI computation.
-* **Decision Maker** — Upload your own posterior samples via CSV, define a Region of Practical Equivalence (ROPE / SESOI), compute HDI and ETI, and export a complete **APA-formatted decision report** — ready to paste into a manuscript.
+* **Decision Maker** — Upload your own posterior samples via CSV (from brms, Stan, or rstanarm), define transformations and derived quantities as formulas (Cohen's d, Odds Ratios, etc.), compute HDI and ETI, and export a complete **APA-formatted decision report** — ready to paste into a manuscript.
 
 ---
 
@@ -117,9 +118,9 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 | Level | Recommended Entry Point | Tools to Explore |
 | :--- | :--- | :--- |
-| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Bayes Interactive |
-| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab · Model Architect |
-| **PhD / Researchers** | Section III–IV | brms Model Builder · Golem Builder · Prior & Posterior P. Check · Decision Maker |
+| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Prior Lab (CI-Solver) · Bayes Interactive |
+| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
+| **PhD / Researchers** | Section III–IV | brms Model Builder · Golem Builder · Prior & Posterior PPC · LOO Lab · Causal Calculator · Decision Maker |
 
 ---
 
@@ -145,7 +146,7 @@ If you use the **Bayes Thinking Lab** for research, teaching, or software develo
 <div align="left">
 
 ### APA Style
-> Düsing, R. (2026). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 0.7). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
+> Düsing, R. (2026). *Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow* (Version 1.0). GitHub. https://github.com/raduesing/Bayes_Thinking_Lab
 
 ### BibTeX
 ```bibtex
@@ -153,7 +154,7 @@ If you use the **Bayes Thinking Lab** for research, teaching, or software develo
   author  = {Düsing, Rainer},
   title   = {{Bayes Thinking Lab: An interactive suite for Bayesian intuition and brms workflow}},
   url     = {https://github.com/raduesing/Bayes_Thinking_Lab},
-  version = {0.7.0},
+  version = {1.0.0},
   year    = {2026}
 }
 ```
