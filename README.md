@@ -41,7 +41,7 @@ The lab is organized into five sections that build on each other. Work through t
 | **III · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Golem Builder · Model Architect · brms Builder · Prior & Posterior PPC · LOO Lab |
 | **IV · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · Decision Lab · Decision Maker |
 
-> **⬡ Workflow tip:** The **Golem Builder** (Section III) feeds directly into the **Causal Calculator** (Section IV). Draw your DAG, identify the adjustment set — then estimate ATE, ATT, and ATU via G-Computation on the correct outcome scale.
+> **⬡ Workflow tip:** Use the **Golem Builder** (Section III) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. The **Causal Calculator** (Section IV) then shows — with a worked example — how to implement exactly this kind of analysis via G-Computation in brms.
 
 ---
 
@@ -86,14 +86,14 @@ The lab is organized into five sections that build on each other. Work through t
 
 > **⬡ Recommended: Causal Reasoning with the Golem Builder**
 >
-> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**, and generate brms simulation code — all in the browser. The Golem Builder feeds directly into the **Causal Calculator** (Section IV): its adjustment set defines the estimand, its simulation code seeds the model.
+> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**, and generate brms simulation code — all in the browser. The conceptual groundwork done here — knowing which variables to adjust for and why — is exactly what the **Causal Calculator** (Section IV) demonstrates in a worked example.
 
 ---
 
 ### IV. Posterior Decision
 *Move from estimation to decision.*
 
-* **Causal Calculator** — Estimate causal effects via **G-Computation (standardization)**. Make confounding visible, correct naive regression bias, and compare ATE (Average Treatment Effect), ATT, and ATU — visualized as counterfactual distributions. Requires a DAG adjustment set from the Golem Builder and a fitted brms model. Exports draws in a format compatible with the Decision Maker.
+* **Causal Calculator** — A worked example of causal effect estimation via **G-Computation (standardization)**. Shows how to make confounding visible, correct naive regression bias, and compare ATE, ATT, and ATU — visualized as counterfactual distributions. Use the Golem Builder to identify the correct adjustment set for your own research question; the Causal Calculator shows how to implement that analysis in brms. Exports draws compatible with the Decision Maker.
 * **Decision Lab** — Apply three principled decision frameworks to any posterior distribution: **Kruschke's HDI vs. ROPE trichotomy** (accept / reject / undecided), **Full ROPE %** (probability of practical equivalence), and **ETI vs. ROPE**. Supports Normal, Student-t, and Gamma posteriors with analytically correct HDI and ETI computation.
 * **Decision Maker** — Upload your own posterior samples via CSV (from brms, Stan, or rstanarm), define transformations and derived quantities as formulas (Cohen's d, Odds Ratios, etc.), compute HDI and ETI, and export a complete **APA-formatted decision report** — ready to paste into a manuscript.
 
