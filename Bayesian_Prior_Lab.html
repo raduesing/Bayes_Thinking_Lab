@@ -263,6 +263,70 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
   font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.7;
 }
 #ppc-hint b{color:var(--ink)}#ppc-hint .hl{color:var(--a3)}
+
+/* ── GLM MODE TOGGLE ─────────────────────────────────────── */
+#glm-toggle-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;flex-wrap:wrap}
+.glm-btn{
+  font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .65rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;letter-spacing:.03em;
+}
+.glm-btn.active{border-color:var(--a4);color:var(--a4);background:rgba(200,122,216,.08)}
+#glm-link-sel{
+  font-family:'DM Mono',monospace;font-size:.75rem;padding:.2rem .45rem;
+  border:1.5px solid var(--a4);background:var(--panel);color:var(--a4);
+  cursor:pointer;outline:none;display:none;
+}
+#glm-link-sel.show{display:inline-block}
+#glm-note{
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a4);
+  line-height:1.65;display:none;
+  background:rgba(200,122,216,.07);border-left:3px solid var(--a4);
+  padding:.35rem .6rem;margin-bottom:.55rem;
+}
+#glm-note.show{display:block}
+
+/* ── INTERCEPT / SLOPE TOGGLE ────────────────────────────── */
+#glm-param-row{display:none;gap:.35rem;margin-bottom:.5rem}
+.glm-param-btn{
+  font-family:'DM Mono',monospace;font-size:.75rem;padding:.2rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;letter-spacing:.03em;
+}
+.glm-param-btn.active{border-color:var(--a4);color:var(--a4);background:rgba(200,122,216,.08)}
+
+/* ── DUAL PANEL ─────────────────────────────────────────── */
+#plot-panels{display:flex;flex-direction:column;gap:.9rem;width:100%}
+#plot-panel-model{width:100%}
+#plot-panel-response{width:100%;display:none}
+.panel-label{
+  color:var(--a4);margin-bottom:.3rem;display:none;
+  border-bottom:1px solid var(--a4);padding-bottom:.3rem;
+}
+.plbl-title{
+  display:block;font-family:'DM Mono',monospace;font-size:.75rem;
+  letter-spacing:.07em;text-transform:uppercase;opacity:.7;
+}
+.plbl-sub{
+  display:block;font-family:'DM Mono',monospace;font-size:.65rem;
+  letter-spacing:.01em;text-transform:none;opacity:.6;
+  margin-top:.2rem;line-height:1.5;
+}
+
+/* ── GLM HILFE PANEL ─────────────────────────────────────── */
+#glm-help-panel{
+  display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
+  width:340px;z-index:700;background:var(--paper);border:1.5px solid var(--a1);
+  box-shadow:4px 4px 0 rgba(0,0,0,.25);max-height:85vh;overflow-y:auto;
+}
+#glm-help-panel.open{display:block}
+#glm-help-panel .hp-body{font-size:.67rem}
+#glm-help-panel .hp-body p{margin-bottom:.3rem;color:var(--ink2)}
+.glm-example-box{
+  background:var(--panel);padding:.38rem .55rem;margin:.3rem 0;
+  border-left:2px solid var(--a1);font-family:'DM Mono',monospace;
+  font-size:.65rem;color:var(--ink2);line-height:1.85;
+}
 </style>
 </head>
 <body>
@@ -342,7 +406,16 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
     <div id="plot-card">
       <div id="plot-title"></div>
       <div id="plot-desc"></div>
-      <div id="plot-svg-wrap"></div>
+      <div id="plot-panels">
+        <div id="plot-panel-model">
+          <div class="panel-label" id="panel-model-lbl"></div>
+          <div id="plot-svg-wrap"></div>
+        </div>
+        <div id="plot-panel-response">
+          <div class="panel-label" id="panel-response-lbl"></div>
+          <div id="plot-response-wrap"></div>
+        </div>
+      </div>
       <div id="coverage"></div>
     </div>
 
@@ -352,13 +425,26 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
       <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.65rem;line-height:1.65" id="solver-hint">
         <!-- Filled dynamically per distribution -->
       </div>
+      <div id="glm-toggle-row">
+        <button class="glm-btn" id="glm-toggle-btn" onclick="toggleGLM()">⬡ GLM-Modus</button>
+        <select id="glm-link-sel" onchange="onGLMLinkChange()">
+          <option value="logit">Logit (Bernoulli / Binomial)</option>
+          <option value="log">Log (Poisson / Gamma / NegBin)</option>
+        </select>
+        <button class="tbtn" id="glm-help-btn" onclick="toggleGLMHelp()" style="border-color:var(--a1);color:var(--a1);display:none;margin-left:auto">ℹ GLM-Modus Hilfe</button>
+      </div>
+      <div id="glm-param-row">
+        <button class="glm-param-btn active" id="gpb-intercept" onclick="toggleGLMParam('intercept')">Intercept</button>
+        <button class="glm-param-btn" id="gpb-slope" onclick="toggleGLMParam('slope')">Slope / β</button>
+      </div>
+      <div id="glm-note"></div>
       <div class="solver-grid">
         <div>
-          <div class="solver-lbl">Untere Grenze</div>
+          <div class="solver-lbl" id="ci-lo-lbl">Untere Grenze</div>
           <input type="number" id="ci-lo" value="-2" step="0.1">
         </div>
         <div>
-          <div class="solver-lbl">Obere Grenze</div>
+          <div class="solver-lbl" id="ci-hi-lbl">Obere Grenze</div>
           <input type="number" id="ci-hi" value="5" step="0.1">
         </div>
         <div>
@@ -457,6 +543,88 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 </div><!-- /app -->
 
 <div id="toast"></div>
+
+<!-- GLM Hilfe Panel -->
+<div id="glm-help-panel">
+  <div class="hp-head" style="border-bottom-color:rgba(232,97,74,.3)">
+    <span class="hp-title" style="color:var(--a1)">GLM Prior — Hilfe</span>
+    <button class="hp-close" onclick="toggleGLMHelp()">×</button>
+  </div>
+  <div class="hp-body">
+    <div class="hp-sect" style="color:var(--a1)">Das Grundproblem</div>
+    <p>Priors in brms müssen auf der <strong>Modellskala</strong> formuliert werden (Logit oder Log) — du denkst aber in Wahrscheinlichkeiten und Raten. Diese Skalen sind <em>nicht linear</em>: Normal(0,&nbsp;10) auf Logit klingt vage, drückt aber fast alle Prior-Masse an die Extremwerte p≈0% und p≈100%.</p>
+    <p>Der <strong>Solver</strong> schlägt diese Brücke: Du formulierst deine inhaltlichen Grenzen auf der Ausgangsskala — der Solver liefert die passenden Prior-Parameter auf der Modellskala, die du direkt in brms verwenden kannst.</p>
+    <p>Die zwei Plots visualisieren genau diesen Zusammenhang:</p>
+    <div class="glm-example-box" style="border-left-color:var(--a4)">
+      <strong>Plot oben — Modellskala:</strong> Die Prior-Verteilung so, wie sie in brms eingetragen werden muss (Logit- oder Log-Skala). Nicht intuitiv lesbar, aber technisch korrekt.<br><br>
+      <strong>Plot unten — Response-Skala:</strong> Was dieser Prior auf der Ausgangsskala impliziert (Wahrscheinlichkeit, Erwartungswert, OR/RR). Das ist, was wir eigentlich wollen — aber nicht direkt in brms formulieren können. Nur zur visuellen Orientierung.
+    </div>
+
+    <div class="hp-sect" style="color:var(--a1)">Warum exp(β) = Multiplikator?</div>
+    <p><strong>Log-Link</strong> (Poisson/Gamma):<br>
+    log(μ) = α + β·X &nbsp;→&nbsp; μ = exp(α) · exp(β·X)</p>
+    <p>Vergleich zweier Gruppen (X: 0 → 1):</p>
+    <div class="glm-example-box" style="border-left-color:var(--ink2)">
+      X=0: &nbsp;μ₀ = exp(α)<br>
+      X=1: &nbsp;μ₁ = exp(α + β) = exp(α) <strong>·</strong> exp(β)<br>
+      Rate Ratio = μ₁ / μ₀ = <strong>exp(β)</strong>
+    </div>
+    <p>Ein β von z.B. 0.69 bedeutet: exp(0.69) ≈ 2 → Rate verdoppelt sich. <em>β addieren auf Log-Skala = μ multiplizieren mit exp(β).</em> Deshalb denkt man beim Prior für β in Ratios, nicht in Differenzen.</p>
+    <p style="margin-top:.4rem"><strong>Logit-Link</strong> (Bernoulli/Binomial) — exakt dieselbe Struktur, nur mit Odds statt Raten:<br>
+    logit(P) = log(P/(1−P)) = α + β·X</p>
+    <div class="glm-example-box" style="border-left-color:var(--ink2)">
+      X=0: &nbsp;odds₀ = exp(α)<br>
+      X=1: &nbsp;odds₁ = exp(α + β) = exp(α) <strong>·</strong> exp(β)<br>
+      Odds Ratio = odds₁ / odds₀ = <strong>exp(β)</strong>
+    </div>
+
+    <div class="hp-sect" style="color:var(--a1)">Intercept — Basis-Niveau</div>
+    <p>Der Intercept bestimmt das Niveau, wenn alle Prädiktoren = 0 sind.</p>
+    <p><strong>Logit-Link:</strong> sigmoid(α) = Baseline-Wahrscheinlichkeit</p>
+    <div class="glm-example-box">
+      „Ohne Therapie genesen 10–40% der Patienten"<br>
+      → Eingabe: 0.10 bis 0.40<br>
+      → logit(0.10) ≈ −2.20 | logit(0.40) ≈ −0.41<br>
+      → Solver: <strong>Normal(−1.30, 0.46)</strong> auf Logit-Skala<br>
+      μ &lt; 0, weil die Baseline unter 50% liegt ✓
+    </div>
+    <p><strong>Log-Link:</strong> exp(α) = Baseline-Erwartungswert</p>
+    <div class="glm-example-box">
+      „Baseline: 3–15 Klinikaufenthalte pro Jahr"<br>
+      → Eingabe: 3 bis 15<br>
+      → log(3) ≈ 1.10 | log(15) ≈ 2.71<br>
+      → Solver: <strong>Normal(1.90, 0.41)</strong> auf Log-Skala<br>
+      μ ≈ 1.90, weil exp(1.90) ≈ 6.7 — Mitte von 3–15 ✓
+    </div>
+
+    <div class="hp-sect" style="color:var(--a1)">Slope / β — Effekt pro X-Einheit</div>
+    <p><strong>Logit-Link → Odds Ratio (OR) = exp(β):</strong></p>
+    <div class="glm-example-box">
+      „Therapie kann Odds leicht reduzieren oder stark erhöhen<br>
+      — OR zwischen 0.7 und 4.0 ist plausibel"<br>
+      → Eingabe: OR 0.70 bis 4.0<br>
+      → log(0.70) ≈ −0.36 | log(4.0) ≈ 1.39<br>
+      → Solver: <strong>Normal(0.52, 0.44)</strong> auf Logit-Skala<br>
+      μ &gt; 0, weil der Prior leicht Richtung positiver Effekt lehnt ✓
+    </div>
+    <p><strong>Log-Link → Rate Ratio (RR) = exp(β):</strong></p>
+    <div class="glm-example-box">
+      „Behandlung erhöht Ereignisrate um 50%–5-fach"<br>
+      → Eingabe: RR 1.5 bis 5.0<br>
+      → log(1.5) ≈ 0.41 | log(5.0) ≈ 1.61<br>
+      → Solver: <strong>Normal(1.01, 0.31)</strong> auf Log-Skala<br>
+      μ &gt; 0, weil Prior ausschließlich positive Effekte erwartet ✓
+    </div>
+
+    <div class="hp-sect" style="color:var(--a1)">Faustregel für Slopes</div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink2);line-height:1.9">
+      Normal(0, <strong>0.5</strong>) → 95%-CrI OR/RR ≈ 0.37–2.7 &nbsp;<em>(moderat)</em><br>
+      Normal(0, <strong>1.0</strong>) → 95%-CrI OR/RR ≈ 0.14–7.4 &nbsp;<em>(groß)</em><br>
+      Normal(0, <strong>2.0</strong>) → 95%-CrI OR/RR ≈ 0.02–55 &nbsp;&nbsp;<em>(sehr vage)</em>
+    </div>
+    <div class="hp-next"><strong>Hinweis zu μ = 0:</strong> Nur wenn die Ratio-Grenzen symmetrisch um 1 liegen (Produkt = 1, z.B. 0.5 × 2.0 = 1), ergibt der Solver zwingend μ = 0. Das ist der klassische „no-effect-prior". Asymmetrische Grenzen — wie in den Beispielen oben — ergeben μ ≠ 0 und kodieren inhaltliche Erwartungen.</div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -669,6 +837,10 @@ const EXAMPLES = [
 // ── State ──────────────────────────────────────────────────
 let CUR = DISTS[0];
 let PARAMS = {};
+let GLM_ACTIVE = false;
+let GLM_LINK = 'logit';
+let GLM_PARAM = 'intercept'; // 'intercept' | 'slope'
+let glmHelpOpen = false;
 
 // ── Init ───────────────────────────────────────────────────
 function init() {
@@ -961,6 +1133,14 @@ function drawPlot() {
   // brms code
   const brmsHtml = CUR.brmsLine ? CUR.brmsLine(PARAMS) : `prior(${CUR.brms}, class = b)`;
   document.getElementById('brms-code').innerHTML = brmsHtml;
+
+  // GLM Dual Panel
+  const rPanel = document.getElementById('plot-panel-response');
+  if (rPanel) {
+    if (GLM_ACTIVE && CUR.pdf) { rPanel.style.display = 'block'; drawResponsePanel(); }
+    else rPanel.style.display = 'none';
+  }
+  document.querySelectorAll('.panel-label').forEach(el => { el.style.display = GLM_ACTIVE ? 'block' : 'none'; });
 }
 
 function findQVal(q) {
@@ -1001,11 +1181,42 @@ function _chi2inv(p,df){
 }
 
 function solvCI() {
-  const lo = parseFloat(document.getElementById('ci-lo').value);
-  const hi = parseFloat(document.getElementById('ci-hi').value);
+  const lo_raw = parseFloat(document.getElementById('ci-lo').value);
+  const hi_raw = parseFloat(document.getElementById('ci-hi').value);
   const pct = parseFloat(document.getElementById('ci-pct').value)||95;
   const res = document.getElementById('solver-result');
   res.classList.add('show');
+
+  // GLM-Modus: Response-Skala → Modell-Skala umrechnen
+  let lo = lo_raw, hi = hi_raw;
+  if (GLM_ACTIVE) {
+    const isSlope_s = GLM_PARAM === 'slope';
+    if (isSlope_s) {
+      // Slope: OR oder RR → log(ratio), gilt für beide Links
+      const rl = GLM_LINK === 'logit' ? 'Odds Ratio' : 'Rate Ratio';
+      if (!isFinite(lo_raw) || lo_raw <= 0 || !isFinite(hi_raw) || hi_raw <= 0) {
+        res.textContent = `Fehler: ${rl} muss > 0 sein. Wert 1 = kein Effekt, < 1 = Reduktion, > 1 = Erhöhung.`;
+        return;
+      }
+      lo = Math.log(lo_raw);
+      hi = Math.log(hi_raw);
+    } else if (GLM_LINK === 'logit') {
+      if (!isFinite(lo_raw) || lo_raw <= 0 || lo_raw >= 1 || !isFinite(hi_raw) || hi_raw <= 0 || hi_raw >= 1) {
+        res.textContent = 'Fehler: Im Logit-Modus Wahrscheinlichkeiten zwischen 0 und 1 eingeben (z.B. 0.30 bis 0.70).';
+        return;
+      }
+      lo = Math.log(lo_raw / (1 - lo_raw));
+      hi = Math.log(hi_raw / (1 - hi_raw));
+    } else {
+      if (!isFinite(lo_raw) || lo_raw <= 0 || !isFinite(hi_raw) || hi_raw <= 0) {
+        res.textContent = 'Fehler: Log-Link erfordert Werte > 0 — log(0) = −∞. Kleinsten Erwartungswert > 0 eingeben (z.B. 0.1 statt 0).';
+        return;
+      }
+      lo = Math.log(lo_raw);
+      hi = Math.log(hi_raw);
+    }
+  }
+
   if (!isFinite(lo)||!isFinite(hi)||lo>=hi) { res.textContent='Fehler: Untere Grenze muss < obere Grenze sein.'; return; }
   if (pct<=0||pct>=100) { res.textContent='Fehler: Masse muss zwischen 1% und 99% liegen.'; return; }
   const q_lo=(1-pct/100)/2, q_hi=1-q_lo;
@@ -1086,6 +1297,21 @@ function solvCI() {
       res.innerHTML=`<span style="opacity:.6">Aktuelle Parameter: P(x<${lo})=${fmtN(clo*100,1)}%, P(x<${hi})=${fmtN(chi*100,1)}%.<br>Ziel: ${fmtN(q_lo*100,1)}% / ${fmtN(q_hi*100,1)}%. Parameter manuell anpassen.</span>`;
       return;
     }
+    // GLM: Response-Skala-Annotation ans Ergebnis anhängen
+    if (GLM_ACTIVE) {
+      const isLog_g   = GLM_LINK  === 'log';
+      const isSlope_g = GLM_PARAM === 'slope';
+      let lo_rs, hi_rs, scaleLabel;
+      if (isSlope_g) {
+        lo_rs = fmtN(lo_raw, 3); hi_rs = fmtN(hi_raw, 3);
+        scaleLabel = isLog_g ? 'Rate Ratio' : 'Odds Ratio';
+      } else {
+        lo_rs = isLog_g ? fmtN(lo_raw, 2) : `${fmtN(lo_raw*100,1)}%`;
+        hi_rs = isLog_g ? fmtN(hi_raw, 2) : `${fmtN(hi_raw*100,1)}%`;
+        scaleLabel = isLog_g ? 'E[Y]' : 'P(Y=1)';
+      }
+      res.innerHTML += `<br><span style="opacity:.5;font-size:.65em">↳ Eingabe (${scaleLabel}): [${lo_rs}, ${hi_rs}] → Modell-Skala: [${fmtN(lo,3)}, ${fmtN(hi,3)}]</span>`;
+    }
     autoRange();
   } catch(e) { res.textContent='Solver-Fehler: '+e.message; }
 }
@@ -1104,6 +1330,222 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+// ── GLM Mode ───────────────────────────────────────────────
+function toggleGLM() {
+  GLM_ACTIVE = !GLM_ACTIVE;
+  document.getElementById('glm-toggle-btn').classList.toggle('active', GLM_ACTIVE);
+  document.getElementById('glm-link-sel').classList.toggle('show', GLM_ACTIVE);
+  document.getElementById('glm-note').classList.toggle('show', GLM_ACTIVE);
+  document.getElementById('glm-param-row').style.display = GLM_ACTIVE ? 'flex' : 'none';
+  document.getElementById('glm-help-btn').style.display = GLM_ACTIVE ? '' : 'none';
+  if (!GLM_ACTIVE && glmHelpOpen) toggleGLMHelp();
+  updateGLMInputs();
+  drawPlot();
+}
+
+function toggleGLMParam(p) {
+  GLM_PARAM = p;
+  document.getElementById('gpb-intercept').classList.toggle('active', p === 'intercept');
+  document.getElementById('gpb-slope').classList.toggle('active', p === 'slope');
+  updateGLMInputs();
+  drawPlot();
+}
+
+function toggleGLMHelp() {
+  glmHelpOpen = !glmHelpOpen;
+  document.getElementById('glm-help-panel').classList.toggle('open', glmHelpOpen);
+}
+
+function setPanelLabels(mTitle, rTitle, rSub) {
+  const mLbl = document.getElementById('panel-model-lbl');
+  const rLbl = document.getElementById('panel-response-lbl');
+  if (mLbl) mLbl.innerHTML =
+    `<span class="plbl-title">${mTitle}</span>` +
+    `<span class="plbl-sub">Prior auf der Modellskala — in dieser Form in brms formuliert.</span>`;
+  if (rLbl) rLbl.innerHTML =
+    `<span class="plbl-title">${rTitle}</span>` +
+    `<span class="plbl-sub">${rSub}</span>`;
+}
+
+function onGLMLinkChange() {
+  GLM_LINK = document.getElementById('glm-link-sel').value;
+  updateGLMInputs();
+  drawPlot();
+}
+
+function updateGLMInputs() {
+  const isLog   = GLM_LINK  === 'log';
+  const isSlope = GLM_PARAM === 'slope';
+  const loLbl = document.getElementById('ci-lo-lbl');
+  const hiLbl = document.getElementById('ci-hi-lbl');
+  const loEl  = document.getElementById('ci-lo');
+  const hiEl  = document.getElementById('ci-hi');
+  const note  = document.getElementById('glm-note');
+  const mLbl  = document.getElementById('panel-model-lbl');
+  const rLbl  = document.getElementById('panel-response-lbl');
+
+  if (!GLM_ACTIVE) {
+    loLbl.textContent = 'Untere Grenze';
+    hiLbl.textContent = 'Obere Grenze';
+    loEl.removeAttribute('min'); loEl.removeAttribute('max'); loEl.step = 0.1;
+    hiEl.removeAttribute('min'); hiEl.removeAttribute('max'); hiEl.step = 0.1;
+    return;
+  }
+
+  if (isSlope) {
+    // ── Slope: OR oder RR (beide Links: log(ratio)) ──────────
+    const rl = isLog ? 'Rate Ratio' : 'Odds Ratio';
+    loLbl.textContent = rl + ' unten';
+    hiLbl.textContent = rl + ' oben';
+    loEl.removeAttribute('max'); loEl.min = 0.0001; loEl.step = 0.01;
+    hiEl.removeAttribute('max'); hiEl.min = 0.0001; hiEl.step = 0.01;
+    const lv = parseFloat(loEl.value), hv = parseFloat(hiEl.value);
+    if (!(lv > 0 && lv < 1)) loEl.value = 0.5;
+    if (!(hv > 1))            hiEl.value = 2.0;
+    if (isLog) {
+      note.innerHTML = '<b>Log-Link · Slope:</b> Grenzen als <b>Rate Ratio (RR)</b> — z.B. 0.5 bis 2.0 (halbiert bis verdoppelt die Rate). RR = 1 → β = 0, kein Effekt.';
+      setPanelLabels(
+        'Modell-Skala (β — Log)',
+        'Response-Skala — Rate Ratio',
+        'Implikation des Priors: Welche Raten-Verhältnisse a priori für plausibel gehalten werden.'
+      );
+    } else {
+      note.innerHTML = '<b>Logit-Link · Slope:</b> Grenzen als <b>Odds Ratio (OR)</b> — z.B. 0.5 bis 2.0 (halbiert bis verdoppelt die Odds). OR = 1 → β = 0, kein Effekt.';
+      setPanelLabels(
+        'Modell-Skala (β — Logit)',
+        'Response-Skala — Odds Ratio',
+        'Implikation des Priors: Welche Odds-Verhältnisse a priori für plausibel gehalten werden.'
+      );
+    }
+  } else {
+    // ── Intercept ────────────────────────────────────────────
+    if (isLog) {
+      loLbl.textContent = 'Erwartungswert unten';
+      hiLbl.textContent = 'Erwartungswert oben';
+      loEl.removeAttribute('max'); loEl.min = 0.0001; loEl.step = 0.1;
+      hiEl.removeAttribute('max'); hiEl.min = 0.0001; hiEl.step = 0.1;
+      if (parseFloat(loEl.value) <= 0 || isNaN(parseFloat(loEl.value))) loEl.value = 1;
+      if (parseFloat(hiEl.value) <= 0 || isNaN(parseFloat(hiEl.value))) hiEl.value = 20;
+      note.innerHTML = '<b>Log-Link · Intercept:</b> Grenzen als <b>Erwartungswert auf Original-Skala</b> — z.B. 1 bis 20 Ereignisse. <b>Achtung:</b> log(0) = −∞, immer Werte >0 verwenden.';
+      setPanelLabels(
+        'Modell-Skala (Intercept — Log)',
+        'Response-Skala — Erwartungswert E[Y]',
+        'Implikation des Priors: Welche Baseline-Ereignisraten a priori für plausibel gehalten werden.'
+      );
+    } else {
+      loLbl.textContent = 'Wahrsch. unten (0–1)';
+      hiLbl.textContent = 'Wahrsch. oben (0–1)';
+      loEl.min = 0.001; loEl.max = 0.999; loEl.step = 0.01;
+      hiEl.min = 0.001; hiEl.max = 0.999; hiEl.step = 0.01;
+      if (parseFloat(loEl.value) <= 0 || parseFloat(loEl.value) >= 1 || isNaN(parseFloat(loEl.value))) loEl.value = 0.30;
+      if (parseFloat(hiEl.value) <= 0 || parseFloat(hiEl.value) >= 1 || isNaN(parseFloat(hiEl.value))) hiEl.value = 0.70;
+      note.innerHTML = '<b>Logit-Link · Intercept:</b> Grenzen als <b>Wahrscheinlichkeit (0–1)</b> — z.B. 0.30 bis 0.70. μ=0 auf Logit-Skala = 50% Baseline.';
+      setPanelLabels(
+        'Modell-Skala (Intercept — Logit)',
+        'Response-Skala — Wahrscheinlichkeit P(Y=1)',
+        'Implikation des Priors: Welche Baseline-Wahrscheinlichkeiten a priori für plausibel gehalten werden.'
+      );
+    }
+  }
+}
+
+function drawResponsePanel() {
+  const isLog   = GLM_LINK  === 'log';
+  const isSlope = GLM_PARAM === 'slope';
+  const wrap = document.getElementById('plot-response-wrap');
+  if (!wrap) return;
+
+  const modelLo = parseFloat(document.getElementById('xlo').value) || -5;
+  const modelHi = parseFloat(document.getElementById('xhi').value) ||  5;
+  const N = 400;
+  let xs, ys, xDomain;
+
+  // Slope (both links) and Log-Intercept: exp transformation Y=exp(X)
+  // Logit-Intercept: sigmoid transformation Y=sigmoid(X), x-axis fixed [0,1]
+  if (isSlope || isLog) {
+    const xlo_r = Math.max(0.0001, Math.exp(modelLo));
+    const xhi_r = Math.exp(modelHi);
+    xDomain = [xlo_r, xhi_r];
+    xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
+    ys = xs.map(y => {
+      if (y <= 0) return 0;
+      try { const v = CUR.pdf(Math.log(y), PARAMS) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+    });
+  } else {
+    xDomain = [0, 1];
+    xs = Array.from({length:N}, (_,i) => 0.001 + i*0.998/(N-1));
+    ys = xs.map(y => {
+      if (y <= 0.00005 || y >= 0.99995) return 0;
+      try {
+        const v = CUR.pdf(Math.log(y/(1-y)), PARAMS) / (y*(1-y));
+        return (isFinite(v) && v >= 0) ? v : 0;
+      } catch(e){ return 0; }
+    });
+  }
+
+  const yMax = Math.max(...ys)*1.15 || 1;
+  const W = wrap.clientWidth || 400;
+  const H = 280;
+  const m = {l:50,r:20,t:18,b:38};
+  const Wp = W-m.l-m.r, Hp = H-m.t-m.b;
+
+  d3.select(wrap).selectAll('*').remove();
+  const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H).style('overflow','visible');
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xSc = d3.scaleLinear().domain(xDomain).range([0, Wp]);
+  const ySc = d3.scaleLinear().domain([0, yMax]).range([Hp, 0]);
+  const grid = cv('--grid'), ink2 = cv('--ink2'), a4 = cv('--a4'), a3 = cv('--a3');
+
+  g.append('g').call(d3.axisLeft(ySc).ticks(4).tickSize(-Wp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','13px').attr('font-family','DM Mono,monospace');});
+
+  const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
+  g.append('g').attr('transform',`translate(0,${Hp})`)
+   .call(d3.axisBottom(xSc).ticks(5).tickFormat(xFmt).tickSize(-Hp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','13px').attr('font-family','DM Mono,monospace');});
+
+  // Gradient (--a4 lila)
+  const gradId = 'gr-r-'+Date.now();
+  const defs = svg.append('defs');
+  const lg = defs.append('linearGradient').attr('id',gradId).attr('x1',0).attr('x2',0).attr('y1',0).attr('y2',1);
+  lg.append('stop').attr('offset','0%').attr('stop-color',a4).attr('stop-opacity',.35);
+  lg.append('stop').attr('offset','100%').attr('stop-color',a4).attr('stop-opacity',.02);
+
+  const pts = xs.map((x,i) => [x, ys[i]]);
+  const area = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+  const line = d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis);
+
+  g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
+  g.append('path').datum(pts).attr('fill','none').attr('stroke',a4).attr('stroke-width',2.5).attr('d',line);
+
+  // Referenzlinie bei OR/RR = 1 (kein Effekt) nur für Slopes
+  if (isSlope && 1 >= xDomain[0] && 1 <= xDomain[1]) {
+    g.append('line').attr('x1',xSc(1)).attr('x2',xSc(1)).attr('y1',0).attr('y2',Hp)
+     .attr('stroke',ink2).attr('stroke-width',1.2).attr('stroke-dasharray','3,3').attr('opacity',.5);
+    g.append('text').attr('x',xSc(1)+4).attr('y',Hp-6)
+     .attr('fill',ink2).attr('font-size','11px').attr('font-family','DM Mono,monospace').attr('opacity',.55)
+     .text('= 1');
+  }
+
+  // Mittellinie (transformierter Mittelwert)
+  const mn = CUR.mean(PARAMS);
+  if (typeof mn === 'number' && isFinite(mn)) {
+    const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
+    if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
+       .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+      g.append('text').attr('x',xSc(mn_r)+4).attr('y',13)
+       .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
+       .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+    }
+  }
 }
 
 function setTopbarHeight(){
