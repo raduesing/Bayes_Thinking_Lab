@@ -52,6 +52,9 @@ The lab is organized into five sections that build on each other. Work through t
 
 * **Interactive LM** — Manipulate data points and watch OLS minimization and residuals update in real time. Build intuition for what a regression line actually optimizes.
 * **Maximum Likelihood** — Explore the conceptual distinction between probability and likelihood by adjusting parameters interactively against simulated data.
+
+<p align="center"><img src="images/MLE.gif" width="580"></p>
+
 * **LM → GLM Transition** — Discover why link functions are necessary for non-normal outcomes and how the GLM generalizes the linear model across distribution families.
 
 ---
@@ -70,7 +73,12 @@ The lab is organized into five sections that build on each other. Work through t
 
 * **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
 * **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode** (new in v1.0): enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios).
+
+<p align="center"><img src="images/Prior_Lab.gif" width="580"></p>
+
 * **MCMC Visualizer** — Watch the Metropolis-Hastings sampler navigate the posterior landscape — the "animated hiker" analogy made interactive.
+
+<p align="center"><img src="images/MCMC.gif" width="580"></p>
 * **Bayes Interactive** — Manipulate prior strength, likelihood, and sample size and see how they jointly shape the posterior. Includes CI and PPI bands for the full posterior predictive.
 
 ---
