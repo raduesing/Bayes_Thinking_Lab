@@ -103,7 +103,7 @@ i18n <- list(
     # Phase 5
     p5_intro = "Du hast die gef\u00fchrte Tour abgeschlossen. Hier kannst du alle verf\u00fcgbaren PPC-Plots frei erkunden und eigene Gruppierungen w\u00e4hlen.",
     p5_type = "Plot-Typ", p5_go = "Plot erstellen", p5_group = "Gruppe:", p5_groupvar = "Gruppierungsvariable:", p5_stat = "Statistik:",
-    p5_dist = "Verteilung", p5_stats = "Kennzahlen", p5_intv = "Intervalle", p5_scat = "Streuung", p5_spec = "Spezial",
+    p5_dist = "Verteilung", p5_stats = "Kennzahlen", p5_intv = "Intervalle", p5_scat = "Streuung", p5_spec = "Spezial", p5_grp = "Gruppiert",
     # Upload
     scr_b = "R-Skript f\u00fcr Kompakt-Export:", scr_desc = "F\u00fchre dieses Skript in R aus, dann lade die erzeugte Datei hoch:",
     scr_code = "library(brms)\n# Dein Modell:  fit <- readRDS(\"mein_modell.rds\")\n\n# Kompakt-Export fuer PPC-App\nnd   <- min(200, posterior::ndraws(fit))\nyrep <- posterior_predict(fit, ndraws = nd)\ny    <- fit$data[[as.character(fit$formula$resp)]]\nfam  <- family(fit)$family\n\n# Gruppen-Variable (optional, NULL wenn nicht vorhanden):\ndat  <- fit$data\ngroups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]\ngrp_data <- if(length(groups)>0) dat[groups] else NULL\n\nsaveRDS(list(\n  yrep    = yrep,\n  y       = y,\n  family  = fam,\n  formula = as.character(fit$formula),\n  n_obs   = nrow(fit$data),\n  grp_data = grp_data\n), \"ppc_export.rds\")",
@@ -205,7 +205,10 @@ i18n <- list(
     xpl_scat  = "Streudiagramm: beobachtete vs. durchschnittliche vorhergesagte Werte. Ideal: Punkte auf der Diagonalen.",
     xpl_errh  = "Histogramm der Residuen. Sollte symmetrisch um 0 sein.",
     xpl_root  = "F\u00fcr Z\u00e4hldaten: beobachtete vs. erwartete H\u00e4ufigkeiten je Z\u00e4hlwert. Balken nahe 0 = gut.",
-    xpl_pit   = "Probability Integral Transform. F\u00fcr gut kalibrierte Modelle: ann\u00e4hernd gerade Diagonale."
+    xpl_pit   = "Probability Integral Transform. F\u00fcr gut kalibrierte Modelle: ann\u00e4hernd gerade Diagonale.",
+    xpl_violin_g = "Violinplot der beobachteten Daten (schwarz) und simulierten Posteriors (blau) je Gruppe. Zeigt, ob Modell Verteilungsform und Streuung pro Gruppe reproduziert.",
+    xpl_dens_g   = "KDE-Dichte-Overlay separat f\u00fcr jede Gruppe. Schwarze Linie = echte Daten, blaue Linien = Simulationen. Ideal: Linien deckungsgleich je Gruppe.",
+    xpl_ecdf_g   = "Empirische CDF getrennt nach Gruppen. Robust bei diskreten oder schiefen Daten. Systematische Gruppenunterschiede gut erkennbar."
   ),
   en = list(
     tb_sub    = "Model checking \u00b7 bayesplot \u00b7 brms \u00b7 Guided Tutorial",
@@ -274,7 +277,7 @@ i18n <- list(
     # Phase 5
     p5_intro = "You have completed the guided tour. Here you can freely explore all available PPC plots and choose your own groupings.",
     p5_type = "Plot type", p5_go = "Create plot", p5_group = "Group:", p5_groupvar = "Grouping variable:", p5_stat = "Statistic:",
-    p5_dist = "Distribution", p5_stats = "Statistics", p5_intv = "Intervals", p5_scat = "Scatter", p5_spec = "Special",
+    p5_dist = "Distribution", p5_stats = "Statistics", p5_intv = "Intervals", p5_scat = "Scatter", p5_spec = "Special", p5_grp = "Grouped",
     # Upload
     scr_b = "R script for compact export:", scr_desc = "Run this script in R, then upload the generated file:",
     scr_code = "library(brms)\n# Your model:  fit <- readRDS(\"my_model.rds\")\n\n# Compact export for PPC app\nnd   <- min(200, posterior::ndraws(fit))\nyrep <- posterior_predict(fit, ndraws = nd)\ny    <- fit$data[[as.character(fit$formula$resp)]]\nfam  <- family(fit)$family\n\n# Group variable (optional, NULL if not present):\ndat  <- fit$data\ngroups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]\ngrp_data <- if(length(groups)>0) dat[groups] else NULL\n\nsaveRDS(list(\n  yrep    = yrep,\n  y       = y,\n  family  = fam,\n  formula = as.character(fit$formula),\n  n_obs   = nrow(fit$data),\n  grp_data = grp_data\n), \"ppc_export.rds\")",
@@ -376,7 +379,10 @@ i18n <- list(
     xpl_scat  = "Scatter plot: observed vs. average predicted values. Ideal: points on the diagonal.",
     xpl_errh  = "Histogram of residuals. Should be symmetric around 0.",
     xpl_root  = "For count data: observed vs. expected frequencies per count value. Bars close to 0 = good.",
-    xpl_pit   = "Probability Integral Transform. For well-calibrated models: approximately straight diagonal."
+    xpl_pit   = "Probability Integral Transform. For well-calibrated models: approximately straight diagonal.",
+    xpl_violin_g = "Violin plot of observed data (black) and simulated posteriors (blue) per group. Shows whether the model reproduces the distribution shape and spread for each group.",
+    xpl_dens_g   = "KDE density overlay separately for each group. Black line = real data, blue lines = simulations. Ideal: lines overlap within each group.",
+    xpl_ecdf_g   = "Empirical CDF split by group. Robust for discrete or skewed data. Systematic group differences are clearly visible."
   )
 )
 
@@ -1099,9 +1105,10 @@ server <- function(input, output, session) {
                 c("ppc_stat", "ppc_stat_grouped"),
                 c("ppc_intervals", "ppc_ribbon"),
                 c("ppc_scatter_avg", "ppc_error_hist"),
-                c("ppc_rootogram", "ppc_pit_ecdf")
+                c("ppc_rootogram", "ppc_pit_ecdf"),
+                c("ppc_violin_grouped", "ppc_dens_overlay_grouped", "ppc_ecdf_overlay_grouped")
               ),
-              c(t$p5_dist, t$p5_stats, t$p5_intv, t$p5_scat, t$p5_spec)
+              c(t$p5_dist, t$p5_stats, t$p5_intv, t$p5_scat, t$p5_spec, t$p5_grp)
             )
           ),
           uiOutput("free_group_ui"),
@@ -1697,7 +1704,10 @@ server <- function(input, output, session) {
       ppc_hist = t$xpl_hist, ppc_stat = t$xpl_stat, ppc_stat_grouped = t$xpl_statg,
       ppc_intervals = t$xpl_intv, ppc_ribbon = t$xpl_rib,
       ppc_scatter_avg = t$xpl_scat, ppc_error_hist = t$xpl_errh,
-      ppc_rootogram = t$xpl_root, ppc_pit_ecdf = t$xpl_pit
+      ppc_rootogram = t$xpl_root, ppc_pit_ecdf = t$xpl_pit,
+      ppc_violin_grouped = t$xpl_violin_g,
+      ppc_dens_overlay_grouped = t$xpl_dens_g,
+      ppc_ecdf_overlay_grouped = t$xpl_ecdf_g
     )
     expl <- expl_map[[input$free_plot_type]]
     if (!is.null(expl)) div(class = "narr-box", style = "margin-top:.5rem", expl)
@@ -1740,6 +1750,24 @@ server <- function(input, output, session) {
           bayesplot::ppc_rootogram(y, yrep)
         } else if (plt == "ppc_pit_ecdf") {
           bayesplot::ppc_pit_ecdf(y, yrep)
+        } else if (plt == "ppc_violin_grouped") {
+          req(input$free_group)
+          dat_free <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+          req(!is.null(dat_free))
+          grp <- dat_free[[input$free_group]]
+          bayesplot::ppc_violin_grouped(y, yrep, group = grp)
+        } else if (plt == "ppc_dens_overlay_grouped") {
+          req(input$free_group)
+          dat_free <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+          req(!is.null(dat_free))
+          grp <- dat_free[[input$free_group]]
+          bayesplot::ppc_dens_overlay_grouped(y, yrep[1:50,], group = grp)
+        } else if (plt == "ppc_ecdf_overlay_grouped") {
+          req(input$free_group)
+          dat_free <- if (!isTRUE(fit_data()$compact)) fit_data()$fit$data else fit_data()$grp_data
+          req(!is.null(dat_free))
+          grp <- dat_free[[input$free_group]]
+          bayesplot::ppc_ecdf_overlay_grouped(y, yrep[1:50,], group = grp)
         }
       }, error = function(e) {
         ggplot() +
