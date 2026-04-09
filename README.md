@@ -132,6 +132,12 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 ---
 
+## 🛠 Built With
+
+Vanilla JS · D3.js · No framework · No build step · Runs entirely in the browser.
+
+---
+
 ## 🖋 Scientific Acknowledgments
 
 The development of the **Bayes Thinking Lab** is grounded in the pedagogical and methodological frameworks established by the following researchers:
