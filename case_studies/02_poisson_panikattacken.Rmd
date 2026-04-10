@@ -176,12 +176,16 @@ daten %>%
 # - Erwartete Baseline-Rate: ~3 Panikattacken/Woche → log(3) = 1.1
 # - Normal(1, 1): 95% der Masse → Rate zwischen 0.14 und 7.4 (plausibel)
 
+# WICHTIG: '0 + Intercept' in der Formel (nicht brms-Default).
+# Intercept-Prior gilt damit direkt auf der log-Skala (Rohskala), ohne interne Zentrierung.
+# Syntax: class = b, coef = Intercept
+
 priors <- c(
-  prior(normal(-0.3, 0.5), class = b,         coef = treatmentExposition),
-  prior(normal(0, 0.5),    class = b,         coef = log(baselineP1)),
-  prior(normal(0, 0.1),    class = b,         coef = asi_score),
-  prior(normal(1, 1),      class = Intercept),
-  prior(normal(0, 0.5),    class = sd)
+  prior(normal(1, 1),       class = b,         coef = Intercept),
+  prior(normal(-0.3, 0.5),  class = b,         coef = treatmentExposition),
+  prior(normal(0, 0.5),     class = b,         coef = log(baselineP1)),
+  prior(normal(0, 0.1),     class = b,         coef = asi_score),
+  prior(normal(0, 0.5),     class = sd)
 )
 ```
 
@@ -192,7 +196,7 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + log(baseline + 1) + asi_score + (1 | zentrum),
   data   = daten,
   family = poisson(link = "log"),
   prior  = priors,
@@ -225,7 +229,7 @@ cat("Prior-generierte Werte: Min =", min(y_prior),
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + log(baseline + 1) + asi_score + (1 | zentrum),
   data   = daten,
   family = poisson(link = "log"),
   prior  = priors,

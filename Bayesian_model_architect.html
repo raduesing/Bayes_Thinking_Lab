@@ -454,14 +454,15 @@ const FAM_BRMS = {
   normal:'gaussian', student:'student', bernoulli:'bernoulli', poisson:'poisson', gamma:'Gamma'
 };
 
-function priorToR(pr, cls){
+function priorToR(pr, cls, coef){
   if(!pr) return '';
   const {fam,mu,sig,p1,p2}=pr;
-  if(fam==='normal')      return `prior(normal(${mu||0}, ${sig||1}), class = "${cls}")`;
-  if(fam==='exponential') return `prior(exponential(${p1||1}), class = "${cls}")`;
-  if(fam==='gamma')       return `prior(gamma(${p1||2}, ${p2||0.1}), class = "${cls}")`;
-  if(fam==='student_t')   return `prior(student_t(3, ${mu||0}, ${sig||1}), class = "${cls}")`;
-  return `prior(${fam}(${p1||1}), class = "${cls}")`;
+  const coefStr = coef ? `, coef = "${coef}"` : '';
+  if(fam==='normal')      return `prior(normal(${mu||0}, ${sig||1}), class = "${cls}"${coefStr})`;
+  if(fam==='exponential') return `prior(exponential(${p1||1}), class = "${cls}"${coefStr})`;
+  if(fam==='gamma')       return `prior(gamma(${p1||2}, ${p2||0.1}), class = "${cls}"${coefStr})`;
+  if(fam==='student_t')   return `prior(student_t(3, ${mu||0}, ${sig||1}), class = "${cls}"${coefStr})`;
+  return `prior(${fam}(${p1||1}), class = "${cls}"${coefStr})`;
 }
 
 function genSimCode(){
@@ -599,12 +600,13 @@ function genSimCode(){
   const pstr=K===0?'1':M.preds.map((p,i)=>p.name||'x'+(i+1)).join(' + ');
   const restr=isML?` + (1${M.ret==='slope'&&K>0?' + '+(M.preds[0].name||'x1'):''}|${gv})`:'';
   L.push('fit <- brm(');
-  L.push(`  formula = ${y} ~ ${pstr}${restr},`);
+  const intercStr = pstr === '1' ? '0 + Intercept' : '0 + Intercept + ' + pstr;
+  L.push(`  formula = ${y} ~ ${intercStr}${restr},`);
   L.push(`  data    = d,`);
   L.push(`  family  = ${FAM_BRMS[fam]||fam}(),`);
   L.push('  prior   = c(');
   const pl=[
-    '    '+priorToR(M.pr.alpha,'Intercept'),
+    '    '+priorToR(M.pr.alpha,'b','Intercept'),
     ...(fam==='normal'||fam==='student'?['    '+priorToR(M.pr.sigma,'sigma')]:[]),
     ...(fam==='student'?['    '+priorToR(M.pr.nu,'nu')]:[]),
     ...M.preds.map(p=>'    '+priorToR(p.pr,'b')),
@@ -702,9 +704,9 @@ function toggleGuide(){
 // ═══════════════════════════════════════════════════════
 const EX={
   alpha:{title:'Intercept α',
-    what:'α ist der erwartete Wert des linearen Prädiktors wenn alle x=0. Bei zentrierten Prädiktoren entspricht er dem Gesamtmittelwert der AV (auf Link-Skala).',
-    why:'Normal(0, 10): sehr breiter, schwacher Prior. σ=10 sagt nur: α ist irgendwo in einem weiten Bereich. Skaliere ihn zur Skala deiner AV — wenn y Reaktionszeiten in ms sind, nutze Normal(500, 300) oder ähnliches.',
-    tip:'Tipp: Z-standardisiere deine AV vor der Analyse. Dann ist Normal(0, 2) ein sinnvoller Prior für α.'},
+    what:'α ist der erwartete Wert des linearen Prädiktors wenn alle Prädiktoren = 0. Das Tool verwendet explizites <code>0 + Intercept</code> in der Formel — der Prior gilt daher direkt auf der Rohskala, ohne interne brms-Zentrierung.',
+    why:'Prior direkt auf der Antwortskala spezifizieren: bei Reaktionszeiten in ms → Normal(500, 150); bei Testwerten 0–100 → Normal(50, 20); bei log-Link → Normal(log(erwarteter_Wert), 0.5). Syntax: prior(normal(…), class = b, coef = Intercept).',
+    tip:'Warum 0 + Intercept? brms-Default zentriert Prädiktoren intern — ein class=Intercept-Prior wirkt dann auf einen verschobenen Parameter. Mit 0+Intercept greift der Prior genau wo gewünscht.'},
   beta:{title:'Steigungsparameter β',
     what:'β misst den Effekt eines Prädiktors: pro Einheit Anstieg in x ändert sich der lineare Prädiktor um β (auf Link-Skala). β=0 bedeutet kein linearer Zusammenhang.',
     why:'Normal(0, 2.5): regularisierender Prior. Erwartet moderate bis kleine Effekte und bremst extreme Schätzungen wenn die Daten dünn sind — verhindert Overfitting.',

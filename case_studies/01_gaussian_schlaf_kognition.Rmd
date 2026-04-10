@@ -167,15 +167,21 @@ ggplot(daten, aes(x = outcome, fill = treatment)) +
 # Random Effect SD (Therapeut):
 # - Therapeuten unterscheiden sich um ca. 5 Punkte → HalfNormal(0, 10)
 
-get_prior(outcome ~ treatment + baseline + alter + (1 | therapeut),
+# WICHTIG: Wir verwenden '0 + Intercept' in der Formel (nicht brms-Default 'y ~ x').
+# Warum: brms-Default zentriert Prädiktoren intern → prior(class = Intercept) wirkt auf
+# einen verschobenen Parameter, nicht auf die Rohskala. Bei unzentrierten Prädiktoren
+# (hier: baseline-Score ~52, alter ~45) führt das zu extremen Posterior-Standardfehlern.
+# Mit '0 + Intercept': prior(class = b, coef = Intercept) gilt direkt auf Rohskala.
+
+get_prior(outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
   data   = daten,
   family = gaussian())
 
 priors <- c(
+  prior(normal(60, 20), class = b,         coef = Intercept),
   prior(normal(0, 8),   class = b,         coef = treatmentCBTMI),
   prior(normal(0, 5),   class = b,         coef = baseline),
   prior(normal(0, 3),   class = b,         coef = alter),
-  prior(normal(50, 20), class = Intercept),
   prior(exponential(1), class = sigma),
   prior(normal(0, 10),  class = sd)
 )
@@ -185,15 +191,17 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ treatment + baseline + alter + (1 | therapeut),
+  outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
   data   = daten,
   family = gaussian(),
   prior  = priors,
   sample_prior = "only",
-  chains = 2, iter = 1000,
+  chains = 4, cores = 4, iter = 4000,
   seed   = 42,
   refresh = 0
 )
+
+print(fit_prior)
 ```
 
 ```{r prior_ppc_plot}
@@ -212,7 +220,7 @@ ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ treatment + baseline + alter + (1 | therapeut),
+  outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
   data   = daten,
   family = gaussian(),
   prior  = priors,

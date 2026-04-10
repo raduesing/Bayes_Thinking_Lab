@@ -731,8 +731,13 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
                : LOGIT_LINK.has(f) ? 'normal(0, 1.0)'
                : 'normal(0, 0.5)';  // identity link
 
-  // Intercept
-  addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha', defInt);
+  // Intercept — explicit 0+Intercept parameterization (except ordinal thresholds)
+  const isOrdinal = f === 'cumulative' || f === 'categorical';
+  if (isOrdinal) {
+    addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha', defInt);
+  } else {
+    addRow('mu_int', 'α Intercept', 'b', 'Intercept', null, '\\alpha', defInt);
+  }
 
   // β per predictor (includes expanded polynomial terms like I(x1^2))
   preds.forEach(p => {
@@ -749,7 +754,7 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
   activeD.forEach(d => {
     const dLink = ['zi','zoi','coi'].includes(d.n) ? '(logit)'
                 : ['alpha','nu'].includes(d.n)     ? '(id)'   : '(log)';
-    addRow(d.n + '_int', 'α\u2009' + d.n + ' ' + dLink, 'Intercept', null, d.n,
+    addRow(d.n + '_int', 'α\u2009' + d.n + ' ' + dLink, 'b', 'Intercept', d.n,
            '\\alpha_{' + d.n + '}', DEF_PRIORS.dist_int);
     d.preds.forEach(p =>
       addRow(d.n + '_b_' + p, 'β\u2009' + d.n + '\u200B·\u200B' + p, 'b', p, d.n,
@@ -847,7 +852,11 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   const trialsV  = (document.getElementById('trials-var')?.value || 'trials').trim() || 'trials';
   const trailsExpr = (f === 'beta_binomial' || f === 'binomial') ? ` | trials(${trialsV})` : '';
   const expandedPreds = expandPreds(preds, predictorDegrees);
-  const muTerms = [...expandedPreds, ...inters].join(' + ') || '1';
+  const isOrdinalCode = f === 'cumulative' || f === 'categorical';
+  const predTerms = [...expandedPreds, ...inters].join(' + ');
+  const muTerms = isOrdinalCode
+    ? (predTerms || '1')
+    : (predTerms ? '0 + Intercept + ' + predTerms : '0 + Intercept');
   let reC = '';
   if (hasRE && g) {
     if (reType === 'slope' && slopeVars.length > 0) {
@@ -861,7 +870,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   if (activeD.length > 0) {
     let lines = `bf(\n  ${y}${trailsExpr} ~ ${muTerms}${reC}`;
     activeD.forEach(d => {
-      lines += `,\n  ${d.n} ~ ${d.preds.join(' + ') || '1'}`;
+      lines += `,\n  ${d.n} ~ ${d.preds.length > 0 ? '0 + Intercept + ' + d.preds.join(' + ') : '0 + Intercept'}`;
     });
     lines += '\n)';
     formCode = lines;
@@ -898,9 +907,10 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     `${f}()`;
 
   return `<span class="cm"># brms Model Builder — generated code</span>
-<span class="cm"># ⚠ Intercept Prior: y ~ x assumes centered predictors (see ⚠ Intercept Prior button)</span>
-<span class="cm">#    For custom Intercept prior: y ~ 0 + Intercept + x</span>
-<span class="cm">#    → Prior syntax changes to: prior(normal(0, 2.5), class = b, coef = Intercept)</span>
+<span class="cm"># Intercept: explicitly modeled via '0 + Intercept' (not the brms default 'y ~ x')</span>
+<span class="cm">#   Why: brms default centers predictors internally → class=Intercept prior acts on a</span>
+<span class="cm">#   shifted parameter, not the raw scale. With '0 + Intercept' the prior applies directly.</span>
+<span class="cm">#   Prior syntax: prior(normal(…), class = b, coef = Intercept)</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> ${formCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -1629,11 +1639,12 @@ const BRMS_HELP_HTML = `
   <li><strong>→ Output</strong> — Copy R code, download LaTeX, send model</li>
 </ul>
 
-<div class="brms-hp-sect">⚠ Intercept Prior Warning</div>
+<div class="brms-hp-sect">📐 Intercept Parameterization</div>
 <ul>
-  <li>With <code>y ~ x</code>, brms sets the Intercept prior <em>automatically</em> — custom specifications are ignored</li>
-  <li>For explicit Intercept priors: <code>y ~ 0 + Intercept + x</code></li>
-  <li><strong>Centering</strong> predictors is generally recommended</li>
+  <li>This builder uses <code>y ~ 0 + Intercept + x</code> by default instead of the brms default <code>y ~ x</code></li>
+  <li><strong>Why?</strong> With <code>y ~ x</code>, brms centers predictors internally — a custom prior then acts on a shifted parameter, not your intended scale</li>
+  <li>With <code>0 + Intercept</code>, <code>prior(…, class = b, coef = Intercept)</code> applies directly to the raw scale: the prior corresponds to the expected outcome when all predictors = 0</li>
+  <li><em>Exception:</em> Ordinal models (cumulative, categorical) keep <code>class = Intercept</code> for threshold parameters</li>
 </ul>
 
 <div class="brms-hp-tip" style="border-left:3px solid var(--accent3);background:rgba(94,160,42,.08);color:var(--accent3)">
@@ -1663,17 +1674,22 @@ document.addEventListener('click', function(e) {
 <div id="ipm-overlay" onclick="ipmCloseBg(event)">
   <div id="ipm-modal">
     <div id="ipm-header">
-      <span>⚠&nbsp; brms Intercept Prior — Note</span>
+      <span>📐&nbsp; brms Intercept Parameterization</span>
       <button id="ipm-close" onclick="ipmClose()">✕ Close</button>
     </div>
     <div id="ipm-body">
-      With formulas like <code>y ~ x</code> or <code>y ~ 1 + x</code>, brms internally assumes
-      that all predictors are <b>centered</b> and sets the Intercept prior
-      automatically — custom prior specifications for the Intercept are thereby ignored.<br><br>
-      To use a custom prior for the Intercept, it must be modeled explicitly:
-      <code>y ~ 0 + Intercept + x</code><br>
-      Only in this formulation do custom Intercept priors take effect as intended.
-      <span class="ipm-strong">→ Centering predictors before analysis is strongly recommended.</span>
+      <strong>The problem with the brms default <code>y ~ x</code></strong><br>
+      With the standard formula, brms internally centers predictors during estimation (intercept reparameterization). A custom <code>prior(…, class = Intercept)</code> then does <em>not</em> act on the "raw" intercept of your predictors, but on an internally shifted parameter. With uncentered predictors — the standard case in practice — this leads to extreme posterior standard errors and unintended prior specifications.<br><br>
+      <strong>Our solution: <code>y ~ 0 + Intercept + x</code> by default</strong><br>
+      With explicit intercept modeling:<br>
+      • The prior <code>prior(normal(60, 20), class = b, coef = Intercept)</code> acts directly on the raw scale<br>
+      • The prior corresponds to the expected outcome when all predictors = 0<br>
+      • No internal conflict, no hidden shifts<br>
+      • Predictors do <em>not</em> need to be centered — the prior meaning is always unambiguous<br><br>
+      <strong>Syntax difference</strong><br>
+      brms default: <code>prior(normal(0, 2.5), class = Intercept)</code><br>
+      Explicit (this formula): <code>prior(normal(0, 2.5), class = b, coef = Intercept)</code><br><br>
+      <span class="ipm-strong">Exception: Ordinal models (cumulative, categorical) — their threshold parameters keep <code>class = Intercept</code>, as brms treats them differently.</span>
     </div>
   </div>
 </div>

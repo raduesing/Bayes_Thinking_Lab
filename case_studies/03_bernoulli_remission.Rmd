@@ -181,11 +181,17 @@ daten %>%
 # - Erwartete Remissionsrate ~50% → logit(0.5) = 0 → Normal(0, 1.5)
 # - Range: logit(0.05) = -2.94 bis logit(0.95) = 2.94 → Normal(0, 1.5) gut
 
+# WICHTIG: '0 + Intercept' in der Formel (nicht brms-Default).
+# Intercept-Prior gilt damit direkt auf der Logit-Skala (Rohskala).
+# logit(0.5) = 0, logit(0.05) = -2.94, logit(0.95) = 2.94
+# Normal(0, 1.5): 95% der Masse → Remissionsrate zwischen ~5% und ~95% (plausibel)
+# Syntax: class = b, coef = Intercept
+
 priors <- c(
+  prior(normal(0, 1.5),  class = b,         coef = Intercept),
   prior(normal(0, 1.0),  class = b,         coef = treatmentKVT),
   prior(normal(0, 0.3),  class = b,         coef = phq9),
   prior(normal(0, 0.8),  class = b,         coef = geschlechtweiblich),
-  prior(normal(0, 1.5),  class = Intercept),
   prior(normal(0, 0.5),  class = sd)
 )
 ```
@@ -194,7 +200,7 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ treatment + phq9 + geschlecht + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + phq9 + geschlecht + (1 | zentrum),
   data   = daten,
   family = bernoulli(link = "logit"),
   prior  = priors,
@@ -224,7 +230,7 @@ abline(v = 0.5, col = "red", lty = 2)
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ treatment + phq9 + geschlecht + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + phq9 + geschlecht + (1 | zentrum),
   data   = daten,
   family = bernoulli(link = "logit"),
   prior  = priors,
