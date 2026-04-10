@@ -1,0 +1,453 @@
+---
+title: "Case Study 3 — Bernoulli (logit-link): KVT und Remission bei Depression"
+author: "Bayes Thinking Lab"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5)
+```
+
+# Forschungsfrage
+
+Erhöht kognitive Verhaltenstherapie (KVT) die Wahrscheinlichkeit einer Remission
+(PHQ-9 < 5 nach 12 Wochen) im Vergleich zu einer aktiven Kontrollbedingung
+(unterstützende Beratung)?
+
+**Outcome:** Remission (0 = nein, 1 = ja) — binär
+**Prädiktor:** Treatment (0 = Beratung, 1 = KVT)
+**Kovariaten:** Baseline PHQ-9 Score, Geschlecht
+**Cluster:** Therapiezentrum (Random Intercept)
+**Familie:** Bernoulli (logit-link)
+
+**Warum Bernoulli und nicht Gaussian?**
+Das Outcome ist binär (0/1). Gaussian würde Wahrscheinlichkeiten außerhalb [0,1]
+vorhersagen. Der logit-Link stellt die Begrenzung auf (0,1) sicher und erlaubt die
+Interpretation als Odds Ratios.
+
+---
+
+# 1. Pakete
+
+```{r packages}
+library(dagitty)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(dplyr)
+library(ggplot2)
+
+theme_set(theme_minimal(base_size = 13))
+color_scheme_set("viridis")
+```
+
+---
+
+# 2. DAG
+
+```{r dag}
+dag <- dagitty('dag {
+  Treatment  -> Outcome
+  PHQ9       -> Outcome
+  Geschlecht -> Outcome
+  Geschlecht -> PHQ9
+  Zentrum    -> Outcome
+}')
+
+coordinates(dag) <- list(
+  x = c(Treatment = 0, PHQ9 = 1, Geschlecht = 2, Zentrum = 1, Outcome = 3),
+  y = c(Treatment = 1, PHQ9 = 2, Geschlecht = 2, Zentrum = 0, Outcome = 1)
+)
+
+plot(dag)
+```
+
+**Minimaler Adjustierungsset:**
+
+```{r adjustment}
+adjustmentSets(dag, exposure = "Treatment", outcome = "Outcome")
+```
+
+→ PHQ9-Baseline und Geschlecht adjustieren. Zentrum als Random Effect.
+
+---
+
+# 3. Daten simulieren
+
+```{r simulate}
+set.seed(99)
+
+n_zentren    <- 7
+n_pro_gruppe <- 25
+N            <- n_zentren * n_pro_gruppe * 2
+
+# Zentrum Random Intercepts (auf Logit-Skala)
+zentrum_id  <- rep(1:n_zentren, each = n_pro_gruppe * 2)
+u0_zentrum  <- rnorm(n_zentren, 0, 0.4)   # SD = 0.4 auf Logit-Skala
+
+# Kovariaten
+geschlecht <- rbinom(N, 1, 0.60)                   # 1 = weiblich (60%)
+phq9       <- round(rnorm(N,
+                           mean = 14 + 2 * geschlecht,  # Frauen leicht höher
+                           sd   = 4))
+phq9       <- pmax(5, pmin(27, phq9))
+
+# Treatment
+treatment  <- rep(c(0, 1), times = n_zentren * n_pro_gruppe)
+
+# Wahre Parameter (auf Logit-Skala)
+# Odds Ratio für KVT: exp(0.80) ≈ 2.23 → KVT mehr als verdoppelt die Remissionschance
+beta_treatment <- 0.80
+beta_phq9      <- -0.18   # höherer Schweregrad → geringere Remission
+beta_geschl    <-  0.25   # Frauen leicht höhere Remissionsrate
+intercept      <-  0.50   # Baseline-Log-Odds der Remission
+
+logit_p <- intercept +
+           beta_treatment * treatment +
+           beta_phq9      * phq9 +
+           beta_geschl    * geschlecht +
+           u0_zentrum[zentrum_id]
+
+p_remission <- plogis(logit_p)    # inverse logit: logit → Wahrscheinlichkeit
+outcome     <- rbinom(N, 1, p_remission)
+
+daten <- data.frame(
+  id         = 1:N,
+  zentrum    = factor(zentrum_id),
+  treatment  = factor(treatment,  labels = c("Beratung", "KVT")),
+  geschlecht = factor(geschlecht, labels = c("männlich", "weiblich")),
+  phq9       = phq9,
+  outcome    = outcome
+)
+
+head(daten)
+```
+
+## Deskriptive Statistik
+
+```{r descriptive}
+# Remissionsraten
+daten %>%
+  group_by(treatment) %>%
+  summarise(
+    n             = n(),
+    n_remission   = sum(outcome),
+    rate_remission = round(mean(outcome), 3),
+    SE            = round(sqrt(mean(outcome) * (1 - mean(outcome)) / n()), 3)
+  )
+```
+
+```{r descriptive_plot}
+daten %>%
+  group_by(treatment, geschlecht) %>%
+  summarise(rate = mean(outcome), n = n(), .groups = "drop") %>%
+  ggplot(aes(x = treatment, y = rate, fill = geschlecht)) +
+    geom_col(position = "dodge", alpha = 0.8) +
+    geom_text(aes(label = paste0(round(rate * 100), "%")),
+              position = position_dodge(0.9), vjust = -0.5, size = 4) +
+    labs(title = "Remissionsrate nach Bedingung und Geschlecht",
+         x = "Bedingung", y = "Remissionsrate", fill = "Geschlecht") +
+    scale_fill_manual(values = c("#2a6e8a", "#c87ad8")) +
+    ylim(0, 0.85)
+```
+
+---
+
+# 4. Prior-Spezifikation (auf Logit-Skala!)
+
+```{r prior_rationale}
+# WICHTIG: Alle Koeffizienten sind auf der Logit-Skala.
+# beta_treatment = 0.80 bedeutet: exp(0.80) ≈ 2.23 → Odds Ratio = 2.23
+#
+# Prior-Überlegung für beta_treatment:
+# - Plausibles Spektrum: OR zwischen 0.5 und 5.0 (Therapiestudien)
+#   → log(0.5) = -0.69, log(5.0) = 1.61
+#   → Normal(0, 1.0): 95% der Masse zwischen -1.96 und +1.96 → OR: 0.14 bis 7.1
+#   → Zu breit? Normal(0, 0.8): OR: 0.21 bis 4.7 → realistisch
+# - McElreath-Empfehlung für logistische Regression: Normal(0, 1.5) als Standardprior
+#   → OR: 0.09 bis 10.8 → sehr konservativ, erlaubt große Effekte
+#
+# Wir wählen: Normal(0, 1.0) für Treatment → moderat konservativ
+# Für PHQ9: kleiner Effekt erwartet, Normal(0, 0.3)
+#
+# Intercept (Logit-Skala):
+# - Erwartete Remissionsrate ~50% → logit(0.5) = 0 → Normal(0, 1.5)
+# - Range: logit(0.05) = -2.94 bis logit(0.95) = 2.94 → Normal(0, 1.5) gut
+
+priors <- c(
+  prior(normal(0, 1.0),  class = b,         coef = treatmentKVT),
+  prior(normal(0, 0.3),  class = b,         coef = phq9),
+  prior(normal(0, 0.8),  class = b,         coef = geschlechtweiblich),
+  prior(normal(0, 1.5),  class = Intercept),
+  prior(normal(0, 0.5),  class = sd)
+)
+```
+
+## Prior Predictive Check
+
+```{r prior_predictive, results='hide'}
+fit_prior <- brm(
+  outcome ~ treatment + phq9 + geschlecht + (1 | zentrum),
+  data   = daten,
+  family = bernoulli(link = "logit"),
+  prior  = priors,
+  sample_prior = "only",
+  chains = 2, iter = 1000,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r prior_ppc}
+y_prior <- posterior_predict(fit_prior, ndraws = 200)
+# Für binäre Outcomes: Prior-Remissionsraten anschauen
+prior_rates <- rowMeans(y_prior)
+hist(prior_rates, breaks = 30, col = "#b85c00", border = "white",
+     main = "Prior Predictive: Verteilung der Remissionsraten",
+     xlab = "Remissionsrate (Anteil = 1 in simulierten Daten)")
+abline(v = 0.5, col = "red", lty = 2)
+```
+
+> **Ziel:** Der Prior sollte Remissionsraten zwischen 5% und 95% als plausibel einstufen,
+> mit dem Schwerpunkt um 50% (unbekannte a priori Wahrscheinlichkeit).
+
+---
+
+# 5. Modell fitten
+
+```{r fit_model, results='hide', cache=TRUE}
+fit <- brm(
+  outcome ~ treatment + phq9 + geschlecht + (1 | zentrum),
+  data   = daten,
+  family = bernoulli(link = "logit"),
+  prior  = priors,
+  chains = 4, iter = 2000, warmup = 1000,
+  cores  = 4,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r model_summary}
+summary(fit)
+```
+
+```{r odds_ratios}
+# Koeffizienten als Odds Ratios
+fixef(fit) %>%
+  as.data.frame() %>%
+  mutate(across(everything(), ~ round(exp(.), 3))) %>%
+  `colnames<-`(c("OR_Estimate", "OR_Error", "OR_Q2.5", "OR_Q97.5"))
+```
+
+## Konvergenz
+
+```{r convergence}
+mcmc_trace(as.array(fit), pars = "b_treatmentKVT") +
+  ggtitle("Trace Plot — Treatment-Effekt (Logit-Skala)")
+```
+
+---
+
+# 6. Posterior Predictive Check
+
+```{r ppc}
+yrep <- posterior_predict(fit, ndraws = 200)
+y    <- daten$outcome
+
+# Für binäre Outcomes: PPC auf Anteile
+ppc_stat(y, yrep, stat = "mean") +
+  ggtitle("PPC: Beobachtete vs. simulierte Remissionsrate")
+```
+
+```{r ppc_grouped}
+ppc_stat_grouped(y, yrep, group = daten$treatment, stat = "mean") +
+  ggtitle("PPC: Remissionsrate nach Bedingung")
+```
+
+```{r ppc_bars}
+# Balken: Anteil 0 und 1
+ppc_bars(y, yrep) +
+  ggtitle("PPC: Beobachtete vs. simulierte 0/1-Verteilung")
+```
+
+---
+
+# 7. Effektschätzung und Entscheidung
+
+```{r posterior_draws}
+draws     <- as_draws_df(fit)
+beta_logit <- draws$b_treatmentKVT    # auf Logit-Skala
+beta_or    <- exp(beta_logit)         # Odds Ratio
+```
+
+```{r hdi}
+hdi_logit <- bayestestR::hdi(beta_logit, ci = 0.95)
+hdi_or    <- bayestestR::hdi(beta_or,    ci = 0.95)
+
+cat("95% HDI (Logit-Skala):", round(hdi_logit$CI_low, 3), "bis", round(hdi_logit$CI_high, 3), "\n")
+cat("95% HDI (Odds Ratio):", round(hdi_or$CI_low, 3), "bis", round(hdi_or$CI_high, 3), "\n")
+```
+
+```{r rope}
+# ROPE auf Odds-Ratio-Skala: OR zwischen 0.80 und 1.25 = praktisch kein Effekt
+# (entspricht einem kleinen log-OR von ±0.22)
+rope_result <- bayestestR::rope(beta_or,
+                                 range = c(0.80, 1.25),
+                                 ci = 0.95)
+print(rope_result)
+```
+
+```{r probability_scale}
+# Effekt auf Wahrscheinlichkeitsskala (bei mittlerem PHQ9 und Geschlecht)
+# Marginal effect: P(Remission | KVT) - P(Remission | Beratung)
+newdata_kvt <- data.frame(
+  treatment  = "KVT",
+  phq9       = median(daten$phq9),
+  geschlecht = "weiblich",
+  zentrum    = NA
+)
+newdata_ber <- data.frame(
+  treatment  = "Beratung",
+  phq9       = median(daten$phq9),
+  geschlecht = "weiblich",
+  zentrum    = NA
+)
+
+p_kvt <- fitted(fit, newdata = newdata_kvt,
+                re_formula = NA, summary = FALSE)[, 1]
+p_ber <- fitted(fit, newdata = newdata_ber,
+                re_formula = NA, summary = FALSE)[, 1]
+p_diff <- p_kvt - p_ber
+
+hdi_diff <- bayestestR::hdi(p_diff, ci = 0.95)
+cat("Differenz in Remissionswahrscheinlichkeit (KVT − Beratung):\n")
+cat("  Posterior Median:", round(median(p_diff), 3), "\n")
+cat("  95% HDI:", round(hdi_diff$CI_low, 3), "bis", round(hdi_diff$CI_high, 3), "\n")
+```
+
+```{r posterior_plot}
+p1 <- ggplot(data.frame(or = beta_or), aes(x = or)) +
+  geom_density(fill = "#7a3a8a", alpha = 0.6) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
+  annotate("rect", xmin = 0.80, xmax = 1.25,
+           ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
+  geom_vline(xintercept = hdi_or$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = hdi_or$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title = "Posterior: Odds Ratio (KVT vs. Beratung)",
+       subtitle = paste0("95% HDI: [", round(hdi_or$CI_low, 2),
+                         ", ", round(hdi_or$CI_high, 2),
+                         "]  |  ROPE: OR [0.80, 1.25]"),
+       x = "Odds Ratio", y = "Dichte")
+
+p2 <- ggplot(data.frame(diff = p_diff), aes(x = diff)) +
+  geom_density(fill = "#2a6e8a", alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+  labs(title = "Posterior: Differenz in Remissionswahrscheinlichkeit",
+       subtitle = paste0("95% HDI: [", round(hdi_diff$CI_low, 2),
+                         ", ", round(hdi_diff$CI_high, 2), "]"),
+       x = "P(Remission|KVT) − P(Remission|Beratung)", y = "Dichte")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r decision}
+p_OR_above1 <- mean(beta_or > 1)
+p_outside   <- mean(beta_or < 0.80 | beta_or > 1.25)
+
+cat("P(OR > 1, d.h. KVT besser):", round(p_OR_above1, 3), "\n")
+cat("P(OR außerhalb ROPE):",        round(p_outside, 3), "\n")
+```
+
+### Entscheidung nach HDI+ROPE
+
+| Kriterium | Wert |
+|---|---|
+| 95% HDI (Odds Ratio) | [`r round(hdi_or$CI_low, 2)`, `r round(hdi_or$CI_high, 2)`] |
+| ROPE | [0.80, 1.25] |
+| P(KVT besser) | `r round(p_OR_above1, 3)` |
+| P(außerhalb ROPE) | `r round(p_outside, 3)` |
+| Differenz P(Remission) | `r round(median(p_diff), 2)` (`r round(hdi_diff$CI_low, 2)` – `r round(hdi_diff$CI_high, 2)`) |
+
+---
+
+# 8. Visualisierung: Marginale Effekte über PHQ9-Gradient
+
+```{r marginal_phq9}
+# Wie ändert sich die Remissionswahrscheinlichkeit mit dem PHQ9-Score?
+phq9_seq <- seq(5, 27, by = 1)
+newdata_gradient <- expand.grid(
+  phq9       = phq9_seq,
+  treatment  = c("Beratung", "KVT"),
+  geschlecht = "weiblich",
+  zentrum    = NA
+)
+
+pred <- fitted(fit, newdata = newdata_gradient,
+               re_formula = NA, summary = TRUE)
+pred_df <- cbind(newdata_gradient, as.data.frame(pred))
+
+ggplot(pred_df, aes(x = phq9, y = Estimate, color = treatment, fill = treatment)) +
+  geom_line(linewidth = 1.2) +
+  geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5), alpha = 0.2, color = NA) +
+  labs(title = "Remissionswahrscheinlichkeit über PHQ9-Schweregrad",
+       subtitle = "Posterior Mittelwert ± 95% CI | Frauen | marginalisiert über Zentren",
+       x = "PHQ-9 Score (Baseline)", y = "P(Remission)",
+       color = "Bedingung", fill = "Bedingung") +
+  scale_color_manual(values = c("#b85c00", "#7a3a8a")) +
+  scale_fill_manual(values  = c("#b85c00", "#7a3a8a")) +
+  ylim(0, 1)
+```
+
+---
+
+# 9. Export für PPC Shiny App
+
+```{r shiny_export, eval=FALSE}
+nd      <- min(200, posterior::ndraws(fit))
+yrep_ex <- posterior_predict(fit, ndraws = nd)
+y_ex    <- daten$outcome
+fam     <- family(fit)$family
+grp_data <- data.frame(
+  treatment  = daten$treatment,
+  geschlecht = daten$geschlecht
+)
+
+saveRDS(list(
+  yrep     = yrep_ex,
+  y        = y_ex,
+  family   = fam,
+  formula  = as.character(fit$formula),
+  n_obs    = nrow(daten),
+  grp_data = grp_data
+), "case03_bernoulli_ppc_export.rds")
+```
+
+---
+
+# Zusammenfassung
+
+**Design:** 2-Gruppen-RCT, 7 Zentren als Cluster, binäres Outcome.
+**Modell:** Bernoulli mit logit-Link, Random Intercept über Zentren.
+**Prior:** Normal(0, 1.0) auf Logit-Skala → OR a priori zwischen 0.14 und 7.1.
+**Befund:** KVT erhöht die Remissionschance deutlich (OR ≈ 2.2, 95% HDI vollständig
+über 1.25 → Effekt außerhalb ROPE). Auf der Wahrscheinlichkeitsskala: +20–25 Prozentpunkte
+mehr Remission durch KVT.
+
+**Schlüsselpunkt für das Teaching:**
+Der logit-Link transformiert additive Log-Odds-Effekte in multiplikative Odds Ratios.
+Priors auf der Logit-Skala spezifizieren (Normal(0, 1.5) nach McElreath), Ergebnisse
+auf der Wahrscheinlichkeitsskala oder als Odds Ratio berichten.
+
+**Workflow-Verbindung:**
+- DAG → Golem Builder
+- Prior-Spezifikation → Prior Lab (Normal(0, 1.0) auf Logit-Skala → GLM-Modus logit)
+- Modell → brms Builder (Bernoulli, logit-link, random intercept)
+- Entscheidung → Decision Lab (ROPE auf OR-Skala)

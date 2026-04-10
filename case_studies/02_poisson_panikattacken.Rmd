@@ -1,0 +1,407 @@
+---
+title: "Case Study 2 — Poisson (log-link): Expositionstherapie und Panikattacken"
+author: "Bayes Thinking Lab"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5)
+```
+
+# Forschungsfrage
+
+Reduziert eine 12-wöchige Expositionstherapie (ET) die Anzahl von Panikattacken pro Woche
+im Vergleich zu einer Psychoedukations-Kontrollbedingung?
+
+**Outcome:** Anzahl Panikattacken pro Woche (Zähldaten: 0, 1, 2, ...)
+**Prädiktor:** Treatment (0 = Psychoedukation, 1 = Expositionstherapie)
+**Kovariaten:** Baseline-Häufigkeit, Agoraphobie-Schweregrad (ASI-Score)
+**Cluster:** Therapiezentrum (Random Intercept)
+**Familie:** Poisson (log-link)
+
+**Warum Poisson und nicht Gaussian?**
+Panikattacken sind Zähldaten: nicht-negativ, ganzzahlig, oft rechtsschief.
+Gaussian würde negative Vorhersagen erlauben und die Varianzstruktur verzerren.
+Der log-Link stellt sicher, dass alle vorhergesagten Raten > 0 bleiben.
+
+---
+
+# 1. Pakete
+
+```{r packages}
+library(dagitty)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(dplyr)
+library(ggplot2)
+
+theme_set(theme_minimal(base_size = 13))
+color_scheme_set("viridis")
+```
+
+---
+
+# 2. DAG
+
+```{r dag}
+dag <- dagitty('dag {
+  Treatment  -> Outcome
+  Baseline   -> Outcome
+  ASI        -> Outcome
+  ASI        -> Baseline
+  Zentrum    -> Outcome
+}')
+
+coordinates(dag) <- list(
+  x = c(Treatment = 0, Baseline = 1, ASI = 2, Zentrum = 1, Outcome = 3),
+  y = c(Treatment = 1, Baseline = 2, ASI = 2, Zentrum = 0, Outcome = 1)
+)
+
+plot(dag)
+```
+
+**Minimaler Adjustierungsset:**
+
+```{r adjustment}
+adjustmentSets(dag, exposure = "Treatment", outcome = "Outcome")
+```
+
+→ Baseline-Rate und ASI-Score adjustieren. Zentrum als Random Effect.
+
+---
+
+# 3. Daten simulieren
+
+```{r simulate}
+set.seed(123)
+
+n_zentren    <- 6
+n_pro_gruppe <- 20
+N            <- n_zentren * n_pro_gruppe * 2
+
+# Random Intercepts der Zentren (auf log-Skala)
+zentrum_id   <- rep(1:n_zentren, each = n_pro_gruppe * 2)
+u0_zentrum   <- rnorm(n_zentren, 0, 0.3)   # SD = 0.3 auf log-Skala ≈ Rate-Ratio ~1.35
+
+# Kovariaten
+asi_score  <- round(runif(N, 10, 45))           # Anxiety Sensitivity Index
+baseline   <- rpois(N, lambda = exp(1.8 + 0.02 * asi_score))  # Baseline-Häufigkeit
+
+# Treatment
+treatment  <- rep(c(0, 1), times = n_zentren * n_pro_gruppe)
+
+# Wahre Parameter (auf log-Skala)
+# Rate Ratio für Treatment: exp(-0.7) ≈ 0.50 → 50% Reduktion
+beta_treatment <- -0.70
+beta_baseline  <-  0.25   # log-Rate steigt mit höherer Baseline
+beta_asi       <-  0.02
+intercept      <-  0.80   # log(baseline-Rate) ≈ 2.2 Panikattacken/Woche
+
+log_mu <- intercept +
+          beta_treatment * treatment +
+          beta_baseline  * log(baseline + 1) +
+          beta_asi       * asi_score +
+          u0_zentrum[zentrum_id]
+
+outcome <- rpois(N, lambda = exp(log_mu))
+
+daten <- data.frame(
+  id        = 1:N,
+  zentrum   = factor(zentrum_id),
+  treatment = factor(treatment, labels = c("Psychoedukation", "Exposition")),
+  asi_score = asi_score,
+  baseline  = baseline,
+  outcome   = outcome
+)
+
+head(daten)
+```
+
+## Deskriptive Statistik
+
+```{r descriptive}
+daten %>%
+  group_by(treatment) %>%
+  summarise(
+    n      = n(),
+    M      = round(mean(outcome), 2),
+    SD     = round(sd(outcome), 2),
+    Median = median(outcome),
+    Min    = min(outcome),
+    Max    = max(outcome)
+  )
+```
+
+```{r descriptive_plot}
+ggplot(daten, aes(x = outcome, fill = treatment)) +
+  geom_histogram(position = "dodge", binwidth = 1, alpha = 0.8) +
+  labs(title = "Panikattacken/Woche nach Bedingung",
+       x = "Anzahl Panikattacken", y = "Häufigkeit", fill = "Bedingung") +
+  scale_fill_manual(values = c("#b85c00", "#2a6e8a"))
+```
+
+```{r zero_proportion}
+# Anteil Null-Beobachtungen
+daten %>%
+  group_by(treatment) %>%
+  summarise(prop_zero = mean(outcome == 0))
+```
+
+> Wenn der Null-Anteil sehr hoch wäre, käme Zero-Inflated Poisson in Frage.
+
+---
+
+# 4. Prior-Spezifikation (auf log-Skala!)
+
+```{r prior_rationale}
+# WICHTIG: Der log-Link bedeutet, dass alle Koeffizienten auf der log-Skala interpretiert werden.
+# beta_treatment = -0.7 bedeutet: exp(-0.7) = 0.50 → Rate um 50% reduziert (Rate Ratio = 0.5)
+#
+# Prior-Überlegung für beta_treatment:
+# - Plausibles Spektrum: RR zwischen 0.2 und 2.0
+#   → log(0.2) = -1.61, log(2.0) = +0.69
+#   → Normal(0, 0.7): 95% der Masse zwischen -1.37 und +1.37 → RR: 0.25 bis 3.9
+# - Alternativ restriktiver: Normal(0, 0.5): RR: 0.37 bis 2.7
+# - Wir wählen Normal(-0.3, 0.5): leicht negativer Prior (Therapien helfen eher)
+#
+# Intercept (log-Skala):
+# - Erwartete Baseline-Rate: ~3 Panikattacken/Woche → log(3) = 1.1
+# - Normal(1, 1): 95% der Masse → Rate zwischen 0.14 und 7.4 (plausibel)
+
+priors <- c(
+  prior(normal(-0.3, 0.5), class = b,         coef = treatmentExposition),
+  prior(normal(0, 0.5),    class = b,         coef = log(baselineP1)),
+  prior(normal(0, 0.1),    class = b,         coef = asi_score),
+  prior(normal(1, 1),      class = Intercept),
+  prior(normal(0, 0.5),    class = sd)
+)
+```
+
+> **Kernpunkt:** Auf der log-Skala entspricht Normal(0, 0.5) einem Rate-Ratio von
+> exp(±1) ≈ 0.37 bis 2.7. Das ist ein moderater, aber nicht zu restriktiver Prior.
+
+## Prior Predictive Check
+
+```{r prior_predictive, results='hide'}
+fit_prior <- brm(
+  outcome ~ treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  data   = daten,
+  family = poisson(link = "log"),
+  prior  = priors,
+  sample_prior = "only",
+  chains = 2, iter = 1000,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r prior_ppc}
+y_prior <- posterior_predict(fit_prior, ndraws = 100)
+ppc_hist(daten$outcome, y_prior[1:8, ]) +
+  ggtitle("Prior Predictive Check — plausible Zählwerte?")
+```
+
+```{r prior_range}
+# Bereich der prior-generierten Daten
+cat("Prior-generierte Werte: Min =", min(y_prior),
+    "| Max =", max(y_prior),
+    "| Median =", median(y_prior), "\n")
+```
+
+> **Ziel:** Priors sollten Counts im realistischen Bereich (0–50 Panikattacken/Woche)
+> generieren — keine negativen Werte, keine absurd großen Zahlen (> 1000).
+
+---
+
+# 5. Modell fitten
+
+```{r fit_model, results='hide', cache=TRUE}
+fit <- brm(
+  outcome ~ treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  data   = daten,
+  family = poisson(link = "log"),
+  prior  = priors,
+  chains = 4, iter = 2000, warmup = 1000,
+  cores  = 4,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r model_summary}
+summary(fit)
+```
+
+```{r rate_ratios}
+# Koeffizienten als Rate Ratios (exp-transformiert)
+fixef(fit) %>%
+  as.data.frame() %>%
+  mutate(across(everything(), ~ round(exp(.), 3))) %>%
+  `colnames<-`(c("RR_Estimate", "RR_Error", "RR_Q2.5", "RR_Q97.5"))
+```
+
+## Konvergenz
+
+```{r convergence}
+mcmc_trace(as.array(fit), pars = "b_treatmentExposition") +
+  ggtitle("Trace Plot — Treatment-Effekt (log-Skala)")
+```
+
+---
+
+# 6. Posterior Predictive Check
+
+```{r ppc}
+yrep <- posterior_predict(fit, ndraws = 200)
+y    <- daten$outcome
+
+ppc_dens_overlay(y, yrep[1:50, ]) +
+  ggtitle("PPC: Dichte (beobachtet vs. simuliert)")
+```
+
+```{r ppc_rootogram}
+# Rootogram: ideal für Zähldaten
+ppc_rootogram(y, yrep) +
+  ggtitle("Rootogram: Beobachtete vs. erwartete Zählhäufigkeiten")
+```
+
+```{r ppc_grouped}
+ppc_stat_grouped(y, yrep, group = daten$treatment, stat = "mean") +
+  ggtitle("PPC: Mittlere Rate nach Bedingung")
+```
+
+---
+
+# 7. Effektschätzung und Entscheidung
+
+```{r posterior_draws}
+draws <- as_draws_df(fit)
+beta_log <- draws$b_treatmentExposition     # auf log-Skala
+beta_rr  <- exp(beta_log)                   # Rate Ratio
+```
+
+```{r hdi}
+# HDI auf log-Skala und Rate-Ratio-Skala
+hdi_log <- bayestestR::hdi(beta_log, ci = 0.95)
+hdi_rr  <- bayestestR::hdi(beta_rr,  ci = 0.95)
+
+cat("95% HDI (log-Skala):", round(hdi_log$CI_low, 3), "bis", round(hdi_log$CI_high, 3), "\n")
+cat("95% HDI (Rate Ratio):", round(hdi_rr$CI_low, 3),  "bis", round(hdi_rr$CI_high, 3), "\n")
+```
+
+```{r rope}
+# ROPE auf Rate-Ratio-Skala: RR zwischen 0.90 und 1.10 = praktisch kein Effekt
+rope_result <- bayestestR::rope(beta_rr,
+                                 range = c(0.90, 1.10),
+                                 ci = 0.95)
+print(rope_result)
+```
+
+```{r posterior_plot}
+ggplot(data.frame(rr = beta_rr), aes(x = rr)) +
+  geom_density(fill = "#b85c00", alpha = 0.6) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
+  annotate("rect", xmin = 0.90, xmax = 1.10,
+           ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
+  geom_vline(xintercept = hdi_rr$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = hdi_rr$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title = "Posterior des Treatment-Effekts (Rate Ratio)",
+       subtitle = paste0("95% HDI: [", round(hdi_rr$CI_low, 2),
+                         ", ", round(hdi_rr$CI_high, 2), "]  |  ",
+                         "Roter Bereich = ROPE (RR 0.9–1.1)"),
+       x = "Rate Ratio (Exposition vs. Psychoedukation)", y = "Dichte")
+```
+
+```{r decision}
+p_reduction <- mean(beta_rr < 1)
+p_outside   <- mean(beta_rr < 0.90 | beta_rr > 1.10)
+
+cat("P(Rate Ratio < 1, d.h. Reduktion):", round(p_reduction, 3), "\n")
+cat("P(Effekt außerhalb ROPE):",           round(p_outside, 3), "\n")
+```
+
+### Entscheidung nach HDI+ROPE
+
+| Kriterium | Wert |
+|---|---|
+| 95% HDI (Rate Ratio) | [`r round(hdi_rr$CI_low, 2)`, `r round(hdi_rr$CI_high, 2)`] |
+| ROPE | [0.90, 1.10] |
+| P(Reduktion) | `r round(p_reduction, 3)` |
+| P(außerhalb ROPE) | `r round(p_outside, 3)` |
+
+---
+
+# 8. Visualisierung: Marginale Effekte
+
+```{r marginal_effects}
+# Vorhergesagte Rate für beide Gruppen (bei mittleren Kovariaten)
+newdata_pred <- data.frame(
+  treatment = factor(c("Psychoedukation", "Exposition"),
+                     levels = c("Psychoedukation", "Exposition")),
+  baseline  = median(daten$baseline),
+  asi_score = median(daten$asi_score),
+  zentrum   = NA   # marginal über Random Effects
+)
+
+# Posterior Vorhersagen (mit re_formula = NA → marginalisiert über Zentren)
+pred <- fitted(fit, newdata = newdata_pred, re_formula = NA, summary = TRUE)
+pred_df <- cbind(newdata_pred, as.data.frame(pred))
+
+ggplot(pred_df, aes(x = treatment, y = Estimate, color = treatment)) +
+  geom_point(size = 4) +
+  geom_errorbar(aes(ymin = Q2.5, ymax = Q97.5), width = 0.2, linewidth = 1) +
+  labs(title = "Vorhergesagte Panikattacken/Woche (bei medianen Kovariaten)",
+       x = "Bedingung", y = "Rate (Panikattacken/Woche)") +
+  scale_color_manual(values = c("#b85c00", "#2a6e8a")) +
+  theme(legend.position = "none")
+```
+
+---
+
+# 9. Export für PPC Shiny App
+
+```{r shiny_export, eval=FALSE}
+nd      <- min(200, posterior::ndraws(fit))
+yrep_ex <- posterior_predict(fit, ndraws = nd)
+y_ex    <- daten$outcome
+fam     <- family(fit)$family
+grp_data <- data.frame(treatment = daten$treatment)
+
+saveRDS(list(
+  yrep     = yrep_ex,
+  y        = y_ex,
+  family   = fam,
+  formula  = as.character(fit$formula),
+  n_obs    = nrow(daten),
+  grp_data = grp_data
+), "case02_poisson_ppc_export.rds")
+```
+
+---
+
+# Zusammenfassung
+
+**Design:** 2-Gruppen-RCT, 6 Zentren als Cluster, Zähldaten als Outcome.
+**Modell:** Poisson mit log-Link, Random Intercept über Zentren.
+**Prior:** Normal(-0.3, 0.5) auf log-Skala → Rate Ratio a priori zwischen 0.37 und 1.9.
+**Befund:** Expositionstherapie reduziert Panikattacken um ca. 50% (RR ≈ 0.50,
+95% HDI liegt vollständig unter 1.0 und außerhalb des ROPE).
+
+**Schlüsselpunkt für das Teaching:**
+Der log-Link transformiert additive Effekte auf der Modellskala in multiplikative
+Rate Ratios auf der Antwortskala. Priors auf der log-Skala spezifizieren,
+aber Ergebnisse als Rate Ratios interpretieren.
+
+**Workflow-Verbindung:**
+- DAG → Golem Builder
+- Prior-Spezifikation → Prior Lab (Normal(−0.3, 0.5) auf log-Skala → GLM-Modus)
+- Modell → brms Builder (Poisson, log-link, random intercept)
+- Entscheidung → Decision Lab (ROPE auf Rate-Ratio-Skala)

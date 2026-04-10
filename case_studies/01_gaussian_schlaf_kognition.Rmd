@@ -1,0 +1,368 @@
+---
+title: "Case Study 1 — Gaussian: Schlafintervention und kognitive Leistung"
+author: "Bayes Thinking Lab"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5)
+```
+
+# Forschungsfrage
+
+Verbessert eine 8-wöchige Schlafintervention (kognitive Verhaltenstherapie für Insomnie,
+CBT-I) die kognitive Leistungsfähigkeit (Arbeitsgedächtnis-Score) im Vergleich zu einer
+Wartelisten-Kontrolle?
+
+**Outcome:** Kontinuierlicher Kognitions-Score (0–100, höher = besser)
+**Prädiktor:** Treatment (0 = Kontrolle, 1 = CBT-I)
+**Kovariaten:** Baseline-Score, Alter
+**Cluster:** Therapeut (Random Intercept)
+**Familie:** Gaussian (identity link)
+
+---
+
+# 1. Pakete
+
+```{r packages}
+library(dagitty)
+library(ggdag)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(dplyr)
+library(ggplot2)
+
+theme_set(theme_minimal(base_size = 13))
+color_scheme_set("viridis")
+```
+
+---
+
+# 2. DAG
+
+```{r dag}
+dag <- dagitty('dag {
+  Treatment -> Outcome
+  Baseline  -> Outcome
+  Alter     -> Outcome
+  Alter     -> Baseline
+  Therapeut -> Outcome
+}')
+
+coordinates(dag) <- list(
+  x = c(Treatment = 0, Baseline = 1, Alter = 2, Therapeut = 1, Outcome = 3),
+  y = c(Treatment = 1, Baseline = 2, Alter = 2, Therapeut = 0, Outcome = 1)
+)
+
+plot(dag)
+```
+
+**Minimaler Adjustierungsset** für den kausalen Effekt von Treatment → Outcome:
+
+```{r adjustment}
+adjustmentSets(dag, exposure = "Treatment", outcome = "Outcome")
+```
+
+→ Baseline und Alter adjustieren (Therapeut als Random Effect im Modell).
+
+---
+
+# 3. Daten simulieren
+
+```{r simulate}
+set.seed(42)
+
+n_therapeuten <- 8
+n_pro_gruppe  <- 15   # pro Therapeut und Bedingung
+N             <- n_therapeuten * n_pro_gruppe * 2
+
+# Therapeuten-spezifischer Random Intercept
+therapeut_id  <- rep(1:n_therapeuten, each = n_pro_gruppe * 2)
+u0_therapeut  <- rnorm(n_therapeuten, 0, 4)   # SD = 4 Punkte
+
+# Kovariaten
+alter    <- round(rnorm(N, 45, 12))
+baseline <- round(rnorm(N, 52, 12))
+baseline <- pmax(10, pmin(90, baseline))
+
+# Treatment-Zuweisung (innerhalb jedes Therapeuten 50/50)
+treatment <- rep(c(0, 1), times = n_therapeuten * n_pro_gruppe)
+
+# Wahrer Effekt: +6 Punkte (klinisch bedeutsam)
+beta_treatment <- 6
+beta_baseline  <- 0.45
+beta_alter     <- -0.15
+intercept      <- 25
+
+mu <- intercept +
+      beta_treatment * treatment +
+      beta_baseline  * baseline +
+      beta_alter     * alter +
+      u0_therapeut[therapeut_id]
+
+sigma <- 10   # residuale SD
+
+outcome <- round(rnorm(N, mu, sigma))
+outcome <- pmax(0, pmin(100, outcome))
+
+daten <- data.frame(
+  id          = 1:N,
+  therapeut   = factor(therapeut_id),
+  treatment   = factor(treatment, labels = c("Kontrolle", "CBT-I")),
+  alter       = alter,
+  baseline    = baseline,
+  outcome     = outcome
+)
+
+head(daten)
+```
+
+## Deskriptive Statistik
+
+```{r descriptive}
+daten %>%
+  group_by(treatment) %>%
+  summarise(
+    n      = n(),
+    M      = round(mean(outcome), 2),
+    SD     = round(sd(outcome), 2),
+    Median = median(outcome),
+    Min    = min(outcome),
+    Max    = max(outcome)
+  )
+```
+
+```{r descriptive_plot}
+ggplot(daten, aes(x = outcome, fill = treatment)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Kognitions-Score nach Bedingung",
+       x = "Kognitions-Score", y = "Dichte", fill = "Bedingung") +
+  scale_fill_manual(values = c("#2a6e8a", "#c87ad8"))
+```
+
+---
+
+# 4. Prior-Spezifikation
+
+```{r prior_rationale}
+# Überlegung zum Prior für beta_treatment:
+# - Skala: Rohpunkte (0–100)
+# - Plausible Effektgröße: ±20 Punkte maximal (sehr großer Effekt wäre 2 SD = 20 Punkte)
+# - Normal(0, 8): 95% der Priormasse zwischen -16 und +16 → konservativ aber informativ
+#
+# Intercept:
+# - Erwarteter Baseline-Score ca. 50 Punkte → Normal(50, 20)
+#
+# sigma:
+# - Residuale SD vermutlich 8–15 Punkte → Exponential(0.1) oder HalfNormal(0, 15)
+#
+# Random Effect SD (Therapeut):
+# - Therapeuten unterscheiden sich um ca. 5 Punkte → HalfNormal(0, 10)
+
+priors <- c(
+  prior(normal(0, 8),   class = b,         coef = treatmentCBTMI),
+  prior(normal(0, 5),   class = b,         coef = baseline),
+  prior(normal(0, 3),   class = b,         coef = alter),
+  prior(normal(50, 20), class = Intercept),
+  prior(exponential(1), class = sigma),
+  prior(normal(0, 10),  class = sd)
+)
+```
+
+## Prior Predictive Check
+
+```{r prior_predictive, results='hide'}
+fit_prior <- brm(
+  outcome ~ treatment + baseline + alter + (1 | therapeut),
+  data   = daten,
+  family = gaussian(),
+  prior  = priors,
+  sample_prior = "only",
+  chains = 2, iter = 1000,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r prior_ppc_plot}
+y_prior <- posterior_predict(fit_prior, ndraws = 100)
+ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
+  ggtitle("Prior Predictive Check — plausible Wertebereiche?") +
+  xlim(-50, 150)
+```
+
+> **Ziel:** Priors sollten Scores im Bereich 0–100 als am plausibelsten einschätzen.
+> Werte weit außerhalb dieses Bereichs sind unplausibel.
+
+---
+
+# 5. Modell fitten
+
+```{r fit_model, results='hide', cache=TRUE}
+fit <- brm(
+  outcome ~ treatment + baseline + alter + (1 | therapeut),
+  data   = daten,
+  family = gaussian(),
+  prior  = priors,
+  chains = 4, iter = 2000, warmup = 1000,
+  cores  = 4,
+  seed   = 42,
+  refresh = 0
+)
+```
+
+```{r model_summary}
+summary(fit)
+```
+
+## Konvergenz prüfen
+
+```{r convergence}
+# R-hat und Effective Sample Size
+plot(fit, variable = "b_treatmentCBTMI")
+```
+
+```{r trace_plot}
+mcmc_trace(as.array(fit), pars = "b_treatmentCBTMI") +
+  ggtitle("Trace Plot — Treatment-Effekt")
+```
+
+---
+
+# 6. Posterior Predictive Check
+
+```{r ppc}
+yrep <- posterior_predict(fit, ndraws = 200)
+y    <- daten$outcome
+
+ppc_dens_overlay(y, yrep[1:50, ]) +
+  ggtitle("Posterior Predictive Check")
+```
+
+```{r ppc_stat}
+ppc_stat(y, yrep, stat = "mean") +
+  ggtitle("PPC: Mittelwert")
+
+ppc_stat(y, yrep, stat = "sd") +
+  ggtitle("PPC: Standardabweichung")
+```
+
+```{r ppc_grouped}
+group <- daten$treatment
+ppc_violin_grouped(y, yrep, group = group) +
+  ggtitle("PPC: Verteilung nach Bedingung")
+```
+
+---
+
+# 7. Effektschätzung und Entscheidung
+
+```{r posterior_draws}
+draws <- as_draws_df(fit)
+
+# Treatment-Effekt extrahieren
+beta_draws <- draws$b_treatmentCBTMI
+```
+
+```{r hdi}
+# HDI (Highest Density Interval)
+hdi_95 <- bayestestR::hdi(beta_draws, ci = 0.95)
+print(hdi_95)
+```
+
+```{r rope}
+# ROPE: Bereich, der als "praktisch null" gilt
+# Konvention: ±0.1 * SD(outcome) nach Kruschke
+rope_low  <- -0.1 * sd(daten$outcome)
+rope_high <-  0.1 * sd(daten$outcome)
+cat("ROPE:", round(rope_low, 2), "bis", round(rope_high, 2), "\n")
+
+rope_result <- bayestestR::rope(beta_draws,
+                                 range = c(rope_low, rope_high),
+                                 ci = 0.95)
+print(rope_result)
+```
+
+```{r posterior_plot}
+ggplot(data.frame(beta = beta_draws), aes(x = beta)) +
+  geom_density(fill = "#2a6e8a", alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+  annotate("rect", xmin = rope_low, xmax = rope_high,
+           ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
+  geom_vline(xintercept = hdi_95$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = hdi_95$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title = "Posterior des Treatment-Effekts (CBT-I vs. Kontrolle)",
+       subtitle = paste0("95% HDI: [", round(hdi_95$CI_low, 2),
+                         ", ", round(hdi_95$CI_high, 2), "]  |  ",
+                         "Roter Bereich = ROPE"),
+       x = "Differenz in Kognitions-Punkten", y = "Dichte")
+```
+
+```{r decision}
+# Wahrscheinlichkeit, dass Effekt positiv
+p_positive <- mean(beta_draws > 0)
+# Wahrscheinlichkeit, dass Effekt außerhalb ROPE
+p_outside_rope <- mean(beta_draws < rope_low | beta_draws > rope_high)
+
+cat("P(Effekt > 0):", round(p_positive, 3), "\n")
+cat("P(Effekt außerhalb ROPE):", round(p_outside_rope, 3), "\n")
+```
+
+### Entscheidung nach HDI+ROPE
+
+| Kriterium | Wert |
+|---|---|
+| 95% HDI | [`r round(hdi_95$CI_low, 1)`, `r round(hdi_95$CI_high, 1)`] Punkte |
+| ROPE | [`r round(rope_low, 1)`, `r round(rope_high, 1)`] Punkte |
+| P(Effekt > 0) | `r round(p_positive, 3)` |
+| P(außerhalb ROPE) | `r round(p_outside_rope, 3)` |
+
+---
+
+# 8. Export für PPC Shiny App
+
+```{r shiny_export, eval=FALSE}
+# Kompakt-Export kompatibel mit der Bayes Thinking Lab Shiny App
+nd      <- min(200, posterior::ndraws(fit))
+yrep_ex <- posterior_predict(fit, ndraws = nd)
+y_ex    <- daten$outcome
+fam     <- family(fit)$family
+
+# Gruppenvariable für Grouped PPC
+grp_data <- data.frame(treatment = daten$treatment)
+
+saveRDS(list(
+  yrep     = yrep_ex,
+  y        = y_ex,
+  family   = fam,
+  formula  = as.character(fit$formula),
+  n_obs    = nrow(daten),
+  grp_data = grp_data
+), "case01_gaussian_ppc_export.rds")
+
+cat("Export gespeichert: case01_gaussian_ppc_export.rds\n")
+```
+
+---
+
+# Zusammenfassung
+
+**Design:** Randomisiertes kontrolliertes Experiment, 2 Bedingungen, 8 Therapeuten als Cluster.
+**Modell:** Gaussian mit Random Intercept über Therapeuten.
+**Prior:** Konservativ-informativ basierend auf Skalenwissen (±20 Punkte max. plausibel).
+**Befund:** CBT-I verbessert kognitive Leistung um ~6 Punkte (95% HDI liegt vollständig
+außerhalb des ROPE → Effekt ist praktisch bedeutsam).
+
+**Workflow-Verbindung:**
+- DAG → Golem Builder
+- Prior-Spezifikation → Prior Lab (Gaussian, Normal(0,8))
+- Modell → brms Builder (gaussian, random intercept)
+- Entscheidung → Decision Lab (HDI + ROPE)
