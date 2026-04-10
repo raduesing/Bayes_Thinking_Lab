@@ -130,6 +130,24 @@ daten <- data.frame(
 head(daten)
 ```
 
+## Prädiktoren zentrieren
+
+```{r center_predictors}
+# Metrischen Prädiktor z-standardisieren: scale() → M=0, SD=1
+# → Intercept = logit(P(Remission)) für Referenzgruppe (Beratung, männlich)
+#   bei DURCHSCHNITTLICHEM PHQ9-Schweregrad
+# → Koeffizient phq9_c = Effekt pro 1 SD des PHQ9-Scores
+daten <- daten %>%
+  mutate(
+    phq9_c = as.numeric(scale(phq9))   # M≈15, SD≈4 → z-Werte
+  )
+
+cat("phq9_c: M =", round(mean(daten$phq9_c), 3),
+    "| SD =", round(sd(daten$phq9_c), 3), "\n")
+cat("PHQ9 original: M =", round(mean(daten$phq9), 1),
+    "| SD =", round(sd(daten$phq9), 1), "\n")
+```
+
 ## Deskriptive Statistik
 
 ```{r descriptive}
@@ -163,36 +181,32 @@ daten %>%
 # 4. Prior-Spezifikation (auf Logit-Skala!)
 
 ```{r prior_rationale}
-# WICHTIG: Alle Koeffizienten sind auf der Logit-Skala.
-# beta_treatment = 0.80 bedeutet: exp(0.80) ≈ 2.23 → Odds Ratio = 2.23
+# Wir verwenden '0 + Intercept' + zentrierten Prädiktor (phq9_c).
+# Alle Koeffizienten liegen auf der Logit-Skala (exp = Odds Ratios).
 #
-# Prior-Überlegung für beta_treatment:
+# Intercept-Prior (Logit-Skala):
+# - Bedeutung: logit(P(Remission)) für BERATUNG-Patient (männlich) mit
+#   DURCHSCHNITTLICHEM PHQ9-Score (phq9_c=0 → PHQ9≈15, moderat-schwer depressiv)
+# - Schätzung: logit_p = 0.50 + (-0.18)*15 ≈ -2.2 → P(Remission) ≈ 10%
+#   (plausibel: kurze Beratung bei schwerer Depression hat niedrige Remissionsrate)
+# - Normal(-1, 1.5): 95% Bereich [-4, 2] → P von ~2% bis ~88% → deckt Unsicherheit ab
+#
+# beta_treatment (KVT vs. Beratung):
 # - Plausibles Spektrum: OR zwischen 0.5 und 5.0 (Therapiestudien)
-#   → log(0.5) = -0.69, log(5.0) = 1.61
-#   → Normal(0, 1.0): 95% der Masse zwischen -1.96 und +1.96 → OR: 0.14 bis 7.1
-#   → Zu breit? Normal(0, 0.8): OR: 0.21 bis 4.7 → realistisch
-# - McElreath-Empfehlung für logistische Regression: Normal(0, 1.5) als Standardprior
-#   → OR: 0.09 bis 10.8 → sehr konservativ, erlaubt große Effekte
+# - Normal(0, 1.0): 95% Masse → OR: 0.14 bis 7.1 → moderat konservativ
 #
-# Wir wählen: Normal(0, 1.0) für Treatment → moderat konservativ
-# Für PHQ9: kleiner Effekt erwartet, Normal(0, 0.3)
+# beta_phq9_c (pro 1 SD des PHQ9, ≈4 Punkte):
+# - beta_phq9_c ≈ -0.18 * SD(phq9) ≈ -0.18 * 4 = -0.72 → Normal(0, 0.7)
 #
-# Intercept (Logit-Skala):
-# - Erwartete Remissionsrate ~50% → logit(0.5) = 0 → Normal(0, 1.5)
-# - Range: logit(0.05) = -2.94 bis logit(0.95) = 2.94 → Normal(0, 1.5) gut
-
-# WICHTIG: '0 + Intercept' in der Formel (nicht brms-Default).
-# Intercept-Prior gilt damit direkt auf der Logit-Skala (Rohskala).
-# logit(0.5) = 0, logit(0.05) = -2.94, logit(0.95) = 2.94
-# Normal(0, 1.5): 95% der Masse → Remissionsrate zwischen ~5% und ~95% (plausibel)
-# Syntax: class = b, coef = Intercept
-# EMPFEHLUNG: Prädiktoren dennoch zentrieren (z.B. scale()) — verbessert die
-# Interpretierbarkeit des Intercepts erheblich und stabilisiert das MCMC-Sampling.
+# beta_geschlecht: Normal(0, 0.8) → OR: 0.20 bis 5.0
+# Random Effect SD (Zentrum): Normal(0, 0.5) auf Logit-Skala
+#
+# Syntax: prior(normal(…), class = b, coef = Intercept) — direkt auf Logit-Rohskala
 
 priors <- c(
-  prior(normal(0, 1.5),  class = b,         coef = Intercept),
+  prior(normal(-1, 1.5), class = b,         coef = Intercept),
   prior(normal(0, 1.0),  class = b,         coef = treatmentKVT),
-  prior(normal(0, 0.3),  class = b,         coef = phq9),
+  prior(normal(0, 0.7),  class = b,         coef = phq9_c),
   prior(normal(0, 0.8),  class = b,         coef = geschlechtweiblich),
   prior(normal(0, 0.5),  class = sd)
 )
@@ -202,7 +216,7 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ 0 + Intercept + treatment + phq9 + geschlecht + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + phq9_c + geschlecht + (1 | zentrum),
   data   = daten,
   family = bernoulli(link = "logit"),
   prior  = priors,
@@ -223,8 +237,9 @@ hist(prior_rates, breaks = 30, col = "#b85c00", border = "white",
 abline(v = 0.5, col = "red", lty = 2)
 ```
 
-> **Ziel:** Der Prior sollte Remissionsraten zwischen 5% und 95% als plausibel einstufen,
-> mit dem Schwerpunkt um 50% (unbekannte a priori Wahrscheinlichkeit).
+> **Ziel:** Der Prior sollte Remissionsraten zwischen 5% und 95% als plausibel einstufen.
+> Da schwer depressive Patienten bei kurzer Beratung niedrige Remissionsraten haben,
+> ist der Schwerpunkt des Intercept-Priors bewusst leicht unter 50% angesetzt.
 
 ---
 
@@ -232,7 +247,7 @@ abline(v = 0.5, col = "red", lty = 2)
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ 0 + Intercept + treatment + phq9 + geschlecht + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + phq9_c + geschlecht + (1 | zentrum),
   data   = daten,
   family = bernoulli(link = "logit"),
   prior  = priors,
@@ -318,13 +333,13 @@ print(rope_result)
 # Marginal effect: P(Remission | KVT) - P(Remission | Beratung)
 newdata_kvt <- data.frame(
   treatment  = "KVT",
-  phq9       = median(daten$phq9),
+  phq9_c     = 0,          # z-Wert 0 = mittlerer PHQ9-Score (≈15)
   geschlecht = "weiblich",
   zentrum    = NA
 )
 newdata_ber <- data.frame(
   treatment  = "Beratung",
-  phq9       = median(daten$phq9),
+  phq9_c     = 0,          # z-Wert 0 = mittlerer PHQ9-Score (≈15)
   geschlecht = "weiblich",
   zentrum    = NA
 )
@@ -390,9 +405,13 @@ cat("P(OR außerhalb ROPE):",        round(p_outside, 3), "\n")
 
 ```{r marginal_phq9}
 # Wie ändert sich die Remissionswahrscheinlichkeit mit dem PHQ9-Score?
+# phq9_c zurückrechnen: z = (x - mean) / sd
+mean_phq9 <- mean(daten$phq9)
+sd_phq9   <- sd(daten$phq9)
+
 phq9_seq <- seq(5, 27, by = 1)
 newdata_gradient <- expand.grid(
-  phq9       = phq9_seq,
+  phq9_c     = (phq9_seq - mean_phq9) / sd_phq9,  # z-standardisiert
   treatment  = c("Beratung", "KVT"),
   geschlecht = "weiblich",
   zentrum    = NA
@@ -401,6 +420,8 @@ newdata_gradient <- expand.grid(
 pred <- fitted(fit, newdata = newdata_gradient,
                re_formula = NA, summary = TRUE)
 pred_df <- cbind(newdata_gradient, as.data.frame(pred))
+# Für die x-Achse: zurück in PHQ9-Originalpunkte
+pred_df$phq9 <- pred_df$phq9_c * sd_phq9 + mean_phq9
 
 ggplot(pred_df, aes(x = phq9, y = Estimate, color = treatment, fill = treatment)) +
   geom_line(linewidth = 1.2) +

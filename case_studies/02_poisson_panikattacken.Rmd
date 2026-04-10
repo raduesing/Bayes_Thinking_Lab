@@ -125,6 +125,25 @@ daten <- data.frame(
 head(daten)
 ```
 
+## Prädiktoren zentrieren
+
+```{r center_predictors}
+# Metrische Prädiktoren z-standardisieren: scale() → M=0, SD=1
+# log(baseline+1) wird erst transformiert, dann zentriert.
+# → Intercept = log(erwartete Rate) für Referenzgruppe bei DURCHSCHNITTLICHEN Kovariaten
+# → Koeffizient = Effekt pro 1 SD des Prädiktors (auf log-Skala)
+daten <- daten %>%
+  mutate(
+    log_baseline_c = as.numeric(scale(log(baseline + 1))),  # log-transformiert + zentriert
+    asi_c          = as.numeric(scale(asi_score))            # ASI z-standardisiert
+  )
+
+cat("log_baseline_c: M =", round(mean(daten$log_baseline_c), 3),
+    "| SD =", round(sd(daten$log_baseline_c), 3), "\n")
+cat("asi_c:          M =", round(mean(daten$asi_c), 3),
+    "| SD =", round(sd(daten$asi_c), 3), "\n")
+```
+
 ## Deskriptive Statistik
 
 ```{r descriptive}
@@ -162,32 +181,32 @@ daten %>%
 # 4. Prior-Spezifikation (auf log-Skala!)
 
 ```{r prior_rationale}
-# WICHTIG: Der log-Link bedeutet, dass alle Koeffizienten auf der log-Skala interpretiert werden.
-# beta_treatment = -0.7 bedeutet: exp(-0.7) = 0.50 → Rate um 50% reduziert (Rate Ratio = 0.5)
+# Wir verwenden '0 + Intercept' + zentrierte Prädiktoren (log_baseline_c, asi_c).
+# Alle Koeffizienten liegen auf der log-Skala (exp-transformiert = Rate Ratios).
 #
-# Prior-Überlegung für beta_treatment:
-# - Plausibles Spektrum: RR zwischen 0.2 und 2.0
-#   → log(0.2) = -1.61, log(2.0) = +0.69
-#   → Normal(0, 0.7): 95% der Masse zwischen -1.37 und +1.37 → RR: 0.25 bis 3.9
-# - Alternativ restriktiver: Normal(0, 0.5): RR: 0.37 bis 2.7
-# - Wir wählen Normal(-0.3, 0.5): leicht negativer Prior (Therapien helfen eher)
+# Intercept-Prior (log-Skala):
+# - Bedeutung: log(erwartete Rate) für Psychoedukation-Patient mit
+#   DURCHSCHNITTLICHEM log_baseline_c=0 und DURCHSCHNITTLICHEM asi_c=0
+# - Schätzung: exp(0.80 + 0.25*2.35 + 0.02*27.5) ≈ exp(2.0) ≈ 7 Panikattacken/Woche
+# - Normal(1.5, 0.75): 95% Bereich [0, 3] → Rate zwischen 1 und 20 → plausibel
 #
-# Intercept (log-Skala):
-# - Erwartete Baseline-Rate: ~3 Panikattacken/Woche → log(3) = 1.1
-# - Normal(1, 1): 95% der Masse → Rate zwischen 0.14 und 7.4 (plausibel)
-
-# WICHTIG: '0 + Intercept' in der Formel (nicht brms-Default).
-# Intercept-Prior gilt damit direkt auf der log-Skala (Rohskala), ohne interne Zentrierung.
-# Syntax: class = b, coef = Intercept
-# EMPFEHLUNG: Prädiktoren dennoch zentrieren (z.B. scale()) — verbessert die
-# Interpretierbarkeit des Intercepts erheblich und stabilisiert das MCMC-Sampling.
+# beta_treatment (Exposition vs. Psychoedukation):
+# - Plausibel: RR zwischen 0.2 und 2.0 → log: [-1.61, +0.69]
+# - Normal(-0.3, 0.5): leicht negativer Prior (Therapien helfen eher)
+#   → RR: exp(-0.3 ± 1) ≈ 0.25 bis 1.9
+#
+# beta_log_baseline_c / beta_asi_c (pro 1 SD des zentrierten Prädiktors):
+# - beta_log_baseline_c ≈ 0.25 * SD(log_baseline) ≈ 0.25 * 0.5 = 0.13 → Normal(0, 0.5)
+# - beta_asi_c          ≈ 0.02 * SD(asi_score)    ≈ 0.02 * 10  = 0.20 → Normal(0, 0.3)
+#
+# Syntax: prior(normal(…), class = b, coef = Intercept) — direkt auf log-Rohskala
 
 priors <- c(
-  prior(normal(1, 1),       class = b,         coef = Intercept),
-  prior(normal(-0.3, 0.5),  class = b,         coef = treatmentExposition),
-  prior(normal(0, 0.5),     class = b,         coef = log(baselineP1)),
-  prior(normal(0, 0.1),     class = b,         coef = asi_score),
-  prior(normal(0, 0.5),     class = sd)
+  prior(normal(1.5, 0.75), class = b,         coef = Intercept),
+  prior(normal(-0.3, 0.5), class = b,         coef = treatmentExposition),
+  prior(normal(0, 0.5),    class = b,         coef = log_baseline_c),
+  prior(normal(0, 0.3),    class = b,         coef = asi_c),
+  prior(normal(0, 0.5),    class = sd)
 )
 ```
 
@@ -198,7 +217,7 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ 0 + Intercept + treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + log_baseline_c + asi_c + (1 | zentrum),
   data   = daten,
   family = poisson(link = "log"),
   prior  = priors,
@@ -231,7 +250,7 @@ cat("Prior-generierte Werte: Min =", min(y_prior),
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ 0 + Intercept + treatment + log(baseline + 1) + asi_score + (1 | zentrum),
+  outcome ~ 0 + Intercept + treatment + log_baseline_c + asi_c + (1 | zentrum),
   data   = daten,
   family = poisson(link = "log"),
   prior  = priors,
@@ -350,11 +369,11 @@ cat("P(Effekt außerhalb ROPE):",           round(p_outside, 3), "\n")
 ```{r marginal_effects}
 # Vorhergesagte Rate für beide Gruppen (bei mittleren Kovariaten)
 newdata_pred <- data.frame(
-  treatment = factor(c("Psychoedukation", "Exposition"),
-                     levels = c("Psychoedukation", "Exposition")),
-  baseline  = median(daten$baseline),
-  asi_score = median(daten$asi_score),
-  zentrum   = NA   # marginal über Random Effects
+  treatment      = factor(c("Psychoedukation", "Exposition"),
+                           levels = c("Psychoedukation", "Exposition")),
+  log_baseline_c = 0,   # mittlerer log(baseline+1) → z-Wert = 0
+  asi_c          = 0,   # mittlerer ASI-Score → z-Wert = 0
+  zentrum        = NA   # marginal über Random Effects
 )
 
 # Posterior Vorhersagen (mit re_formula = NA → marginalisiert über Zentren)
@@ -364,7 +383,7 @@ pred_df <- cbind(newdata_pred, as.data.frame(pred))
 ggplot(pred_df, aes(x = treatment, y = Estimate, color = treatment)) +
   geom_point(size = 4) +
   geom_errorbar(aes(ymin = Q2.5, ymax = Q97.5), width = 0.2, linewidth = 1) +
-  labs(title = "Vorhergesagte Panikattacken/Woche (bei medianen Kovariaten)",
+  labs(title = "Vorhergesagte Panikattacken/Woche (bei mittleren Kovariaten)",
        x = "Bedingung", y = "Rate (Panikattacken/Woche)") +
   scale_color_manual(values = c("#b85c00", "#2a6e8a")) +
   theme(legend.position = "none")
@@ -397,7 +416,7 @@ saveRDS(list(
 
 **Design:** 2-Gruppen-RCT, 6 Zentren als Cluster, Zähldaten als Outcome.
 **Modell:** Poisson mit log-Link, Random Intercept über Zentren.
-**Prior:** Normal(-0.3, 0.5) auf log-Skala → Rate Ratio a priori zwischen 0.37 und 1.9.
+**Prior:** Intercept Normal(1.5,0.75) = log(erwartete Rate) bei durchschnittlichen Kovariaten; Treatment Normal(-0.3,0.5) auf log-Skala → RR a priori ca. 0.25–1.9; Steigungen pro 1 SD.
 **Befund:** Expositionstherapie reduziert Panikattacken um ca. 50% (RR ≈ 0.50,
 95% HDI liegt vollständig unter 1.0 und außerhalb des ROPE).
 

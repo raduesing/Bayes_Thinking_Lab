@@ -125,6 +125,25 @@ daten <- data.frame(
 head(daten)
 ```
 
+## Prädiktoren zentrieren
+
+```{r center_predictors}
+# Metrische Prädiktoren z-standardisieren: scale() → M=0, SD=1
+# → Intercept entspricht dann dem erwarteten Outcome für einen Patienten
+#   in der REFERENZGRUPPE (Kontrolle) mit DURCHSCHNITTLICHEM Alter und Baseline-Score
+# → Koeffizient = Effekt pro 1 SD des Prädiktors
+daten <- daten %>%
+  mutate(
+    baseline_c = as.numeric(scale(baseline)),   # M≈52, SD≈12 → z-Werte
+    alter_c    = as.numeric(scale(alter))        # M≈45, SD≈12 → z-Werte
+  )
+
+cat("baseline_c: M =", round(mean(daten$baseline_c), 3),
+    "| SD =", round(sd(daten$baseline_c), 3), "\n")
+cat("alter_c:    M =", round(mean(daten$alter_c), 3),
+    "| SD =", round(sd(daten$alter_c), 3), "\n")
+```
+
 ## Deskriptive Statistik
 
 ```{r descriptive}
@@ -153,37 +172,37 @@ ggplot(daten, aes(x = outcome, fill = treatment)) +
 # 4. Prior-Spezifikation
 
 ```{r prior_rationale}
-# Überlegung zum Prior für beta_treatment:
-# - Skala: Rohpunkte (0–100)
-# - Plausible Effektgröße: ±20 Punkte maximal (sehr großer Effekt wäre 2 SD = 20 Punkte)
-# - Normal(0, 8): 95% der Priormasse zwischen -16 und +16 → konservativ aber informativ
+# Wir verwenden '0 + Intercept' + zentrierte Prädiktoren (baseline_c, alter_c).
 #
-# Intercept:
-# - Erwarteter Baseline-Score ca. 50 Punkte → Normal(50, 20)
+# Intercept-Prior:
+# - Bedeutung: erwarteter Kognitions-Score für einen KONTROLLE-Patienten mit
+#   DURCHSCHNITTLICHEM Baseline-Score (baseline_c=0 → ≈52 Punkte) und
+#   DURCHSCHNITTLICHEM Alter (alter_c=0 → ≈45 Jahre)
+# - Schätzung aus wahren Parametern: 25 + 0.45*52 + (-0.15)*45 ≈ 42 Punkte
+# - Prior Normal(50, 15): 95%-Bereich [20, 80] → deckt plausible Werte (0–100) ab
 #
-# sigma:
-# - Residuale SD vermutlich 8–15 Punkte → Exponential(0.1) oder HalfNormal(0, 15)
+# beta_treatment (CBT-I vs. Kontrolle):
+# - Skala: Rohpunkte (0–100); plausible Effektgröße: ±20 Punkte max.
+# - Normal(0, 8): 95% Priormasse zwischen -16 und +16 → konservativ-informativ
 #
-# Random Effect SD (Therapeut):
-# - Therapeuten unterscheiden sich um ca. 5 Punkte → HalfNormal(0, 10)
+# beta_baseline_c / beta_alter_c (pro 1 SD des jeweiligen Prädiktors):
+# - beta_baseline_c ≈ 0.45 * SD(baseline) ≈ 0.45 * 12 = 5.4 → Normal(0, 8)
+# - beta_alter_c    ≈ -0.15 * SD(alter)  ≈ -0.15 * 12 = -1.8 → Normal(0, 5)
+#
+# sigma: residuale SD ≈ 8–15 Punkte → exponential(1)
+# Random Effect SD (Therapeut): ≈ 5 Punkte → Normal(0, 10)
+#
+# Syntax: prior(normal(…), class = b, coef = Intercept) — wirkt direkt auf Rohskala
 
-# WICHTIG: Wir verwenden '0 + Intercept' in der Formel (nicht brms-Default 'y ~ x').
-# Warum: brms-Default zentriert Prädiktoren intern → prior(class = Intercept) wirkt auf
-# einen verschobenen Parameter, nicht auf die Rohskala. Bei unzentrierten Prädiktoren
-# (hier: baseline-Score ~52, alter ~45) führt das zu extremen Posterior-Standardfehlern.
-# Mit '0 + Intercept': prior(class = b, coef = Intercept) gilt direkt auf Rohskala.
-# EMPFEHLUNG: Prädiktoren dennoch zentrieren (z.B. scale()) — verbessert die
-# Interpretierbarkeit des Intercepts erheblich und stabilisiert das MCMC-Sampling.
-
-get_prior(outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
+get_prior(outcome ~ 0 + Intercept + treatment + baseline_c + alter_c + (1 | therapeut),
   data   = daten,
   family = gaussian())
 
 priors <- c(
-  prior(normal(60, 20), class = b,         coef = Intercept),
+  prior(normal(50, 15), class = b,         coef = Intercept),
   prior(normal(0, 8),   class = b,         coef = treatmentCBTMI),
-  prior(normal(0, 5),   class = b,         coef = baseline),
-  prior(normal(0, 3),   class = b,         coef = alter),
+  prior(normal(0, 8),   class = b,         coef = baseline_c),
+  prior(normal(0, 5),   class = b,         coef = alter_c),
   prior(exponential(1), class = sigma),
   prior(normal(0, 10),  class = sd)
 )
@@ -193,7 +212,7 @@ priors <- c(
 
 ```{r prior_predictive, results='hide'}
 fit_prior <- brm(
-  outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
+  outcome ~ 0 + Intercept + treatment + baseline_c + alter_c + (1 | therapeut),
   data   = daten,
   family = gaussian(),
   prior  = priors,
@@ -207,10 +226,12 @@ print(fit_prior)
 ```
 
 ```{r prior_ppc_plot}
-y_prior <- posterior_predict(fit_prior, ndraws = 100)
-ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
-  ggtitle("Prior Predictive Check — plausible Wertebereiche?") +
-  xlim(-50, 150)
+# y_prior <- posterior_predict(fit_prior, ndraws = 100)
+# ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
+#   ggtitle("Prior Predictive Check — plausible Wertebereiche?") +
+#   xlim(-50, 150)
+
+pp_check(fit_prior, ndraws = 100)
 ```
 
 > **Ziel:** Priors sollten Scores im Bereich 0–100 als am plausibelsten einschätzen.
@@ -222,7 +243,7 @@ ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
 
 ```{r fit_model, results='hide', cache=TRUE}
 fit <- brm(
-  outcome ~ 0 + Intercept + treatment + baseline + alter + (1 | therapeut),
+  outcome ~ 0 + Intercept + treatment + baseline_c + alter_c + (1 | therapeut),
   data   = daten,
   family = gaussian(),
   prior  = priors,
@@ -371,7 +392,7 @@ cat("Export gespeichert: case01_gaussian_ppc_export.rds\n")
 
 **Design:** Randomisiertes kontrolliertes Experiment, 2 Bedingungen, 8 Therapeuten als Cluster.
 **Modell:** Gaussian mit Random Intercept über Therapeuten.
-**Prior:** Konservativ-informativ basierend auf Skalenwissen (±20 Punkte max. plausibel).
+**Prior:** Konservativ-informativ; Intercept Normal(50,15) = erwarteter Score bei durchschnittlichem Baseline und Alter (Kontrolle); Steigungsparameter pro 1 SD der zentrierten Prädiktoren.
 **Befund:** CBT-I verbessert kognitive Leistung um ~6 Punkte (95% HDI liegt vollständig
 außerhalb des ROPE → Effekt ist praktisch bedeutsam).
 
