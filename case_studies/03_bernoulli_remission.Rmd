@@ -40,6 +40,7 @@ Interpretation als Odds Ratios.
 library(dagitty)
 library(brms)
 library(bayesplot)
+library(bayestestR)
 library(tidybayes)
 library(dplyr)
 library(ggplot2)
@@ -137,7 +138,7 @@ head(daten)
 # → Intercept = logit(P(Remission)) für Referenzgruppe (Beratung, männlich)
 #   bei DURCHSCHNITTLICHEM PHQ9-Schweregrad
 # → Koeffizient phq9_c = Effekt pro 1 SD des PHQ9-Scores
-daten <- daten %>%
+daten <- daten |>
   mutate(
     phq9_c = as.numeric(scale(phq9))   # M≈15, SD≈4 → z-Werte
   )
@@ -152,8 +153,8 @@ cat("PHQ9 original: M =", round(mean(daten$phq9), 1),
 
 ```{r descriptive}
 # Remissionsraten
-daten %>%
-  group_by(treatment) %>%
+daten |>
+  group_by(treatment) |>
   summarise(
     n             = n(),
     n_remission   = sum(outcome),
@@ -163,9 +164,9 @@ daten %>%
 ```
 
 ```{r descriptive_plot}
-daten %>%
-  group_by(treatment, geschlecht) %>%
-  summarise(rate = mean(outcome), n = n(), .groups = "drop") %>%
+daten |>
+  group_by(treatment, geschlecht) |>
+  summarise(rate = mean(outcome), n = n(), .groups = "drop") |>
   ggplot(aes(x = treatment, y = rate, fill = geschlecht)) +
     geom_col(position = "dodge", alpha = 0.8) +
     geom_text(aes(label = paste0(round(rate * 100), "%")),
@@ -228,13 +229,10 @@ fit_prior <- brm(
 ```
 
 ```{r prior_ppc}
-y_prior <- posterior_predict(fit_prior, ndraws = 200)
-# Für binäre Outcomes: Prior-Remissionsraten anschauen
-prior_rates <- rowMeans(y_prior)
-hist(prior_rates, breaks = 30, col = "#b85c00", border = "white",
-     main = "Prior Predictive: Verteilung der Remissionsraten",
-     xlab = "Remissionsrate (Anteil = 1 in simulierten Daten)")
-abline(v = 0.5, col = "red", lty = 2)
+# Für binäre Outcomes: Verteilung der prior-generierten Remissionsraten pro Draw
+pp_check(fit_prior, ndraws = 100, type = "stat", stat = "mean") +
+  labs(title = "Prior Predictive Check — Remissionsraten",
+       x     = "Anteil Remissionen (Mittelwert je simuliertem Datensatz)")
 ```
 
 > **Ziel:** Der Prior sollte Remissionsraten zwischen 5% und 95% als plausibel einstufen.
@@ -264,17 +262,16 @@ summary(fit)
 
 ```{r odds_ratios}
 # Koeffizienten als Odds Ratios
-fixef(fit) %>%
-  as.data.frame() %>%
-  mutate(across(everything(), ~ round(exp(.), 3))) %>%
+fixef(fit) |>
+  as.data.frame() |>
+  mutate(across(everything(), ~ round(exp(.), 3))) |>
   `colnames<-`(c("OR_Estimate", "OR_Error", "OR_Q2.5", "OR_Q97.5"))
 ```
 
 ## Konvergenz
 
 ```{r convergence}
-mcmc_trace(as.array(fit), pars = "b_treatmentKVT") +
-  ggtitle("Trace Plot — Treatment-Effekt (Logit-Skala)")
+plot(fit, variable = "b_treatmentKVT")
 ```
 
 ---
@@ -282,22 +279,13 @@ mcmc_trace(as.array(fit), pars = "b_treatmentKVT") +
 # 6. Posterior Predictive Check
 
 ```{r ppc}
-yrep <- posterior_predict(fit, ndraws = 200)
-y    <- daten$outcome
-
-# Für binäre Outcomes: PPC auf Anteile
-ppc_stat(y, yrep, stat = "mean") +
+pp_check(fit, ndraws = 200, type = "stat", stat = "mean") +
   ggtitle("PPC: Beobachtete vs. simulierte Remissionsrate")
-```
 
-```{r ppc_grouped}
-ppc_stat_grouped(y, yrep, group = daten$treatment, stat = "mean") +
+pp_check(fit, ndraws = 200, type = "stat_grouped", group = "treatment", stat = "mean") +
   ggtitle("PPC: Remissionsrate nach Bedingung")
-```
 
-```{r ppc_bars}
-# Balken: Anteil 0 und 1
-ppc_bars(y, yrep) +
+pp_check(fit, ndraws = 200, type = "bars") +
   ggtitle("PPC: Beobachtete vs. simulierte 0/1-Verteilung")
 ```
 
@@ -305,99 +293,76 @@ ppc_bars(y, yrep) +
 
 # 7. Effektschätzung und Entscheidung
 
-```{r posterior_draws}
-draws     <- as_draws_df(fit)
-beta_logit <- draws$b_treatmentKVT    # auf Logit-Skala
-beta_or    <- exp(beta_logit)         # Odds Ratio
-```
+```{r effect_estimate}
+# ROPE auf OR-Skala: OR ∈ [0.80, 1.25] = praktisch kein Effekt (log-OR ≈ ±0.22)
+rope_or_low  <- 0.80
+rope_or_high <- 1.25
 
-```{r hdi}
-hdi_logit <- bayestestR::hdi(beta_logit, ci = 0.95)
-hdi_or    <- bayestestR::hdi(beta_or,    ci = 0.95)
+# Draws (auf OR-Skala) + vollständige Posterior-Zusammenfassung
+beta_or      <- as_draws_df(fit)$b_treatmentKVT |> exp()
+post_or      <- beta_or |>
+  describe_posterior(
+    rope_range = c(rope_or_low, rope_or_high),
+    ci         = 0.95,
+    ci_method  = "hdi",
+    test       = c("p_direction", "rope")
+  )
 
-cat("95% HDI (Logit-Skala):", round(hdi_logit$CI_low, 3), "bis", round(hdi_logit$CI_high, 3), "\n")
-cat("95% HDI (Odds Ratio):", round(hdi_or$CI_low, 3), "bis", round(hdi_or$CI_high, 3), "\n")
-```
-
-```{r rope}
-# ROPE auf Odds-Ratio-Skala: OR zwischen 0.80 und 1.25 = praktisch kein Effekt
-# (entspricht einem kleinen log-OR von ±0.22)
-rope_result <- bayestestR::rope(beta_or,
-                                 range = c(0.80, 1.25),
-                                 ci = 0.95)
-print(rope_result)
+post_or
 ```
 
 ```{r probability_scale}
-# Effekt auf Wahrscheinlichkeitsskala (bei mittlerem PHQ9 und Geschlecht)
-# Marginal effect: P(Remission | KVT) - P(Remission | Beratung)
-newdata_kvt <- data.frame(
-  treatment  = "KVT",
-  phq9_c     = 0,          # z-Wert 0 = mittlerer PHQ9-Score (≈15)
-  geschlecht = "weiblich",
-  zentrum    = NA
-)
-newdata_ber <- data.frame(
-  treatment  = "Beratung",
-  phq9_c     = 0,          # z-Wert 0 = mittlerer PHQ9-Score (≈15)
-  geschlecht = "weiblich",
-  zentrum    = NA
+# Effekt auf Wahrscheinlichkeitsskala bei mittlerem PHQ9 (phq9_c=0) — Frauen
+nd <- list(
+  KVT     = data.frame(treatment = "KVT",     phq9_c = 0, geschlecht = "weiblich", zentrum = NA),
+  Beratung = data.frame(treatment = "Beratung", phq9_c = 0, geschlecht = "weiblich", zentrum = NA)
 )
 
-p_kvt <- fitted(fit, newdata = newdata_kvt,
-                re_formula = NA, summary = FALSE)[, 1]
-p_ber <- fitted(fit, newdata = newdata_ber,
-                re_formula = NA, summary = FALSE)[, 1]
+p_kvt  <- fitted(fit, newdata = nd$KVT,     re_formula = NA, summary = FALSE)[, 1]
+p_ber  <- fitted(fit, newdata = nd$Beratung, re_formula = NA, summary = FALSE)[, 1]
 p_diff <- p_kvt - p_ber
 
-hdi_diff <- bayestestR::hdi(p_diff, ci = 0.95)
-cat("Differenz in Remissionswahrscheinlichkeit (KVT − Beratung):\n")
-cat("  Posterior Median:", round(median(p_diff), 3), "\n")
-cat("  95% HDI:", round(hdi_diff$CI_low, 3), "bis", round(hdi_diff$CI_high, 3), "\n")
+post_diff <- p_diff |>
+  describe_posterior(ci = 0.95, ci_method = "hdi", test = "p_direction")
+
+post_diff
 ```
 
 ```{r posterior_plot}
 p1 <- ggplot(data.frame(or = beta_or), aes(x = or)) +
   geom_density(fill = "#7a3a8a", alpha = 0.6) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
-  annotate("rect", xmin = 0.80, xmax = 1.25,
+  annotate("rect", xmin = rope_or_low, xmax = rope_or_high,
            ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
-  geom_vline(xintercept = hdi_or$CI_low,  linetype = "dotted", color = "#c87ad8") +
-  geom_vline(xintercept = hdi_or$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title = "Posterior: Odds Ratio (KVT vs. Beratung)",
-       subtitle = paste0("95% HDI: [", round(hdi_or$CI_low, 2),
-                         ", ", round(hdi_or$CI_high, 2),
-                         "]  |  ROPE: OR [0.80, 1.25]"),
+  geom_vline(xintercept = post_or$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = post_or$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title    = "Posterior: Odds Ratio (KVT vs. Beratung)",
+       subtitle = paste0("95% HDI: [", round(post_or$CI_low, 2), ", ",
+                         round(post_or$CI_high, 2), "]  |  ROPE: OR [0.80, 1.25]"),
        x = "Odds Ratio", y = "Dichte")
 
 p2 <- ggplot(data.frame(diff = p_diff), aes(x = diff)) +
   geom_density(fill = "#2a6e8a", alpha = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
-  labs(title = "Posterior: Differenz in Remissionswahrscheinlichkeit",
-       subtitle = paste0("95% HDI: [", round(hdi_diff$CI_low, 2),
-                         ", ", round(hdi_diff$CI_high, 2), "]"),
+  geom_vline(xintercept = post_diff$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = post_diff$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title    = "Posterior: Differenz in Remissionswahrscheinlichkeit",
+       subtitle = paste0("95% HDI: [", round(post_diff$CI_low, 2), ", ",
+                         round(post_diff$CI_high, 2), "]"),
        x = "P(Remission|KVT) − P(Remission|Beratung)", y = "Dichte")
 
 gridExtra::grid.arrange(p1, p2, ncol = 2)
-```
-
-```{r decision}
-p_OR_above1 <- mean(beta_or > 1)
-p_outside   <- mean(beta_or < 0.80 | beta_or > 1.25)
-
-cat("P(OR > 1, d.h. KVT besser):", round(p_OR_above1, 3), "\n")
-cat("P(OR außerhalb ROPE):",        round(p_outside, 3), "\n")
 ```
 
 ### Entscheidung nach HDI+ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI (Odds Ratio) | [`r round(hdi_or$CI_low, 2)`, `r round(hdi_or$CI_high, 2)`] |
+| 95% HDI (Odds Ratio) | [`r round(post_or$CI_low, 2)`, `r round(post_or$CI_high, 2)`] |
 | ROPE | [0.80, 1.25] |
-| P(KVT besser) | `r round(p_OR_above1, 3)` |
-| P(außerhalb ROPE) | `r round(p_outside, 3)` |
-| Differenz P(Remission) | `r round(median(p_diff), 2)` (`r round(hdi_diff$CI_low, 2)` – `r round(hdi_diff$CI_high, 2)`) |
+| P(Richtung) | `r round(post_or$pd, 3)` |
+| % in ROPE | `r round(post_or$ROPE_Percentage, 1)`% |
+| Differenz P(Remission) | `r round(post_diff$Median, 2)` (HDI: `r round(post_diff$CI_low, 2)` – `r round(post_diff$CI_high, 2)`) |
 
 ---
 

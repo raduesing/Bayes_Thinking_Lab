@@ -39,6 +39,7 @@ Der log-Link stellt sicher, dass alle vorhergesagten Raten > 0 bleiben.
 library(dagitty)
 library(brms)
 library(bayesplot)
+library(bayestestR)
 library(tidybayes)
 library(dplyr)
 library(ggplot2)
@@ -229,16 +230,12 @@ fit_prior <- brm(
 ```
 
 ```{r prior_ppc}
-y_prior <- posterior_predict(fit_prior, ndraws = 100)
-ppc_hist(daten$outcome, y_prior[1:8, ]) +
+pp_check(fit_prior, ndraws = 50, type = "hist") +
   ggtitle("Prior Predictive Check — plausible Zählwerte?")
-```
 
-```{r prior_range}
-# Bereich der prior-generierten Daten
-cat("Prior-generierte Werte: Min =", min(y_prior),
-    "| Max =", max(y_prior),
-    "| Median =", median(y_prior), "\n")
+# Extremwerte prüfen: Poisson sollte keine negativen und keine absurd großen Werte erzeugen
+r <- range(posterior_predict(fit_prior, ndraws = 50))
+cat("Prior-Werte: Min =", r[1], "| Max =", r[2], "\n")
 ```
 
 > **Ziel:** Priors sollten Counts im realistischen Bereich (0–50 Panikattacken/Woche)
@@ -267,9 +264,9 @@ summary(fit)
 
 ```{r rate_ratios}
 # Koeffizienten als Rate Ratios (exp-transformiert)
-fixef(fit) %>%
-  as.data.frame() %>%
-  mutate(across(everything(), ~ round(exp(.), 3))) %>%
+fixef(fit) |>
+  as.data.frame() |>
+  mutate(across(everything(), ~ round(exp(.), 3))) |>
   `colnames<-`(c("RR_Estimate", "RR_Error", "RR_Q2.5", "RR_Q97.5"))
 ```
 
@@ -285,21 +282,13 @@ mcmc_trace(as.array(fit), pars = "b_treatmentExposition") +
 # 6. Posterior Predictive Check
 
 ```{r ppc}
-yrep <- posterior_predict(fit, ndraws = 200)
-y    <- daten$outcome
+pp_check(fit, ndraws = 50) +
+  ggtitle("PPC: Dichte")
 
-ppc_dens_overlay(y, yrep[1:50, ]) +
-  ggtitle("PPC: Dichte (beobachtet vs. simuliert)")
-```
-
-```{r ppc_rootogram}
-# Rootogram: ideal für Zähldaten
-ppc_rootogram(y, yrep) +
+pp_check(fit, ndraws = 200, type = "rootogram") +
   ggtitle("Rootogram: Beobachtete vs. erwartete Zählhäufigkeiten")
-```
 
-```{r ppc_grouped}
-ppc_stat_grouped(y, yrep, group = daten$treatment, stat = "mean") +
+pp_check(fit, ndraws = 200, type = "stat_grouped", group = "treatment", stat = "mean") +
   ggtitle("PPC: Mittlere Rate nach Bedingung")
 ```
 
@@ -307,60 +296,47 @@ ppc_stat_grouped(y, yrep, group = daten$treatment, stat = "mean") +
 
 # 7. Effektschätzung und Entscheidung
 
-```{r posterior_draws}
-draws <- as_draws_df(fit)
-beta_log <- draws$b_treatmentExposition     # auf log-Skala
-beta_rr  <- exp(beta_log)                   # Rate Ratio
-```
+```{r effect_estimate}
+# ROPE auf Rate-Ratio-Skala: RR ∈ [0.90, 1.10] = praktisch kein Effekt
+rope_rr_low  <- 0.90
+rope_rr_high <- 1.10
 
-```{r hdi}
-# HDI auf log-Skala und Rate-Ratio-Skala
-hdi_log <- bayestestR::hdi(beta_log, ci = 0.95)
-hdi_rr  <- bayestestR::hdi(beta_rr,  ci = 0.95)
+# Draws (auf RR-Skala) + vollständige Posterior-Zusammenfassung
+beta_rr      <- as_draws_df(fit)$b_treatmentExposition |> exp()
+post_summary <- beta_rr |>
+  describe_posterior(
+    rope_range = c(rope_rr_low, rope_rr_high),
+    ci         = 0.95,
+    ci_method  = "hdi",
+    test       = c("p_direction", "rope")
+  )
 
-cat("95% HDI (log-Skala):", round(hdi_log$CI_low, 3), "bis", round(hdi_log$CI_high, 3), "\n")
-cat("95% HDI (Rate Ratio):", round(hdi_rr$CI_low, 3),  "bis", round(hdi_rr$CI_high, 3), "\n")
-```
-
-```{r rope}
-# ROPE auf Rate-Ratio-Skala: RR zwischen 0.90 und 1.10 = praktisch kein Effekt
-rope_result <- bayestestR::rope(beta_rr,
-                                 range = c(0.90, 1.10),
-                                 ci = 0.95)
-print(rope_result)
+post_summary
 ```
 
 ```{r posterior_plot}
 ggplot(data.frame(rr = beta_rr), aes(x = rr)) +
   geom_density(fill = "#b85c00", alpha = 0.6) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
-  annotate("rect", xmin = 0.90, xmax = 1.10,
+  annotate("rect", xmin = rope_rr_low, xmax = rope_rr_high,
            ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
-  geom_vline(xintercept = hdi_rr$CI_low,  linetype = "dotted", color = "#c87ad8") +
-  geom_vline(xintercept = hdi_rr$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title = "Posterior des Treatment-Effekts (Rate Ratio)",
-       subtitle = paste0("95% HDI: [", round(hdi_rr$CI_low, 2),
-                         ", ", round(hdi_rr$CI_high, 2), "]  |  ",
-                         "Roter Bereich = ROPE (RR 0.9–1.1)"),
+  geom_vline(xintercept = post_summary$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = post_summary$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title    = "Posterior des Treatment-Effekts (Rate Ratio)",
+       subtitle = paste0("95% HDI: [", round(post_summary$CI_low, 2), ", ",
+                         round(post_summary$CI_high, 2), "]  |  ",
+                         "ROPE: RR [", rope_rr_low, "–", rope_rr_high, "]"),
        x = "Rate Ratio (Exposition vs. Psychoedukation)", y = "Dichte")
-```
-
-```{r decision}
-p_reduction <- mean(beta_rr < 1)
-p_outside   <- mean(beta_rr < 0.90 | beta_rr > 1.10)
-
-cat("P(Rate Ratio < 1, d.h. Reduktion):", round(p_reduction, 3), "\n")
-cat("P(Effekt außerhalb ROPE):",           round(p_outside, 3), "\n")
 ```
 
 ### Entscheidung nach HDI+ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI (Rate Ratio) | [`r round(hdi_rr$CI_low, 2)`, `r round(hdi_rr$CI_high, 2)`] |
+| 95% HDI (Rate Ratio) | [`r round(post_summary$CI_low, 2)`, `r round(post_summary$CI_high, 2)`] |
 | ROPE | [0.90, 1.10] |
-| P(Reduktion) | `r round(p_reduction, 3)` |
-| P(außerhalb ROPE) | `r round(p_outside, 3)` |
+| P(Richtung) | `r round(post_summary$pd, 3)` |
+| % in ROPE | `r round(post_summary$ROPE_Percentage, 1)`% |
 
 ---
 

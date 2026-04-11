@@ -39,6 +39,7 @@ library(bayesplot)
 library(tidybayes)
 library(dplyr)
 library(ggplot2)
+library(bayestestR)
 
 theme_set(theme_minimal(base_size = 13))
 color_scheme_set("viridis")
@@ -132,7 +133,7 @@ head(daten)
 # → Intercept entspricht dann dem erwarteten Outcome für einen Patienten
 #   in der REFERENZGRUPPE (Kontrolle) mit DURCHSCHNITTLICHEM Alter und Baseline-Score
 # → Koeffizient = Effekt pro 1 SD des Prädiktors
-daten <- daten %>%
+daten <- daten |>
   mutate(
     baseline_c = as.numeric(scale(baseline)),   # M≈52, SD≈12 → z-Werte
     alter_c    = as.numeric(scale(alter))        # M≈45, SD≈12 → z-Werte
@@ -147,8 +148,8 @@ cat("alter_c:    M =", round(mean(daten$alter_c), 3),
 ## Deskriptive Statistik
 
 ```{r descriptive}
-daten %>%
-  group_by(treatment) %>%
+daten |>
+  group_by(treatment) |>
   summarise(
     n      = n(),
     M      = round(mean(outcome), 2),
@@ -226,11 +227,6 @@ print(fit_prior)
 ```
 
 ```{r prior_ppc_plot}
-# y_prior <- posterior_predict(fit_prior, ndraws = 100)
-# ppc_dens_overlay(daten$outcome, y_prior[1:50, ]) +
-#   ggtitle("Prior Predictive Check — plausible Wertebereiche?") +
-#   xlim(-50, 150)
-
 pp_check(fit_prior, ndraws = 100)
 ```
 
@@ -247,7 +243,8 @@ fit <- brm(
   data   = daten,
   family = gaussian(),
   prior  = priors,
-  chains = 4, iter = 2000, warmup = 1000,
+  iter = 4000, warmup = 2000,
+  chains = 4, 
   cores  = 4,
   seed   = 42,
   refresh = 0
@@ -261,13 +258,7 @@ summary(fit)
 ## Konvergenz prüfen
 
 ```{r convergence}
-# R-hat und Effective Sample Size
 plot(fit, variable = "b_treatmentCBTMI")
-```
-
-```{r trace_plot}
-mcmc_trace(as.array(fit), pars = "b_treatmentCBTMI") +
-  ggtitle("Trace Plot — Treatment-Effekt")
 ```
 
 ---
@@ -275,24 +266,16 @@ mcmc_trace(as.array(fit), pars = "b_treatmentCBTMI") +
 # 6. Posterior Predictive Check
 
 ```{r ppc}
-yrep <- posterior_predict(fit, ndraws = 200)
-y    <- daten$outcome
+pp_check(fit, ndraws = 50) +
+  ggtitle("PPC: Dichte")
 
-ppc_dens_overlay(y, yrep[1:50, ]) +
-  ggtitle("Posterior Predictive Check")
-```
-
-```{r ppc_stat}
-ppc_stat(y, yrep, stat = "mean") +
+pp_check(fit, ndraws = 200, type = "stat", stat = "mean") +
   ggtitle("PPC: Mittelwert")
 
-ppc_stat(y, yrep, stat = "sd") +
+pp_check(fit, ndraws = 200, type = "stat", stat = "sd") +
   ggtitle("PPC: Standardabweichung")
-```
 
-```{r ppc_grouped}
-group <- daten$treatment
-ppc_violin_grouped(y, yrep, group = group) +
+pp_check(fit, ndraws = 200, type = "violin_grouped", group = "treatment") +
   ggtitle("PPC: Verteilung nach Bedingung")
 ```
 
@@ -300,30 +283,22 @@ ppc_violin_grouped(y, yrep, group = group) +
 
 # 7. Effektschätzung und Entscheidung
 
-```{r posterior_draws}
-draws <- as_draws_df(fit)
-
-# Treatment-Effekt extrahieren
-beta_draws <- draws$b_treatmentCBTMI
-```
-
-```{r hdi}
-# HDI (Highest Density Interval)
-hdi_95 <- bayestestR::hdi(beta_draws, ci = 0.95)
-print(hdi_95)
-```
-
-```{r rope}
-# ROPE: Bereich, der als "praktisch null" gilt
-# Konvention: ±0.1 * SD(outcome) nach Kruschke
+```{r effect_estimate}
+# ROPE: ±0.1 SD(outcome) nach Kruschke
 rope_low  <- -0.1 * sd(daten$outcome)
 rope_high <-  0.1 * sd(daten$outcome)
-cat("ROPE:", round(rope_low, 2), "bis", round(rope_high, 2), "\n")
 
-rope_result <- bayestestR::rope(beta_draws,
-                                 range = c(rope_low, rope_high),
-                                 ci = 0.95)
-print(rope_result)
+# Draws extrahieren + vollständige Posterior-Zusammenfassung
+beta_draws   <- as_draws_df(fit)$b_treatmentCBTMI
+post_summary <- beta_draws |>
+  describe_posterior(
+    rope_range = c(rope_low, rope_high),
+    ci         = 0.95,
+    ci_method  = "hdi",
+    test       = c("p_direction", "rope")
+  )
+
+post_summary
 ```
 
 ```{r posterior_plot}
@@ -332,33 +307,23 @@ ggplot(data.frame(beta = beta_draws), aes(x = beta)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
   annotate("rect", xmin = rope_low, xmax = rope_high,
            ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
-  geom_vline(xintercept = hdi_95$CI_low,  linetype = "dotted", color = "#c87ad8") +
-  geom_vline(xintercept = hdi_95$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title = "Posterior des Treatment-Effekts (CBT-I vs. Kontrolle)",
-       subtitle = paste0("95% HDI: [", round(hdi_95$CI_low, 2),
-                         ", ", round(hdi_95$CI_high, 2), "]  |  ",
-                         "Roter Bereich = ROPE"),
+  geom_vline(xintercept = post_summary$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = post_summary$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title    = "Posterior des Treatment-Effekts (CBT-I vs. Kontrolle)",
+       subtitle = paste0("95% HDI: [", round(post_summary$CI_low, 2), ", ",
+                         round(post_summary$CI_high, 2), "]  |  ",
+                         "ROPE: [", round(rope_low, 1), ", ", round(rope_high, 1), "]"),
        x = "Differenz in Kognitions-Punkten", y = "Dichte")
-```
-
-```{r decision}
-# Wahrscheinlichkeit, dass Effekt positiv
-p_positive <- mean(beta_draws > 0)
-# Wahrscheinlichkeit, dass Effekt außerhalb ROPE
-p_outside_rope <- mean(beta_draws < rope_low | beta_draws > rope_high)
-
-cat("P(Effekt > 0):", round(p_positive, 3), "\n")
-cat("P(Effekt außerhalb ROPE):", round(p_outside_rope, 3), "\n")
 ```
 
 ### Entscheidung nach HDI+ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI | [`r round(hdi_95$CI_low, 1)`, `r round(hdi_95$CI_high, 1)`] Punkte |
+| 95% HDI | [`r round(post_summary$CI_low, 1)`, `r round(post_summary$CI_high, 1)`] Punkte |
 | ROPE | [`r round(rope_low, 1)`, `r round(rope_high, 1)`] Punkte |
-| P(Effekt > 0) | `r round(p_positive, 3)` |
-| P(außerhalb ROPE) | `r round(p_outside_rope, 3)` |
+| P(Richtung) | `r round(post_summary$pd, 3)` |
+| % in ROPE | `r round(post_summary$ROPE_Percentage, 1)`% |
 
 ---
 
