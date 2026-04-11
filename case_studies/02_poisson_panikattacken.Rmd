@@ -129,14 +129,14 @@ head(daten)
 ## Prädiktoren zentrieren
 
 ```{r center_predictors}
-# Metrische Prädiktoren z-standardisieren: scale() → M=0, SD=1
+# Metrische Prädiktoren zentrieren: scale(x, center=TRUE, scale=FALSE) → M=0, SD unverändert
 # log(baseline+1) wird erst transformiert, dann zentriert.
 # → Intercept = log(erwartete Rate) für Referenzgruppe bei DURCHSCHNITTLICHEN Kovariaten
-# → Koeffizient = Effekt pro 1 SD des Prädiktors (auf log-Skala)
+# → Koeffizient = Effekt pro 1 Einheit des Prädiktors (Originalskala)
 daten <- daten %>%
   mutate(
-    log_baseline_c = as.numeric(scale(log(baseline + 1))),  # log-transformiert + zentriert
-    asi_c          = as.numeric(scale(asi_score))            # ASI z-standardisiert
+    log_baseline_c = as.numeric(scale(log(baseline + 1), center = TRUE, scale = FALSE)),
+    asi_c          = as.numeric(scale(asi_score,          center = TRUE, scale = FALSE))
   )
 
 cat("log_baseline_c: M =", round(mean(daten$log_baseline_c), 3),
@@ -196,9 +196,10 @@ daten %>%
 # - Normal(-0.3, 0.5): leicht negativer Prior (Therapien helfen eher)
 #   → RR: exp(-0.3 ± 1) ≈ 0.25 bis 1.9
 #
-# beta_log_baseline_c / beta_asi_c (pro 1 SD des zentrierten Prädiktors):
-# - beta_log_baseline_c ≈ 0.25 * SD(log_baseline) ≈ 0.25 * 0.5 = 0.13 → Normal(0, 0.5)
-# - beta_asi_c          ≈ 0.02 * SD(asi_score)    ≈ 0.02 * 10  = 0.20 → Normal(0, 0.3)
+# beta_log_baseline_c / beta_asi_c (pro 1 Einheit des zentrierten Prädiktors, Originalskala):
+# - beta_log_baseline_c ≈ 0.25 pro 1 Einheit log(Baseline+1) → Normal(0, 0.5): plausibles Max. ±1.0
+# - beta_asi_c          ≈ 0.02 pro 1 ASI-Punkt               → Normal(0, 0.05): plausibles Max. ±0.1
+#   (für 10 Punkte ASI-Unterschied: log-Rate-Änderung ≤ 1.0 → Rate Ratio ≤ 2.7)
 #
 # Syntax: prior(normal(…), class = b, coef = Intercept) — direkt auf log-Rohskala
 
@@ -206,7 +207,7 @@ priors <- c(
   prior(normal(1.5, 0.75), class = b,         coef = Intercept),
   prior(normal(-0.3, 0.5), class = b,         coef = treatmentExposition),
   prior(normal(0, 0.5),    class = b,         coef = log_baseline_c),
-  prior(normal(0, 0.3),    class = b,         coef = asi_c),
+  prior(normal(0, 0.05),   class = b,         coef = asi_c),
   prior(normal(0, 0.5),    class = sd)
 )
 ```
@@ -347,8 +348,8 @@ ggplot(data.frame(rr = beta_rr), aes(x = rr)) +
 newdata_pred <- data.frame(
   treatment      = factor(c("Psychoedukation", "Exposition"),
                            levels = c("Psychoedukation", "Exposition")),
-  log_baseline_c = 0,   # mittlerer log(baseline+1) → z-Wert = 0
-  asi_c          = 0,   # mittlerer ASI-Score → z-Wert = 0
+  log_baseline_c = 0,   # mittlerer log(baseline+1) → zentrierter Wert = 0
+  asi_c          = 0,   # mittlerer ASI-Score → zentrierter Wert = 0
   zentrum        = NA   # marginal über Random Effects
 )
 
@@ -367,7 +368,38 @@ ggplot(pred_df, aes(x = treatment, y = Estimate, color = treatment)) +
 
 ---
 
-# 9. Export für PPC Shiny App
+# 9. Export für Prior Predictive Check (CSV-Upload)
+
+```{r ppc_csv_export, eval=FALSE}
+# CSV-Export für den Prior Predictive Check (HTML-App)
+# Konvention: y, x1, x2, ..., group
+# group-Spalte → wird in der App automatisch als nGroups erkannt
+#
+# Variablen:
+#   y   = Anzahl Panikattacken/Woche (Outcome, Zähldaten)
+#   x1  = Treatment (0 = Psychoedukation, 1 = Exposition)
+#   x2  = log_baseline_c  (log(Baseline+1), zentriert)
+#   x3  = asi_c           (ASI-Score, zentriert: M abgezogen)
+#   group = zentrum        (Cluster-Variable)
+
+ppc_data <- data.frame(
+  y     = daten$outcome,
+  x1    = as.integer(daten$treatment == "Exposition"),
+  x2    = daten$log_baseline_c,
+  x3    = daten$asi_c,
+  group = daten$zentrum
+)
+
+write.csv(ppc_data, "case02_poisson_ppc.csv", row.names = FALSE)
+cat("Gespeichert: case02_poisson_ppc.csv\n")
+cat("  y: Panikattacken/Woche | x1: Treatment (0/1) |",
+    "x2: log(Baseline+1) zentriert | x3: ASI zentriert | group: Zentrum\n")
+cat("  Prior Predictive Check → Poisson, 0 + Intercept + x1 + x2 + x3 + (1|group)\n")
+```
+
+---
+
+# 10. Export für PPC Shiny App
 
 ```{r shiny_export, eval=FALSE}
 nd      <- min(200, posterior::ndraws(fit))

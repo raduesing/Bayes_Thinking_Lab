@@ -134,13 +134,13 @@ head(daten)
 ## Prädiktoren zentrieren
 
 ```{r center_predictors}
-# Metrischen Prädiktor z-standardisieren: scale() → M=0, SD=1
+# Metrischen Prädiktor zentrieren: scale(x, center=TRUE, scale=FALSE) → M=0, SD unverändert
 # → Intercept = logit(P(Remission)) für Referenzgruppe (Beratung, männlich)
-#   bei DURCHSCHNITTLICHEM PHQ9-Schweregrad
-# → Koeffizient phq9_c = Effekt pro 1 SD des PHQ9-Scores
+#   bei DURCHSCHNITTLICHEM PHQ9-Schweregrad (phq9_c = 0 → PHQ9 ≈ 15)
+# → Koeffizient phq9_c = Effekt pro 1 PHQ9-Punkt (Originalskala)
 daten <- daten |>
   mutate(
-    phq9_c = as.numeric(scale(phq9))   # M≈15, SD≈4 → z-Werte
+    phq9_c = as.numeric(scale(phq9, center = TRUE, scale = FALSE))  # M≈15 abgezogen
   )
 
 cat("phq9_c: M =", round(mean(daten$phq9_c), 3),
@@ -196,8 +196,9 @@ daten |>
 # - Plausibles Spektrum: OR zwischen 0.5 und 5.0 (Therapiestudien)
 # - Normal(0, 1.0): 95% Masse → OR: 0.14 bis 7.1 → moderat konservativ
 #
-# beta_phq9_c (pro 1 SD des PHQ9, ≈4 Punkte):
-# - beta_phq9_c ≈ -0.18 * SD(phq9) ≈ -0.18 * 4 = -0.72 → Normal(0, 0.7)
+# beta_phq9_c (pro 1 PHQ9-Punkt, Originalskala):
+# - beta_phq9_c ≈ -0.18 pro Punkt; PHQ9-Range 5–27, SD ≈ 4 Punkte
+# - Normal(0, 0.25): plausibles Max. ±0.5 pro Punkt → per 5 Punkte: ±2.5 Logit-Einheiten
 #
 # beta_geschlecht: Normal(0, 0.8) → OR: 0.20 bis 5.0
 # Random Effect SD (Zentrum): Normal(0, 0.5) auf Logit-Skala
@@ -205,11 +206,11 @@ daten |>
 # Syntax: prior(normal(…), class = b, coef = Intercept) — direkt auf Logit-Rohskala
 
 priors <- c(
-  prior(normal(-1, 1.5), class = b,         coef = Intercept),
-  prior(normal(0, 1.0),  class = b,         coef = treatmentKVT),
-  prior(normal(0, 0.7),  class = b,         coef = phq9_c),
-  prior(normal(0, 0.8),  class = b,         coef = geschlechtweiblich),
-  prior(normal(0, 0.5),  class = sd)
+  prior(normal(-1, 1.5),  class = b,         coef = Intercept),
+  prior(normal(0, 1.0),   class = b,         coef = treatmentKVT),
+  prior(normal(0, 0.25),  class = b,         coef = phq9_c),
+  prior(normal(0, 0.8),   class = b,         coef = geschlechtweiblich),
+  prior(normal(0, 0.5),   class = sd)
 )
 ```
 
@@ -370,13 +371,12 @@ gridExtra::grid.arrange(p1, p2, ncol = 2)
 
 ```{r marginal_phq9}
 # Wie ändert sich die Remissionswahrscheinlichkeit mit dem PHQ9-Score?
-# phq9_c zurückrechnen: z = (x - mean) / sd
+# phq9_c = phq9 - mean(phq9), also: phq9 = phq9_c + mean(phq9)
 mean_phq9 <- mean(daten$phq9)
-sd_phq9   <- sd(daten$phq9)
 
 phq9_seq <- seq(5, 27, by = 1)
 newdata_gradient <- expand.grid(
-  phq9_c     = (phq9_seq - mean_phq9) / sd_phq9,  # z-standardisiert
+  phq9_c     = phq9_seq - mean_phq9,   # zentriert
   treatment  = c("Beratung", "KVT"),
   geschlecht = "weiblich",
   zentrum    = NA
@@ -386,7 +386,7 @@ pred <- fitted(fit, newdata = newdata_gradient,
                re_formula = NA, summary = TRUE)
 pred_df <- cbind(newdata_gradient, as.data.frame(pred))
 # Für die x-Achse: zurück in PHQ9-Originalpunkte
-pred_df$phq9 <- pred_df$phq9_c * sd_phq9 + mean_phq9
+pred_df$phq9 <- pred_df$phq9_c + mean_phq9
 
 ggplot(pred_df, aes(x = phq9, y = Estimate, color = treatment, fill = treatment)) +
   geom_line(linewidth = 1.2) +
@@ -402,7 +402,38 @@ ggplot(pred_df, aes(x = phq9, y = Estimate, color = treatment, fill = treatment)
 
 ---
 
-# 9. Export für PPC Shiny App
+# 9. Export für Prior Predictive Check (CSV-Upload)
+
+```{r ppc_csv_export, eval=FALSE}
+# CSV-Export für den Prior Predictive Check (HTML-App)
+# Konvention: y, x1, x2, ..., group
+# group-Spalte → wird in der App automatisch als nGroups erkannt
+#
+# Variablen:
+#   y   = Remission (0 = nein, 1 = ja)
+#   x1  = Treatment (0 = Beratung, 1 = KVT)
+#   x2  = phq9_c      (PHQ9-Score, zentriert: M≈15 abgezogen)
+#   x3  = geschlecht  (0 = männlich, 1 = weiblich)
+#   group = zentrum    (Cluster-Variable)
+
+ppc_data <- data.frame(
+  y     = daten$outcome,
+  x1    = as.integer(daten$treatment  == "KVT"),
+  x2    = daten$phq9_c,
+  x3    = as.integer(daten$geschlecht == "weiblich"),
+  group = daten$zentrum
+)
+
+write.csv(ppc_data, "case03_bernoulli_ppc.csv", row.names = FALSE)
+cat("Gespeichert: case03_bernoulli_ppc.csv\n")
+cat("  y: Remission (0/1) | x1: Treatment (0/1) |",
+    "x2: PHQ9 zentriert | x3: Geschlecht (0/1) | group: Zentrum\n")
+cat("  Prior Predictive Check → Bernoulli, 0 + Intercept + x1 + x2 + x3 + (1|group)\n")
+```
+
+---
+
+# 10. Export für PPC Shiny App
 
 ```{r shiny_export, eval=FALSE}
 nd      <- min(200, posterior::ndraws(fit))

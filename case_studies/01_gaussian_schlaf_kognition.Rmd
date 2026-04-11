@@ -129,14 +129,14 @@ head(daten)
 ## Prädiktoren zentrieren
 
 ```{r center_predictors}
-# Metrische Prädiktoren z-standardisieren: scale() → M=0, SD=1
-# → Intercept entspricht dann dem erwarteten Outcome für einen Patienten
+# Metrische Prädiktoren zentrieren: scale(x, center=TRUE, scale=FALSE) → M=0, SD unverändert
+# → Intercept entspricht dem erwarteten Outcome für einen Patienten
 #   in der REFERENZGRUPPE (Kontrolle) mit DURCHSCHNITTLICHEM Alter und Baseline-Score
-# → Koeffizient = Effekt pro 1 SD des Prädiktors
+# → Koeffizient = Effekt pro 1 Einheit des Prädiktors (Originalskala)
 daten <- daten |>
   mutate(
-    baseline_c = as.numeric(scale(baseline)),   # M≈52, SD≈12 → z-Werte
-    alter_c    = as.numeric(scale(alter))        # M≈45, SD≈12 → z-Werte
+    baseline_c = as.numeric(scale(baseline, center = TRUE, scale = FALSE)),  # M≈52 abgezogen
+    alter_c    = as.numeric(scale(alter,    center = TRUE, scale = FALSE))   # M≈45 abgezogen
   )
 
 cat("baseline_c: M =", round(mean(daten$baseline_c), 3),
@@ -186,9 +186,9 @@ ggplot(daten, aes(x = outcome, fill = treatment)) +
 # - Skala: Rohpunkte (0–100); plausible Effektgröße: ±20 Punkte max.
 # - Normal(0, 8): 95% Priormasse zwischen -16 und +16 → konservativ-informativ
 #
-# beta_baseline_c / beta_alter_c (pro 1 SD des jeweiligen Prädiktors):
-# - beta_baseline_c ≈ 0.45 * SD(baseline) ≈ 0.45 * 12 = 5.4 → Normal(0, 8)
-# - beta_alter_c    ≈ -0.15 * SD(alter)  ≈ -0.15 * 12 = -1.8 → Normal(0, 5)
+# beta_baseline_c / beta_alter_c (pro 1 Einheit des zentrierten Prädiktors, Originalskala):
+# - beta_baseline_c ≈ 0.45 Punkte pro 1 Baseline-Punkt  → Normal(0, 0.8): plausibles Max. ±1.6
+# - beta_alter_c    ≈ -0.15 Punkte pro 1 Lebensjahr     → Normal(0, 0.5): plausibles Max. ±1.0
 #
 # sigma: residuale SD ≈ 8–15 Punkte → exponential(1)
 # Random Effect SD (Therapeut): ≈ 5 Punkte → Normal(0, 10)
@@ -202,8 +202,8 @@ get_prior(outcome ~ 0 + Intercept + treatment + baseline_c + alter_c + (1 | ther
 priors <- c(
   prior(normal(50, 15), class = b,         coef = Intercept),
   prior(normal(0, 8),   class = b,         coef = treatmentCBTMI),
-  prior(normal(0, 8),   class = b,         coef = baseline_c),
-  prior(normal(0, 5),   class = b,         coef = alter_c),
+  prior(normal(0, 0.8), class = b,         coef = baseline_c),
+  prior(normal(0, 0.5), class = b,         coef = alter_c),
   prior(exponential(1), class = sigma),
   prior(normal(0, 10),  class = sd)
 )
@@ -327,7 +327,38 @@ ggplot(data.frame(beta = beta_draws), aes(x = beta)) +
 
 ---
 
-# 8. Export für PPC Shiny App
+# 8. Export für Prior Predictive Check (CSV-Upload)
+
+```{r ppc_csv_export, eval=FALSE}
+# CSV-Export für den Prior Predictive Check (HTML-App)
+# Konvention: y, x1, x2, ..., group
+# group-Spalte → wird in der App automatisch als nGroups erkannt
+#
+# Variablen:
+#   y   = Kognitions-Score (Outcome)
+#   x1  = Treatment (0 = Kontrolle, 1 = CBT-I)
+#   x2  = baseline_c  (Baseline-Score, zentriert: M≈52 abgezogen)
+#   x3  = alter_c     (Alter in Jahren, zentriert: M≈45 abgezogen)
+#   group = therapeut  (Cluster-Variable)
+
+ppc_data <- data.frame(
+  y     = daten$outcome,
+  x1    = as.integer(daten$treatment == "CBT-I"),
+  x2    = daten$baseline_c,
+  x3    = daten$alter_c,
+  group = daten$therapeut
+)
+
+write.csv(ppc_data, "case01_gaussian_ppc.csv", row.names = FALSE)
+cat("Gespeichert: case01_gaussian_ppc.csv\n")
+cat("  y: Kognitions-Score | x1: Treatment (0/1) |",
+    "x2: baseline zentriert | x3: Alter zentriert | group: Therapeut\n")
+cat("  Prior Predictive Check → Gaussian, 0 + Intercept + x1 + x2 + x3 + (1|group)\n")
+```
+
+---
+
+# 9. Export für PPC Shiny App
 
 ```{r shiny_export, eval=FALSE}
 # Kompakt-Export kompatibel mit der Bayes Thinking Lab Shiny App
