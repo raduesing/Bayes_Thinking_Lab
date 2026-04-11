@@ -344,7 +344,7 @@ svg text{font-family:'DM Mono',monospace}
       <input type="number" class="skala-num" id="int-mu-rng" value="10" min="1" step="1"
              onchange="setIntMuRange(+this.value)" title="Slider range for μ: ±value">
       <span class="skala-lbl">σ max</span>
-      <input type="number" class="skala-num" id="int-sig-max" value="10" min="0.1" step="1"
+      <input type="number" class="skala-num" id="int-sig-max" value="10" min="1" step="1"
              onchange="setIntSigMax(+this.value)" title="Maximum σ value on the slider">
     </div>
   </div>
@@ -595,7 +595,7 @@ svg text{font-family:'DM Mono',monospace}
       <div class="pl">
         <span class="lbl">τ₀ Family</span>
       </div>
-      <select id="re-int-fam">
+      <select id="re-int-fam" onchange="onReIntFamChange()">
         <option value="exponential">Exponential(λ)</option>
         <option value="half_normal">Half-Normal(σ)</option>
         <option value="half_student">Half-Student-t(ν, σ)</option>
@@ -603,21 +603,41 @@ svg text{font-family:'DM Mono',monospace}
       </select>
       <div class="pl" style="margin-top:.28rem">
         <span class="lbl">λ / σ <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>SD of Random Intercepts τ₀</b><br>How much do groups differ? Exponential(1): τ₀ mostly &lt;2.</span></span></span>
-        <span class="pv pvp" id="d-reip">1.0</span>
+        <span class="pv pvp" id="d-reip">1.00</span>
       </div>
-      <input type="range" id="re-int-p1" min="0.1" max="5" step="0.1" value="1" oninput="updDisp('re-int-p1','d-reip',1)">
+      <input type="range" id="re-int-p1" min="0.1" max="5" step="0.05" value="1" oninput="updDisp('re-int-p1','d-reip',2)">
+      <div class="skala-row">
+        <span class="skala-lbl">Min</span>
+        <input type="number" class="skala-num" id="re-int-p1-min" value="0.1" min="0.01" step="0.1" onchange="setReIntRange()">
+        <span class="skala-lbl">Max</span>
+        <input type="number" class="skala-num" id="re-int-p1-max" value="5" min="0.5" step="1" onchange="setReIntRange()">
+      </div>
+      <div class="pg" id="re-int-nu-row" style="display:none">
+        <div class="pl"><span class="lbl">ν (degrees of freedom) <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>ν for Half-Student-t</b><br>ν=3: robust default. Small ν → heavier tails → τ₀ can grow larger.</span></span></span><span class="pv pvp" id="d-reinu">3.0</span></div>
+        <input type="range" id="re-int-nu" min="1" max="30" step="0.5" value="3" oninput="updDisp('re-int-nu','d-reinu',1)">
+      </div>
     </div>
     <div id="re-slope-block" style="display:none">
       <div class="pg">
         <div class="pl"><span class="lbl">τ₁ Family</span></div>
-        <select id="re-slp-fam">
+        <select id="re-slp-fam" onchange="onReSlpFamChange()">
           <option value="exponential">Exponential(λ)</option>
           <option value="half_normal">Half-Normal(σ)</option>
           <option value="half_student">Half-Student-t(ν, σ)</option>
           <option value="half_cauchy">Half-Cauchy(σ)</option>
         </select>
-        <div class="pl" style="margin-top:.28rem"><span class="lbl">λ / σ</span><span class="pv pvp" id="d-resp">1.0</span></div>
-        <input type="range" id="re-slp-p1" min="0.1" max="5" step="0.1" value="1" oninput="updDisp('re-slp-p1','d-resp',1)">
+        <div class="pl" style="margin-top:.28rem"><span class="lbl">λ / σ</span><span class="pv pvp" id="d-resp">1.00</span></div>
+        <input type="range" id="re-slp-p1" min="0.1" max="5" step="0.05" value="1" oninput="updDisp('re-slp-p1','d-resp',2)">
+        <div class="skala-row">
+          <span class="skala-lbl">Min</span>
+          <input type="number" class="skala-num" id="re-slp-p1-min" value="0.1" min="0.01" step="0.1" onchange="setReSlpRange()">
+          <span class="skala-lbl">Max</span>
+          <input type="number" class="skala-num" id="re-slp-p1-max" value="5" min="0.5" step="1" onchange="setReSlpRange()">
+        </div>
+        <div class="pg" id="re-slp-nu-row" style="display:none">
+          <div class="pl"><span class="lbl">ν (degrees of freedom)</span><span class="pv pvp" id="d-reslnu">3.0</span></div>
+          <input type="range" id="re-slp-nu" min="1" max="30" step="0.5" value="3" oninput="updDisp('re-slp-nu','d-reslnu',1)">
+        </div>
       </div>
       <div class="pg">
         <div class="pl">
@@ -628,8 +648,12 @@ svg text{font-family:'DM Mono',monospace}
       </div>
     </div>
     <div class="pg">
-      <div class="pl"><span class="lbl">Groups</span><span class="pv pvp" id="d-ngrp">20</span></div>
-      <input type="range" id="re-ngrp" min="5" max="80" step="5" value="20" oninput="updDisp('re-ngrp','d-ngrp',0)">
+      <div class="pl"><span class="lbl">Groups <span class="tip-wrap"><span class="tip-icon">?</span><span class="tip-box"><b>Number of groups (nGroups)</b><br>CSV upload: column <code>group</code> → nGroups is detected automatically.</span></span></span><span class="pv pvp" id="d-ngrp">20</span></div>
+      <input type="range" id="re-ngrp" min="2" max="200" step="1" value="20" oninput="updDispInt('re-ngrp','d-ngrp')">
+    </div>
+    <div class="skala-row">
+      <span class="skala-lbl">Max</span>
+      <input type="number" class="skala-num" id="re-ngrp-max" value="200" min="10" step="10" onchange="setReNGrpMax()" title="Maximum number of groups on the slider">
     </div>
   </div>
 
@@ -657,7 +681,7 @@ svg text{font-family:'DM Mono',monospace}
          ondrop="handleDrop(event)">
       <input type="file" id="file-inp" accept=".csv,.txt" style="display:none" onchange="handleFile(this.files[0])">
       📂 Drop CSV or click<br>
-      <span style="opacity:.5;font-size:.75rem">Columns: y, x (or x1, x2 …)</span>
+      <span style="opacity:.5;font-size:.75rem">Columns: y, x (or x1, x2 …); <b>group</b> → nGroups auto</span>
     </div>
     <div id="upload-msg" style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.32rem"></div>
     <button id="del-data-btn" onclick="clearData()" style="display:none;font-family:'DM Mono',monospace;font-size:.75rem;border:1px solid var(--accent);background:transparent;cursor:pointer;color:var(--accent);padding:.22rem .6rem;width:100%;margin-top:.35rem;transition:all .12s" onmouseover="this.style.background=cv('--accent');this.style.color='white'" onmouseout="this.style.background='transparent';this.style.color=cv('--accent')">✕ Delete data</button>
@@ -684,8 +708,8 @@ let MODEL      = 'linear';
 let USE_LMM    = false;
 let USE_AB     = false;
 let DARK       = true;
-let predictors = [{ id:0, fam:'normal', mu:0, sig:1, nu:3, xMin:-3, xMax:3, degree:1, polybetas:[] }];
-let nextPredId = 1;
+let predictors = [];
+let nextPredId = 0;
 let uploadedData = null;
 let lastSimA = null, lastSimB = null;
 let lazyTimer = null, abTimer = null;
@@ -801,43 +825,53 @@ function resizeSlider(id, min, max, step) {
   el.value = Math.min(Math.max(cur, min), max);
 }
 function setIntMuRange(halfRange) {
-  const r = Math.max(1, halfRange);
+  const r = Math.max(1, Math.round(halfRange));  // integer → -r is always on-step
   const step = r >= 100 ? 1 : r >= 10 ? 0.5 : 0.1;
   resizeSlider('int-mu', -r, r, step);
-  const cur = parseFloat(document.getElementById('int-mu').value||0);
-  const dp = document.getElementById('d-imu'); if(dp) dp.textContent = cur.toFixed(1);
+  const raw = parseFloat(document.getElementById('int-mu').value||0);
+  const cur = Math.round(Math.min(Math.max(raw, -r), r) / step) * step;
+  document.getElementById('int-mu').value = cur;
+  const dp = document.getElementById('d-imu'); if(dp) dp.textContent = cur.toFixed(step < 1 ? 1 : 0);
   if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
 }
 function setIntSigMax(maxVal) {
-  const m = Math.max(0.1, maxVal);
+  const m = Math.max(1, Math.round(maxVal));  // integer → sigMin aligns cleanly
   const step = m >= 100 ? 1 : m >= 10 ? 0.5 : 0.1;
-  resizeSlider('int-sig', 0.1, m, step);
-  const cur = parseFloat(document.getElementById('int-sig').value||1);
-  const dp = document.getElementById('d-isg'); if(dp) dp.textContent = cur.toFixed(1);
+  const sigMin = step >= 0.5 ? step : 0.1;   // multiple of step, so positions land on clean values
+  resizeSlider('int-sig', sigMin, m, step);
+  // Snap current value to nearest valid position
+  const raw = parseFloat(document.getElementById('int-sig').value||1);
+  const cur = Math.max(sigMin, Math.round(Math.min(raw, m) / step) * step);
+  document.getElementById('int-sig').value = cur;
+  const dp = document.getElementById('d-isg'); if(dp) dp.textContent = cur.toFixed(step < 1 ? 1 : 0);
   if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
 }
 function setPredMuRange(id, halfRange) {
-  const r = Math.max(1, halfRange);
-  const step = r >= 1000 ? 10 : r >= 100 ? 1 : r >= 10 ? 0.5 : 0.1;
+  const r = Math.max(1, Math.round(halfRange));  // always integer → slider min=-r is always on-step
+  const step = r >= 1000 ? 10 : r >= 100 ? 1 : r >= 10 ? 1 : r >= 2 ? 0.5 : 0.1;
   resizeSlider(`pm-${id}`, -r, r, step);
   const p = predictors.find(x=>x.id===id); if(!p) return;
-  const cur = Math.min(Math.max(p.mu, -r), r);
+  // Snap current value to nearest step to avoid stranded fractions
+  const cur = Math.round(Math.min(Math.max(p.mu, -r), r) / step) * step;
   p.mu = cur;
   const el = document.getElementById(`pm-${id}`); if(el) el.value = cur;
-  const dp = document.getElementById(`pdm-${id}`); if(dp) dp.textContent = cur.toFixed(1);
+  const dp = document.getElementById(`pdm-${id}`); if(dp) dp.textContent = cur.toFixed(step < 1 ? 1 : 0);
   // Auto-update xMin/xMax
   p.xMin = p.mu - 3*p.sig; p.xMax = p.mu + 3*p.sig;
   if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
 }
 function setPredSigMax(id, maxVal) {
-  const m = Math.max(0.1, maxVal);
-  const step = m >= 1000 ? 10 : m >= 100 ? 1 : m >= 10 ? 0.5 : 0.1;
-  resizeSlider(`ps-${id}`, 0.1, m, step);
+  const m = Math.max(1, Math.round(maxVal));  // always integer → sigMin aligns cleanly
+  const step = m >= 1000 ? 10 : m >= 100 ? 1 : m >= 10 ? 0.5 : m >= 2 ? 0.5 : 0.1;
+  // sigMin must be a multiple of step (same logic as renderPredictors)
+  const sigMin = step >= 0.5 ? step : 0.1;
+  resizeSlider(`ps-${id}`, sigMin, m, step);
   const p = predictors.find(x=>x.id===id); if(!p) return;
-  const cur = Math.min(p.sig, m);
+  // Snap to nearest valid step position, clamped to [sigMin, m]
+  const cur = Math.max(sigMin, Math.round(Math.min(Math.max(p.sig, sigMin), m) / step) * step);
   p.sig = cur;
   const el = document.getElementById(`ps-${id}`); if(el) el.value = cur;
-  const dp = document.getElementById(`pds-${id}`); if(dp) dp.textContent = cur.toFixed(1);
+  const dp = document.getElementById(`pds-${id}`); if(dp) dp.textContent = cur.toFixed(step < 1 ? 1 : 0);
   p.xMin = p.mu - 3*p.sig; p.xMax = p.mu + 3*p.sig;
   if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300);}
 }
@@ -1027,7 +1061,48 @@ function onReStructChange() {
   document.getElementById('re-slope-vars').style.display  = isSlope ? '' : 'none';
   if (isSlope) updateSlopeChks();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
-
+}
+function onReIntFamChange() {
+  const fam = gv('re-int-fam');
+  const nuRow = document.getElementById('re-int-nu-row');
+  if (nuRow) nuRow.style.display = fam === 'half_student' ? '' : 'none';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function onReSlpFamChange() {
+  const fam = gv('re-slp-fam');
+  const nuRow = document.getElementById('re-slp-nu-row');
+  if (nuRow) nuRow.style.display = fam === 'half_student' ? '' : 'none';
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setReIntRange() {
+  const sl = document.getElementById('re-int-p1'); if (!sl) return;
+  const mn = parseFloat(document.getElementById('re-int-p1-min')?.value) || 0.1;
+  const mx = parseFloat(document.getElementById('re-int-p1-max')?.value) || 5;
+  const range = mx - mn;
+  const step = range <= 1 ? 0.01 : range <= 5 ? 0.05 : range <= 20 ? 0.1 : 0.5;
+  sl.min = mn; sl.max = mx; sl.step = step;
+  sl.value = Math.min(Math.max(parseFloat(sl.value), mn), mx);
+  const dp = document.getElementById('d-reip'); if (dp) dp.textContent = parseFloat(sl.value).toFixed(2);
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setReSlpRange() {
+  const sl = document.getElementById('re-slp-p1'); if (!sl) return;
+  const mn = parseFloat(document.getElementById('re-slp-p1-min')?.value) || 0.1;
+  const mx = parseFloat(document.getElementById('re-slp-p1-max')?.value) || 5;
+  const range = mx - mn;
+  const step = range <= 1 ? 0.01 : range <= 5 ? 0.05 : range <= 20 ? 0.1 : 0.5;
+  sl.min = mn; sl.max = mx; sl.step = step;
+  sl.value = Math.min(Math.max(parseFloat(sl.value), mn), mx);
+  const dp = document.getElementById('d-resp'); if (dp) dp.textContent = parseFloat(sl.value).toFixed(2);
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
+}
+function setReNGrpMax() {
+  const sl = document.getElementById('re-ngrp'); if (!sl) return;
+  const mx = Math.max(10, parseInt(document.getElementById('re-ngrp-max')?.value) || 200);
+  sl.max = mx;
+  sl.value = Math.min(parseInt(sl.value), mx);
+  const dp = document.getElementById('d-ngrp'); if (dp) dp.textContent = Math.round(+sl.value);
+  if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
 
 function updateSlopeChks() {
@@ -1053,21 +1128,35 @@ function updateSlopeChks() {
 function renderPredictors() {
   const c = document.getElementById('pred-container');
   c.innerHTML = '';
+  if (predictors.length === 0) {
+    const note = document.createElement('div');
+    note.className = 'infobox';
+    note.style.cssText = 'margin-bottom:.35rem;font-size:.75rem;color:var(--ink2)';
+    note.innerHTML = '<em>Intercept-only model</em> — <code>y ~ 0 + Intercept</code><br>Add a predictor to include β-terms.';
+    c.appendChild(note);
+    if (gv('re-struct')==='slope') updateSlopeChks();
+    return;
+  }
   predictors.forEach((p, idx) => {
     const label = p.name || `x${idx+1}`;
     // Auto-derive xMin/xMax from prior if not explicitly set by range controls
     if (p.xMin == null) p.xMin = p.mu - 3*p.sig;
     if (p.xMax == null) p.xMax = p.mu + 3*p.sig;
-    const muHalf  = Math.max(Math.abs(p.mu) + 3*p.sig, 5);
-    const sigMax  = Math.max(p.sig * 4, 5);
-    const muStep  = muHalf >= 1000 ? 10 : muHalf >= 100 ? 1 : muHalf >= 10 ? 0.5 : 0.1;
-    const sigStep = sigMax >= 100  ? 1  : sigMax >= 10  ? 0.5 : 0.1;
+    // Keep range integers so number-input step="1" always produces clean values
+    const muHalf  = Math.max(Math.ceil(Math.abs(p.mu) + 3*p.sig), 5);
+    const sigMax  = Math.max(Math.ceil(p.sig * 4), 5);
+    const muStep  = muHalf >= 1000 ? 10 : muHalf >= 100 ? 1 : muHalf >= 10 ? 1 : muHalf >= 2 ? 0.5 : 0.1;
+    const sigStep = sigMax >= 100  ? 1  : sigMax >= 10  ? 0.5 : sigMax >= 2 ? 0.5 : 0.1;
+    // sigMin must be a multiple of sigStep (min=0.1 with step=0.5 → 0.1,0.6,1.1... broken)
+    const sigMin  = sigStep >= 0.5 ? sigStep : 0.1;
+    // Snap p.sig to nearest valid step position ≥ sigMin
+    const sigInit = Math.max(sigMin, Math.round(Math.max(p.sig, sigMin) / sigStep) * sigStep);
     const div = document.createElement('div');
     div.className = 'pred-block';
     div.innerHTML = `
       <div class="pred-hdr">
         <span class="pred-name">β · ${label}</span>
-        ${predictors.length>1 ? `<button class="pred-rm" onclick="removePredictor(${p.id})">✕</button>` : ''}
+        <button class="pred-rm" onclick="removePredictor(${p.id})">✕</button>
       </div>
       <div class="pg">
         <div class="pl"><span class="lbl">Family</span></div>
@@ -1084,9 +1173,9 @@ function renderPredictors() {
                oninput="setPredVal(${p.id},'mu',+this.value,'pdm-${p.id}',1)">
       </div>
       <div class="pg">
-        <div class="pl"><span class="lbl">σ (Prior)</span><span class="pv pvg" id="pds-${p.id}">${p.sig.toFixed(1)}</span></div>
-        <input type="range" id="ps-${p.id}" min="0.1" max="${sigMax}" step="${sigStep}" value="${p.sig}"
-               oninput="setPredVal(${p.id},'sig',+this.value,'pds-${p.id}',1)">
+        <div class="pl"><span class="lbl">σ (Prior)</span><span class="pv pvg" id="pds-${p.id}">${sigInit.toFixed(sigStep < 1 ? 1 : 0)}</span></div>
+        <input type="range" id="ps-${p.id}" min="${sigMin}" max="${sigMax}" step="${sigStep}" value="${sigInit}"
+               oninput="setPredVal(${p.id},'sig',+this.value,'pds-${p.id}',${sigStep < 1 ? 1 : 0})">
       </div>
       <div class="pg" id="pnr-${p.id}" style="display:${p.fam==='student_t'?'':'none'}">
         <div class="pl"><span class="lbl">ν</span><span class="pv pvg" id="pdn-${p.id}">${p.nu.toFixed(1)}</span></div>
@@ -1095,10 +1184,10 @@ function renderPredictors() {
       </div>
       <div class="skala-row">
         <span class="skala-lbl" title="Slider range for μ: ±value">μ ±</span>
-        <input type="number" class="skala-num" value="${muHalf.toFixed(0)}" min="0.1" step="1"
+        <input type="number" class="skala-num" value="${muHalf}" min="1" step="1"
                onchange="setPredMuRange(${p.id},+this.value)">
         <span class="skala-lbl" title="Maximum σ value on the slider">σ max</span>
-        <input type="number" class="skala-num" value="${sigMax.toFixed(0)}" min="0.1" step="1"
+        <input type="number" class="skala-num" value="${sigMax}" min="1" step="1"
                onchange="setPredSigMax(${p.id},+this.value)">
         <span class="skala-lbl" style="opacity:.5;font-size:.75rem" title="x-axis = μ±3σ of the prior">x±3σ</span>
       </div>
@@ -1143,11 +1232,9 @@ function addPredictor() {
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
 }
 function removePredictor(id) {
-  if (predictors.length<=1) return;
   predictors = predictors.filter(p => p.id!==id);
   renderPredictors();
   if (lastSimA) { clearTimeout(lazyTimer); lazyTimer = setTimeout(render, 300); }
-
 }
 function changePredDegree(id, deg) {
   const p = predictors.find(x => x.id === id); if (!p) return;
@@ -1652,8 +1739,10 @@ function buildConfigA() {
     slopeVars: slopeVars,
     reIntFam:  gv('re-int-fam') || 'exponential',
     reIntP1:   gn('re-int-p1')  || 1,
+    reIntNu:   gn('re-int-nu')  || 3,
     reSlpFam:  gv('re-slp-fam') || 'exponential',
     reSlpP1:   gn('re-slp-p1')  || 1,
+    reSlpNu:   gn('re-slp-nu')  || 3,
     lkjEta:    gn('re-lkj')     || 2,
     nGrp:      Math.round(gn('re-ngrp')) || 20,
     // Aux params for new families
@@ -1787,10 +1876,10 @@ function simulate(cfg, model) {
     // LMM
     let tau0=0, tau1=0, groupOffsets=null;
     if (cfg.lmm) {
-      tau0 = drawScale(cfg.reIntFam, cfg.reIntP1);
+      tau0 = drawScale(cfg.reIntFam, cfg.reIntP1, cfg.reIntNu);
       const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
       if (sv.length > 0) {
-        tau1 = drawScale(cfg.reSlpFam, cfg.reSlpP1);
+        tau1 = drawScale(cfg.reSlpFam, cfg.reSlpP1, cfg.reSlpNu);
         if (sv.length === 1) {
           const eta  = Math.max(0.5, cfg.lkjEta);
           const betaS = Math.sqrt(0.25/(2*eta+1));
@@ -2634,8 +2723,10 @@ function brmsCode(cfg) {
   let formulaRHS;
   const distSigActive = cfg.distSigOn && (cfg.distSigBetas||[]).length > 0;
   const distNuActive  = cfg.distNuOn  && (cfg.distNuBetas||[]).length > 0;
+  // Always use 0 + Intercept parameterization (explicit intercept prior on raw scale)
+  const intercPart = xTerms ? `0 + Intercept + ${xTerms}` : `0 + Intercept`;
   if (distSigActive || distNuActive) {
-    let bfLines = `  y ~ ${xTerms}${interTermsStr}${lmmPart}`;
+    let bfLines = `  y ~ ${intercPart}${interTermsStr}${lmmPart}`;
     if (distSigActive) {
       const dsPreds = (cfg.distSigBetas||[]).map(b => pNames[b.predIdx] || `x${b.predIdx+1}`);
       bfLines += `,\n  sigma ~ ${dsPreds.join(' + ')}`;
@@ -2647,14 +2738,19 @@ function brmsCode(cfg) {
     formulaRHS = `bf(\n${bfLines}\n)`;
   } else {
     const trialsV = (MODEL==='beta_binomial'||MODEL==='binomial') ? ` | trials(${(document.getElementById('trials-var')?.value||'trials').trim()||'trials'})` : '';
-    formulaRHS = `bf(y${trialsV} ~ ${xTerms}${interTermsStr}${lmmPart})`;
+    formulaRHS = `bf(y${trialsV} ~ ${intercPart}${interTermsStr}${lmmPart})`;
   }
 
   // Build prior lines — class without quotes, coef always with quotes (brms convention)
+  // For 0+Intercept parameterization: class = b, coef = Intercept
+  // Exception: cumulative/categorical use class = Intercept for threshold parameters
   const iFam=cfg.ifam==='student_t'?`student_t(${Math.round(cfg.inu)}, ${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
     :cfg.ifam==='cauchy'?`cauchy(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
     :`normal(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`;
-  const priorLines=[`  <span class="str">prior(${iFam}, class = Intercept)</span>`];
+  const isOrdCatFam = MODEL==='cumulative' || MODEL==='categorical';
+  const priorLines=[isOrdCatFam
+    ? `  <span class="str">prior(${iFam}, class = Intercept)</span>  <span class="cm">// thresholds τ_k</span>`
+    : `  <span class="str">prior(${iFam}, class = b, coef = Intercept)</span>`];
 
   // β priors — coef quoted, class = b without quotes; includes polynomial betas
   const totalTerms = allTermNames.length;
@@ -2751,17 +2847,14 @@ function brmsCode(cfg) {
     const tv = (document.getElementById('trials-var')?.value||'trials').trim();
     // Note in code: add | trials() to formula
   }
-  if (MODEL==='cumulative' || MODEL==='categorical') {
-    const ts=(aux.threshSig||2.5).toFixed(1);
-    priorLines.push(`  <span class="str">prior(normal(0, ${ts}), class = Intercept)  <span class="cm">// thresholds τ_k</span></span>`);
-  }
+  // Note: cumulative/categorical threshold prior already added at top (isOrdCatFam branch)
 
   // LMM priors
   if (cfg.lmm) {
     // brms adds lb=0 automatically for class = sd; use normal(0,x)/student_t/cauchy (Stan truncates)
     const reSD = cfg.reIntFam==='exponential' ? `exponential(${cfg.reIntP1.toFixed(2)})`
                : cfg.reIntFam==='half_cauchy'  ? `cauchy(0, ${cfg.reIntP1.toFixed(2)})`
-               : cfg.reIntFam==='half_student' ? `student_t(3, 0, ${cfg.reIntP1.toFixed(2)})`
+               : cfg.reIntFam==='half_student' ? `student_t(${Math.round(cfg.reIntNu||3)}, 0, ${cfg.reIntP1.toFixed(2)})`
                : `normal(0, ${cfg.reIntP1.toFixed(2)})`;
     priorLines.push(`  <span class="str">prior(${reSD}, class = sd)</span>`);
     if (cfg.slopeVars && cfg.slopeVars.length > 0)
@@ -2770,9 +2863,14 @@ function brmsCode(cfg) {
 
   // Output — separate model_formula + priors + brm() objects, parallel to builder
   return `<span class="cm"># Prior Predictive Check in brms</span>
-<span class="cm"># ⚠ Intercept prior: y ~ x assumes centered predictors (see button ⚠ Intercept Prior)</span>
-<span class="cm">#    Custom prior: y ~ 0 + Intercept + x</span>
-<span class="cm">#    → Prior syntax changes to: prior(normal(0, 2.5), class = b, coef = Intercept)</span>
+<span class="cm"># Intercept: modelled explicitly via '0 + Intercept' (not brms default 'y ~ x')</span>
+<span class="cm">#   Why: brms default centers predictors internally → class=Intercept prior acts on</span>
+<span class="cm">#   shifted parameter, not the raw scale. With '0 + Intercept' the prior applies directly.</span>
+<span class="cm">#</span>
+<span class="cm"># RECOMMENDATION: Transform metric predictors before analysis:</span>
+<span class="cm">#   Center:        x_c  &lt;- scale(x, center = TRUE, scale = FALSE)   # x - mean(x)</span>
+<span class="cm">#   Z-standardize: x_z  &lt;- scale(x, center = TRUE, scale = TRUE)    # (x - mean(x)) / sd(x)</span>
+<span class="cm"># → Intercept = E[y] at average predictor; coefficient per SD (z-std.) or unit (centered)</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> <span class="nm">${formulaRHS.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
 
@@ -3156,12 +3254,37 @@ function parseCSV(text,name) {
   const hdrs=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/"/g,''));
   if(!hdrs.includes('y')){uploadMsg(`Error: Column "y" missing. Found: ${hdrs.join(', ')}`,true);return;}
   const cols={}; hdrs.forEach(h=>cols[h]=[]);
+  const rawCols={}; hdrs.forEach(h=>rawCols[h]=[]);
   lines.slice(1).forEach(row=>{
     const vs=row.split(sep);
-    hdrs.forEach((h,i)=>{const v=parseFloat(vs[i]);if(isFinite(v))cols[h].push(v);});
+    hdrs.forEach((h,i)=>{
+      const raw=(vs[i]||'').trim().replace(/"/g,'');
+      rawCols[h].push(raw);
+      const v=parseFloat(raw);if(isFinite(v))cols[h].push(v);
+    });
   });
   uploadedData=cols;
-  uploadMsg(`✓ ${name}: ${cols.y.length} rows · Columns: ${hdrs.join(', ')}`);
+  // Auto-detect nGroups from "group" column
+  let groupNote = '';
+  if (hdrs.includes('group')) {
+    const uniqueGroups = new Set(rawCols['group'].filter(v=>v!=='')).size;
+    if (uniqueGroups >= 2) {
+      const sl = document.getElementById('re-ngrp');
+      if (sl) {
+        // Expand max if needed
+        const curMax = parseInt(sl.max) || 200;
+        if (uniqueGroups > curMax) {
+          sl.max = uniqueGroups + 10;
+          const mxIn = document.getElementById('re-ngrp-max');
+          if (mxIn) mxIn.value = sl.max;
+        }
+        sl.value = uniqueGroups;
+        const dp = document.getElementById('d-ngrp'); if (dp) dp.textContent = uniqueGroups;
+      }
+      groupNote = ` · group: ${uniqueGroups} groups detected → nGroups set`;
+    }
+  }
+  uploadMsg(`✓ ${name}: ${cols.y.length} rows · Columns: ${hdrs.join(', ')}${groupNote}`);
   const btn=document.getElementById('del-data-btn'); if(btn) btn.style.display='block';
   // Full re-render so the ovl panel appears immediately after pp-a
   if(lastSimA) render(); else requestAnimationFrame(drawAllPlots);
@@ -4592,13 +4715,15 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') ipmClose(); });
       <button id="ipm-close" onclick="ipmClose()">✕ Close</button>
     </div>
     <div id="ipm-body">
-      With formulas like <code>y ~ x</code> or <code>y ~ 1 + x</code>, brms internally assumes
-      that all predictors are <b>centered</b>, and sets the intercept prior
-      automatically — custom prior specifications for the intercept are ignored.<br><br>
-      To use a custom intercept prior, it must be explicitly modeled:
-      <code>y ~ 0 + Intercept + x</code><br>
-      Only in this formulation do custom intercept priors work as intended.
-      <span class="ipm-strong">→ Centering predictors before analysis is strongly recommended.</span>
+      This tool <b>always</b> uses the explicit <code>0 + Intercept</code> formulation:<br>
+      <code>y ~ 0 + Intercept + x</code><br><br>
+      This means the intercept prior set here applies <b>directly on the raw scale</b> —
+      without internal centering by brms. The intercept prior describes the
+      expected y-value when <em>all predictors = 0</em>.<br><br>
+      <b>Tip:</b> Z-standardize predictors before analysis (<code>scale()</code>):
+      then x=0 means average, and the intercept prior corresponds to the
+      expected y for an average observation.
+      <span class="ipm-strong">→ Centering predictors before analysis is strongly recommended (scale()).</span>
     </div>
   </div>
 </div>
