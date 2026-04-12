@@ -284,6 +284,7 @@ select:focus{border-color:var(--accent2)}
       <button class="tbtn" onclick="setCrI(89)" id="cri-89">89%</button>
       <button class="tbtn on" onclick="setCrI(95)" id="cri-95">95%</button>
       <button class="tbtn" onclick="setCrI(99)" id="cri-99">99%</button>
+      <button class="tbtn" onclick="setCrI(100)" id="cri-100">100%</button>
     </div>
     <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
          line-height:1.7;margin-top:.55rem" id="cri-hint">
@@ -331,6 +332,8 @@ select:focus{border-color:var(--accent2)}
     <div class="panel-title">Posterior-Verteilung · ROPE · Intervalle</div>
     <div class="legend-row" id="legend-row">
       <span><span class="ld" style="background:var(--accent);height:2px"></span>Posterior</span>
+      <span><span class="ld" style="background:var(--accent);height:3px"></span>Median</span>
+      <span id="leg-pdref" style="display:none"><span class="ld" style="background:var(--accent4);height:2px;opacity:.85"></span>θ Ref (pd)</span>
       <span id="leg-hdi"><span class="ld" style="background:var(--hdi-col);height:3px"></span>HDI</span>
       <span id="leg-eti" style="display:none"><span class="ld" style="background:var(--eti-col);height:3px;border-bottom:2px dashed var(--eti-col)"></span>ETI</span>
       <span><span class="ld" style="background:var(--rope-col);opacity:.4;height:10px;border-radius:2px"></span>ROPE</span>
@@ -490,13 +493,15 @@ function toggleCollap(hd){
 // ─── CrI width ───────────────────────────────────
 function setCrI(v){
   CRI = v;
-  ['89','95','99'].forEach(x => {
-    document.getElementById('cri-'+x).classList.remove('on');
+  ['89','95','99','100'].forEach(x => {
+    const el = document.getElementById('cri-'+x);
+    if(el) el.classList.remove('on');
   });
   document.getElementById('cri-'+v).classList.add('on');
   const hints = {89:'89% — McElreaths Empfehlung (größte Primzahl < 90)',
                  95:'95% — Kruschkes Standard',
-                 99:'99% — konservativ, breites Intervall'};
+                 99:'99% — konservativ, breites Intervall',
+                 100:'100% — Full ROPE: gesamte Posteriormasse (rope_ci = 1 in bayestestR)'};
   document.getElementById('cri-hint').textContent = hints[v];
   update();
 }
@@ -693,6 +698,22 @@ function computeETI(xs, ys, ci){
   return [eL, eH];
 }
 
+// Median: Wert, bei dem die kumulative Masse 50% erreicht
+function computeMedian(xs, ys){
+  const total = trapz(xs, ys);
+  const half = total * 0.5;
+  let cum = 0;
+  for(let i=1; i<xs.length; i++){
+    const seg = 0.5*(ys[i-1]+ys[i])*(xs[i]-xs[i-1]);
+    if(cum + seg >= half){
+      const frac = seg > 0 ? (half - cum) / seg : 0;
+      return xs[i-1] + frac*(xs[i]-xs[i-1]);
+    }
+    cum += seg;
+  }
+  return xs[xs.length-1];
+}
+
 // ROPE mass percentage
 function computeROPEmass(xs, ys, rl, ru){
   const total = trapz(xs, ys);
@@ -744,20 +765,26 @@ function update(){
   const maxY = Math.max(...ys);
 
   // Intervals — analytical for Normal/t (exact), grid-based for Gamma
+  // Bei CRI=100 → gesamtes Wertebereichs-Intervall (Full ROPE)
   let hdi, eti;
-  if(DIST === 'normal'){
+  if(CRI >= 100){
+    hdi = [xmin, xmax]; eti = [xmin, xmax];
+  } else if(DIST === 'normal'){
     const z = normalInvCDF((1+CRI/100)/2);
     const lo = mu - z*sigma, hi = mu + z*sigma;
     hdi = [lo, hi]; eti = [lo, hi];
   } else if(DIST === 't'){
     const iv = tAnalyticalETI(mu, sigma, nu, CRI);
-    hdi = iv; eti = iv;  // t is symmetric: HDI = ETI exactly
+    hdi = iv; eti = iv;  // t ist symmetrisch: HDI = ETI exakt
   } else {
-    // Gamma: use grid (HDI ≠ ETI for skewed distributions)
+    // Gamma: Grid-basiert (HDI ≠ ETI bei schiefen Verteilungen)
     hdi = computeHDI(xs, ys, CRI);
     eti = computeETI(xs, ys, CRI);
   }
   const ropeMass = computeROPEmass(xs, ys, rl, ru);
+
+  // Median (analytisch für Normal/t; numerisch für Gamma)
+  const median = (DIST === 'normal' || DIST === 't') ? mu : computeMedian(xs, ys);
 
   // Verdicts
   const ivForKruschke = (IV_TYPE === 'eti') ? eti : hdi;
@@ -818,9 +845,11 @@ function update(){
   const cHDI   = cssv('--hdi-col');
   const cETI   = cssv('--eti-col');
   const cROPE  = cssv('--rope-col');
+  const cPD    = cssv('--accent4');  // lila für pd-Referenzlinie
 
-  // Margins
-  const ml = 52, mr = 18, mt = 20, mb = 36;
+  // Margins — bei "beide Intervalle" mehr Platz unten für getrennte Labels
+  const ml = 52, mr = 18, mt = 20;
+  const mb = IV_TYPE === 'both' ? 56 : 40;
   const pw = W - ml - mr, ph = H - mt - mb;
 
   function toX(v){ return ml + (v - xmin)/(xmax - xmin) * pw; }
@@ -851,6 +880,20 @@ function update(){
     ctx.fillText('ROPE', (rx1+rx2)/2, mt + 12);
   }
 
+  // pd-Referenzlinie (lila, gestrichelt) — zeigt Referenzwert für p(direction)
+  const pdRefInRange = pdRef >= xmin && pdRef <= xmax;
+  document.getElementById('leg-pdref').style.display = pdRefInRange ? '' : 'none';
+  if(pdRefInRange){
+    const prX = toX(pdRef);
+    ctx.save();
+    ctx.strokeStyle = cPD; ctx.lineWidth = 1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(prX, mt); ctx.lineTo(prX, mt+ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cPD; ctx.font = `500 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('θ ref', prX, mt+10);
+    ctx.restore();
+  }
+
   // Posterior fill
   ctx.beginPath();
   ctx.moveTo(toX(xs[0]), toY(0));
@@ -866,32 +909,42 @@ function update(){
   ctx.strokeStyle = cPosterior; ctx.lineWidth = 2; ctx.setLineDash([]);
   ctx.stroke();
 
-  // HDI band
-  if(IV_TYPE !== 'eti'){
-    const hx1 = toX(hdi[0]), hx2 = toX(hdi[1]);
-    ctx.strokeStyle = cHDI; ctx.lineWidth = 3; ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(hx1, mt+ph+6); ctx.lineTo(hx2, mt+ph+6); ctx.stroke();
-    // caps
-    [hx1, hx2].forEach(x => {
-      ctx.beginPath(); ctx.moveTo(x, mt+ph+2); ctx.lineTo(x, mt+ph+10); ctx.stroke();
-    });
-    // label
-    ctx.fillStyle = cHDI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
-    ctx.fillText('HDI', (hx1+hx2)/2, mt+ph+20);
+  // Median-Linie (dick, gleiche Farbe wie Posterior-Outline)
+  {
+    const mX = toX(median);
+    ctx.strokeStyle = cPosterior; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(mX, mt+4); ctx.lineTo(mX, mt+ph); ctx.stroke();
+    ctx.fillStyle = cPosterior; ctx.font = `500 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    // Label leicht versetzt wenn pd-Referenz nahe beim Median liegt
+    const lblY = pdRefInRange && Math.abs(toX(pdRef)-mX) < 30 ? mt+22 : mt+11;
+    ctx.fillText('Md', mX, lblY);
   }
 
-  // ETI band
+  // HDI band — bei "beide" oben, bei einzeln normal
+  if(IV_TYPE !== 'eti'){
+    const hx1 = toX(hdi[0]), hx2 = toX(hdi[1]);
+    const yB = IV_TYPE === 'both' ? 8 : 6;
+    ctx.strokeStyle = cHDI; ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(hx1, mt+ph+yB); ctx.lineTo(hx2, mt+ph+yB); ctx.stroke();
+    [hx1, hx2].forEach(x => {
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+yB-4); ctx.lineTo(x, mt+ph+yB+4); ctx.stroke();
+    });
+    ctx.fillStyle = cHDI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('HDI', (hx1+hx2)/2, mt+ph+yB+14);
+  }
+
+  // ETI band — bei "beide" mit deutlichem Versatz nach unten
   if(IV_TYPE !== 'hdi'){
     const ex1 = toX(eti[0]), ex2 = toX(eti[1]);
-    const yOff = IV_TYPE === 'both' ? 14 : 6;
+    const yB = IV_TYPE === 'both' ? 32 : 6;   // 32px Abstand zu HDI-Band (war 14)
     ctx.strokeStyle = cETI; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-    ctx.beginPath(); ctx.moveTo(ex1, mt+ph+yOff); ctx.lineTo(ex2, mt+ph+yOff); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex1, mt+ph+yB); ctx.lineTo(ex2, mt+ph+yB); ctx.stroke();
     ctx.setLineDash([]);
     [ex1, ex2].forEach(x => {
-      ctx.beginPath(); ctx.moveTo(x, mt+ph+yOff-4); ctx.lineTo(x, mt+ph+yOff+4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+yB-4); ctx.lineTo(x, mt+ph+yB+4); ctx.stroke();
     });
     ctx.fillStyle = cETI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
-    ctx.fillText('ETI', (ex1+ex2)/2, mt+ph+(IV_TYPE==='both'?28:20));
+    ctx.fillText('ETI', (ex1+ex2)/2, mt+ph+yB+14);
   }
 
   // X axis
@@ -982,22 +1035,59 @@ function update(){
   }
 
   // ── Update R Code ──────────────────────────────
-  let rcode = 'library(bayestestR)\n\n';
+  const criVal = CRI >= 100 ? 1 : CRI/100;   // Wert für ci-Argument (0–1)
+  let rcode = '# ── 1. Pakete laden ──────────────────────────────────────────\n';
+  rcode += 'library(bayestestR)\n\n';
+
+  // Posterior-Samples
+  rcode += '# ── 2. Posterior-Samples erzeugen ───────────────────────────\n';
   if(DIST === 'normal'){
-    rcode += `# Posterior-Samples (Normalverteilung)\nposterior <- rnorm(10000, mean = ${mu}, sd = ${sigma})\n`;
+    rcode += `# Normalverteilung: μ = ${mu}, σ = ${sigma}\n`;
+    rcode += `posterior <- rnorm(10000, mean = ${mu}, sd = ${sigma})\n\n`;
   } else if(DIST === 't'){
-    rcode += `# Posterior-Samples (t-Verteilung)\nposterior <- ${mu} + ${sigma} * rt(10000, df = ${nu})\n`;
+    rcode += `# t-Verteilung: μ = ${mu}, σ = ${sigma}, ν = ${nu}\n`;
+    rcode += `posterior <- ${mu} + ${sigma} * rt(10000, df = ${nu})\n\n`;
   } else {
-    rcode += `# Posterior-Samples (Gamma-Verteilung)\nposterior <- rgamma(10000, shape = ${shape}, rate = ${rate})\n`;
+    rcode += `# Gamma-Verteilung: α = ${shape}, β = ${rate}  →  E[X] = α/β = ${(shape/rate).toFixed(2)}\n`;
+    rcode += `posterior <- rgamma(10000, shape = ${shape}, rate = ${rate})\n\n`;
   }
-  rcode += `\n# ${CRI}% HDI\nhdi(posterior, ci = ${CRI/100})\n\n`;
-  rcode += `# ${CRI}% ETI\neti(posterior, ci = ${CRI/100})\n\n`;
-  rcode += `# ROPE-Analyse (${CRI}% Intervall)\nrope(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
-  rcode += `# Vollständige Entscheidung\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
-  rcode += `# Probability of Direction\np_direction(posterior)`;
-  if (pdRef !== 0) {
-    rcode += `\n\n# pd relativ zu Referenzwert ${pdRef}\nmean(posterior > ${pdRef})  # Anteil positiv`;
+
+  // Einzelfunktionen
+  rcode += '# ── 3. Einzel-Funktionen (jeweils separat abrufbar) ─────────\n\n';
+  rcode += `# HDI: kürzestes Intervall mit ${CRI}% der Posteriormasse\n`;
+  rcode += `# Enthält die dichtesten (plausibelsten) Parameterwerte\n`;
+  rcode += `hdi(posterior, ci = ${criVal})\n\n`;
+  rcode += `# ETI: Equal-Tailed Interval — schneidet je ${((1-criVal)*50).toFixed(1)}% von beiden Rändern ab\n`;
+  rcode += `# Invariant unter monotonen Transformationen (empfohlen für GLMs)\n`;
+  rcode += `eti(posterior, ci = ${criVal})\n\n`;
+  rcode += `# ROPE: Anteil der Posteriormasse im Intervall [${rl}, ${ru}]\n`;
+  rcode += `# ci = ${criVal} → prüft den ${CRI}%-Bereich des Posteriors\n`;
+  rcode += `rope(posterior, range = c(${rl}, ${ru}), ci = ${criVal})\n\n`;
+  if(CRI < 100){
+    rcode += `# Full ROPE: gesamte Posteriormasse im ROPE (ci = 1 = 100%)\n`;
+    rcode += `# Empfehlung Makowski et al. (2019): rope_ci = 1 in describe_posterior()\n`;
+    rcode += `rope(posterior, range = c(${rl}, ${ru}), ci = 1)\n\n`;
   }
+  rcode += `# Probability of Direction: Anteil der Masse auf der stärkeren Seite\n`;
+  rcode += `# Referenzwert: ${pdRef} (Standard: 0; für Odds Ratios z.B. 1 verwenden)\n`;
+  rcode += `p_direction(posterior)\n`;
+  if(pdRef !== 0) rcode += `p_direction(posterior, null = ${pdRef})\n`;
+  rcode += `\n`;
+  rcode += `# Median des Posteriors\nmedian(posterior)\n\n`;
+
+  // describe_posterior — alles auf einmal
+  rcode += '# ── 4. Alles auf einmal: describe_posterior() ───────────────\n';
+  rcode += '# HDI und ETI können NICHT gleichzeitig angefordert werden.\n';
+  rcode += '# → ETI ist der robustere Default (invariant unter Transformationen).\n';
+  rcode += '# → rope_ci = 1 aktiviert Full ROPE (gesamte Posterior, nicht nur CI-Bereich).\n';
+  rcode += `describe_posterior(\n`;
+  rcode += `  posterior,\n`;
+  rcode += `  ci         = ${criVal},        # Intervall-Breite (${CRI}%)\n`;
+  rcode += `  ci_method  = "eti",    # "eti" (Default) oder "hdi"\n`;
+  rcode += `  rope_range = c(${rl}, ${ru}),\n`;
+  rcode += `  rope_ci    = 1,        # Full ROPE: gesamte Posterior prüfen\n`;
+  rcode += `  test       = c("p_direction", "rope")\n`;
+  rcode += `)`;
   document.getElementById('rcode-block').textContent = rcode;
 }
 
