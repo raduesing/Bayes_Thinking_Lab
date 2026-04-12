@@ -44,6 +44,7 @@ library(bayestestR)
 library(tidybayes)
 library(dplyr)
 library(ggplot2)
+library(marginaleffects)
 
 theme_set(theme_minimal(base_size = 13))
 color_scheme_set("viridis")
@@ -295,75 +296,60 @@ pp_check(fit, ndraws = 200, type = "bars") +
 # 7. Effektschätzung und Entscheidung
 
 ```{r effect_estimate}
-# ROPE auf OR-Skala: OR ∈ [0.80, 1.25] = praktisch kein Effekt (log-OR ≈ ±0.22)
-rope_or_low  <- 0.80
-rope_or_high <- 1.25
+# Marginaler Effekt auf der Wahrscheinlichkeitsskala (Originalmetrik):
+# avg_comparisons() berechnet E[P(Y=1|KVT)] − E[P(Y=1|Beratung)]
+# gemittelt über alle Beobachtungen im Datensatz (Average Marginal Effect, AME).
+# Vorteil gegenüber Odds Ratio: direkt als Prozentpunktunterschied interpretierbar,
+# keine Logit-Transformation, invariant gegenüber Link-Funktion.
+me <- avg_comparisons(
+  fit,
+  variables  = "treatment",
+  re_formula = NA    # marginalisiert über Zentren
+)
+me
 
-# Draws (auf OR-Skala) + vollständige Posterior-Zusammenfassung
-beta_or      <- as_draws_df(fit)$b_treatmentKVT |> exp()
-post_or      <- beta_or |>
+# Posterior-Draws des AME für ETI + Full ROPE
+me_draws <- posterior_draws(me)
+
+# ROPE auf Wahrscheinlichkeitsskala: ±0.05 = 5 Prozentpunkte = praktisch kein Effekt
+rope_low  <- -0.05
+rope_high <-  0.05
+
+post_summary <- me_draws$draw |>
   describe_posterior(
-    rope_range = c(rope_or_low, rope_or_high),
+    rope_range = c(rope_low, rope_high),
     ci         = 0.95,
-    ci_method  = "hdi",
-    test       = c("p_direction", "rope")
+    ci_method  = "eti",
+    test       = c("p_direction", "rope"),
+    rope_ci    = 1        # Full ROPE: gesamte Posterior (nicht nur CI-Bereich)
   )
 
-post_or
-```
-
-```{r probability_scale}
-# Effekt auf Wahrscheinlichkeitsskala bei mittlerem PHQ9 (phq9_c=0) — Frauen
-nd <- list(
-  KVT     = data.frame(treatment = "KVT",     phq9_c = 0, geschlecht = "weiblich", zentrum = NA),
-  Beratung = data.frame(treatment = "Beratung", phq9_c = 0, geschlecht = "weiblich", zentrum = NA)
-)
-
-p_kvt  <- fitted(fit, newdata = nd$KVT,     re_formula = NA, summary = FALSE)[, 1]
-p_ber  <- fitted(fit, newdata = nd$Beratung, re_formula = NA, summary = FALSE)[, 1]
-p_diff <- p_kvt - p_ber
-
-post_diff <- p_diff |>
-  describe_posterior(ci = 0.95, ci_method = "hdi", test = "p_direction")
-
-post_diff
+post_summary
 ```
 
 ```{r posterior_plot}
-p1 <- ggplot(data.frame(or = beta_or), aes(x = or)) +
+ggplot(data.frame(ame = me_draws$draw), aes(x = ame)) +
   geom_density(fill = "#7a3a8a", alpha = 0.6) +
-  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
-  annotate("rect", xmin = rope_or_low, xmax = rope_or_high,
-           ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
-  geom_vline(xintercept = post_or$CI_low,  linetype = "dotted", color = "#c87ad8") +
-  geom_vline(xintercept = post_or$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title    = "Posterior: Odds Ratio (KVT vs. Beratung)",
-       subtitle = paste0("95% HDI: [", round(post_or$CI_low, 2), ", ",
-                         round(post_or$CI_high, 2), "]  |  ROPE: OR [0.80, 1.25]"),
-       x = "Odds Ratio", y = "Dichte")
-
-p2 <- ggplot(data.frame(diff = p_diff), aes(x = diff)) +
-  geom_density(fill = "#2a6e8a", alpha = 0.6) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
-  geom_vline(xintercept = post_diff$CI_low,  linetype = "dotted", color = "#c87ad8") +
-  geom_vline(xintercept = post_diff$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title    = "Posterior: Differenz in Remissionswahrscheinlichkeit",
-       subtitle = paste0("95% HDI: [", round(post_diff$CI_low, 2), ", ",
-                         round(post_diff$CI_high, 2), "]"),
-       x = "P(Remission|KVT) − P(Remission|Beratung)", y = "Dichte")
-
-gridExtra::grid.arrange(p1, p2, ncol = 2)
+  annotate("rect", xmin = rope_low, xmax = rope_high,
+           ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
+  geom_vline(xintercept = post_summary$CI_low,  linetype = "dotted", color = "#c87ad8") +
+  geom_vline(xintercept = post_summary$CI_high, linetype = "dotted", color = "#c87ad8") +
+  labs(title    = "Posterior des Treatment-Effekts (Wahrscheinlichkeitsskala)",
+       subtitle = paste0("95% ETI: [", round(post_summary$CI_low, 2), ", ",
+                         round(post_summary$CI_high, 2), "]  |  ",
+                         "ROPE: [", rope_low, ", ", rope_high, "] (±5 Prozentpunkte)"),
+       x = "Δ P(Remission) (KVT − Beratung)", y = "Dichte")
 ```
 
-### Entscheidung nach HDI+ROPE
+### Entscheidung nach ETI + Full ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI (Odds Ratio) | [`r round(post_or$CI_low, 2)`, `r round(post_or$CI_high, 2)`] |
-| ROPE | [0.80, 1.25] |
-| P(Richtung) | `r round(post_or$pd, 3)` |
-| % in ROPE | `r round(post_or$ROPE_Percentage, 1)`% |
-| Differenz P(Remission) | `r round(post_diff$Median, 2)` (HDI: `r round(post_diff$CI_low, 2)` – `r round(post_diff$CI_high, 2)`) |
+| 95% ETI (Δ P(Remission)) | [`r round(post_summary$CI_low, 2)`, `r round(post_summary$CI_high, 2)`] |
+| ROPE | [-0.05, 0.05] (±5 Prozentpunkte) |
+| P(Richtung) | `r round(post_summary$pd, 3)` |
+| % in ROPE (voll) | `r round(post_summary$ROPE_Percentage, 1)`% |
 
 ---
 
@@ -462,17 +448,17 @@ saveRDS(list(
 **Design:** 2-Gruppen-RCT, 7 Zentren als Cluster, binäres Outcome.
 **Modell:** Bernoulli mit logit-Link, Random Intercept über Zentren.
 **Prior:** Normal(0, 1.0) auf Logit-Skala → OR a priori zwischen 0.14 und 7.1.
-**Befund:** KVT erhöht die Remissionschance deutlich (OR ≈ 2.2, 95% HDI vollständig
-über 1.25 → Effekt außerhalb ROPE). Auf der Wahrscheinlichkeitsskala: +20–25 Prozentpunkte
-mehr Remission durch KVT.
+**Befund:** KVT erhöht die Remissionswahrscheinlichkeit deutlich (AME 95% ETI vollständig
+über 0 und außerhalb des ROPE → Effekt ist praktisch bedeutsam).
 
 **Schlüsselpunkt für das Teaching:**
 Der logit-Link transformiert additive Log-Odds-Effekte in multiplikative Odds Ratios.
-Priors auf der Logit-Skala spezifizieren (Normal(0, 1.5) nach McElreath), Ergebnisse
-auf der Wahrscheinlichkeitsskala oder als Odds Ratio berichten.
+Für die Entscheidung werden jedoch Marginale Effekte auf der Wahrscheinlichkeitsskala
+(Originalmetrik) verwendet — einfacher zu interpretieren, invariant gegenüber
+Link-Transformation, direkt als Prozentpunktunterschied lesbar.
 
 **Workflow-Verbindung:**
 - DAG → Golem Builder
 - Prior-Spezifikation → Prior Lab (Normal(0, 1.0) auf Logit-Skala → GLM-Modus logit)
 - Modell → brms Builder (Bernoulli, logit-link, random intercept)
-- Entscheidung → Decision Lab (ROPE auf OR-Skala)
+- Entscheidung → Decision Lab (ETI + Full ROPE auf Wahrscheinlichkeitsskala via marginaleffects)

@@ -40,6 +40,7 @@ library(tidybayes)
 library(dplyr)
 library(ggplot2)
 library(bayestestR)
+library(marginaleffects)
 
 theme_set(theme_minimal(base_size = 13))
 color_scheme_set("viridis")
@@ -294,8 +295,9 @@ post_summary <- beta_draws |>
   describe_posterior(
     rope_range = c(rope_low, rope_high),
     ci         = 0.95,
-    ci_method  = "hdi",
-    test       = c("p_direction", "rope")
+    ci_method  = "eti",
+    test       = c("p_direction", "rope"),
+    rope_ci    = 1        # Full ROPE: gesamte Posterior (nicht nur CI-Bereich)
   )
 
 post_summary
@@ -310,20 +312,20 @@ ggplot(data.frame(beta = beta_draws), aes(x = beta)) +
   geom_vline(xintercept = post_summary$CI_low,  linetype = "dotted", color = "#c87ad8") +
   geom_vline(xintercept = post_summary$CI_high, linetype = "dotted", color = "#c87ad8") +
   labs(title    = "Posterior des Treatment-Effekts (CBT-I vs. Kontrolle)",
-       subtitle = paste0("95% HDI: [", round(post_summary$CI_low, 2), ", ",
+       subtitle = paste0("95% ETI: [", round(post_summary$CI_low, 2), ", ",
                          round(post_summary$CI_high, 2), "]  |  ",
                          "ROPE: [", round(rope_low, 1), ", ", round(rope_high, 1), "]"),
        x = "Differenz in Kognitions-Punkten", y = "Dichte")
 ```
 
-### Entscheidung nach HDI+ROPE
+### Entscheidung nach ETI + Full ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI | [`r round(post_summary$CI_low, 1)`, `r round(post_summary$CI_high, 1)`] Punkte |
+| 95% ETI | [`r round(post_summary$CI_low, 1)`, `r round(post_summary$CI_high, 1)`] Punkte |
 | ROPE | [`r round(rope_low, 1)`, `r round(rope_high, 1)`] Punkte |
 | P(Richtung) | `r round(post_summary$pd, 3)` |
-| % in ROPE | `r round(post_summary$ROPE_Percentage, 1)`% |
+| % in ROPE (voll) | `r round(post_summary$ROPE_Percentage, 1)`% |
 
 ---
 
@@ -396,4 +398,4 @@ außerhalb des ROPE → Effekt ist praktisch bedeutsam).
 - DAG → Golem Builder
 - Prior-Spezifikation → Prior Lab (Gaussian, Normal(0,8))
 - Modell → brms Builder (gaussian, random intercept)
-- Entscheidung → Decision Lab (HDI + ROPE)
+- Entscheidung → Decision Lab (ETI + Full ROPE)

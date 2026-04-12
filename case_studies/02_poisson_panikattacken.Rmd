@@ -43,6 +43,8 @@ library(bayestestR)
 library(tidybayes)
 library(dplyr)
 library(ggplot2)
+library(tidyverse)
+library(marginaleffects)
 
 theme_set(theme_minimal(base_size = 13))
 color_scheme_set("viridis")
@@ -252,7 +254,7 @@ fit <- brm(
   data   = daten,
   family = poisson(link = "log"),
   prior  = priors,
-  chains = 4, iter = 2000, warmup = 1000,
+  chains = 4, iter = 4000, warmup = 2000,
   cores  = 4,
   seed   = 42,
   refresh = 0
@@ -298,46 +300,60 @@ pp_check(fit, ndraws = 200, type = "stat_grouped", group = "treatment", stat = "
 # 7. Effektschätzung und Entscheidung
 
 ```{r effect_estimate}
-# ROPE auf Rate-Ratio-Skala: RR ∈ [0.90, 1.10] = praktisch kein Effekt
-rope_rr_low  <- 0.90
-rope_rr_high <- 1.10
+# Marginaler Effekt auf der Zählskala (Originalmetrik):
+# avg_comparisons() berechnet E[Y|Exposition] − E[Y|Psychoedukation]
+# gemittelt über alle Beobachtungen im Datensatz (Average Marginal Effect, AME).
+# Vorteil gegenüber Rate Ratio: direkt in Panikattacken/Woche interpretierbar,
+# keine Log-Transformation, keine Probleme bei nicht-linearen Links.
+me <- avg_comparisons(
+  fit,
+  variables  = "treatment",
+  re_formula = NA    # marginalisiert über Zentren
+)
+me
 
-# Draws (auf RR-Skala) + vollständige Posterior-Zusammenfassung
-beta_rr      <- as_draws_df(fit)$b_treatmentExposition |> exp()
-post_summary <- beta_rr |>
+# Posterior-Draws des AME für ETI + Full ROPE
+me_draws <- posterior_draws(me)
+
+# ROPE auf Zählskala: ±0.5 Panikattacken/Woche = praktisch kein Effekt
+rope_low  <- -0.5
+rope_high <-  0.5
+
+post_summary <- me_draws$draw |>
   describe_posterior(
-    rope_range = c(rope_rr_low, rope_rr_high),
+    rope_range = c(rope_low, rope_high),
     ci         = 0.95,
-    ci_method  = "hdi",
-    test       = c("p_direction", "rope")
+    ci_method  = "eti",
+    test       = c("p_direction", "rope"),
+    rope_ci    = 1        # Full ROPE: gesamte Posterior (nicht nur CI-Bereich)
   )
 
 post_summary
 ```
 
 ```{r posterior_plot}
-ggplot(data.frame(rr = beta_rr), aes(x = rr)) +
+ggplot(data.frame(ame = me_draws$draw), aes(x = ame)) +
   geom_density(fill = "#b85c00", alpha = 0.6) +
-  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
-  annotate("rect", xmin = rope_rr_low, xmax = rope_rr_high,
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+  annotate("rect", xmin = rope_low, xmax = rope_high,
            ymin = -Inf, ymax = Inf, alpha = 0.15, fill = "red") +
   geom_vline(xintercept = post_summary$CI_low,  linetype = "dotted", color = "#c87ad8") +
   geom_vline(xintercept = post_summary$CI_high, linetype = "dotted", color = "#c87ad8") +
-  labs(title    = "Posterior des Treatment-Effekts (Rate Ratio)",
-       subtitle = paste0("95% HDI: [", round(post_summary$CI_low, 2), ", ",
+  labs(title    = "Posterior des Treatment-Effekts (Panikattacken/Woche)",
+       subtitle = paste0("95% ETI: [", round(post_summary$CI_low, 2), ", ",
                          round(post_summary$CI_high, 2), "]  |  ",
-                         "ROPE: RR [", rope_rr_low, "–", rope_rr_high, "]"),
-       x = "Rate Ratio (Exposition vs. Psychoedukation)", y = "Dichte")
+                         "ROPE: [", rope_low, ", ", rope_high, "] Attacken/Woche"),
+       x = "Δ Panikattacken/Woche (Exposition − Psychoedukation)", y = "Dichte")
 ```
 
-### Entscheidung nach HDI+ROPE
+### Entscheidung nach ETI + Full ROPE
 
 | Kriterium | Wert |
 |---|---|
-| 95% HDI (Rate Ratio) | [`r round(post_summary$CI_low, 2)`, `r round(post_summary$CI_high, 2)`] |
-| ROPE | [0.90, 1.10] |
+| 95% ETI (Δ Panikattacken/Woche) | [`r round(post_summary$CI_low, 2)`, `r round(post_summary$CI_high, 2)`] |
+| ROPE | [-0.5, 0.5] Panikattacken/Woche |
 | P(Richtung) | `r round(post_summary$pd, 3)` |
-| % in ROPE | `r round(post_summary$ROPE_Percentage, 1)`% |
+| % in ROPE (voll) | `r round(post_summary$ROPE_Percentage, 1)`% |
 
 ---
 
@@ -424,17 +440,18 @@ saveRDS(list(
 
 **Design:** 2-Gruppen-RCT, 6 Zentren als Cluster, Zähldaten als Outcome.
 **Modell:** Poisson mit log-Link, Random Intercept über Zentren.
-**Prior:** Intercept Normal(1.5,0.75) = log(erwartete Rate) bei durchschnittlichen Kovariaten; Treatment Normal(-0.3,0.5) auf log-Skala → RR a priori ca. 0.25–1.9; Steigungen pro 1 SD.
-**Befund:** Expositionstherapie reduziert Panikattacken um ca. 50% (RR ≈ 0.50,
-95% HDI liegt vollständig unter 1.0 und außerhalb des ROPE).
+**Prior:** Intercept Normal(1.5,0.75) = log(erwartete Rate) bei durchschnittlichen Kovariaten; Treatment Normal(-0.3,0.5) auf log-Skala → RR a priori ca. 0.25–1.9; Steigungen pro 1 Einheit.
+**Befund:** Expositionstherapie reduziert Panikattacken deutlich (AME 95% ETI vollständig
+unter 0 und außerhalb des ROPE → Effekt ist praktisch bedeutsam).
 
 **Schlüsselpunkt für das Teaching:**
 Der log-Link transformiert additive Effekte auf der Modellskala in multiplikative
-Rate Ratios auf der Antwortskala. Priors auf der log-Skala spezifizieren,
-aber Ergebnisse als Rate Ratios interpretieren.
+Rate Ratios. Für die Entscheidung werden jedoch Marginale Effekte auf der Zählskala
+(Originalmetrik) verwendet — einfacher zu interpretieren, invariant gegenüber
+Link-Transformation.
 
 **Workflow-Verbindung:**
 - DAG → Golem Builder
 - Prior-Spezifikation → Prior Lab (Normal(−0.3, 0.5) auf log-Skala → GLM-Modus)
 - Modell → brms Builder (Poisson, log-link, random intercept)
-- Entscheidung → Decision Lab (ROPE auf Rate-Ratio-Skala)
+- Entscheidung → Decision Lab (ETI + Full ROPE auf Zählskala via marginaleffects)
