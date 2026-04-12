@@ -113,10 +113,10 @@ main { padding: 1.2rem 1.2rem 2rem; max-width: 1400px; margin: 0 auto; }
   border-radius: 6px;
   padding: .8rem;
   overflow-y: auto;
-  max-height: 460px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  align-self: stretch;
 }
 
 .sidebar-section { display: flex; flex-direction: column; gap: .4rem; }
@@ -625,7 +625,7 @@ canvas {
 /* RESPONSIVE */
 @media (max-width: 768px) {
   .dag-builder { grid-template-columns: 1fr; }
-  .dag-sidebar { max-height: 260px; }
+  .dag-sidebar { max-height: 320px; }
   .analysis-grid { grid-template-columns: 1fr; }
   .cards-grid { grid-template-columns: 1fr; }
 }
@@ -904,9 +904,9 @@ canvas {
     </div>
 
     <div id="nonRootSdSection" style="display:none">
-      <div class="section-title">Residual-SD endogener Knoten</div>
+      <div class="section-title">Endogene Knoten — Intercept &amp; Residual-SD</div>
       <table class="node-dist-table">
-        <thead><tr><th>Variable</th><th>σ_residual</th></tr></thead>
+        <thead><tr><th>Variable</th><th>Intercept α</th><th>σ_residual</th></tr></thead>
         <tbody id="nonRootSdBody"></tbody>
       </table>
     </div>
@@ -2172,15 +2172,16 @@ function updateNonRootSdTable() {
   const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
   if (nonRoots.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
-  const existing = {};
-  tbody.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
-    existing[inp.dataset.nonrootSd] = inp.value;
-  });
+  const existingSd = {}, existingInt = {};
+  tbody.querySelectorAll('[data-nonroot-sd]').forEach(inp => { existingSd[inp.dataset.nonrootSd] = inp.value; });
+  tbody.querySelectorAll('[data-nonroot-intercept]').forEach(inp => { existingInt[inp.dataset.nonrootIntercept] = inp.value; });
   tbody.innerHTML = nonRoots.map(n => {
-    const val = existing[n.id] !== undefined ? existing[n.id] : '1';
+    const sdVal  = existingSd[n.id]  !== undefined ? existingSd[n.id]  : '1';
+    const intVal = existingInt[n.id] !== undefined ? existingInt[n.id] : '0';
     return `<tr>
       <td>${escHtml(n.name)}</td>
-      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${val}" step="0.1" min="0.01"></td>
+      <td><input type="number" class="sd-input" data-nonroot-intercept="${n.id}" value="${intVal}" step="0.1"></td>
+      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${sdVal}" step="0.1" min="0.01"></td>
     </tr>`;
   }).join('');
 }
@@ -2188,6 +2189,11 @@ function updateNonRootSdTable() {
 function getNonRootSd(nodeId) {
   const inp = document.querySelector(`[data-nonroot-sd="${nodeId}"]`);
   return inp ? (parseFloat(inp.value) || 1) : 1;
+}
+
+function getNonRootIntercept(nodeId) {
+  const inp = document.querySelector(`[data-nonroot-intercept="${nodeId}"]`);
+  return inp ? (parseFloat(inp.value) || 0) : 0;
 }
 
 function generateRCode() {
@@ -2227,7 +2233,8 @@ function generateRCode() {
 
   lines.push(
     '# SIMULATIONSLOGIK (Ansatz A — natürliche Skala, nach McElreath):',
-    '#   Endogene Knoten: Y <- rnorm(n, sum(beta_i * X_i), sigma_residual)',
+    '#   Endogene Knoten: Y <- rnorm(n, alpha + sum(beta_i * X_i), sigma_residual)',
+    '#   alpha = Intercept pro Knoten konfigurierbar (Standard: 0).',
     '#   sigma_residual ist pro Knoten konfigurierbar (Standard: 1).',
     '#   beta und sigma liegen auf der Skala der jeweiligen Inputvariablen.',
     '#',
@@ -2290,18 +2297,21 @@ function generateRCode() {
       latentNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
         const sigma = getNonRootSd(nd.id);
-        const terms = parents.map(pid => {
+        const alpha = getNonRootIntercept(nd.id);
+        const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           return `${coef} * ${getNodeName(pid)}`;
         });
-        const commentParts = parents.map(pid => {
+        const muTerms = alpha !== 0 ? [String(alpha), ...betaTerms] : betaTerms;
+        const commentParts = alpha !== 0 ? [`alpha=${alpha}`] : [];
+        parents.forEach(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-          return `beta(${getNodeName(pid)})=${coef}`;
+          commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
         commentParts.push(`sigma=${sigma}`);
-        lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # latent — nicht im Datensatz! ${commentParts.join(', ')}`);
+        lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # latent — nicht im Datensatz! ${commentParts.join(', ')}`);
       });
     }
 
@@ -2310,18 +2320,21 @@ function generateRCode() {
       observedNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
         const sigma = getNonRootSd(nd.id);
-        const terms = parents.map(pid => {
+        const alpha = getNonRootIntercept(nd.id);
+        const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           return `${coef} * ${getNodeName(pid)}`;
         });
-        const commentParts = parents.map(pid => {
+        const muTerms = alpha !== 0 ? [String(alpha), ...betaTerms] : betaTerms;
+        const commentParts = alpha !== 0 ? [`alpha=${alpha}`] : [];
+        parents.forEach(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
-          return `beta(${getNodeName(pid)})=${coef}`;
+          commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
         commentParts.push(`sigma=${sigma}`);
-        lines.push(`${nd.name} <- rnorm(n, ${terms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+        lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
       });
     }
   }
