@@ -284,10 +284,26 @@ select:focus{border-color:var(--accent2)}
       <button class="tbtn" onclick="setCrI(89)" id="cri-89">89%</button>
       <button class="tbtn on" onclick="setCrI(95)" id="cri-95">95%</button>
       <button class="tbtn" onclick="setCrI(99)" id="cri-99">99%</button>
+      <button class="tbtn" onclick="setCrI(100)" id="cri-100">100%</button>
     </div>
     <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
          line-height:1.7;margin-top:.55rem" id="cri-hint">
       95% — Kruschke's standard
+    </div>
+  </div>
+
+  <!-- ROPE decision -->
+  <div class="scard">
+    <h3>ROPE decision</h3>
+    <div class="btn-group" id="rope-ci-btns">
+      <button class="tbtn" onclick="setRopeCi(89)" id="rope-ci-89">89%</button>
+      <button class="tbtn" onclick="setRopeCi(95)" id="rope-ci-95">95%</button>
+      <button class="tbtn" onclick="setRopeCi(99)" id="rope-ci-99">99%</button>
+      <button class="tbtn on" onclick="setRopeCi(100)" id="rope-ci-100">100%</button>
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
+         line-height:1.7;margin-top:.55rem" id="rope-ci-hint">
+      100% — Full ROPE: entire posterior mass (rope_ci = 1 in bayestestR)
     </div>
   </div>
 
@@ -331,9 +347,11 @@ select:focus{border-color:var(--accent2)}
     <div class="panel-title">Posterior distribution · ROPE · Intervals</div>
     <div class="legend-row" id="legend-row">
       <span><span class="ld" style="background:var(--accent);height:2px"></span>Posterior</span>
+      <span><span class="ld" style="background:var(--accent);height:3px"></span>Median</span>
       <span id="leg-hdi"><span class="ld" style="background:var(--hdi-col);height:3px"></span>HDI</span>
       <span id="leg-eti" style="display:none"><span class="ld" style="background:var(--eti-col);height:3px;border-bottom:2px dashed var(--eti-col)"></span>ETI</span>
       <span><span class="ld" style="background:var(--rope-col);opacity:.4;height:10px;border-radius:2px"></span>ROPE</span>
+      <span id="leg-pdref" style="display:none"><span class="ld" style="background:var(--accent4);height:2px;border-bottom:2px dashed var(--accent4)"></span>θ Ref (pd)</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 150px;gap:1rem;align-items:start">
       <div id="plot-area"><canvas id="mainCanvas"></canvas></div>
@@ -469,6 +487,7 @@ equivalence_test(posterior, range = c(97, 113), ci = 0.95)</div>
 <script>
 // ─── State ────────────────────────────────────────
 let CRI = 95;
+let ROPE_CI = 100;   // CI width for ROPE decision (Approach A+C) — independent of CRI
 let IV_TYPE = 'hdi'; // 'hdi' | 'eti' | 'both'
 let DIST = 'normal';
 
@@ -490,14 +509,32 @@ function toggleCollap(hd){
 // ─── CrI width ───────────────────────────────────
 function setCrI(v){
   CRI = v;
-  ['89','95','99'].forEach(x => {
-    document.getElementById('cri-'+x).classList.remove('on');
+  ['89','95','99','100'].forEach(x => {
+    const el = document.getElementById('cri-'+x);
+    if(el) el.classList.remove('on');
   });
   document.getElementById('cri-'+v).classList.add('on');
   const hints = {89:"89% — McElreath's recommendation (largest prime < 90)",
                  95:"95% — Kruschke's standard",
-                 99:"99% — conservative, wide interval"};
+                 99:"99% — conservative, wide interval",
+                 100:"100% — Full ROPE: entire posterior mass (rope_ci = 1 in bayestestR)"};
   document.getElementById('cri-hint').textContent = hints[v];
+  update();
+}
+
+// ─── ROPE-CI width ───────────────────────────────
+function setRopeCi(v){
+  ROPE_CI = v;
+  ['89','95','99','100'].forEach(x => {
+    const el = document.getElementById('rope-ci-'+x);
+    if(el) el.classList.remove('on');
+  });
+  document.getElementById('rope-ci-'+v).classList.add('on');
+  const hints = {89:"89% — McElreath's recommendation (largest prime < 90)",
+                 95:"95% — Kruschke's standard",
+                 99:"99% — conservative, wide interval",
+                 100:"100% — Full ROPE: entire posterior mass (rope_ci = 1 in bayestestR)"};
+  document.getElementById('rope-ci-hint').textContent = hints[v];
   update();
 }
 
@@ -701,6 +738,22 @@ function computeROPEmass(xs, ys, rl, ru){
   return 100 * trapz(xs, inside) / total;
 }
 
+// Median: value at which the cumulative mass reaches 50%
+function computeMedian(xs, ys){
+  const total = trapz(xs, ys);
+  const half = total * 0.5;
+  let cum = 0;
+  for(let i=1; i<xs.length; i++){
+    const seg = 0.5*(ys[i-1]+ys[i])*(xs[i]-xs[i-1]);
+    if(cum + seg >= half){
+      const frac = seg > 0 ? (half - cum) / seg : 0;
+      return xs[i-1] + frac*(xs[i]-xs[i-1]);
+    }
+    cum += seg;
+  }
+  return xs[xs.length-1];
+}
+
 // Kruschke verdict
 function kruschkeVerdict(ivL, ivR, rl, ru){
   if(ivR < rl || ivL > ru) return 'reject';   // outside ROPE → effect real
@@ -744,8 +797,11 @@ function update(){
   const maxY = Math.max(...ys);
 
   // Intervals — analytical for Normal/t (exact), grid-based for Gamma
+  // Bei CRI=100 → gesamtes Wertebereichs-Intervall (Full ROPE)
   let hdi, eti;
-  if(DIST === 'normal'){
+  if(CRI >= 100){
+    hdi = [xmin, xmax]; eti = [xmin, xmax];
+  } else if(DIST === 'normal'){
     const z = normalInvCDF((1+CRI/100)/2);
     const lo = mu - z*sigma, hi = mu + z*sigma;
     hdi = [lo, hi]; eti = [lo, hi];
@@ -757,12 +813,32 @@ function update(){
     hdi = computeHDI(xs, ys, CRI);
     eti = computeETI(xs, ys, CRI);
   }
+
+  // Separate intervals for ROPE decision (ROPE_CI, default 100%) — independent of displayed CRI
+  let hdi_rope, eti_rope;
+  if(ROPE_CI >= 100){
+    hdi_rope = [xmin, xmax]; eti_rope = [xmin, xmax];
+  } else if(DIST === 'normal'){
+    const z2 = normalInvCDF((1+ROPE_CI/100)/2);
+    hdi_rope = [mu - z2*sigma, mu + z2*sigma];
+    eti_rope = hdi_rope.slice();
+  } else if(DIST === 't'){
+    const iv2 = tAnalyticalETI(mu, sigma, nu, ROPE_CI);
+    hdi_rope = iv2; eti_rope = iv2;
+  } else {
+    hdi_rope = computeHDI(xs, ys, ROPE_CI);
+    eti_rope = computeETI(xs, ys, ROPE_CI);
+  }
+
   const ropeMass = computeROPEmass(xs, ys, rl, ru);
 
-  // Verdicts
-  const ivForKruschke = (IV_TYPE === 'eti') ? eti : hdi;
+  // Median (analytical for Normal/t; numerical for Gamma)
+  const median = (DIST === 'normal' || DIST === 't') ? mu : computeMedian(xs, ys);
+
+  // Verdicts (use ROPE_CI intervals, not the displayed CRI)
+  const ivForKruschke = (IV_TYPE === 'eti') ? eti_rope : hdi_rope;
   const vK = kruschkeVerdict(ivForKruschke[0], ivForKruschke[1], rl, ru);
-  const vE = kruschkeVerdict(eti[0], eti[1], rl, ru);
+  const vE = kruschkeVerdict(eti_rope[0], eti_rope[1], rl, ru);
 
   // ── Draw canvas ────────────────────────────────
   const canvas = document.getElementById('mainCanvas');
@@ -788,9 +864,11 @@ function update(){
   const cHDI   = cssv('--hdi-col');
   const cETI   = cssv('--eti-col');
   const cROPE  = cssv('--rope-col');
+  const cPD    = cssv('--accent4');  // purple for pd reference line
 
-  // Margins
-  const ml = 52, mr = 18, mt = 20, mb = 36;
+  // Margins — more space below when both intervals are shown
+  const ml = 52, mr = 18, mt = 20;
+  const mb = IV_TYPE === 'both' ? 68 : 48;
   const pw = W - ml - mr, ph = H - mt - mb;
 
   function toX(v){ return ml + (v - xmin)/(xmax - xmin) * pw; }
@@ -821,6 +899,21 @@ function update(){
     ctx.fillText('ROPE', (rx1+rx2)/2, mt + 12);
   }
 
+  // pd reference line (purple, dashed) — shows reference value for p(direction)
+  const pdRef = parseFloat(document.getElementById('inp-pdref').value) || 0;
+  const pdRefInRange = pdRef >= xmin && pdRef <= xmax;
+  document.getElementById('leg-pdref').style.display = pdRefInRange ? '' : 'none';
+  if(pdRefInRange){
+    const prX = toX(pdRef);
+    ctx.save();
+    ctx.strokeStyle = cPD; ctx.lineWidth = 1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(prX, mt); ctx.lineTo(prX, mt+ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cPD; ctx.font = `500 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('θ ref', prX, mt+10);
+    ctx.restore();
+  }
+
   // Posterior fill
   ctx.beginPath();
   ctx.moveTo(toX(xs[0]), toY(0));
@@ -836,32 +929,51 @@ function update(){
   ctx.strokeStyle = cPosterior; ctx.lineWidth = 2; ctx.setLineDash([]);
   ctx.stroke();
 
-  // HDI band
-  if(IV_TYPE !== 'eti'){
-    const hx1 = toX(hdi[0]), hx2 = toX(hdi[1]);
-    ctx.strokeStyle = cHDI; ctx.lineWidth = 3; ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(hx1, mt+ph+6); ctx.lineTo(hx2, mt+ph+6); ctx.stroke();
-    // caps
-    [hx1, hx2].forEach(x => {
-      ctx.beginPath(); ctx.moveTo(x, mt+ph+2); ctx.lineTo(x, mt+ph+10); ctx.stroke();
-    });
-    // label
-    ctx.fillStyle = cHDI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
-    ctx.fillText('HDI', (hx1+hx2)/2, mt+ph+20);
+  // Median line (thick, same colour as posterior outline)
+  // Extends only to density height at median; "Md" label directly above the density curve
+  {
+    const mX = toX(median);
+    // Density value at median (linear interpolation on grid)
+    let yAtMed = 0;
+    for(let i = 1; i < xs.length; i++){
+      if(xs[i] >= median){
+        const frac = xs[i] > xs[i-1] ? (median - xs[i-1]) / (xs[i] - xs[i-1]) : 0;
+        yAtMed = ys[i-1] + frac * (ys[i] - ys[i-1]);
+        break;
+      }
+    }
+    const mTopY = toY(yAtMed);
+    ctx.strokeStyle = cPosterior; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(mX, mTopY); ctx.lineTo(mX, mt+ph); ctx.stroke();
+    ctx.fillStyle = cPosterior; ctx.font = `500 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('Md', mX, mTopY - 4);
   }
 
-  // ETI band
+  // HDI band — 20px below x-axis (when "both": upper band)
+  if(IV_TYPE !== 'eti'){
+    const hx1 = toX(hdi[0]), hx2 = toX(hdi[1]);
+    const yB = 20;
+    ctx.strokeStyle = cHDI; ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(hx1, mt+ph+yB); ctx.lineTo(hx2, mt+ph+yB); ctx.stroke();
+    [hx1, hx2].forEach(x => {
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+yB-4); ctx.lineTo(x, mt+ph+yB+4); ctx.stroke();
+    });
+    ctx.fillStyle = cHDI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
+    ctx.fillText('HDI', (hx1+hx2)/2, mt+ph+yB+14);
+  }
+
+  // ETI band — 20px (single) or 44px (when "both": lower band) below x-axis
   if(IV_TYPE !== 'hdi'){
     const ex1 = toX(eti[0]), ex2 = toX(eti[1]);
-    const yOff = IV_TYPE === 'both' ? 14 : 6;
+    const yB = IV_TYPE === 'both' ? 44 : 20;
     ctx.strokeStyle = cETI; ctx.lineWidth = 3; ctx.setLineDash([6,3]);
-    ctx.beginPath(); ctx.moveTo(ex1, mt+ph+yOff); ctx.lineTo(ex2, mt+ph+yOff); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex1, mt+ph+yB); ctx.lineTo(ex2, mt+ph+yB); ctx.stroke();
     ctx.setLineDash([]);
     [ex1, ex2].forEach(x => {
-      ctx.beginPath(); ctx.moveTo(x, mt+ph+yOff-4); ctx.lineTo(x, mt+ph+yOff+4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, mt+ph+yB-4); ctx.lineTo(x, mt+ph+yB+4); ctx.stroke();
     });
     ctx.fillStyle = cETI; ctx.font = `600 9px 'DM Mono',monospace`; ctx.textAlign = 'center';
-    ctx.fillText('ETI', (ex1+ex2)/2, mt+ph+(IV_TYPE==='both'?28:20));
+    ctx.fillText('ETI', (ex1+ex2)/2, mt+ph+yB+14);
   }
 
   // X axis
@@ -881,7 +993,7 @@ function update(){
   const ivKL = ivForKruschke[0], ivKR = ivForKruschke[1];
   const ivTypeName = IV_TYPE === 'eti' ? 'ETI' : 'HDI';
   document.getElementById('da-interval').textContent =
-    `${CRI}% ${ivTypeName}: [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}]`;
+    `${ROPE_CI}% ${ivTypeName}: [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}]`;
   const vKlabels = {
     reject:   ['✓ Accept effect', 'v-accept'],
     accept:   ['≈ Accept equivalence', 'v-accept'],
@@ -891,9 +1003,9 @@ function update(){
   const dvA = document.getElementById('da-verdict');
   dvA.textContent = vKtext; dvA.className = 'dec-verdict ' + vKclass;
   const explA = {
-    reject: `${ivTypeName} [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}] lies completely outside ROPE [${rl}, ${ru}] → effect is real.`,
-    accept: `${ivTypeName} lies completely inside ROPE → practically no effect.`,
-    withhold: `${ivTypeName} overlaps the ROPE boundary → insufficient data for a decision.`
+    reject: `${ROPE_CI}% ${ivTypeName} [${ivKL.toFixed(1)}, ${ivKR.toFixed(1)}] lies completely outside ROPE [${rl}, ${ru}] → effect is real.`,
+    accept: `${ROPE_CI}% ${ivTypeName} lies completely inside ROPE → practically no effect.`,
+    withhold: `${ROPE_CI}% ${ivTypeName} overlaps the ROPE boundary → insufficient data for a decision.`
   };
   document.getElementById('da-explain').textContent = explA[vK];
 
@@ -909,7 +1021,7 @@ function update(){
 
   // C: ETI
   document.getElementById('dc-interval').textContent =
-    `${CRI}% ETI: [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}]`;
+    `${ROPE_CI}% ETI: [${eti_rope[0].toFixed(1)}, ${eti_rope[1].toFixed(1)}]`;
   const vEtext2 = {
     reject:   '✓ Accept effect',
     accept:   '≈ Accept equivalence',
@@ -921,11 +1033,10 @@ function update(){
   // Compare to HDI verdict
   const sameAsHDI = (vK === vE) || IV_TYPE === 'eti';
   document.getElementById('dc-explain').textContent = sameAsHDI
-    ? `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — same decision as HDI for this distribution.`
-    : `ETI [${eti[0].toFixed(1)}, ${eti[1].toFixed(1)}] — DIFFERENT decision from HDI! Typical for skewed posteriors.`;
+    ? `ETI [${eti_rope[0].toFixed(1)}, ${eti_rope[1].toFixed(1)}] — same decision as HDI for this distribution.`
+    : `ETI [${eti_rope[0].toFixed(1)}, ${eti_rope[1].toFixed(1)}] — DIFFERENT decision from HDI! Typical for skewed posteriors.`;
 
   // D: Probability of Direction
-  const pdRef = parseFloat(document.getElementById('inp-pdref').value) || 0;
   let pd, pdDirection;
   {
     const pdN = 1000;
@@ -972,22 +1083,69 @@ function update(){
   }
 
   // ── Update R Code ──────────────────────────────
-  let rcode = 'library(bayestestR)\n\n';
+  const criVal = CRI >= 100 ? 1 : CRI/100;
+  const ropeCiVal = ROPE_CI >= 100 ? 1 : ROPE_CI/100;
+  const ciMethodStr = IV_TYPE === 'hdi' ? '"hdi"' : '"eti"';
+  let rcode = '# ── 1. Load packages ────────────────────────────────────────\n';
+  rcode += 'library(bayestestR)\n\n';
+
+  rcode += '# ── 2. Posterior samples ─────────────────────────────────────\n';
   if(DIST === 'normal'){
-    rcode += `# Posterior samples (normal distribution)\nposterior <- rnorm(10000, mean = ${mu}, sd = ${sigma})\n`;
+    rcode += `# Normal distribution: μ = ${mu}, σ = ${sigma}\n`;
+    rcode += `posterior <- rnorm(10000, mean = ${mu}, sd = ${sigma})\n\n`;
   } else if(DIST === 't'){
-    rcode += `# Posterior samples (t-distribution)\nposterior <- ${mu} + ${sigma} * rt(10000, df = ${nu})\n`;
+    rcode += `# t-distribution: μ = ${mu}, σ = ${sigma}, ν = ${nu}\n`;
+    rcode += `posterior <- ${mu} + ${sigma} * rt(10000, df = ${nu})\n\n`;
   } else {
-    rcode += `# Posterior samples (gamma distribution)\nposterior <- rgamma(10000, shape = ${shape}, rate = ${rate})\n`;
+    rcode += `# Gamma distribution: α = ${shape}, β = ${rate}  →  E[X] = α/β = ${(shape/rate).toFixed(2)}\n`;
+    rcode += `posterior <- rgamma(10000, shape = ${shape}, rate = ${rate})\n\n`;
   }
-  rcode += `\n# ${CRI}% HDI\nhdi(posterior, ci = ${CRI/100})\n\n`;
-  rcode += `# ${CRI}% ETI\neti(posterior, ci = ${CRI/100})\n\n`;
-  rcode += `# ROPE analysis (${CRI}% interval)\nrope(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
-  rcode += `# Full decision\nequivalence_test(posterior, range = c(${rl}, ${ru}), ci = ${CRI/100})\n\n`;
-  rcode += `# Probability of Direction\np_direction(posterior)`;
-  if (pdRef !== 0) {
-    rcode += `\n\n# pd relative to reference value ${pdRef}\nmean(posterior > ${pdRef})  # proportion positive`;
+
+  rcode += '# ── 3. Individual functions (callable separately) ────────────\n\n';
+  rcode += `# HDI: shortest interval containing ${CRI}% of the posterior mass\n`;
+  rcode += `# Contains the densest (most plausible) parameter values\n`;
+  rcode += `hdi(posterior, ci = ${criVal})\n\n`;
+  rcode += `# ETI: Equal-Tailed Interval — cuts ${((1-criVal)*50).toFixed(1)}% from each tail\n`;
+  rcode += `# Invariant under monotone transformations (recommended for GLMs)\n`;
+  rcode += `eti(posterior, ci = ${criVal})\n\n`;
+  rcode += `# ROPE: proportion of posterior mass in [${rl}, ${ru}]\n`;
+  rcode += `# ci = ${criVal} → checks the ${CRI}%-region of the posterior\n`;
+  rcode += `rope(posterior, range = c(${rl}, ${ru}), ci = ${criVal})\n\n`;
+  if(ropeCiVal < 1){
+    rcode += `# ROPE for decision: ${ROPE_CI}% interval\n`;
+    rcode += `rope(posterior, range = c(${rl}, ${ru}), ci = ${ropeCiVal})\n\n`;
+  } else {
+    rcode += `# Full ROPE: entire posterior mass in ROPE (ci = 1 = 100%)\n`;
+    rcode += `# Recommendation Makowski et al. (2019): rope_ci = 1 in describe_posterior()\n`;
+    rcode += `rope(posterior, range = c(${rl}, ${ru}), ci = 1)\n\n`;
   }
+  rcode += `# Probability of Direction: proportion of mass on the stronger side\n`;
+  rcode += `# Reference value: ${pdRef} (default: 0; use 1 for Odds Ratios etc.)\n`;
+  rcode += `p_direction(posterior)\n`;
+  if(pdRef !== 0) rcode += `p_direction(posterior, null = ${pdRef})\n`;
+  rcode += `\n`;
+  rcode += `# Median of the posterior\nmedian(posterior)\n\n`;
+
+  rcode += '# ── 4. Everything at once: describe_posterior() ──────────────\n';
+  if(IV_TYPE === 'both'){
+    rcode += '# Note: HDI and ETI cannot be requested simultaneously in describe_posterior()\n';
+    rcode += '# → ETI as default (invariant under monotone transformations).\n';
+  } else if(IV_TYPE === 'hdi'){
+    rcode += '# ci_method = "hdi" → shortest interval with X% of the posterior mass.\n';
+  } else {
+    rcode += '# ci_method = "eti" → invariant under transformations (recommended for GLMs).\n';
+  }
+  rcode += `# rope_ci = ${ropeCiVal} → ${ROPE_CI === 100 ? 'Full ROPE: check entire posterior (Makowski et al., 2019)' : ROPE_CI+'%-region for ROPE decision'}.\n`;
+  rcode += `describe_posterior(\n`;
+  rcode += `  posterior,\n`;
+  rcode += `  ci         = ${criVal},        # Displayed interval (${CRI}%)\n`;
+  rcode += `  ci_method  = ${ciMethodStr},`;
+  if(IV_TYPE === 'both') rcode += `  # "eti" forced — HDI+ETI simultaneously not possible`;
+  rcode += `\n`;
+  rcode += `  rope_range = c(${rl}, ${ru}),\n`;
+  rcode += `  rope_ci    = ${ropeCiVal},        # ROPE decision: ${ROPE_CI === 100 ? 'Full ROPE' : ROPE_CI+'%'}\n`;
+  rcode += `  test       = c("p_direction", "rope")\n`;
+  rcode += `)`;
   document.getElementById('rcode-block').textContent = rcode;
 }
 
