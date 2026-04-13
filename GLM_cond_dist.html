@@ -226,6 +226,9 @@ html{font-size:18px}
           η = <span id="ps-eta">–</span> &nbsp;→&nbsp;
           <span class="pname" id="ps-param-name">λ</span> = <span class="pval" id="ps-param-val">–</span>
         </div>
+        <div id="clip-note" style="display:none;font-family:'DM Mono',monospace;font-size:.6rem;
+             color:var(--accent5);background:var(--accent5)18;border:1px solid var(--accent5)44;
+             padding:.2rem .5rem;margin-bottom:.3rem;border-radius:2px"></div>
         <canvas id="chartLeft" height="230"></canvas>
       </div>
       
@@ -288,6 +291,39 @@ function toggleCI() {
 const COLORS = ['#e05a3a','#4ab0d8','#6aaa30','#b04ac8','#e8a020','#20c8a8','#e04a80'];
 function ghostColor(i) { return COLORS[i % COLORS.length] + (isDark ? '30' : '1a'); }
 function activeColor(i) { return COLORS[i % COLORS.length]; }
+
+// ── maxK HELPER (verhindert unsichtbar dünne Balken bei extremen β-Werten) ──
+const MAX_K_BARS = 60;
+function poissonQ999(lam) {
+  // Kleinster k-Wert mit Poisson-CDF(k) ≥ 0.999 (log-space für numerische Stabilität)
+  if(lam <= 0) return 1;
+  let cumul = 0, k = 0, logP = -lam;
+  while(k < 3000) {
+    cumul += Math.exp(logP);
+    if(cumul >= 0.999) return k;
+    k++;
+    logP += Math.log(lam) - Math.log(k);
+  }
+  return k;
+}
+function clampK(rawK) {
+  const maxK = Math.min(Math.max(2, rawK), MAX_K_BARS);
+  const clipped = rawK > MAX_K_BARS;
+  // Je mehr Balken, desto mehr Platz füllen sie aus (verhindert dünne Balken)
+  const t = maxK / MAX_K_BARS; // 0..1
+  const barPct = Math.min(0.95, 0.6 + t * 0.35);
+  const catPct = Math.min(0.99, 0.8 + t * 0.19);
+  return { maxK, clipped, barPct, catPct };
+}
+function calcMaxK(maxLam) {
+  return clampK(Math.max(2, poissonQ999(maxLam)));
+}
+function showClipNote(clipped, maxK) {
+  const el = document.getElementById('clip-note');
+  if(!el) return;
+  el.style.display = clipped ? 'block' : 'none';
+  if(clipped) el.textContent = `Ansicht auf k ≤ ${maxK} begrenzt (extremer β-Wert)`;
+}
 
 // ── MATH ─────────────────────────────────────────────────────────────────────
 function normalPDF(y, mu, s) { return Math.exp(-0.5 * ((y - mu) / s) ** 2) / (s * Math.sqrt(2 * Math.PI)); }
@@ -384,8 +420,10 @@ const MODELS = {
     formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>Y|x ~ Poisson(λ)`,
     buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
       if (isLeft) {
-        const lams = xVals.map(x=>Math.exp(b0+b1*x)), maxK = Math.ceil(Math.max(...lams) + 5*Math.sqrt(Math.max(...lams)))+2; // FIX: Hartes Limit entfernt
-        const maxDens = Math.max(...lams.map(l=>poissonPMF(Math.round(l),l)));
+        const lams = xVals.map(x=>Math.exp(b0+b1*x));
+        const {maxK, clipped, barPct, catPct} = calcMaxK(Math.max(...lams));
+        showClipNote(clipped, maxK);
+        const maxDens = Math.max(...lams.map(l=>poissonPMF(Math.min(Math.round(l),maxK),l)));
         return xVals.map((x,i) => {
           const lam = Math.exp(b0+b1*x), isHL = x===hlX;
           if(viewMode==='single' && !isHL) return null;
@@ -393,7 +431,7 @@ const MODELS = {
           const pts = []; for(let k=0; k<=maxK; k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset, poissonPMF(k,lam)+offset]:poissonPMF(k,lam)});
           return {label:`x=${x}`, data:pts, type:'bar',
             borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
-            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+            borderWidth:1, barPercentage:barPct, categoryPercentage:catPct};
         }).filter(d=>d);
       } else {
         const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
@@ -402,7 +440,8 @@ const MODELS = {
     },
     distAxis: (m, b0, b1, xVals, e) => {
       const ml = Math.max(...xVals.map(x=>Math.exp(b0+b1*x)));
-      return {xMin:0, xMax:Math.ceil(ml+4*Math.sqrt(ml))+1, xLabel:'k (Zählung)'}; // FIX: Hartes Limit entfernt
+      const {maxK} = calcMaxK(ml);
+      return {xMin:0, xMax:maxK+1, xLabel:'k (Zählung)'};
     }
   },
 
@@ -418,8 +457,12 @@ const MODELS = {
     formulaHtml: (e) => `η = β₀ + β₁·x<br>log(μ) = η &nbsp;⟹&nbsp; μ = <span class="computed">exp(η)</span><br>α = <span class="computed">${e.alpha.toFixed(2)}</span><br>Y|x ~ NB(μ, α)`,
     buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
       if (isLeft) {
-        const mus = xVals.map(x=>Math.exp(b0+b1*x)), maxK = Math.ceil(Math.max(...mus) + 4*Math.sqrt(Math.max(...mus)+e.alpha*Math.pow(Math.max(...mus),2)))+2; // FIX: Hartes Limit entfernt
-        const maxDens = Math.max(...mus.map(mu=>negBinPMF(Math.round(mu),mu,e.alpha)));
+        const mus = xVals.map(x=>Math.exp(b0+b1*x));
+        const maxMu = Math.max(...mus);
+        const rawK = Math.ceil(maxMu + 4*Math.sqrt(maxMu + e.alpha*maxMu*maxMu)) + 2;
+        const {maxK, clipped, barPct, catPct} = clampK(rawK);
+        showClipNote(clipped, maxK);
+        const maxDens = Math.max(...mus.map(mu=>negBinPMF(Math.min(Math.round(mu),maxK),mu,e.alpha)));
         return xVals.map((x,i) => {
           const mu = Math.exp(b0+b1*x), isHL = x===hlX;
           if(viewMode==='single' && !isHL) return null;
@@ -427,7 +470,7 @@ const MODELS = {
           const pts = []; for(let k=0; k<=maxK; k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset, negBinPMF(k,mu,e.alpha)+offset]:negBinPMF(k,mu,e.alpha)});
           return {label:`x=${x}`, data:pts, type:'bar',
             borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
-            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+            borderWidth:1, barPercentage:barPct, categoryPercentage:catPct};
         }).filter(d=>d);
       } else {
         const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
@@ -436,7 +479,8 @@ const MODELS = {
     },
     distAxis: (m, b0, b1, xVals, e) => {
       const ml = Math.max(...xVals.map(x=>Math.exp(b0+b1*x)));
-      return {xMin:0, xMax:Math.ceil(ml+3*Math.sqrt(ml+e.alpha*ml*ml))+1, xLabel:'k'}; // FIX: Hartes Limit entfernt
+      const rawK = Math.ceil(ml + 3*Math.sqrt(ml + e.alpha*ml*ml)) + 1;
+      return {xMin:0, xMax:Math.min(rawK, MAX_K_BARS)+1, xLabel:'k'};
     }
   },
 
@@ -602,7 +646,9 @@ const MODELS = {
     formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>π = <span class="computed">${(e.pi_zi||0).toFixed(2)}</span><br>P(Y=0) = π + (1−π)·e^−λ`,
     buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
       if (isLeft) {
-        const maxK = 18, pi = e.pi_zi;
+        const pi = e.pi_zi;
+        const {maxK, clipped, barPct, catPct} = calcMaxK(Math.max(...xVals.map(x=>Math.exp(b0+b1*x))));
+        showClipNote(clipped, maxK);
         let maxDens = 0;
         xVals.forEach(x => { const lam=Math.exp(b0+b1*x); for(let k=0;k<=maxK;k++){const p=zipPMF(k,pi,lam);if(p>maxDens)maxDens=p;} });
         return xVals.map((x,i) => {
@@ -612,7 +658,7 @@ const MODELS = {
           const pts = []; for(let k=0;k<=maxK;k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset,zipPMF(k,pi,lam)+offset]:zipPMF(k,pi,lam)});
           return {label:`x=${x}`, data:pts, type:'bar',
             borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
-            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+            borderWidth:1, barPercentage:barPct, categoryPercentage:catPct};
         }).filter(d=>d);
       } else {
         const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
@@ -621,7 +667,8 @@ const MODELS = {
     },
     distAxis: (m, b0, b1, xVals, e) => {
       const maxLam = Math.max(...xVals.map(x => Math.exp(b0+b1*x)));
-      return {xMin:0, xMax:Math.min(25, Math.max(10, Math.ceil(maxLam*2.5))), xLabel:'k (Anzahl Ereignisse)'};
+      const {maxK} = calcMaxK(maxLam);
+      return {xMin:0, xMax:maxK+1, xLabel:'k (Anzahl Ereignisse)'};
     }
   },
 
@@ -645,7 +692,9 @@ const MODELS = {
     formulaHtml: (e) => `η = β₀ + β₁·x<br>log(λ) = η &nbsp;⟹&nbsp; λ = <span class="computed">exp(η)</span><br>p₀ = <span class="computed">${(e.p0_hurdle||0).toFixed(2)}</span><br>P(Y=0) = p₀ &nbsp;·&nbsp; P(Y>0): Pois(λ) trunkiert`,
     buildDatasets: (m, b0, b1, xVals, e, hlX, isLeft) => {
       if (isLeft) {
-        const maxK = 18, p0 = e.p0_hurdle;
+        const p0 = e.p0_hurdle;
+        const {maxK, clipped, barPct, catPct} = calcMaxK(Math.max(...xVals.map(x=>Math.exp(b0+b1*x))));
+        showClipNote(clipped, maxK);
         let maxDens = 0;
         xVals.forEach(x => { const lam=Math.exp(b0+b1*x); for(let k=0;k<=maxK;k++){const p=hurdlePoissonPMF(k,p0,lam);if(p>maxDens)maxDens=p;} });
         return xVals.map((x,i) => {
@@ -655,7 +704,7 @@ const MODELS = {
           const pts = []; for(let k=0;k<=maxK;k++) pts.push({x:k, y:viewMode==='ridgeline'?[offset,hurdlePoissonPMF(k,p0,lam)+offset]:hurdlePoissonPMF(k,p0,lam)});
           return {label:`x=${x}`, data:pts, type:'bar',
             borderColor:isHL?activeColor(i):ghostColor(i), backgroundColor:isHL?activeColor(i)+'aa':ghostColor(i),
-            borderWidth:1, barPercentage:.6, categoryPercentage:.8};
+            borderWidth:1, barPercentage:barPct, categoryPercentage:catPct};
         }).filter(d=>d);
       } else {
         const xs = []; for(let x=-3.5; x<=3.5; x+=0.1) xs.push(x);
@@ -664,7 +713,8 @@ const MODELS = {
     },
     distAxis: (m, b0, b1, xVals, e) => {
       const maxLam = Math.max(...xVals.map(x => Math.exp(b0+b1*x)));
-      return {xMin:0, xMax:Math.min(25, Math.max(10, Math.ceil(maxLam*2.5))), xLabel:'k (Anzahl Ereignisse)'};
+      const {maxK} = calcMaxK(maxLam);
+      return {xMin:0, xMax:maxK+1, xLabel:'k (Anzahl Ereignisse)'};
     }
   }
 
@@ -800,6 +850,7 @@ function renderAll() {
   document.getElementById('param-info').style.borderColor = hlColor + '70';
 
   // --- Left Chart ---
+  showClipNote(false); // reset; distAxis/buildDatasets überschreiben bei Bedarf
   const axL = m.distAxis(m, b0, b1, m.xValues, extras);
   const dsL = m.buildDatasets(m, b0, b1, m.xValues, extras, highlightX, true);
   
