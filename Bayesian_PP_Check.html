@@ -3513,6 +3513,50 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
   white-space:nowrap;
 }
 .pl-cov-item b{color:#9ae4f8}
+/* ── GLM mode ── */
+#pl-glm-btn{
+  font-family:'DM Mono',monospace;font-size:.75rem;padding:.38rem .7rem;
+  border:1px solid #2a3550;background:transparent;cursor:pointer;
+  color:#556080;width:100%;text-align:left;transition:all .12s;letter-spacing:.03em;
+}
+#pl-glm-btn:hover{border-color:#c87ad8;color:#c87ad8}
+#pl-glm-btn.active{border-color:#c87ad8;color:#c87ad8;background:rgba(200,122,216,.08)}
+.pl-glm-link-row{display:flex;align-items:center;gap:.5rem;margin-top:.45rem}
+.pl-glm-link-row label{font-family:'DM Mono',monospace;font-size:.75rem;color:#556080}
+.pl-glm-link-row select{
+  font-family:'DM Mono',monospace;font-size:.75rem;flex:1;
+  background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;
+  padding:.22rem .35rem;outline:none;cursor:pointer;
+}
+.pl-glm-link-row select:focus{border-color:#c87ad8}
+.pl-glm-param-row{display:none;gap:.3rem;margin-top:.35rem}
+.pl-gpb{
+  font-family:'DM Mono',monospace;font-size:.72rem;padding:.3rem .55rem;
+  border:1px solid #2a3550;background:transparent;cursor:pointer;
+  color:#556080;transition:all .12s;flex:1;text-align:center;
+}
+.pl-gpb:hover{border-color:#c87ad8;color:#c87ad8}
+.pl-gpb.active{border-color:#c87ad8;color:#0d1117;background:#c87ad8}
+#pl-glm-note{
+  font-family:'DM Mono',monospace;font-size:.72rem;color:#556080;
+  margin-top:.4rem;line-height:1.65;display:none;
+  background:rgba(200,122,216,.05);border-left:2px solid #c87ad840;
+  padding:.35rem .55rem;
+}
+#pl-glm-note b{color:#c87ad8}
+/* response panel */
+#pl-response-panel{
+  border-top:1px solid #1e2a40;padding-top:.8rem;margin-top:.2rem;
+}
+#pl-response-panel-lbl{
+  font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.09em;
+  text-transform:uppercase;color:#c87ad8;margin-bottom:.5rem;opacity:.85;
+}
+#pl-response-panel-sub{
+  font-family:'DM Mono',monospace;font-size:.68rem;color:#556080;
+  margin-bottom:.6rem;line-height:1.6;
+}
+#pl-response-svg-wrap{width:100%}
 </style>
 
 <div id="prior-lab-overlay" onclick="closePriorLabIfBg(event)">
@@ -3535,6 +3579,23 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
         <div class="pl-section-title">Parameter</div>
         <div class="pl-params" id="pl-params"></div>
       </div>
+      <!-- ── GLM mode toggle ── -->
+      <div>
+        <div class="pl-section-title">GLM-Modus</div>
+        <button id="pl-glm-btn" onclick="plToggleGLM()">⬡ GLM-Modus</button>
+        <div id="pl-glm-link-row" class="pl-glm-link-row" style="display:none">
+          <label>Link:</label>
+          <select id="pl-glm-link-sel" onchange="plOnGLMLinkChange()">
+            <option value="logit">logit (Logistisch)</option>
+            <option value="log">log (Poisson/NB)</option>
+          </select>
+        </div>
+        <div id="pl-glm-param-row" class="pl-glm-param-row">
+          <button id="pl-gpb-intercept" class="pl-gpb active" onclick="plToggleGLMParam('intercept')">Intercept</button>
+          <button id="pl-gpb-slope"     class="pl-gpb"        onclick="plToggleGLMParam('slope')">Slope</button>
+        </div>
+        <div id="pl-glm-note"></div>
+      </div>
       <div class="pl-stats" id="pl-stats"></div>
     </div>
     <!-- main canvas -->
@@ -3555,6 +3616,13 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
         </div>
         <div id="pl-svg-wrap"></div>
       </div>
+      <!-- ── GLM response panel ── -->
+      <div id="pl-response-panel" style="display:none">
+        <div id="pl-response-panel-lbl">Response-Skala</div>
+        <div id="pl-response-panel-sub">Jacobian-transformierte Dichte — mathematisch exakt, keine Approximation.</div>
+        <div id="pl-response-title" style="font-family:'DM Mono',monospace;font-size:.75rem;color:#c87ad8;margin-bottom:.55rem;opacity:.75"></div>
+        <div id="pl-response-svg-wrap"></div>
+      </div>
       <div id="pl-coverage"></div>
       <!-- ── Reverse CI solver ── -->
       <div id="pl-reverse" style="margin-top:.8rem;background:#0a0e16;border:1.5px solid #1e2a40;padding:.9rem 1.1rem">
@@ -3562,12 +3630,12 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
         <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.6rem;line-height:1.65">Gib das gewünschte Credible Interval an — der Solver findet automatisch die passenden Parameter.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;align-items:end;margin-bottom:.55rem">
           <div>
-            <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.2rem">Untere Grenze</div>
+            <div id="pl-ci-lo-lbl" style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.2rem">Untere Grenze</div>
             <input type="number" id="pl-ci-lo" value="-2" step="0.1"
               style="font-family:'DM Mono',monospace;font-size:.75rem;width:100%;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.3rem .45rem;outline:none;text-align:center">
           </div>
           <div>
-            <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.2rem">Obere Grenze</div>
+            <div id="pl-ci-hi-lbl" style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.2rem">Obere Grenze</div>
             <input type="number" id="pl-ci-hi" value="5" step="0.1"
               style="font-family:'DM Mono',monospace;font-size:.75rem;width:100%;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.28rem .4rem;outline:none;text-align:center">
           </div>
@@ -3782,6 +3850,191 @@ function owenT(h, a) {
 // ── State ────────────────────────────────────────────────
 let plDist  = DISTS[0];
 let plParams = {};
+let PL_GLM_ACTIVE = false;
+let PL_GLM_LINK   = 'logit';
+let PL_GLM_PARAM  = 'intercept'; // 'intercept' | 'slope'
+
+// ── GLM functions ────────────────────────────────────────
+window.plToggleGLM = function() {
+  PL_GLM_ACTIVE = !PL_GLM_ACTIVE;
+  document.getElementById('pl-glm-btn').classList.toggle('active', PL_GLM_ACTIVE);
+  const linkRow = document.getElementById('pl-glm-link-row');
+  if(linkRow) linkRow.style.display = PL_GLM_ACTIVE ? '' : 'none';
+  document.getElementById('pl-glm-param-row').style.display = PL_GLM_ACTIVE ? 'flex' : 'none';
+  document.getElementById('pl-glm-note').style.display = PL_GLM_ACTIVE ? '' : 'none';
+  document.getElementById('pl-response-panel').style.display = PL_GLM_ACTIVE ? '' : 'none';
+  plUpdateGLMInputs();
+  plUpdatePlot();
+};
+
+window.plToggleGLMParam = function(p) {
+  PL_GLM_PARAM = p;
+  document.getElementById('pl-gpb-intercept').classList.toggle('active', p==='intercept');
+  document.getElementById('pl-gpb-slope').classList.toggle('active', p==='slope');
+  plUpdateGLMInputs();
+  plUpdatePlot();
+};
+
+window.plOnGLMLinkChange = function() {
+  PL_GLM_LINK = document.getElementById('pl-glm-link-sel').value;
+  plUpdateGLMInputs();
+  plUpdatePlot();
+};
+
+function plUpdateGLMInputs() {
+  const isLog   = PL_GLM_LINK  === 'log';
+  const isSlope = PL_GLM_PARAM === 'slope';
+  const loLbl = document.getElementById('pl-ci-lo-lbl');
+  const hiLbl = document.getElementById('pl-ci-hi-lbl');
+  const loEl  = document.getElementById('pl-ci-lo');
+  const hiEl  = document.getElementById('pl-ci-hi');
+  const note  = document.getElementById('pl-glm-note');
+  const rTitle= document.getElementById('pl-response-title');
+
+  if (!PL_GLM_ACTIVE) {
+    if(loLbl) loLbl.textContent = 'Untere Grenze';
+    if(hiLbl) hiLbl.textContent = 'Obere Grenze';
+    loEl.removeAttribute('min'); loEl.removeAttribute('max'); loEl.step = 0.1;
+    hiEl.removeAttribute('min'); hiEl.removeAttribute('max'); hiEl.step = 0.1;
+    return;
+  }
+
+  if (isSlope) {
+    const rl = isLog ? 'Rate Ratio' : 'Odds Ratio';
+    if(loLbl) loLbl.textContent = rl + ' unten';
+    if(hiLbl) hiLbl.textContent = rl + ' oben';
+    loEl.removeAttribute('max'); loEl.min = 0.0001; loEl.step = 0.01;
+    hiEl.removeAttribute('max'); hiEl.min = 0.0001; hiEl.step = 0.01;
+    const lv = parseFloat(loEl.value), hv = parseFloat(hiEl.value);
+    if (!(lv > 0 && lv < 1)) loEl.value = 0.5;
+    if (!(hv > 1))            hiEl.value = 2.0;
+    if (isLog) {
+      if(note) note.innerHTML = '<b>Log-Link · Slope:</b> Grenzen als <b>Rate Ratio (RR)</b> — z.B. 0.5 bis 2.0. RR = 1 → β = 0, kein Effekt.';
+      if(rTitle) rTitle.textContent = 'Response-Skala — Rate Ratio';
+    } else {
+      if(note) note.innerHTML = '<b>Logit-Link · Slope:</b> Grenzen als <b>Odds Ratio (OR)</b> — z.B. 0.5 bis 2.0. OR = 1 → β = 0, kein Effekt.';
+      if(rTitle) rTitle.textContent = 'Response-Skala — Odds Ratio';
+    }
+  } else {
+    if (isLog) {
+      if(loLbl) loLbl.textContent = 'Erwartungswert unten';
+      if(hiLbl) hiLbl.textContent = 'Erwartungswert oben';
+      loEl.removeAttribute('max'); loEl.min = 0.0001; loEl.step = 0.1;
+      hiEl.removeAttribute('max'); hiEl.min = 0.0001; hiEl.step = 0.1;
+      if (parseFloat(loEl.value) <= 0 || isNaN(parseFloat(loEl.value))) loEl.value = 1;
+      if (parseFloat(hiEl.value) <= 0 || isNaN(parseFloat(hiEl.value))) hiEl.value = 20;
+      if(note) note.innerHTML = '<b>Log-Link · Intercept:</b> Grenzen als <b>Erwartungswert auf Original-Skala</b> — z.B. 1 bis 20. Werte > 0 verwenden.';
+      if(rTitle) rTitle.textContent = 'Response-Skala — Erwartungswert E[Y]';
+    } else {
+      if(loLbl) loLbl.textContent = 'Wahrsch. unten (0–1)';
+      if(hiLbl) hiLbl.textContent = 'Wahrsch. oben (0–1)';
+      loEl.min = 0.001; loEl.max = 0.999; loEl.step = 0.01;
+      hiEl.min = 0.001; hiEl.max = 0.999; hiEl.step = 0.01;
+      if (parseFloat(loEl.value) <= 0 || parseFloat(loEl.value) >= 1 || isNaN(parseFloat(loEl.value))) loEl.value = 0.30;
+      if (parseFloat(hiEl.value) <= 0 || parseFloat(hiEl.value) >= 1 || isNaN(parseFloat(hiEl.value))) hiEl.value = 0.70;
+      if(note) note.innerHTML = '<b>Logit-Link · Intercept:</b> Grenzen als <b>Wahrscheinlichkeit (0–1)</b> — z.B. 0.30 bis 0.70. μ=0 ≙ 50% Baseline.';
+      if(rTitle) rTitle.textContent = 'Response-Skala — Wahrscheinlichkeit P(Y=1)';
+    }
+  }
+}
+
+function plDrawResponsePanel() {
+  if (!PL_GLM_ACTIVE) return;
+  const isLog   = PL_GLM_LINK  === 'log';
+  const isSlope = PL_GLM_PARAM === 'slope';
+  const wrap = document.getElementById('pl-response-svg-wrap');
+  if (!wrap) return;
+
+  const modelLo = parseFloat(document.getElementById('pl-xlo').value) || -5;
+  const modelHi = parseFloat(document.getElementById('pl-xhi').value) ||  5;
+  const N = 400;
+  let xs, ys, xDomain;
+
+  if (isSlope || isLog) {
+    const xlo_r = Math.max(0.0001, Math.exp(modelLo));
+    const xhi_r = Math.exp(modelHi);
+    xDomain = [xlo_r, xhi_r];
+    xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
+    ys = xs.map(y => {
+      if (y <= 0) return 0;
+      try { const v = plDist.pdf(Math.log(y), plParams) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+    });
+  } else {
+    xDomain = [0, 1];
+    xs = Array.from({length:N}, (_,i) => 0.001 + i*0.998/(N-1));
+    ys = xs.map(y => {
+      if (y <= 0.00005 || y >= 0.99995) return 0;
+      try {
+        const v = plDist.pdf(Math.log(y/(1-y)), plParams) / (y*(1-y));
+        return (isFinite(v) && v >= 0) ? v : 0;
+      } catch(e){ return 0; }
+    });
+  }
+
+  const yMax = Math.max(...ys)*1.15 || 1;
+  const W = wrap.clientWidth || 500;
+  const H = 240;
+  const m = {l:50,r:20,t:12,b:34};
+  const Wp = W-m.l-m.r, Hp = H-m.t-m.b;
+
+  d3.select(wrap).selectAll('*').remove();
+  const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H).style('overflow','visible');
+  const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
+
+  const xSc = d3.scaleLinear().domain(xDomain).range([0, Wp]);
+  const ySc = d3.scaleLinear().domain([0, yMax]).range([Hp, 0]);
+  const a4  = '#c87ad8';
+  const a3  = '#7ec850';
+  const ink2= '#3a4a60';
+  const grid= '#1a2235';
+
+  g.append('g').call(d3.axisLeft(ySc).ticks(4).tickSize(-Wp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
+
+  const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
+  g.append('g').attr('transform',`translate(0,${Hp})`)
+   .call(d3.axisBottom(xSc).ticks(5).tickFormat(xFmt).tickSize(-Hp))
+   .call(gr=>{gr.select('.domain').remove();
+     gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
+     gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
+
+  const gradId = 'pl-gr-r-'+Date.now();
+  const defs = svg.append('defs');
+  const lg = defs.append('linearGradient').attr('id',gradId).attr('x1',0).attr('x2',0).attr('y1',0).attr('y2',1);
+  lg.append('stop').attr('offset','0%').attr('stop-color',a4).attr('stop-opacity',.35);
+  lg.append('stop').attr('offset','100%').attr('stop-color',a4).attr('stop-opacity',.02);
+
+  const pts = xs.map((x,i) => [x, ys[i]]);
+  const area = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+  const line = d3.line().x(p=>xSc(p[0])).y(p=>ySc(p[1])).curve(d3.curveBasis);
+
+  g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
+  g.append('path').datum(pts).attr('fill','none').attr('stroke',a4).attr('stroke-width',2.5).attr('d',line);
+
+  // Reference line at OR/RR = 1 for slopes
+  if (isSlope && 1 >= xDomain[0] && 1 <= xDomain[1]) {
+    g.append('line').attr('x1',xSc(1)).attr('x2',xSc(1)).attr('y1',0).attr('y2',Hp)
+     .attr('stroke',ink2).attr('stroke-width',1.2).attr('stroke-dasharray','3,3').attr('opacity',.5);
+    g.append('text').attr('x',xSc(1)+4).attr('y',Hp-6)
+     .attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace').attr('opacity',.55)
+     .text('= 1');
+  }
+
+  // Mean line (transformed)
+  const mn = plDist.mean(plParams);
+  if (typeof mn === 'number' && isFinite(mn)) {
+    const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
+    if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
+       .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+      g.append('text').attr('x',xSc(mn_r)+4).attr('y',11)
+       .attr('fill',a3).attr('font-size','10px').attr('font-family','DM Mono,monospace')
+       .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+    }
+  }
+}
 
 // ── Init ─────────────────────────────────────────────────
 function initPriorLab(){
@@ -3978,6 +4231,9 @@ window.plUpdatePlot=function(){
   document.getElementById('pl-coverage').innerHTML=covHTML
     ? '<span style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:#2a3550;display:block;width:100%;margin-bottom:.3rem;letter-spacing:.1em;text-transform:uppercase">Credible Intervals</span>'+covHTML
     : '';
+
+  // GLM response panel
+  if (PL_GLM_ACTIVE) plDrawResponsePanel();
 };
 
 function findQuantileWith(qFn){
@@ -4000,10 +4256,34 @@ function findQuantileVal(q){
 
 // ── Reverse CI solver ─────────────────────────────────────
 window.plSolvCI=function(){
-  const lo=parseFloat(document.getElementById('pl-ci-lo').value);
-  const hi=parseFloat(document.getElementById('pl-ci-hi').value);
+  const lo_raw=parseFloat(document.getElementById('pl-ci-lo').value);
+  const hi_raw=parseFloat(document.getElementById('pl-ci-hi').value);
   const pct=parseFloat(document.getElementById('pl-ci-pct').value)||95;
   const res=document.getElementById('pl-ci-result');
+
+  // GLM-Modus: Response-Skala → Modell-Skala umrechnen
+  let lo=lo_raw, hi=hi_raw;
+  if (PL_GLM_ACTIVE) {
+    const isSlope_s = PL_GLM_PARAM === 'slope';
+    if (isSlope_s) {
+      const rl = PL_GLM_LINK === 'logit' ? 'Odds Ratio' : 'Rate Ratio';
+      if (!isFinite(lo_raw)||lo_raw<=0||!isFinite(hi_raw)||hi_raw<=0) {
+        res.textContent=`Fehler: ${rl} muss > 0 sein. Wert 1 = kein Effekt, < 1 = Reduktion, > 1 = Erhöhung.`; return;
+      }
+      lo=Math.log(lo_raw); hi=Math.log(hi_raw);
+    } else if (PL_GLM_LINK === 'logit') {
+      if (!isFinite(lo_raw)||lo_raw<=0||lo_raw>=1||!isFinite(hi_raw)||hi_raw<=0||hi_raw>=1) {
+        res.textContent='Fehler: Im Logit-Modus Wahrscheinlichkeiten zwischen 0 und 1 eingeben (z.B. 0.30 bis 0.70).'; return;
+      }
+      lo=Math.log(lo_raw/(1-lo_raw)); hi=Math.log(hi_raw/(1-hi_raw));
+    } else {
+      if (!isFinite(lo_raw)||lo_raw<=0||!isFinite(hi_raw)||hi_raw<=0) {
+        res.textContent='Fehler: Log-Link erfordert Werte > 0 — log(0) = −∞. Kleinsten Erwartungswert > 0 eingeben (z.B. 0.1 statt 0).'; return;
+      }
+      lo=Math.log(lo_raw); hi=Math.log(hi_raw);
+    }
+  }
+
   if(!isFinite(lo)||!isFinite(hi)||lo>=hi){res.textContent='Fehler: Untere Grenze muss < obere Grenze sein.';return;}
   if(pct<=0||pct>=100){res.textContent='Fehler: Masse muss zwischen 1% und 99% liegen.';return;}
   const q_lo=(1-pct/100)/2, q_hi=1-q_lo;
@@ -4123,6 +4403,21 @@ window.plSolvCI=function(){
       if(!plDist.cdf){res.innerHTML='<span style="color:#556080">Kein CDF verfügbar — bitte Parameter manuell anpassen.</span>';return;}
       const clo=plDist.cdf(lo,plParams)||0, chi=plDist.cdf(hi,plParams)||0;
       res.innerHTML=`<span style="color:#556080">Mit aktuellen Parametern: P(x&lt;${lo})=${(clo*100).toFixed(1)}%, P(x&lt;${hi})=${(chi*100).toFixed(1)}%.<br>Ziel: ${(q_lo*100).toFixed(1)}% / ${(q_hi*100).toFixed(1)}%. Parameter manuell anpassen.</span>`;
+    }
+    // GLM: Response-Skala-Annotation anhängen
+    if (PL_GLM_ACTIVE) {
+      const isLog_g   = PL_GLM_LINK  === 'log';
+      const isSlope_g = PL_GLM_PARAM === 'slope';
+      let lo_rs, hi_rs, scaleLabel;
+      if (isSlope_g) {
+        lo_rs = lo_raw.toFixed(3); hi_rs = hi_raw.toFixed(3);
+        scaleLabel = isLog_g ? 'Rate Ratio' : 'Odds Ratio';
+      } else {
+        lo_rs = isLog_g ? lo_raw.toFixed(2) : `${(lo_raw*100).toFixed(1)}%`;
+        hi_rs = isLog_g ? hi_raw.toFixed(2) : `${(hi_raw*100).toFixed(1)}%`;
+        scaleLabel = isLog_g ? 'E[Y]' : 'P(Y=1)';
+      }
+      res.innerHTML += `<br><span style="opacity:.5;font-size:.65em">↳ Eingabe (${scaleLabel}): [${lo_rs}, ${hi_rs}] → Modell-Skala: [${lo.toFixed(3)}, ${hi.toFixed(3)}]</span>`;
     }
     plUpdatePlot();
   } catch(e){ res.textContent='Solver-Fehler: '+e.message; }
