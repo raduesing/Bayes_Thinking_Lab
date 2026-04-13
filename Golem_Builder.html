@@ -547,6 +547,8 @@ canvas {
   max-height: 320px;
   overflow-y: auto;
 }
+.cm{color:var(--ink2)}.fn{color:var(--a2)}.str{color:var(--a3)}.kw{color:var(--a5)}.nm{color:#9a7a20}.num{color:var(--a4)}
+[data-theme="dark"] .nm{color:#c8a840}
 
 /* LEARNING CARDS */
 .cards-section { margin-top: 1.5rem; }
@@ -2678,6 +2680,44 @@ function loadExample() {
 // ============================================================
 // UTILITIES
 // ============================================================
+function highlightR(code){
+  const R_KW=new Set(['if','else','for','while','repeat','function','return',
+    'TRUE','FALSE','NULL','NA','Inf','NaN','in','next','break','library','require']);
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  let out='',i=0;
+  while(i<code.length){
+    if(code[i]==='#'){
+      let j=i;while(j<code.length&&code[j]!=='\n')j++;
+      out+=`<span class="cm">${esc(code.slice(i,j))}</span>`;i=j;continue;
+    }
+    if(code[i]==='"'||code[i]==="'"){
+      const q=code[i];let j=i+1;
+      while(j<code.length){if(code[j]==='\\'){j+=2;continue;}if(code[j]===q){j++;break;}j++;}
+      out+=`<span class="str">${esc(code.slice(i,j))}</span>`;i=j;continue;
+    }
+    if(code[i]==='<'&&i+1<code.length&&code[i+1]==='-'){out+=`<span class="kw">&lt;-</span>`;i+=2;continue;}
+    if(code[i]==='-'&&i+1<code.length&&code[i+1]==='>'){out+=`<span class="kw">-&gt;</span>`;i+=2;continue;}
+    if(/\d/.test(code[i])&&(i===0||!/[a-zA-Z_.]/.test(code[i-1]))){
+      let j=i;while(j<code.length&&/[\d.eE]/.test(code[j]))j++;
+      if(j<code.length&&/[+-]/.test(code[j])&&j>i&&/[eE]/.test(code[j-1])){j++;while(j<code.length&&/\d/.test(code[j]))j++;}
+      if(j<code.length&&code[j]==='L')j++;
+      out+=`<span class="num">${esc(code.slice(i,j))}</span>`;i=j;continue;
+    }
+    if(/[a-zA-Z_.]/.test(code[i])){
+      let j=i;while(j<code.length&&/[a-zA-Z0-9_.]/.test(code[j]))j++;
+      const word=code.slice(i,j);
+      let k=j;while(k<code.length&&(code[k]===' '||code[k]==='\t'))k++;
+      if(R_KW.has(word))out+=`<span class="kw">${esc(word)}</span>`;
+      else if(k<code.length&&code[k]==='(')out+=`<span class="fn">${esc(word)}</span>`;
+      else if(k<code.length&&code[k]==='='&&(k+1>=code.length||code[k+1]!=='='))out+=`<span class="nm">${esc(word)}</span>`;
+      else out+=esc(word);
+      i=j;continue;
+    }
+    out+=esc(code[i]);i++;
+  }
+  return out;
+}
+
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -2779,21 +2819,21 @@ document.getElementById('partBToggle').addEventListener('click', () => {
 document.getElementById('btnGenR').addEventListener('click', () => {
   if (state.nodes.length === 0) { showToast('Bitte zuerst einen DAG erstellen.'); return; }
   const code = generateRCode();
-  document.getElementById('rCodeArea').textContent = code;
+  document.getElementById('rCodeArea').innerHTML = highlightR(code);
   document.getElementById('rCodeWrap').style.display = 'block';
 });
 
 document.getElementById('btnGenBrms').addEventListener('click', () => {
   if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
   const code = generateBrmsCode();
-  document.getElementById('brmsCodeArea').textContent = code;
+  document.getElementById('brmsCodeArea').innerHTML = highlightR(code);
   document.getElementById('brmsCodeWrap').style.display = 'block';
 });
 
 document.getElementById('btnGenTMB').addEventListener('click', () => {
   if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
   const code = generateTMBCode();
-  document.getElementById('tmbCodeArea').textContent = code;
+  document.getElementById('tmbCodeArea').innerHTML = highlightR(code);
   document.getElementById('tmbCodeWrap').style.display = 'block';
 });
 
