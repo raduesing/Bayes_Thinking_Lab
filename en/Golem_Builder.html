@@ -913,6 +913,25 @@ canvas {
       </table>
     </div>
 
+    <!-- Standardization mode -->
+    <div style="margin-bottom:.85rem">
+      <button id="btnStdMode" onclick="toggleStdMode()"
+        style="font-family:'DM Mono',monospace;font-size:.75rem;padding:.38rem .85rem;
+               border:1.5px solid var(--border);background:transparent;cursor:pointer;
+               color:var(--ink2);transition:all .14s;letter-spacing:.03em;width:100%;
+               text-align:left;display:flex;align-items:center;gap:.5rem">
+        <span>📐</span><span>Standardization mode <span style="opacity:.55">(Approach B — path coefficients)</span></span>
+      </button>
+      <div id="stdModeNote" style="display:none;font-family:'DM Mono',monospace;font-size:.72rem;
+           color:var(--ink2);line-height:1.72;margin-top:.35rem;
+           border-left:2px solid var(--a4);padding:.4rem .65rem;background:var(--panel)">
+        All variances = 1. σ_residual is computed automatically as <b>√(1 − Σβᵢ²)</b>.<br>
+        β is directly the standardized path coefficient (Wright 1921, lavaan, dagitty).<br>
+        Root nodes are fixed to <b>μ=0, SD=1</b>.
+        <span id="stdModeGlobalWarn" style="display:none;color:var(--a1)"><br>⚠ One or more nodes: Σβᵢ² ≥ 1 — σ_residual² would be negative. Reduce β values.</span>
+      </div>
+    </div>
+
     <div class="section-title">Simulation Settings</div>
     <div class="sim-settings">
       <div class="sim-setting-item">
@@ -2074,12 +2093,105 @@ function buildPathString(path) {
 }
 
 // ============================================================
+// STANDARDIZATION MODE
+// ============================================================
+let STD_MODE = false;
+
+function toggleStdMode() {
+  STD_MODE = !STD_MODE;
+  const btn = document.getElementById('btnStdMode');
+  const note = document.getElementById('stdModeNote');
+  if (btn) {
+    btn.style.borderColor  = STD_MODE ? 'var(--a4)' : 'var(--border)';
+    btn.style.color        = STD_MODE ? 'var(--a4)' : 'var(--ink2)';
+    btn.style.background   = STD_MODE ? 'rgba(200,122,216,.07)' : 'transparent';
+  }
+  if (note) note.style.display = STD_MODE ? '' : 'none';
+  applyStdMode();
+}
+
+// σ_residual for a node in standardization mode (assumes Var(parent)=1)
+function computeStdSigma(nodeId) {
+  const parents = getParents(nodeId);
+  const sumB2 = parents.reduce((s, pid) => {
+    const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
+    const beta = edge ? getEdgeCoef(edge.id) : 0.5;
+    return s + beta * beta;
+  }, 0);
+  const sigma2 = 1 - sumB2;
+  return { sigma: sigma2 > 0 ? Math.sqrt(sigma2) : 0, sumB2, invalid: sigma2 <= 0 };
+}
+
+function applyStdMode() {
+  // ── Root nodes: mean=0, sd=1 (read-only when active) ──
+  document.querySelectorAll('[data-root-mean]').forEach(inp => {
+    if (STD_MODE) { inp.value = '0'; inp.readOnly = true; inp.style.opacity = '.4'; inp.style.cursor = 'not-allowed'; }
+    else          { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; }
+  });
+  document.querySelectorAll('[data-root-sd]').forEach(inp => {
+    if (!inp.disabled) {
+      if (STD_MODE) { inp.value = '1'; inp.readOnly = true; inp.style.opacity = '.4'; inp.style.cursor = 'not-allowed'; }
+      else          { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; }
+    }
+  });
+
+  // ── Endogenous nodes: auto-compute σ_residual ──
+  let anyInvalid = false;
+  document.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
+    const nodeId = inp.dataset.nonrootSd;
+    if (STD_MODE) {
+      const { sigma, sumB2, invalid } = computeStdSigma(nodeId);
+      if (invalid) anyInvalid = true;
+      inp.value    = invalid ? '0' : sigma.toFixed(4);
+      inp.readOnly = true;
+      inp.style.cursor    = 'not-allowed';
+      inp.style.color     = invalid ? 'var(--a1)' : 'var(--a3)';
+      inp.style.fontWeight= '500';
+      inp.style.opacity   = '.85';
+      const td = inp.closest('td');
+      if (td) {
+        let badge = td.querySelector('.std-warn-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'std-warn-badge';
+          badge.style.cssText = 'font-family:"DM Mono",monospace;font-size:.65rem;margin-left:.35rem;';
+          td.appendChild(badge);
+        }
+        badge.textContent = invalid ? '⚠ Σβ²≥1' : `(√${(1-sumB2).toFixed(3)})`;
+        badge.style.color = invalid ? 'var(--a1)' : 'var(--ink3)';
+      }
+    } else {
+      inp.readOnly = false;
+      inp.style.cursor = ''; inp.style.color = ''; inp.style.fontWeight = ''; inp.style.opacity = '';
+      const td = inp.closest('td');
+      if (td) { const b = td.querySelector('.std-warn-badge'); if (b) b.remove(); }
+    }
+  });
+
+  // Global warning
+  const gw = document.getElementById('stdModeGlobalWarn');
+  if (gw) gw.style.display = (STD_MODE && anyInvalid) ? '' : 'none';
+
+  // Section title
+  const section = document.getElementById('nonRootSdSection');
+  if (section) {
+    const title = section.querySelector('.section-title');
+    if (title) title.textContent = STD_MODE
+      ? 'Endogenous Nodes — Intercept & σ_residual (auto · Approach B)'
+      : 'Endogenous Nodes — Intercept & Residual SD';
+    const th = section.querySelector('thead th:last-child');
+    if (th) th.textContent = STD_MODE ? 'σ_residual (auto)' : 'σ_residual';
+  }
+}
+
+// ============================================================
 // PART B: CODE GENERATION
 // ============================================================
 function updatePartB() {
   updateEdgeCoefTable();
   updateRootNodeTable();
   updateNonRootSdTable();
+  if (STD_MODE) applyStdMode();
 }
 
 function getEdgeCoef(edgeId) {
@@ -2114,7 +2226,7 @@ function updateEdgeCoefTable() {
     return `<tr>
       <td>${escHtml(getNodeName(e.from))}</td>
       <td>→ ${escHtml(getNodeName(e.to))}</td>
-      <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1"></td>
+      <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1" oninput="if(STD_MODE)applyStdMode()"></td>
     </tr>`;
   }).join('');
 }
@@ -2233,23 +2345,38 @@ function generateRCode() {
     );
   }
 
+  if (STD_MODE) {
+    lines.push(
+      '# SIMULATION LOGIC (Approach B — standardized path coefficients, dagitty-style):',
+      '#   All variables standardized: Var(X) = 1, mean = 0.',
+      '#   beta = direct path coefficient (Wright 1921, lavaan, dagitty).',
+      '#   sigma_residual = sqrt(1 - sum(beta_i²))  [auto-computed]',
+      '#   Requirement: sum(beta_i²) < 1 — otherwise Var(Y) > 1 (unphysical).',
+      '#   Literature: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
+      '#              dagitty.net/learn; McElreath (2020) Ch. 5-6.',
+    );
+  } else {
+    lines.push(
+      '# SIMULATION LOGIC (Approach A — natural scale, following McElreath):',
+      '#   Endogenous nodes: Y <- rnorm(n, alpha + sum(beta_i * X_i), sigma_residual)',
+      '#   alpha = intercept configurable per node (default: 0).',
+      '#   sigma_residual is configurable per node (default: 1).',
+      '#   beta and sigma are on the scale of the respective input variables.',
+      '#',
+      '# ADAPTING FOR OWN DATA:',
+      '#   If predictors are not standardized (SD != 1), scale beta and sigma',
+      '#   accordingly. Rule of thumb: R² ~ Var(mu) / (Var(mu) + sigma²)',
+      '#   with Var(mu) = sum(beta_i² * Var(X_i)) for uncorrelated predictors.',
+      '#',
+      '# ALTERNATIVE (Approach B — standardized path coefficients, dagitty-style):',
+      '#   All variables Var = 1, beta = standardized path coefficient.',
+      '#   Then: sigma_residual = sqrt(1 - sum(beta_i²)), requirement: sum(beta²) < 1.',
+      '#   Literature: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
+      '#              dagitty.net/learn; McElreath (2020) Ch. 5-6 (natural scale).',
+    );
+  }
+
   lines.push(
-    '# SIMULATION LOGIC (Approach A — natural scale, following McElreath):',
-    '#   Endogenous nodes: Y <- rnorm(n, alpha + sum(beta_i * X_i), sigma_residual)',
-    '#   alpha = intercept configurable per node (default: 0).',
-    '#   sigma_residual is configurable per node (default: 1).',
-    '#   beta and sigma are on the scale of the respective input variables.',
-    '#',
-    '# ADAPTING FOR OWN DATA:',
-    '#   If predictors are not standardized (SD != 1), scale beta and sigma',
-    '#   accordingly. Rule of thumb: R² ~ Var(mu) / (Var(mu) + sigma²)',
-    '#   with Var(mu) = sum(beta_i² * Var(X_i)) for uncorrelated predictors.',
-    '#',
-    '# ALTERNATIVE (Approach B — standardized path coefficients, dagitty-style):',
-    '#   All variables Var = 1, beta = standardized path coefficient.',
-    '#   Then: sigma_residual = sqrt(1 - sum(beta_i²)), requirement: sum(beta²) < 1.',
-    '#   Literature: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
-    '#              dagitty.net/learn; McElreath (2020) Ch. 5-6 (natural scale).',
     '',
     `set.seed(${seed})`,
     `n <- ${n}`,
@@ -2279,7 +2406,9 @@ function generateRCode() {
     lines.push('# Root nodes (exogenous observable variables, no parents)');
     observedRoots.forEach(nd => {
       const { dist, mean, sd } = getRootDist(nd.id);
-      if (dist === 'Normal') {
+      if (STD_MODE) {
+        lines.push(`${nd.name} <- rnorm(n, 0, 1)  # standardized: μ=0, SD=1`);
+      } else if (dist === 'Normal') {
         lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
       } else if (dist === 'Bernoulli') {
         lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
@@ -2298,7 +2427,7 @@ function generateRCode() {
       lines.push('', '# Latent endogenous nodes (unobservable)');
       latentNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
-        const sigma = getNonRootSd(nd.id);
+        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2312,7 +2441,7 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(`sigma=${sigma}`);
+        commentParts.push(STD_MODE ? `sigma=${sigma} [auto]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # latent — not in dataset! ${commentParts.join(', ')}`);
       });
     }
@@ -2321,7 +2450,7 @@ function generateRCode() {
       lines.push('', '# Endogenous observable nodes (topological order)');
       observedNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
-        const sigma = getNonRootSd(nd.id);
+        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2335,7 +2464,7 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(`sigma=${sigma}`);
+        commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
       });
     }

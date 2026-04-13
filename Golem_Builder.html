@@ -913,6 +913,25 @@ canvas {
       </table>
     </div>
 
+    <!-- Standardisierungsmodus -->
+    <div style="margin-bottom:.85rem">
+      <button id="btnStdMode" onclick="toggleStdMode()"
+        style="font-family:'DM Mono',monospace;font-size:.75rem;padding:.38rem .85rem;
+               border:1.5px solid var(--border);background:transparent;cursor:pointer;
+               color:var(--ink2);transition:all .14s;letter-spacing:.03em;width:100%;
+               text-align:left;display:flex;align-items:center;gap:.5rem">
+        <span>📐</span><span>Standardisierungsmodus <span style="opacity:.55">(Ansatz B — Pfadkoeffizienten)</span></span>
+      </button>
+      <div id="stdModeNote" style="display:none;font-family:'DM Mono',monospace;font-size:.72rem;
+           color:var(--ink2);line-height:1.72;margin-top:.35rem;
+           border-left:2px solid var(--a4);padding:.4rem .65rem;background:var(--panel)">
+        Alle Varianzen = 1. σ_residual wird als <b>√(1 − Σβᵢ²)</b> automatisch berechnet.<br>
+        β ist direkt der standardisierte Pfadkoeffizient (Wright 1921, lavaan, dagitty).<br>
+        Wurzelknoten werden auf <b>μ=0, SD=1</b> gesetzt.
+        <span id="stdModeGlobalWarn" style="display:none;color:var(--a1)"><br>⚠ Ein oder mehrere Knoten: Σβᵢ² ≥ 1 — σ_residual² wäre negativ. β-Werte reduzieren.</span>
+      </div>
+    </div>
+
     <div class="section-title">Simulationseinstellungen</div>
     <div class="sim-settings">
       <div class="sim-setting-item">
@@ -2074,12 +2093,106 @@ function buildPathString(path) {
 }
 
 // ============================================================
+// STANDARDISIERUNGSMODUS
+// ============================================================
+let STD_MODE = false;
+
+function toggleStdMode() {
+  STD_MODE = !STD_MODE;
+  const btn = document.getElementById('btnStdMode');
+  const note = document.getElementById('stdModeNote');
+  if (btn) {
+    btn.style.borderColor  = STD_MODE ? 'var(--a4)' : 'var(--border)';
+    btn.style.color        = STD_MODE ? 'var(--a4)' : 'var(--ink2)';
+    btn.style.background   = STD_MODE ? 'rgba(200,122,216,.07)' : 'transparent';
+  }
+  if (note) note.style.display = STD_MODE ? '' : 'none';
+  applyStdMode();
+}
+
+// σ_residual für Knoten im Standardisierungsmodus (nimmt Var(parent)=1 an)
+function computeStdSigma(nodeId) {
+  const parents = getParents(nodeId);
+  const sumB2 = parents.reduce((s, pid) => {
+    const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
+    const beta = edge ? getEdgeCoef(edge.id) : 0.5;
+    return s + beta * beta;
+  }, 0);
+  const sigma2 = 1 - sumB2;
+  return { sigma: sigma2 > 0 ? Math.sqrt(sigma2) : 0, sumB2, invalid: sigma2 <= 0 };
+}
+
+function applyStdMode() {
+  // ── Wurzelknoten: mean=0, sd=1 (read-only wenn aktiv) ──
+  document.querySelectorAll('[data-root-mean]').forEach(inp => {
+    if (STD_MODE) { inp.value = '0'; inp.readOnly = true; inp.style.opacity = '.4'; inp.style.cursor = 'not-allowed'; }
+    else          { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; }
+  });
+  document.querySelectorAll('[data-root-sd]').forEach(inp => {
+    if (!inp.disabled) { // nur wenn nicht wegen Dist disabled
+      if (STD_MODE) { inp.value = '1'; inp.readOnly = true; inp.style.opacity = '.4'; inp.style.cursor = 'not-allowed'; }
+      else          { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; }
+    }
+  });
+
+  // ── Endogene Knoten: σ_residual auto-berechnen ──
+  let anyInvalid = false;
+  document.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
+    const nodeId = inp.dataset.nonrootSd;
+    if (STD_MODE) {
+      const { sigma, sumB2, invalid } = computeStdSigma(nodeId);
+      if (invalid) anyInvalid = true;
+      inp.value    = invalid ? '0' : sigma.toFixed(4);
+      inp.readOnly = true;
+      inp.style.cursor    = 'not-allowed';
+      inp.style.color     = invalid ? 'var(--a1)' : 'var(--a3)';
+      inp.style.fontWeight= '500';
+      inp.style.opacity   = '.85';
+      // Warn-Badge in der Zelle
+      const td = inp.closest('td');
+      if (td) {
+        let badge = td.querySelector('.std-warn-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'std-warn-badge';
+          badge.style.cssText = 'font-family:"DM Mono",monospace;font-size:.65rem;margin-left:.35rem;';
+          td.appendChild(badge);
+        }
+        badge.textContent   = invalid ? '⚠ Σβ²≥1' : `(√${(1-sumB2).toFixed(3)})`;
+        badge.style.color   = invalid ? 'var(--a1)' : 'var(--ink3)';
+      }
+    } else {
+      inp.readOnly = false;
+      inp.style.cursor = ''; inp.style.color = ''; inp.style.fontWeight = ''; inp.style.opacity = '';
+      const td = inp.closest('td');
+      if (td) { const b = td.querySelector('.std-warn-badge'); if (b) b.remove(); }
+    }
+  });
+
+  // Global-Warnung
+  const gw = document.getElementById('stdModeGlobalWarn');
+  if (gw) gw.style.display = (STD_MODE && anyInvalid) ? '' : 'none';
+
+  // Abschnittstitel
+  const section = document.getElementById('nonRootSdSection');
+  if (section) {
+    const title = section.querySelector('.section-title');
+    if (title) title.textContent = STD_MODE
+      ? 'Endogene Knoten — Intercept & σ_residual (auto · Ansatz B)'
+      : 'Endogene Knoten — Intercept & Residual-SD';
+    const th = section.querySelector('thead th:last-child');
+    if (th) th.textContent = STD_MODE ? 'σ_residual (auto)' : 'σ_residual';
+  }
+}
+
+// ============================================================
 // PART B: CODE GENERATION
 // ============================================================
 function updatePartB() {
   updateEdgeCoefTable();
   updateRootNodeTable();
   updateNonRootSdTable();
+  if (STD_MODE) applyStdMode();
 }
 
 function getEdgeCoef(edgeId) {
@@ -2114,7 +2227,7 @@ function updateEdgeCoefTable() {
     return `<tr>
       <td>${escHtml(getNodeName(e.from))}</td>
       <td>→ ${escHtml(getNodeName(e.to))}</td>
-      <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1"></td>
+      <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1" oninput="if(STD_MODE)applyStdMode()"></td>
     </tr>`;
   }).join('');
 }
@@ -2233,23 +2346,38 @@ function generateRCode() {
     );
   }
 
+  if (STD_MODE) {
+    lines.push(
+      '# SIMULATIONSLOGIK (Ansatz B — standardisierte Pfadkoeffizienten, dagitty-Stil):',
+      '#   Alle Variablen standardisiert: Var(X) = 1, Mittelwert = 0.',
+      '#   beta = direkt der Pfadkoeffizient (Wright 1921, lavaan, dagitty).',
+      '#   sigma_residual = sqrt(1 - sum(beta_i²))  [auto-berechnet]',
+      '#   Voraussetzung: sum(beta_i²) < 1 — sonst wäre Var(Y) > 1 (unphysikalisch).',
+      '#   Literatur: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
+      '#              dagitty.net/learn; McElreath (2020) Kap. 5-6.',
+    );
+  } else {
+    lines.push(
+      '# SIMULATIONSLOGIK (Ansatz A — natürliche Skala, nach McElreath):',
+      '#   Endogene Knoten: Y <- rnorm(n, alpha + sum(beta_i * X_i), sigma_residual)',
+      '#   alpha = Intercept pro Knoten konfigurierbar (Standard: 0).',
+      '#   sigma_residual ist pro Knoten konfigurierbar (Standard: 1).',
+      '#   beta und sigma liegen auf der Skala der jeweiligen Inputvariablen.',
+      '#',
+      '# ANPASSUNG FÜR EIGENE DATEN:',
+      '#   Wenn Prädiktoren nicht standardisiert sind (SD != 1), beta und sigma',
+      '#   entsprechend skalieren. Anhaltspunkt: R² ~ Var(mu) / (Var(mu) + sigma²)',
+      '#   mit Var(mu) = sum(beta_i² * Var(X_i)) bei unkorrelierten Prädiktoren.',
+      '#',
+      '# ALTERNATIVE (Ansatz B — standardisierte Pfadkoeffizienten, dagitty-Stil):',
+      '#   Alle Variablen Var = 1, beta = standardisierter Pfadkoeffizient.',
+      '#   Dann: sigma_residual = sqrt(1 - sum(beta_i²)), Voraussetzung: sum(beta²) < 1.',
+      '#   Literatur: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
+      '#              dagitty.net/learn; McElreath (2020) Kap. 5-6 (natürliche Skala).',
+    );
+  }
+
   lines.push(
-    '# SIMULATIONSLOGIK (Ansatz A — natürliche Skala, nach McElreath):',
-    '#   Endogene Knoten: Y <- rnorm(n, alpha + sum(beta_i * X_i), sigma_residual)',
-    '#   alpha = Intercept pro Knoten konfigurierbar (Standard: 0).',
-    '#   sigma_residual ist pro Knoten konfigurierbar (Standard: 1).',
-    '#   beta und sigma liegen auf der Skala der jeweiligen Inputvariablen.',
-    '#',
-    '# ANPASSUNG FÜR EIGENE DATEN:',
-    '#   Wenn Prädiktoren nicht standardisiert sind (SD != 1), beta und sigma',
-    '#   entsprechend skalieren. Anhaltspunkt: R² ~ Var(mu) / (Var(mu) + sigma²)',
-    '#   mit Var(mu) = sum(beta_i² * Var(X_i)) bei unkorrelierten Prädiktoren.',
-    '#',
-    '# ALTERNATIVE (Ansatz B — standardisierte Pfadkoeffizienten, dagitty-Stil):',
-    '#   Alle Variablen Var = 1, beta = standardisierter Pfadkoeffizient.',
-    '#   Dann: sigma_residual = sqrt(1 - sum(beta_i²)), Voraussetzung: sum(beta²) < 1.',
-    '#   Literatur: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
-    '#              dagitty.net/learn; McElreath (2020) Kap. 5-6 (natürliche Skala).',
     '',
     `set.seed(${seed})`,
     `n <- ${n}`,
@@ -2279,7 +2407,9 @@ function generateRCode() {
     lines.push('# Wurzelknoten (exogene beobachtbare Variablen, keine Eltern)');
     observedRoots.forEach(nd => {
       const { dist, mean, sd } = getRootDist(nd.id);
-      if (dist === 'Normal') {
+      if (STD_MODE) {
+        lines.push(`${nd.name} <- rnorm(n, 0, 1)  # standardisiert: μ=0, SD=1`);
+      } else if (dist === 'Normal') {
         lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
       } else if (dist === 'Bernoulli') {
         lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
@@ -2298,7 +2428,7 @@ function generateRCode() {
       lines.push('', '# Latente endogene Knoten (nicht beobachtbar)');
       latentNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
-        const sigma = getNonRootSd(nd.id);
+        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2312,7 +2442,7 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(`sigma=${sigma}`);
+        commentParts.push(STD_MODE ? `sigma=${sigma} [auto]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # latent — nicht im Datensatz! ${commentParts.join(', ')}`);
       });
     }
@@ -2321,7 +2451,7 @@ function generateRCode() {
       lines.push('', '# Endogene beobachtbare Knoten (topologische Reihenfolge)');
       observedNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
-        const sigma = getNonRootSd(nd.id);
+        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2335,7 +2465,7 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(`sigma=${sigma}`);
+        commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
       });
     }
