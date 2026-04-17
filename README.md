@@ -90,6 +90,8 @@ The lab is organized into five sections that build on each other. Work through t
 *Named after Richard McElreath (*Statistical Rethinking*, Ch. 2): a model is a "small world" — a simplified, consistent representation of reality. Before real data are collected or models fitted, it is worth explicitly constructing and simulating this small world.*
 
 * **Golem Builder** — Draw directed acyclic graphs (DAGs), compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**. Quantify relationships, simulate data directly from the DAG, and export production-ready `brms` and `glmmTMB` analysis code — all in the browser. Exactly following McElreath's approach.
+<p align="center"><img src="images/Golem_Builder_gif.gif" width="580"></p>
+
 * **Data Creator** — Parametric data generation for all common designs: between-subjects, within-subjects (repeated measures), and mixed designs — with covariates, cluster structures (random intercepts & slopes), and arbitrary sample sizes. Supports 10 likelihood families (Gaussian, Student-t, Log-Normal, Gamma, Bernoulli, Beta, Binomial, Poisson, Negative Binomial). Full `faux` and `glmmTMB` R code export, plus a commented simulation-based power analysis block (glmmTMB + car::Anova) — ready to run in R.
 
 > **⬡ Workflow tip:** Do the causal groundwork in the **Golem Builder** first — draw your DAG, identify which variables to adjust for and why. The **Causal Calculator** (Section V) then demonstrates how to implement exactly this analysis via G-Computation in brms.
