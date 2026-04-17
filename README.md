@@ -13,7 +13,7 @@
 
 ### 🌐 [www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)
 
-**19 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation and GLM-scale prior specification.**
+**20 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -40,10 +40,11 @@ The lab is organized into five sections that build on each other. Work through t
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | GLM Conditional Distributions · GLM 3D · Interactive GLMM |
 | **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
-| **III · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Golem Builder · Model Architect · brms Builder · Prior & Posterior PPC · LOO Lab |
-| **IV · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · Decision Lab · Decision Maker |
+| **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
+| **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Prior & Posterior PPC · LOO Lab |
+| **V · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · Decision Lab · Decision Maker |
 
-> **⬡ Workflow tip:** Use the **Golem Builder** (Section III) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. The **Causal Calculator** (Section IV) then shows — with a worked example — how to implement exactly this kind of analysis via G-Computation in brms.
+> **⬡ Workflow tip:** Use the **Golem Builder** (Section III — Small Worlds) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. The **Causal Calculator** (Section V) then shows — with a worked example — how to implement exactly this kind of analysis via G-Computation in brms.
 
 ---
 
@@ -85,7 +86,17 @@ The lab is organized into five sections that build on each other. Work through t
 
 ---
 
-### III. Bayesian Workflow
+### III. Small Worlds
+*Named after Richard McElreath (*Statistical Rethinking*, Ch. 2): a model is a "small world" — a simplified, consistent representation of reality. Before real data are collected or models fitted, it is worth explicitly constructing and simulating this small world.*
+
+* **Golem Builder** — Draw directed acyclic graphs (DAGs), compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**. Quantify relationships, simulate data directly from the DAG, and export production-ready `brms` and `glmmTMB` analysis code — all in the browser. Exactly following McElreath's approach.
+* **Data Creator** — Parametric data generation for all common designs: between-subjects, within-subjects (repeated measures), and mixed designs — with covariates, cluster structures (random intercepts & slopes), and arbitrary sample sizes. Supports 10 likelihood families (Gaussian, Student-t, Log-Normal, Gamma, Bernoulli, Beta, Binomial, Poisson, Negative Binomial). Full `faux` and `glmmTMB` R code export, plus a commented simulation-based power analysis block (glmmTMB + car::Anova) — ready to run in R.
+
+> **⬡ Workflow tip:** Do the causal groundwork in the **Golem Builder** first — draw your DAG, identify which variables to adjust for and why. The **Causal Calculator** (Section V) then demonstrates how to implement exactly this analysis via G-Computation in brms.
+
+---
+
+### IV. Bayesian Workflow
 *Tools for the applied scientist.*
 
 * **Bayesian Model Architect** — Build hierarchical Bayesian model structures visually in Kruschke-diagram style. See how priors, hyperpriors, and random effects (intercepts and slopes: u₀ⱼ, u₁ⱼ, τ₀, τ₁) connect in a live diagram — then generate R simulation code for prior predictive checking.
@@ -94,13 +105,9 @@ The lab is organized into five sections that build on each other. Work through t
 * **Posterior Predictive Check** — Evaluate model fit and posterior behavior via a dedicated Shiny app (R/bayesplot). Upload a saved `brms` object (`saveRDS(fit, "model.rds")`), walk through KDE overlay, summary statistics, error structure, and prediction intervals with guided evaluation.
 * **LOO Lab** — Compare models after fitting. Paste `loo_compare()` output directly from R and receive an annotated forest plot, Pareto-k diagnostics, and a traffic-light decision rule. Includes an animated LOO walkthrough (Stage 1) that requires no R.
 
-> **⬡ Recommended: Causal Reasoning with the Golem Builder**
->
-> Before specifying your model, consider making your causal assumptions explicit in a DAG. The **[Golem Builder](Golem_builder.html)** lets you draw directed acyclic graphs, compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**, and generate brms simulation code — all in the browser. The conceptual groundwork done here — knowing which variables to adjust for and why — is exactly what the **Causal Calculator** (Section IV) demonstrates in a worked example.
-
 ---
 
-### IV. Posterior Decision
+### V. Posterior Decision
 *Move from estimation to decision.*
 
 * **Causal Calculator** — A worked example of causal effect estimation via **G-Computation (standardization)**. Shows how to make confounding visible, correct naive regression bias, and compare ATE, ATT, and ATU — visualized as counterfactual distributions. Use the Golem Builder to identify the correct adjustment set for your own research question; the Causal Calculator shows how to implement that analysis in brms. Exports draws compatible with the Decision Maker.
@@ -130,7 +137,7 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 | :--- | :--- | :--- |
 | **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Prior Lab (CI-Solver) · Bayes Interactive |
 | **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
-| **PhD / Researchers** | Section III–IV | brms Model Builder · Golem Builder · Prior & Posterior PPC · LOO Lab · Causal Calculator · Decision Maker |
+| **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PPC · LOO Lab · Causal Calculator · Decision Maker |
 
 ---
 
