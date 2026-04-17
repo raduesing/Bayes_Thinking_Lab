@@ -960,6 +960,7 @@ canvas {
       <button class="btn btn-primary" id="btnGenR">Generate R Simulation Code</button>
       <button class="btn" id="btnGenBrms" style="border-color:var(--a4);color:var(--a4);">Generate brms Code</button>
       <button class="btn" id="btnGenTMB" style="border-color:var(--a6);color:var(--a6);">Generate glmmTMB Code</button>
+      <button class="btn" id="btnOpenGComp" style="border-color:var(--a5);color:var(--a5);" title="Pass DAG structure to G-Comp Builder">→ G-Comp Builder</button>
     </div>
 
     <div id="rCodeWrap" class="code-block-wrap" style="display:none;">
@@ -2974,6 +2975,26 @@ document.getElementById('copyBrms').addEventListener('click', e => {
 });
 document.getElementById('copyTmb').addEventListener('click', e => {
   copyToClipboard(document.getElementById('tmbCodeArea').textContent, e.currentTarget);
+});
+
+document.getElementById('btnOpenGComp').addEventListener('click', () => {
+  if (!state.exposure || !state.outcome) {
+    showToast('Please set exposure and outcome first.');
+    return;
+  }
+  const getName = id => state.nodes.find(n => n.id === id)?.name || id;
+  const adjSetIds = state.analysisResult?.minimal?.[0] || [];
+  const payload = {
+    exposure:  getName(state.exposure),
+    outcome:   getName(state.outcome),
+    adjSet:    adjSetIds.map(getName),
+    allNodes:  state.nodes.filter(n => !n.latent).map(n => n.name),
+    edges:     state.edges.map(e => [getName(e.from), getName(e.to)]),
+    source:    'GolemBuilder',
+    timestamp: Date.now()
+  };
+  localStorage.setItem('btl_gcomp_import', JSON.stringify(payload));
+  window.open('../GComp_Builder.html', '_blank');
 });
 
 // ============================================================
