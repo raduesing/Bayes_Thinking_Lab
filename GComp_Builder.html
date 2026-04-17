@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G-Comp Builder — Kausale G-Computation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+:root {
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --accent:#5a8a2a;--accent2:#2a6e8a;--accent3:#b85c00;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--shadow:#c0b8a4;
+  --ok:#5a8a2a;--warn:#b85c00;--err:#c94a2a;
+}
+[data-theme="dark"] {
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --accent:#80cb52;--accent2:#4ab0d8;--accent3:#e07830;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--shadow:#080b10;
+  --ok:#80cb52;--warn:#e07830;--err:#e8614a;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:17px;-webkit-font-smoothing:antialiased}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);min-height:100vh;font-weight:300;overflow-x:hidden}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:100;background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.55rem 1.2rem;display:flex;align-items:center;gap:1rem}
+.nav-title{font-size:.95rem;font-weight:300;flex:1}.nav-title em{font-style:italic;color:var(--accent)}
+.nav-back{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);text-decoration:none;
+  border-bottom:1px dotted var(--border);transition:color .15s}
+.nav-back:hover{color:var(--accent)}
+.nb{font-family:'DM Mono',monospace;font-size:.72rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.2rem .55rem;cursor:pointer;transition:all .15s}
+.nb:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* LAYOUT */
+.outer{display:grid;grid-template-columns:270px 1fr;gap:1rem;padding:1rem 1.2rem;align-items:start}
+.sidebar{display:flex;flex-direction:column;gap:.6rem;position:sticky;top:3.2rem;
+  max-height:calc(100vh - 3.8rem);overflow-y:auto}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.main{display:flex;flex-direction:column;gap:.9rem}
+
+/* PANELS */
+.scard{background:var(--paper);border:1.5px solid var(--border);padding:.75rem .9rem;box-shadow:2px 2px 0 var(--shadow)}
+.scard h3{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.55rem;padding-bottom:.25rem;border-bottom:1px solid var(--grid);color:var(--ink3)}
+.panel{background:var(--paper);border:1.5px solid var(--border);padding:.9rem 1.1rem;box-shadow:2px 2px 0 var(--shadow)}
+.panel-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:.7rem;padding-bottom:.28rem;border-bottom:1px solid var(--grid)}
+
+/* FORM ELEMENTS */
+label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);display:block;margin-bottom:.18rem}
+input[type=text],textarea,select{
+  width:100%;font-family:'DM Mono',monospace;font-size:.72rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink);padding:.3rem .45rem;
+  outline:none;transition:border-color .15s;resize:vertical}
+input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+.field{margin-bottom:.55rem}
+.field:last-child{margin-bottom:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+
+/* RADIO / CHECKBOX */
+.radio-group,.check-group{display:flex;flex-direction:column;gap:.22rem;margin-top:.2rem}
+.radio-item,.check-item{display:flex;align-items:center;gap:.4rem;
+  font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);cursor:pointer}
+.radio-item input,.check-item input{cursor:pointer;accent-color:var(--accent)}
+
+/* BUTTONS */
+.btn{font-family:'DM Mono',monospace;font-size:.7rem;padding:.28rem .65rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:var(--paper);border-color:var(--accent);font-weight:500}
+.btn-primary:hover{background:var(--ok);border-color:var(--ok);color:var(--paper)}
+.btn-full{width:100%}
+
+/* IMPORT BANNER */
+.import-banner{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;
+  border:1.5px solid var(--ok);background:color-mix(in srgb, var(--ok) 8%, transparent);
+  font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ok)}
+.import-banner.warn{border-color:var(--warn);background:color-mix(in srgb, var(--warn) 8%, transparent);color:var(--warn)}
+
+/* VALIDATION PANEL */
+.val-list{list-style:none;display:flex;flex-direction:column;gap:.3rem;margin-top:.4rem}
+.val-item{display:flex;align-items:flex-start;gap:.5rem;font-family:'DM Mono',monospace;font-size:.7rem;line-height:1.5}
+.val-icon{flex-shrink:0;font-size:.8rem}
+.val-ok{color:var(--ok)}
+.val-warn{color:var(--warn)}
+.val-err{color:var(--err)}
+.val-info{color:var(--ink3)}
+
+/* TAG LIST */
+.tag-list{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem}
+.tag{font-family:'DM Mono',monospace;font-size:.65rem;padding:.1rem .4rem;
+  border:1px solid var(--border);color:var(--ink2);background:var(--panel)}
+.tag.ok{border-color:var(--ok);color:var(--ok)}
+.tag.warn{border-color:var(--warn);color:var(--warn)}
+.tag.err{border-color:var(--err);color:var(--err)}
+
+/* CODE OUTPUT */
+.code-wrap{background:var(--panel);border:1.5px solid var(--border)}
+.code-header{display:flex;align-items:center;justify-content:space-between;
+  padding:.4rem .7rem;border-bottom:1px solid var(--grid)}
+.code-label{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink3)}
+.code-area{font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.65;
+  padding:.8rem 1rem;overflow-x:auto;white-space:pre;color:var(--ink)}
+
+/* SYNTAX HIGHLIGHT */
+.r-kw{color:#7a3a8a}.r-fn{color:#2a6e8a}.r-str{color:#5a8a2a}
+.r-num{color:#b85c00}.r-cm{color:#8a7f72;font-style:italic}
+[data-theme="dark"] .r-kw{color:#c87ad8}
+[data-theme="dark"] .r-fn{color:#4ab0d8}
+[data-theme="dark"] .r-str{color:#80cb52}
+[data-theme="dark"] .r-num{color:#e07830}
+[data-theme="dark"] .r-cm{color:#5a5448}
+
+/* EMPTY STATE */
+.empty-state{padding:2.5rem 1rem;text-align:center;color:var(--ink3);
+  font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.8}
+.empty-state strong{color:var(--ink2)}
+
+/* DEBUG */
+.debug-pre{font-family:'DM Mono',monospace;font-size:.65rem;background:var(--panel);
+  border:1px solid var(--border);padding:.5rem .7rem;overflow-x:auto;
+  white-space:pre-wrap;color:var(--ink2);max-height:200px;overflow-y:auto;margin-top:.4rem}
+
+/* TOAST */
+#toast{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);
+  font-family:'DM Mono',monospace;font-size:.72rem;background:var(--ink);color:var(--paper);
+  padding:.4rem .9rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:999}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index_de.html" class="nav-back">← Übersicht</a>
+  <div class="nav-title">G-Comp <em>Builder</em></div>
+  <button class="nb" onclick="toggleTheme()">◑ Modus</button>
+</nav>
+
+<div class="outer">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- 1. DAG-Import -->
+    <div class="scard">
+      <h3>1 — DAG-Import</h3>
+      <div id="importStatus" class="import-banner warn" style="margin-bottom:.55rem">
+        ℹ Kein Golem Builder Import — manuelle Eingabe
+      </div>
+      <div class="field">
+        <label>Exposition (Exposure)</label>
+        <input type="text" id="inExposure" placeholder="z.B. Rauchen" oninput="onSettingChange()">
+      </div>
+      <div class="field">
+        <label>Outcome</label>
+        <input type="text" id="inOutcome" placeholder="z.B. FEV1" oninput="onSettingChange()">
+      </div>
+      <div class="field">
+        <label>Adjustment-Set (kommagetrennt)</label>
+        <input type="text" id="inAdjSet" placeholder="z.B. Alter, Sex" oninput="onSettingChange()">
+      </div>
+      <button class="btn btn-full" onclick="reloadFromLocalStorage()" style="margin-top:.3rem">
+        ↺ Neu aus Golem Builder laden
+      </button>
+    </div>
+
+    <!-- 2. Modell -->
+    <div class="scard">
+      <h3>2 — Modell</h3>
+      <div class="field">
+        <label>brms- oder glmmTMB-Aufruf (oder nur Formel)</label>
+        <textarea id="inFormula" rows="5" placeholder="fit <- brm(&#10;  FEV1 ~ Rauchen + Alter + Sex + (1 | Schule),&#10;  data = dat,&#10;  family = gaussian()&#10;)" oninput="onFormulaChange()"></textarea>
+      </div>
+      <div id="parsedPreview" style="display:none;margin-top:.35rem">
+        <div class="tag-list" id="parsedTags"></div>
+      </div>
+    </div>
+
+    <!-- 3. Einstellungen -->
+    <div class="scard">
+      <h3>3 — Einstellungen</h3>
+      <div class="field">
+        <label>Exposure-Typ</label>
+        <div class="radio-group">
+          <label class="radio-item">
+            <input type="radio" name="expType" value="binary" checked onchange="onSettingChange()">
+            Kategoriell / Binär
+          </label>
+          <label class="radio-item">
+            <input type="radio" name="expType" value="metric" onchange="onSettingChange()">
+            Metrisch / Kontinuierlich
+          </label>
+        </div>
+      </div>
+
+      <div id="binaryOpts">
+        <div class="field row2">
+          <div>
+            <label>Wert 0 (Referenz)</label>
+            <input type="text" id="inVal0" value="0" oninput="onSettingChange()">
+          </div>
+          <div>
+            <label>Wert 1 (Treatment)</label>
+            <input type="text" id="inVal1" value="1" oninput="onSettingChange()">
+          </div>
+        </div>
+        <div class="field">
+          <label>Estimanden</label>
+          <div class="check-group">
+            <label class="check-item"><input type="checkbox" id="ckATE" checked onchange="onSettingChange()"> ATE (Gesamtpopulation)</label>
+            <label class="check-item"><input type="checkbox" id="ckATT" checked onchange="onSettingChange()"> ATT (Behandelte)</label>
+            <label class="check-item"><input type="checkbox" id="ckATU" onchange="onSettingChange()"> ATU (Unbehandelte)</label>
+            <label class="check-item"><input type="checkbox" id="ckCond" onchange="onSettingChange()"> Konditionaler Effekt (wenn Interaktion)</label>
+          </div>
+        </div>
+      </div>
+
+      <div id="metricOpts" style="display:none">
+        <div class="field">
+          <label>Kontrast-Typ</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" name="contrast" value="range" checked onchange="onSettingChange()"> Min → Max</label>
+            <label class="radio-item"><input type="radio" name="contrast" value="iqr" onchange="onSettingChange()"> Q1 → Q3 (IQR)</label>
+            <label class="radio-item"><input type="radio" name="contrast" value="sd" onchange="onSettingChange()"> ±1 SD</label>
+            <label class="radio-item"><input type="radio" name="contrast" value="manual" onchange="onSettingChange()"> Manuell</label>
+          </div>
+        </div>
+        <div id="manualVals" class="field row2" style="display:none">
+          <div><label>Von</label><input type="text" id="inManualLo" placeholder="0" oninput="onSettingChange()"></div>
+          <div><label>Bis</label><input type="text" id="inManualHi" placeholder="10" oninput="onSettingChange()"></div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:.4rem">
+        <label>Objekt-Namen</label>
+        <div class="row2">
+          <div><label>Modell</label><input type="text" id="inModelName" value="fit" oninput="onSettingChange()"></div>
+          <div><label>Dataframe</label><input type="text" id="inDataName" value="dat" oninput="onSettingChange()"></div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="check-group">
+          <label class="check-item"><input type="checkbox" id="ckExport" onchange="onSettingChange()"> Export für BTL Decision Maker</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Code generieren -->
+    <div class="scard">
+      <h3>4 — Code generieren</h3>
+      <button class="btn btn-primary btn-full" onclick="generateAndShow()">R-Code generieren</button>
+    </div>
+
+    <!-- Debug -->
+    <div class="scard">
+      <h3>Debug — localStorage</h3>
+      <button class="btn btn-full" onclick="showDebug()">Rohdaten anzeigen</button>
+      <div id="debugOut"></div>
+    </div>
+
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- Validierungspanel -->
+    <div class="panel" id="validPanel">
+      <div class="panel-title">Validierung — DAG vs. Modell</div>
+      <div id="validContent">
+        <div class="empty-state">
+          Modellformel eingeben und <strong>R-Code generieren</strong> klicken.
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Output -->
+    <div class="panel" id="codePanel" style="display:none">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Generierter R-Code — marginaleffects</span>
+        <button class="btn" onclick="copyCode()">Kopieren</button>
+      </div>
+      <div class="code-wrap">
+        <pre class="code-area" id="codeArea"></pre>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const st = {
+  exposure: '', outcome: '', adjSet: [],
+  parsed: null,
+  importedFromGolem: false
+};
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  reloadFromLocalStorage();
+  setupExposureTypeToggle();
+  setupContrastToggle();
+});
+
+function reloadFromLocalStorage() {
+  const raw = localStorage.getItem('btl_gcomp_import');
+  if (!raw) { setImportStatus(false); return; }
+  try {
+    const d = JSON.parse(raw);
+    if (!d.exposure || !d.outcome) { setImportStatus(false); return; }
+    document.getElementById('inExposure').value = d.exposure;
+    document.getElementById('inOutcome').value  = d.outcome;
+    document.getElementById('inAdjSet').value   = (d.adjSet || []).join(', ');
+    setImportStatus(true, d);
+    onSettingChange();
+  } catch(e) { setImportStatus(false); }
+}
+
+function setImportStatus(ok, data) {
+  const el = document.getElementById('importStatus');
+  st.importedFromGolem = ok;
+  if (ok) {
+    el.className = 'import-banner';
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString('de-DE') : '';
+    el.textContent = `✓ Golem Builder Import${ts ? ' · ' + ts : ''}`;
+  } else {
+    el.className = 'import-banner warn';
+    el.textContent = 'ℹ Kein Golem Builder Import — manuelle Eingabe';
+  }
+}
+
+// ─────────────────────────────────────────────
+// SETTINGS / TOGGLES
+// ─────────────────────────────────────────────
+function setupExposureTypeToggle() {
+  document.querySelectorAll('input[name=expType]').forEach(r => {
+    r.addEventListener('change', () => {
+      const isMetric = r.value === 'metric' && r.checked;
+      document.getElementById('binaryOpts').style.display = isMetric ? 'none' : '';
+      document.getElementById('metricOpts').style.display = isMetric ? '' : 'none';
+    });
+  });
+}
+
+function setupContrastToggle() {
+  document.querySelectorAll('input[name=contrast]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('manualVals').style.display =
+        r.value === 'manual' && r.checked ? '' : 'none';
+    });
+  });
+}
+
+function onSettingChange() {
+  st.exposure = document.getElementById('inExposure').value.trim();
+  st.outcome  = document.getElementById('inOutcome').value.trim();
+  st.adjSet   = document.getElementById('inAdjSet').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function onFormulaChange() {
+  const raw = document.getElementById('inFormula').value.trim();
+  if (!raw) { document.getElementById('parsedPreview').style.display = 'none'; return; }
+  st.parsed = parseFormula(raw);
+  showParsedTags(st.parsed);
+  onSettingChange();
+}
+
+// ─────────────────────────────────────────────
+// FORMULA PARSER
+// ─────────────────────────────────────────────
+function parseFormula(s) {
+  const res = {
+    modelType: 'unknown', family: null,
+    outcome: '', variables: [], interactions: [],
+    hasRandomEffects: false, reTerms: [],
+    formulaStr: '', raw: s
+  };
+
+  // Model type
+  if (/\bbrm\s*\(/.test(s))      res.modelType = 'brms';
+  else if (/\bglmmTMB\s*\(/.test(s)) res.modelType = 'glmmTMB';
+  else if (/\blme4\b|\blmer\s*\(|\bglmer\s*\(/.test(s)) res.modelType = 'lme4';
+  else if (/\bglm\s*\(/.test(s)) res.modelType = 'glm';
+  else if (/\blm\s*\(/.test(s))  res.modelType = 'lm';
+
+  // Family
+  const famMatch = s.match(/family\s*=\s*([A-Za-z_]+)/);
+  if (famMatch) res.family = famMatch[1].toLowerCase();
+
+  // Formula: LHS ~ RHS
+  const fMatch = s.match(/([A-Za-z_\.][A-Za-z0-9_\.]*)\s*~\s*([^\n,)]+(?:\([^)]*\)[^\n,)]*)*)/);
+  if (fMatch) {
+    res.outcome    = fMatch[1].trim();
+    const rhs      = fMatch[2].trim();
+    res.formulaStr = `${res.outcome} ~ ${rhs}`;
+
+    // Random effects
+    const reMatches = rhs.match(/\([^)]+\)/g) || [];
+    res.reTerms = reMatches;
+    res.hasRandomEffects = reMatches.length > 0;
+
+    // Fixed part
+    const fixedPart = rhs.replace(/\([^)]+\)/g, '').trim();
+
+    // Split on +
+    const terms = fixedPart.split('+').map(t => t.trim()).filter(Boolean);
+
+    // Interactions
+    res.interactions = terms.filter(t => /[\*:]/.test(t));
+
+    // Variables
+    const vars = new Set();
+    terms.forEach(t => {
+      t.split(/[\*:]/).forEach(v => {
+        const c = v.trim();
+        if (c && c !== '1' && c !== '0' && c !== '-1') vars.add(c);
+      });
+    });
+    res.variables = [...vars];
+  }
+
+  return res;
+}
+
+function showParsedTags(p) {
+  const wrap = document.getElementById('parsedPreview');
+  const tags = document.getElementById('parsedTags');
+  const items = [];
+  if (p.modelType !== 'unknown') items.push(`<span class="tag ok">${p.modelType}</span>`);
+  if (p.family) items.push(`<span class="tag">${p.family}</span>`);
+  if (p.hasRandomEffects) items.push(`<span class="tag ok">Random Effects</span>`);
+  if (p.interactions.length) items.push(`<span class="tag warn">Interaktion: ${p.interactions.join(', ')}</span>`);
+  tags.innerHTML = items.join('');
+  wrap.style.display = items.length ? '' : 'none';
+}
+
+// ─────────────────────────────────────────────
+// VALIDATION
+// ─────────────────────────────────────────────
+function runValidation() {
+  const exp = st.exposure, out = st.outcome, adj = st.adjSet;
+  const p   = st.parsed;
+  const items = [];
+
+  if (!exp) { items.push({ type:'err', text:'Exposition nicht angegeben.' }); }
+  if (!out) { items.push({ type:'err', text:'Outcome nicht angegeben.' }); }
+
+  if (p) {
+    // Outcome match
+    if (out && p.outcome && p.outcome !== out) {
+      items.push({ type:'warn', text:`Outcome im Modell: "${p.outcome}" — oben steht: "${out}". Bitte prüfen.` });
+    } else if (out && p.outcome === out) {
+      items.push({ type:'ok', text:`Outcome "${out}" in Modellformel gefunden.` });
+    }
+
+    // Exposure in model
+    if (exp) {
+      if (p.variables.includes(exp)) {
+        items.push({ type:'ok', text:`Exposition "${exp}" in Modellformel gefunden.` });
+      } else {
+        items.push({ type:'err', text:`Exposition "${exp}" NICHT in Modellformel — G-Computation nicht möglich.` });
+      }
+    }
+
+    // Adj-set check
+    adj.forEach(a => {
+      if (p.variables.includes(a)) {
+        items.push({ type:'ok', text:`Adj.-Set-Variable "${a}" im Modell.` });
+      } else {
+        items.push({ type:'warn', text:`⚠ "${a}" im Adj.-Set, aber NICHT im Modell — Confounder unkontrolliert?` });
+      }
+    });
+
+    // Interaction with exposure
+    const interWithExp = p.interactions.filter(t => t.split(/[\*:]/).map(v=>v.trim()).includes(exp));
+    if (interWithExp.length) {
+      items.push({ type:'warn', text:`Interaktion mit Exposition erkannt: ${interWithExp.join(', ')} → Effekt-Heterogenität; konditionaler Code wird generiert.` });
+    }
+
+    // Random effects
+    if (p.hasRandomEffects) {
+      if (p.modelType === 'brms') {
+        items.push({ type:'ok', text:`Random Effects erkannt (brms): re_formula = NA → Population-Level-Schätzer.` });
+      } else {
+        items.push({ type:'ok', text:`Random Effects erkannt (${p.modelType || 'LMM'}): marginale Effekte über Cluster.` });
+      }
+    }
+  }
+
+  return items;
+}
+
+function renderValidation(items) {
+  const el = document.getElementById('validContent');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state">Keine Prüfungen — Formel und Variablen eingeben.</div>';
+    return;
+  }
+  const icons = { ok: '✓', warn: '⚠', err: '✗', info: 'ℹ' };
+  el.innerHTML = `<ul class="val-list">${items.map(i =>
+    `<li class="val-item val-${i.type}">
+      <span class="val-icon">${icons[i.type]}</span>
+      <span>${i.text}</span>
+    </li>`).join('')}</ul>`;
+}
+
+// ─────────────────────────────────────────────
+// CODE GENERATION
+// ─────────────────────────────────────────────
+function generateAndShow() {
+  onSettingChange();
+  if (!document.getElementById('inFormula').value.trim()) {
+    st.parsed = null;
+  }
+  const valItems = runValidation();
+  renderValidation(valItems);
+
+  const hasErrors = valItems.some(v => v.type === 'err');
+  if (!st.exposure || !st.outcome) {
+    showToast('Bitte Exposition und Outcome angeben.');
+    return;
+  }
+
+  const code = buildCode();
+  const el   = document.getElementById('codeArea');
+  el.innerHTML = highlightR(code);
+  document.getElementById('codePanel').style.display = '';
+}
+
+function buildCode() {
+  const exp   = st.exposure;
+  const out   = st.outcome;
+  const adj   = st.adjSet;
+  const p     = st.parsed || {};
+  const model = document.getElementById('inModelName').value.trim() || 'fit';
+  const dat   = document.getElementById('inDataName').value.trim() || 'dat';
+  const isBrms   = p.modelType === 'brms';
+  const isGlmmTMB= p.modelType === 'glmmTMB';
+  const hasRE    = p.hasRandomEffects;
+  const isBinary = document.querySelector('input[name=expType]:checked').value === 'binary';
+  const val0  = document.getElementById('inVal0').value.trim() || '0';
+  const val1  = document.getElementById('inVal1').value.trim() || '1';
+  const showATE  = document.getElementById('ckATE').checked;
+  const showATT  = document.getElementById('ckATT').checked;
+  const showATU  = document.getElementById('ckATU').checked;
+  const showCond = document.getElementById('ckCond').checked;
+  const doExport = document.getElementById('ckExport').checked;
+  const contrastType = (document.querySelector('input[name=contrast]:checked') || {}).value || 'range';
+  const manLo = document.getElementById('inManualLo').value.trim();
+  const manHi = document.getElementById('inManualHi').value.trim();
+
+  const reArg = (isBrms && hasRE)
+    ? `,\n  re_formula = NA       # Population-Level (Cluster marginalisiert)`
+    : '';
+  const adjStr = adj.length ? adj.join(', ') : 'keines';
+
+  let c = '';
+  c += `library(marginaleffects)\n`;
+  c += `library(ggplot2)\n\n`;
+
+  c += `# ── DAG-Struktur${st.importedFromGolem ? ' (Golem Builder Import)' : ''} ──────────────────────────────────────────\n`;
+  c += `# Exposition:  ${exp}\n`;
+  c += `# Outcome:     ${out}\n`;
+  c += `# Adj.-Set:    ${adjStr}\n`;
+  if (p.formulaStr) c += `# Modell:      ${p.formulaStr}\n`;
+  c += `\n`;
+
+  if (isBinary) {
+    // ── BINARY ──────────────────────────────────────────────────
+    const varSpec = `list(${exp} = c(${val0}, ${val1}))`;
+
+    if (showATE) {
+      c += `# ── ATE — Average Treatment Effect (Gesamtpopulation) ──────────────────────\n`;
+      c += `# G-Computation via Standardisierung\n`;
+      c += `ate <- avg_comparisons(\n`;
+      c += `  ${model},\n`;
+      c += `  variables  = ${varSpec},\n`;
+      c += `  newdata    = ${dat},\n`;
+      c += `  conf_level = 0.95${reArg}\n`;
+      c += `)\nprint(ate)\n\n`;
+    }
+
+    if (showATT) {
+      c += `# ── ATT — Average Treatment Effect on the Treated ───────────────────────────\n`;
+      c += `att <- avg_comparisons(\n`;
+      c += `  ${model},\n`;
+      c += `  variables  = ${varSpec},\n`;
+      c += `  newdata    = subset(${dat}, ${exp} == ${val1}),\n`;
+      c += `  conf_level = 0.95${reArg}\n`;
+      c += `)\nprint(att)\n\n`;
+    }
+
+    if (showATU) {
+      c += `# ── ATU — Average Treatment Effect on the Untreated ─────────────────────────\n`;
+      c += `atu <- avg_comparisons(\n`;
+      c += `  ${model},\n`;
+      c += `  variables  = ${varSpec},\n`;
+      c += `  newdata    = subset(${dat}, ${exp} == ${val0}),\n`;
+      c += `  conf_level = 0.95${reArg}\n`;
+      c += `)\nprint(atu)\n\n`;
+    }
+
+    // Kontrafaktische Vorhersagen
+    c += `# ── Kontrafaktische Vorhersagen ──────────────────────────────────────────────\n`;
+    c += `pred_1 <- avg_predictions(${model},\n`;
+    c += `  newdata = transform(${dat}, ${exp} = ${val1})${hasRE && isBrms ? ',\n  re_formula = NA' : ''})\n`;
+    c += `pred_0 <- avg_predictions(${model},\n`;
+    c += `  newdata = transform(${dat}, ${exp} = ${val0})${hasRE && isBrms ? ',\n  re_formula = NA' : ''})\n\n`;
+
+    // Interaktion
+    const interWithExp = (p.interactions || []).filter(t =>
+      t.split(/[\*:]/).map(v => v.trim()).includes(exp));
+    const interVar = interWithExp.length
+      ? interWithExp[0].split(/[\*:]/).map(v=>v.trim()).find(v=>v!==exp)
+      : null;
+
+    if (showCond && interVar) {
+      c += `# ── Konditionaler Effekt (Interaktion ${exp}:${interVar} erkannt) ──────────────\n`;
+      c += `cond <- comparisons(\n`;
+      c += `  ${model},\n`;
+      c += `  variables  = ${varSpec},\n`;
+      c += `  condition  = "${interVar}",\n`;
+      c += `  conf_level = 0.95${reArg}\n`;
+      c += `)\n\n`;
+    }
+
+    // ── ggplot Visualisierungen ──────────────────────────────────
+    c += `# ══════════════════════════════════════════════════════════════════════════════\n`;
+    c += `# VISUALISIERUNG\n`;
+    c += `# ══════════════════════════════════════════════════════════════════════════════\n\n`;
+
+    // Forest plot
+    const estRows = [];
+    if (showATE) estRows.push(`  data.frame(Estimand = "ATE", as.data.frame(ate)[, c("estimate","conf.low","conf.high")])`);
+    if (showATT) estRows.push(`  data.frame(Estimand = "ATT", as.data.frame(att)[, c("estimate","conf.low","conf.high")])`);
+    if (showATU) estRows.push(`  data.frame(Estimand = "ATU", as.data.frame(atu)[, c("estimate","conf.low","conf.high")])`);
+
+    if (estRows.length) {
+      c += `# 1 — Forest Plot: Effektschätzer mit 95%-CI\n`;
+      c += `est_df <- rbind(\n${estRows.join(',\n')}\n)\n\n`;
+      c += `ggplot(est_df, aes(x = estimate, xmin = conf.low, xmax = conf.high,\n`;
+      c += `                   y = Estimand, color = Estimand)) +\n`;
+      c += `  geom_pointrange(linewidth = 0.8, size = 0.5) +\n`;
+      c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+      c += `  scale_color_manual(values = c(\n`;
+      c += `    ATE = "#5a8a2a", ATT = "#2a6e8a", ATU = "#b85c00")) +\n`;
+      c += `  labs(\n`;
+      c += `    title = paste("G-Computation: Kausaler Effekt von '${exp}' auf '${out}'"),\n`;
+      c += `    subtitle = paste("Adj.-Set:", "${adjStr}"),\n`;
+      c += `    x = paste("Effekt auf", "${out}"), y = NULL\n`;
+      c += `  ) +\n`;
+      c += `  theme_minimal(base_size = 13) +\n`;
+      c += `  theme(legend.position = "none")\n\n`;
+    }
+
+    // Kontrafaktische Verteilungen
+    c += `# 2 — Kontrafaktische Verteilungen: E[Y | do(${exp} = 0)] vs. E[Y | do(${exp} = 1)]\n`;
+    c += `cf_df <- rbind(\n`;
+    c += `  data.frame(Gruppe = paste("${exp} =", ${val1}), pred_1),\n`;
+    c += `  data.frame(Gruppe = paste("${exp} =", ${val0}), pred_0)\n`;
+    c += `)\n\n`;
+    c += `ggplot(cf_df, aes(x = estimate, fill = Gruppe, color = Gruppe)) +\n`;
+    c += `  geom_density(alpha = 0.25, linewidth = 0.8) +\n`;
+    c += `  scale_fill_manual(values  = c("#5a8a2a", "#2a6e8a")) +\n`;
+    c += `  scale_color_manual(values = c("#5a8a2a", "#2a6e8a")) +\n`;
+    c += `  labs(\n`;
+    c += `    title = "Kontrafaktische Outcome-Verteilungen",\n`;
+    c += `    x = "${out}", y = "Dichte", fill = NULL, color = NULL\n`;
+    c += `  ) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
+
+    // Konditionaler Effekt Plot
+    if (showCond && interVar) {
+      c += `# 3 — Konditionaler Effekt: Effekt-Heterogenität über ${interVar}\n`;
+      c += `plot_comparisons(\n`;
+      c += `  ${model},\n`;
+      c += `  variables = "${exp}",\n`;
+      c += `  condition = "${interVar}"${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n`;
+      c += `) +\n`;
+      c += `  labs(\n`;
+      c += `    title = paste("Konditionaler Effekt von '${exp}'"),\n`;
+      c += `    subtitle = "Effekt-Heterogenität — Interaktion mit '${interVar}'",\n`;
+      c += `    y = paste("Kausaler Effekt auf '${out}'"), x = "${interVar}"\n`;
+      c += `  ) +\n`;
+      c += `  theme_minimal(base_size = 13)\n\n`;
+    }
+
+  } else {
+    // ── METRIC ──────────────────────────────────────────────────
+    let contrastVal;
+    if      (contrastType === 'range')  contrastVal = 'range';
+    else if (contrastType === 'iqr')    contrastVal = '"iqr"';
+    else if (contrastType === 'sd')     contrastVal = '"sd"';
+    else contrastVal = `c(${manLo || 'lo'}, ${manHi || 'hi'})`;
+
+    c += `# ── AME — Average Marginal Effect (pro 1 Einheit ${exp}) ─────────────────────────\n`;
+    c += `ame <- avg_slopes(\n`;
+    c += `  ${model},\n`;
+    c += `  variables  = "${exp}",\n`;
+    c += `  newdata    = ${dat},\n`;
+    c += `  conf_level = 0.95${reArg}\n`;
+    c += `)\nprint(ame)\n\n`;
+
+    const contrastLabel = contrastType === 'range' ? 'Min → Max' :
+      contrastType === 'iqr' ? 'Q1 → Q3 (IQR)' :
+      contrastType === 'sd'  ? '±1 SD' : `${manLo} → ${manHi}`;
+
+    c += `# ── Kontrast: ${contrastLabel} ────────────────────────────────────────────────────\n`;
+    c += `ate_kontrast <- avg_comparisons(\n`;
+    c += `  ${model},\n`;
+    c += `  variables  = list(${exp} = ${contrastVal}),\n`;
+    c += `  newdata    = ${dat},\n`;
+    c += `  conf_level = 0.95${reArg}\n`;
+    c += `)\nprint(ate_kontrast)\n\n`;
+
+    c += `# ── Dosis-Wirkungs-Kurve (kontrafaktisch) ───────────────────────────────────\n`;
+    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out = 100)\n\n`;
+    c += `pred_kurve <- avg_predictions(\n`;
+    c += `  ${model},\n`;
+    c += `  newdata    = datagrid(${exp} = dose_grid)${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n`;
+    c += `)\n\n`;
+
+    c += `# ══════════════════════════════════════════════════════════════════════════════\n`;
+    c += `# VISUALISIERUNG\n`;
+    c += `# ══════════════════════════════════════════════════════════════════════════════\n\n`;
+
+    c += `# 1 — Dosis-Wirkungs-Kurve: E[${out} | do(${exp} = x)]\n`;
+    c += `ggplot(pred_kurve,\n`;
+    c += `       aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
+    c += `  geom_ribbon(alpha = 0.18, fill = "#5a8a2a") +\n`;
+    c += `  geom_line(color = "#5a8a2a", linewidth = 1) +\n`;
+    c += `  labs(\n`;
+    c += `    title = "G-Computation: Kontrafaktische Dosis-Wirkungs-Kurve",\n`;
+    c += `    subtitle = paste("Adj.-Set:", "${adjStr}"),\n`;
+    c += `    x = "${exp}",\n`;
+    c += `    y = paste0("E[${out} | do(${exp} = x)]")\n`;
+    c += `  ) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
+
+    c += `# 2 — Marginaler Slope (Linearitätsprüfung)\n`;
+    c += `plot_slopes(\n`;
+    c += `  ${model},\n`;
+    c += `  variables = "${exp}",\n`;
+    c += `  condition = "${exp}"${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n`;
+    c += `) +\n`;
+    c += `  geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += `  labs(\n`;
+    c += `    title = "Marginaler Effekt entlang der Exposition (Linearitätsprüfung)",\n`;
+    c += `    subtitle = "Nicht konstant = nichtlinearer Effekt",\n`;
+    c += `    x = "${exp}", y = paste("dE[${out}] / d${exp}")\n`;
+    c += `  ) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
+
+    c += `# 3 — AME: Punktschätzer + CI\n`;
+    c += `ame_df <- as.data.frame(ame)\n\n`;
+    c += `ggplot(ame_df, aes(x = estimate, xmin = conf.low, xmax = conf.high, y = 1)) +\n`;
+    c += `  geom_pointrange(color = "#5a8a2a", size = 0.8) +\n`;
+    c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += `  labs(\n`;
+    c += `    title = paste("AME: Durchschnittl. marginaler Effekt von '${exp}'"),\n`;
+    c += `    subtitle = "Pro 1 Einheit Zunahme in der Exposition",\n`;
+    c += `    x = paste("Effekt auf", "${out}"), y = NULL\n`;
+    c += `  ) +\n`;
+    c += `  scale_y_continuous(limits = c(0.5, 1.5)) +\n`;
+    c += `  theme_minimal(base_size = 13) +\n`;
+    c += `  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())\n\n`;
+  }
+
+  // Export
+  if (doExport && isBrms) {
+    c += `# ── Export für BTL Decision Maker ───────────────────────────────────────────\n`;
+    c += `draws <- posterior_draws(ate)\n`;
+    c += `write.csv(draws, "${exp}_${out}_ate_draws.csv", row.names = FALSE)\n`;
+    c += `# → Im Decision Maker: CSV laden, Spalte "draw" auswählen\n`;
+  }
+
+  return c;
+}
+
+// ─────────────────────────────────────────────
+// SYNTAX HIGHLIGHTING
+// ─────────────────────────────────────────────
+function highlightR(code) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const kw  = ['library','function','if','else','for','return','TRUE','FALSE','NULL','NA','c','list','data.frame','rbind'];
+  const fn  = ['avg_comparisons','avg_slopes','avg_predictions','comparisons','predictions',
+               'plot_comparisons','plot_slopes','plot_predictions','posterior_draws',
+               'datagrid','transform','subset','print','ggplot','aes','geom_pointrange',
+               'geom_ribbon','geom_line','geom_density','geom_vline','geom_hline',
+               'scale_color_manual','scale_fill_manual','scale_y_continuous',
+               'theme_minimal','theme','labs','paste','paste0','seq','min','max',
+               'write.csv','brm','glmmTMB','lm','glm'];
+  let h = esc(code);
+  // Comments
+  h = h.replace(/(#[^\n]*)/g, '<span class="r-cm">$1</span>');
+  // Strings
+  h = h.replace(/(&quot;[^&]*?&quot;|&#x27;[^&#]*?&#x27;)/g, '<span class="r-str">$1</span>');
+  // Numbers
+  h = h.replace(/\b(\d+\.?\d*)\b/g, '<span class="r-num">$1</span>');
+  // Functions
+  fn.forEach(f => {
+    h = h.replace(new RegExp(`\\b(${f})\\b`, 'g'), '<span class="r-fn">$1</span>');
+  });
+  // Keywords
+  kw.forEach(k => {
+    h = h.replace(new RegExp(`\\b(${k})\\b`, 'g'), '<span class="r-kw">$1</span>');
+  });
+  return h;
+}
+
+// ─────────────────────────────────────────────
+// COPY + DEBUG + THEME
+// ─────────────────────────────────────────────
+function copyCode() {
+  const text = document.getElementById('codeArea').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('Code kopiert!'));
+}
+
+function showDebug() {
+  const raw = localStorage.getItem('btl_gcomp_import');
+  const el  = document.getElementById('debugOut');
+  if (!raw) {
+    el.innerHTML = '<div class="debug-pre">Kein Eintrag "btl_gcomp_import" in localStorage.</div>';
+  } else {
+    try {
+      const formatted = JSON.stringify(JSON.parse(raw), null, 2);
+      el.innerHTML = `<pre class="debug-pre">${formatted}</pre>`;
+    } catch(e) {
+      el.innerHTML = `<pre class="debug-pre">${raw}</pre>`;
+    }
+  }
+}
+
+function toggleTheme() {
+  const h = document.documentElement;
+  h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
