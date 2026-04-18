@@ -2983,16 +2983,36 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
     showToast('Bitte Exposition und Outcome festlegen.');
     return;
   }
+  const X = state.exposure, Y = state.outcome;
   const getName = id => state.nodes.find(n => n.id === id)?.name || id;
   const adjSetIds = state.analysisResult?.minimal?.[0] || [];
+  const adjSetNames = adjSetIds.map(getName);
+  const exposureName = getName(X);
+  const outcomeName  = getName(Y);
+
+  // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome noch Adj-Set sind
+  const optionalVars = state.nodes
+    .filter(n => !n.latent && n.id !== X && n.id !== Y && !adjSetIds.includes(n.id))
+    .map(n => n.name);
+
+  // Node-Positionen für Mini-DAG-Canvas
+  const nodePositions = state.nodes.filter(n => !n.latent).map(n => ({
+    name: n.name, x: n.x, y: n.y,
+    isExposure: n.id === X,
+    isOutcome:  n.id === Y,
+    isAdjSet:   adjSetIds.includes(n.id)
+  }));
+
   const payload = {
-    exposure:  getName(state.exposure),
-    outcome:   getName(state.outcome),
-    adjSet:    adjSetIds.map(getName),
-    allNodes:  state.nodes.filter(n => !n.latent).map(n => n.name),
-    edges:     state.edges.map(e => [getName(e.from), getName(e.to)]),
-    source:    'GolemBuilder',
-    timestamp: Date.now()
+    exposure:          exposureName,
+    outcome:           outcomeName,
+    adjSet:            adjSetNames,
+    optionalVars,
+    nodePositions,
+    edges:             state.edges.map(e => [getName(e.from), getName(e.to)]),
+    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...adjSetNames].join(' + ')}`,
+    source:            'GolemBuilder',
+    timestamp:         Date.now()
   };
   localStorage.setItem('btl_gcomp_import', JSON.stringify(payload));
   window.open('GComp_Builder.html', '_blank');
