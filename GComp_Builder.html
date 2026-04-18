@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="light">
+<html lang="de" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -268,12 +268,29 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent)}
   <!-- MAIN -->
   <div class="main">
 
+    <!-- Workflow-Erklärung -->
+    <div class="panel" id="introPanel">
+      <div class="panel-title">Workflow</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.8">
+        <span style="color:var(--accent)">①</span> DAG im <strong>Golem Builder</strong> aufbauen → <strong>→ G-Comp Builder</strong> klicken (Exposition, Outcome &amp; Adj.-Set werden automatisch importiert)<br>
+        <span style="color:var(--accent)">②</span> <strong>Modellformel</strong> einfügen — das bereits gefittete brms- oder glmmTMB-Modell aus R<br>
+        <span style="color:var(--accent)">③</span> <strong>Exposure-Typ</strong> wählen (binär/metrisch) und Estimanden festlegen<br>
+        <span style="color:var(--accent)">④</span> <strong>R-Code generieren</strong> → fertigen marginaleffects-Code kopieren und in R ausführen
+      </div>
+    </div>
+
+    <!-- DAG-Import Vorschau -->
+    <div class="panel" id="dagPreviewPanel" style="display:none">
+      <div class="panel-title">Importierte DAG-Struktur — Golem Builder</div>
+      <div id="dagPreviewContent"></div>
+    </div>
+
     <!-- Validierungspanel -->
     <div class="panel" id="validPanel">
       <div class="panel-title">Validierung — DAG vs. Modell</div>
       <div id="validContent">
-        <div class="empty-state">
-          Modellformel eingeben und <strong>R-Code generieren</strong> klicken.
+        <div class="empty-state" style="padding:1rem">
+          Exposition und Outcome eingeben, dann Modellformel einfügen.
         </div>
       </div>
     </div>
@@ -315,16 +332,56 @@ window.addEventListener('load', () => {
 
 function reloadFromLocalStorage() {
   const raw = localStorage.getItem('btl_gcomp_import');
-  if (!raw) { setImportStatus(false); return; }
+  if (!raw) { setImportStatus(false); renderDagPreview(null); return; }
   try {
     const d = JSON.parse(raw);
-    if (!d.exposure || !d.outcome) { setImportStatus(false); return; }
+    if (!d.exposure || !d.outcome) { setImportStatus(false); renderDagPreview(null); return; }
     document.getElementById('inExposure').value = d.exposure;
     document.getElementById('inOutcome').value  = d.outcome;
     document.getElementById('inAdjSet').value   = (d.adjSet || []).join(', ');
     setImportStatus(true, d);
+    renderDagPreview(d);
     onSettingChange();
-  } catch(e) { setImportStatus(false); }
+  } catch(e) { setImportStatus(false); renderDagPreview(null); }
+}
+
+function renderDagPreview(d) {
+  const panel = document.getElementById('dagPreviewPanel');
+  const content = document.getElementById('dagPreviewContent');
+  if (!d) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const tag = (label, cls) =>
+    `<span class="tag ${cls}" style="font-size:.7rem">${label}</span>`;
+
+  const edgeStr = (d.edges || [])
+    .map(([f,t]) => `${f} → ${t}`)
+    .join(' &nbsp;·&nbsp; ');
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin-bottom:.7rem">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;
+             letter-spacing:.08em;color:var(--ink3);margin-bottom:.3rem">Exposition</div>
+        ${tag(d.exposure, 'ok')}
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;
+             letter-spacing:.08em;color:var(--ink3);margin-bottom:.3rem">Outcome</div>
+        ${tag(d.outcome, '')}
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.58rem;text-transform:uppercase;
+             letter-spacing:.08em;color:var(--ink3);margin-bottom:.3rem">Adjustment-Set</div>
+        ${d.adjSet && d.adjSet.length
+          ? d.adjSet.map(a => tag(a, 'warn')).join(' ')
+          : `<span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3)">keines nötig</span>`}
+      </div>
+    </div>
+    ${edgeStr ? `<div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);
+      border-top:1px solid var(--grid);padding-top:.5rem;margin-top:.3rem">
+      <span style="color:var(--ink2)">Kanten:</span> ${edgeStr}</div>` : ''}
+  `;
 }
 
 function setImportStatus(ok, data) {
@@ -367,14 +424,19 @@ function onSettingChange() {
   st.outcome  = document.getElementById('inOutcome').value.trim();
   st.adjSet   = document.getElementById('inAdjSet').value
     .split(',').map(s => s.trim()).filter(Boolean);
+  renderValidation(runValidation());
 }
 
 function onFormulaChange() {
   const raw = document.getElementById('inFormula').value.trim();
-  if (!raw) { document.getElementById('parsedPreview').style.display = 'none'; return; }
-  st.parsed = parseFormula(raw);
-  showParsedTags(st.parsed);
-  onSettingChange();
+  if (!raw) {
+    st.parsed = null;
+    document.getElementById('parsedPreview').style.display = 'none';
+  } else {
+    st.parsed = parseFormula(raw);
+    showParsedTags(st.parsed);
+  }
+  renderValidation(runValidation());
 }
 
 // ─────────────────────────────────────────────
@@ -454,8 +516,27 @@ function runValidation() {
   const p   = st.parsed;
   const items = [];
 
+  // Basis-Status
+  if (!exp && !out) {
+    items.push({ type:'info', text:'Exposition und Outcome aus Golem Builder importieren oder manuell eingeben.' });
+    return items;
+  }
   if (!exp) { items.push({ type:'err', text:'Exposition nicht angegeben.' }); }
-  if (!out) { items.push({ type:'err', text:'Outcome nicht angegeben.' }); }
+  else       { items.push({ type:'ok',  text:`Exposition: "${exp}"` }); }
+  if (!out)  { items.push({ type:'err', text:'Outcome nicht angegeben.' }); }
+  else       { items.push({ type:'ok',  text:`Outcome: "${out}"` }); }
+  if (adj.length) {
+    items.push({ type:'ok', text:`Adjustment-Set: ${adj.join(', ')}` });
+  } else {
+    items.push({ type:'info', text:'Kein Adjustment-Set — kausale Identifikation ohne Confounder-Kontrolle.' });
+  }
+
+  if (!p) {
+    items.push({ type:'info', text:'Modellformel fehlt noch — Schritt 2 ausfüllen, dann wird hier geprüft ob Exposition, Outcome und Adj.-Set im Modell enthalten sind.' });
+    return items;
+  }
+
+  items.push({ type:'info', text:'── Modell-Prüfung ──────────────────' });
 
   if (p) {
     // Outcome match
@@ -505,15 +586,19 @@ function runValidation() {
 function renderValidation(items) {
   const el = document.getElementById('validContent');
   if (!items.length) {
-    el.innerHTML = '<div class="empty-state">Keine Prüfungen — Formel und Variablen eingeben.</div>';
+    el.innerHTML = '<div class="empty-state" style="padding:1rem">Exposition und Outcome eingeben.</div>';
     return;
   }
   const icons = { ok: '✓', warn: '⚠', err: '✗', info: 'ℹ' };
-  el.innerHTML = `<ul class="val-list">${items.map(i =>
-    `<li class="val-item val-${i.type}">
-      <span class="val-icon">${icons[i.type]}</span>
+  el.innerHTML = `<ul class="val-list">${items.map(i => {
+    const isSep = i.text.startsWith('──');
+    if (isSep) return `<li style="font-family:'DM Mono',monospace;font-size:.63rem;
+      color:var(--ink3);padding:.2rem 0;border-top:1px solid var(--grid);margin-top:.3rem">${i.text}</li>`;
+    return `<li class="val-item val-${i.type}">
+      <span class="val-icon">${icons[i.type] || 'ℹ'}</span>
       <span>${i.text}</span>
-    </li>`).join('')}</ul>`;
+    </li>`;
+  }).join('')}</ul>`;
 }
 
 // ─────────────────────────────────────────────
@@ -521,22 +606,15 @@ function renderValidation(items) {
 // ─────────────────────────────────────────────
 function generateAndShow() {
   onSettingChange();
-  if (!document.getElementById('inFormula').value.trim()) {
-    st.parsed = null;
-  }
-  const valItems = runValidation();
-  renderValidation(valItems);
-
-  const hasErrors = valItems.some(v => v.type === 'err');
   if (!st.exposure || !st.outcome) {
     showToast('Bitte Exposition und Outcome angeben.');
     return;
   }
-
   const code = buildCode();
   const el   = document.getElementById('codeArea');
   el.innerHTML = highlightR(code);
   document.getElementById('codePanel').style.display = '';
+  document.getElementById('codePanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function buildCode() {
