@@ -975,6 +975,19 @@ function generateLive() {
 
   let c = '';
   c += `library(marginaleffects)\nlibrary(ggplot2)\n\n`;
+
+  // Pre-processing block (as.factor MUST come before brm/glmmTMB fit)
+  if (isBinary && isFactor) {
+    c += `# ══ SCHRITT 1: PRE-PROCESSING ── VOR dem Modell-Fit ausführen! ══════════════\n`;
+    c += `# ⚠ Diese Zeilen müssen ausgeführt werden BEVOR brm() / glmmTMB() aufgerufen wird!\n`;
+    c += `${dat}$${exp} <- as.factor(${dat}$${exp})\n`;
+    c += `# Referenzlevel (aktuell: levels(${dat}$${exp})[1] = erste Stufe):\n`;
+    c += `# ${dat}$${exp} <- relevel(${dat}$${exp}, ref = "KontrollGruppe")\n\n`;
+    c += `# ══ SCHRITT 2: MODELL FITTEN ════════════════════════════════════════════════\n`;
+    c += `# ${mod} <- brm(${fullFml || `${out} ~ ${exp} + ...`}, data = ${dat}, family = ...)\n\n`;
+    c += `# ══ SCHRITT 3: G-COMPUTATION ════════════════════════════════════════════════\n`;
+  }
+
   c += `# ── DAG-Struktur${ST.imp ? ' (Golem Builder Import)' : ''} ──────────────────────────────────────────\n`;
   c += `# Exposition:  ${exp}\n# Outcome:     ${out}\n# Adj.-Set:    ${adjStr}\n`;
   if (fullFml) c += `# Formel:      ${fullFml}\n`;
@@ -993,26 +1006,23 @@ function generateLive() {
 
   if (isBinary) {
     // Factor mode vs. manual v0/v1
-    const varSpec   = isFactor ? `"${exp}"` : `list(${exp} = c(${v0}, ${v1}))`;
+    // For factors: variables = list(X = levels(dat$X)) compares level[2] vs level[1]
+    const varSpec   = isFactor
+      ? `list(${exp} = levels(${dat}$${exp}))`
+      : `list(${exp} = c(${v0}, ${v1}))`;
     const subsetTrt = isFactor
       ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[2])`
       : `subset(${dat}, ${exp} == ${v1})`;
     const subsetCtl = isFactor
       ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[1])`
       : `subset(${dat}, ${exp} == ${v0})`;
+    // For counterfactual transforms: factor scalar is recycled to nrow(dat)
     const cfTrt     = isFactor
-      ? `transform(${dat}, ${exp} = levels(${dat}$${exp})[2])`
+      ? `transform(${dat}, ${exp} = factor(levels(${dat}$${exp})[2], levels=levels(${dat}$${exp})))`
       : `transform(${dat}, ${exp} = ${v1})`;
     const cfCtl     = isFactor
-      ? `transform(${dat}, ${exp} = levels(${dat}$${exp})[1])`
+      ? `transform(${dat}, ${exp} = factor(levels(${dat}$${exp})[1], levels=levels(${dat}$${exp})))`
       : `transform(${dat}, ${exp} = ${v0})`;
-
-    if (isFactor) {
-      c += `# ── Faktor-Kodierung (empfohlen) ─────────────────────────────────────────────\n`;
-      c += `${dat}$${exp} <- as.factor(${dat}$${exp})\n`;
-      c += `# Referenzlevel prüfen / ändern:\n`;
-      c += `# ${dat}$${exp} <- relevel(${dat}$${exp}, ref = "Referenzgruppe")\n\n`;
-    }
 
     if (showATE) {
       c += `# ── ATE — Average Treatment Effect (Gesamtpopulation) ──────────────────────\n`;
