@@ -909,7 +909,7 @@ canvas {
     <div id="nonRootSdSection" style="display:none">
       <div class="section-title">Endogene Knoten — Intercept &amp; Residual-SD</div>
       <table class="node-dist-table">
-        <thead><tr><th>Variable</th><th>Intercept α</th><th>σ_residual</th></tr></thead>
+        <thead><tr><th>Variable</th><th>Typ</th><th>Intercept α</th><th>σ_residual</th></tr></thead>
         <tbody id="nonRootSdBody"></tbody>
       </table>
     </div>
@@ -2153,6 +2153,7 @@ function applyStdMode() {
   let anyInvalid = false;
   document.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
     const nodeId = inp.dataset.nonrootSd;
+    if (getNonRootDist(nodeId) === 'Bernoulli') return; // kein σ bei Bernoulli
     if (STD_MODE) {
       const { sigma, sumB2, invalid } = computeStdSigma(nodeId);
       if (invalid) anyInvalid = true;
@@ -2301,23 +2302,52 @@ function updateNonRootSdTable() {
   const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
   if (nonRoots.length === 0) { section.style.display = 'none'; return; }
   section.style.display = '';
-  const existingSd = {}, existingInt = {};
+  const existingSd = {}, existingInt = {}, existingDist = {};
   tbody.querySelectorAll('[data-nonroot-sd]').forEach(inp => { existingSd[inp.dataset.nonrootSd] = inp.value; });
   tbody.querySelectorAll('[data-nonroot-intercept]').forEach(inp => { existingInt[inp.dataset.nonrootIntercept] = inp.value; });
+  tbody.querySelectorAll('[data-nonroot-dist]').forEach(sel => { existingDist[sel.dataset.nonrootDist] = sel.value; });
   tbody.innerHTML = nonRoots.map(n => {
-    const sdVal  = existingSd[n.id]  !== undefined ? existingSd[n.id]  : '1';
-    const intVal = existingInt[n.id] !== undefined ? existingInt[n.id] : '0';
+    const sdVal   = existingSd[n.id]   !== undefined ? existingSd[n.id]   : '1';
+    const intVal  = existingInt[n.id]  !== undefined ? existingInt[n.id]  : '0';
+    const distVal = existingDist[n.id] !== undefined ? existingDist[n.id] : 'Normal';
+    const sdDisabled = distVal === 'Bernoulli' ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
     return `<tr>
       <td>${escHtml(n.name)}</td>
+      <td>
+        <select class="dist-select" data-nonroot-dist="${n.id}">
+          <option${distVal==='Normal'?' selected':''}>Normal</option>
+          <option${distVal==='Bernoulli'?' selected':''}>Bernoulli</option>
+        </select>
+      </td>
       <td><input type="number" class="sd-input" data-nonroot-intercept="${n.id}" value="${intVal}" step="0.1"></td>
-      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${sdVal}" step="0.1" min="0.01"></td>
+      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${sdVal}" step="0.1" min="0.01"${sdDisabled}></td>
     </tr>`;
   }).join('');
+
+  // Wire up dist change → toggle σ disabled state
+  tbody.querySelectorAll('[data-nonroot-dist]').forEach(sel => {
+    const nodeId = sel.dataset.nonrootDist;
+    const sdInp = tbody.querySelector(`[data-nonroot-sd="${nodeId}"]`);
+    sel.addEventListener('change', () => {
+      if (sdInp) {
+        sdInp.disabled = sel.value === 'Bernoulli';
+        sdInp.style.opacity = sel.value === 'Bernoulli' ? '.35' : '';
+        sdInp.style.cursor  = sel.value === 'Bernoulli' ? 'not-allowed' : '';
+      }
+      updatePartB();
+      generateRCode && document.getElementById('rCodeOutput') && (document.getElementById('rCodeOutput').textContent = generateRCode());
+    });
+  });
 }
 
 function getNonRootSd(nodeId) {
   const inp = document.querySelector(`[data-nonroot-sd="${nodeId}"]`);
   return inp ? (parseFloat(inp.value) || 1) : 1;
+}
+
+function getNonRootDist(nodeId) {
+  const sel = document.querySelector(`[data-nonroot-dist="${nodeId}"]`);
+  return sel ? sel.value : 'Normal';
 }
 
 function getNonRootIntercept(nodeId) {
@@ -2479,8 +2509,12 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
-        lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+        if (getNonRootDist(nd.id) === 'Bernoulli') {
+          lines.push(`${nd.name} <- rbinom(n, 1, plogis(${muTerms.join(' + ')}))  # ${commentParts.join(', ')}`);
+        } else {
+          commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
+          lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+        }
       });
     }
   }
@@ -2493,12 +2527,15 @@ function generateRCode() {
   }
   lines.push('', `dat <- data.frame(${observedNames.join(', ')})`);
 
-  // Auto as.factor for Bernoulli exposure (root node only)
+  // Auto as.factor for Bernoulli exposure (root or endogenous)
   if (state.exposure) {
     const expNode = state.nodes.find(n => n.id === state.exposure && !n.latent);
-    if (expNode && getParents(state.exposure).length === 0) {
-      const { dist } = getRootDist(state.exposure);
-      if (dist === 'Bernoulli') {
+    if (expNode) {
+      const isRoot = getParents(state.exposure).length === 0;
+      const isBernoulli = isRoot
+        ? getRootDist(state.exposure).dist === 'Bernoulli'
+        : getNonRootDist(state.exposure) === 'Bernoulli';
+      if (isBernoulli) {
         lines.push('', `# Exposition als Faktor kodieren — vor dem Modell-Fit ausführen!`);
         lines.push(`dat$${expNode.name} <- as.factor(dat$${expNode.name})`);
         lines.push(`# levels(dat$${expNode.name})  # prüfen: welche Stufe ist Referenz`);
