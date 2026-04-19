@@ -977,7 +977,7 @@ function generateLive() {
   const fmlForFit = fullFml || (exp && out ? `${out} ~ ${exp}` : `outcome ~ exposure`);
 
   let c = '';
-  c += `library(marginaleffects)\nlibrary(ggplot2)\n\n`;
+  c += `library(marginaleffects)\nlibrary(ggplot2)\nlibrary(patchwork)\n\n`;
 
   // Model fitting template
   c += `# ══ SCHRITT 1: MODELL FITTEN ════════════════════════════════════════════════\n`;
@@ -1077,38 +1077,55 @@ function generateLive() {
 
     const grpTrt = isFactor ? `levels(${dat}$${exp})[2]` : `"${exp} = ${v1}"`;
     const grpCtl = isFactor ? `levels(${dat}$${exp})[1]` : `"${exp} = ${v0}"`;
-    c += `# 2 — Kontrafaktische Outcome-Verteilungen\ncf_df <- rbind(\n`;
-    c += `  data.frame(Gruppe=${grpTrt}, pred_1),\n`;
-    c += `  data.frame(Gruppe=${grpCtl}, pred_0)\n)\n\n`;
-    c += `ggplot(cf_df, aes(x=estimate, fill=Gruppe, color=Gruppe)) +\n`;
-    c += `  geom_density(alpha=0.22, linewidth=0.8) +\n`;
-    c += `  scale_fill_manual(values=c("#5a8a2a","#2a6e8a")) +\n`;
-    c += `  scale_color_manual(values=c("#5a8a2a","#2a6e8a")) +\n`;
-    c += `  labs(title="Kontrafaktische Outcome-Verteilungen (Ŷ(1) vs. Ŷ(0))",\n`;
-    c += `       x="${out}", y="Dichte", fill=NULL, color=NULL) +\n`;
-    c += `  theme_minimal(base_size=13)\n\n`;
 
-    // ITE plot: individual causal effects sorted by magnitude (Solomon Kurz style)
-    c += `# 2b — Individuelle kausale Effekte (ICE = Ŷ(1) − Ŷ(0) pro Person, sortiert)\n`;
-    c += `# Jeder Punkt = eine Person; Y-Achse sortiert nach Effektgröße (wie Solomon Kurz)\n`;
+
+    // Plot 2 + 2b: patchwork — counterfactuals left, ICE right, shared row order
+    c += `# 2 — Kontrafaktische Potenzielle Outcomes + ICE (patchwork, geteilte Sortierung)\n`;
+    c += `# Sortierung nach Ŷ(0) — gleiche Zeile = gleiche Person in beiden Plots\n`;
+    c += `rank_vec <- rank(pred_0$estimate)           # Rang jeder Person nach Ŷ(0)\n\n`;
+
+    c += `# Linker Plot: Ŷ(0) und Ŷ(1) pro Person, verbunden durch Linie\n`;
+    c += `cf_long <- rbind(\n`;
+    c += `  data.frame(.id = seq_len(nrow(pred_0)), Gruppe = ${grpCtl}, estimate = pred_0$estimate),\n`;
+    c += `  data.frame(.id = seq_len(nrow(pred_1)), Gruppe = ${grpTrt}, estimate = pred_1$estimate)\n`;
+    c += `)\n`;
+    c += `cf_long$.rank <- rank_vec[cf_long$.id]\n\n`;
+
+    c += `p_cf <- ggplot(cf_long, aes(x = estimate, y = .rank, color = Gruppe)) +\n`;
+    c += `  geom_line(aes(group = .id), color = "gray75", linewidth = 0.3) +\n`;
+    c += `  geom_point(size = 0.9, alpha = 0.8) +\n`;
+    c += `  scale_color_manual(values = c("#2a6e8a", "#5a8a2a")) +\n`;
+    c += `  scale_y_continuous(breaks = NULL) +\n`;
+    c += `  labs(title = "Potenzielle Outcomes",\n`;
+    c += `       subtitle = "Ŷ(0) und Ŷ(1) pro Person, sortiert nach Ŷ(0)",\n`;
+    c += `       x = "${out}", y = NULL, color = NULL) +\n`;
+    c += `  theme_minimal(base_size = 13) +\n`;
+    c += `  theme(legend.position = "bottom")\n\n`;
+
+    c += `# Rechter Plot: ICE = Ŷ(1) − Ŷ(0), gleiche Zeilenreihenfolge\n`;
     c += `ite_df <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n`;
-    c += `ite_df$.id <- seq_len(nrow(ite_df))  # Personen-ID für Y-Achse\n\n`;
-    c += `ggplot(ite_df, aes(x = estimate, y = reorder(.id, estimate))) +\n`;
+    c += `ite_df$.rank <- rank_vec                    # gleiche Sortierung wie linker Plot\n\n`;
+
+    c += `p_ice <- ggplot(ite_df, aes(x = estimate, y = .rank)) +\n`;
     c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
-    c += `  geom_vline(xintercept = mean(ite_df$estimate),\n`;
-    c += `             color = "#b85c00", linewidth = 0.9) +\n`;
+    c += `  geom_vline(xintercept = mean(ite_df$estimate), color = "#b85c00", linewidth = 0.8) +\n`;
     c += `  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),\n`;
-    c += `                 height = 0, linewidth = 0.25, alpha = 0.4, color = "#5a8a2a") +\n`;
+    c += `                 height = 0, linewidth = 0.25, alpha = 0.35, color = "#5a8a2a") +\n`;
     c += `  geom_point(size = 0.8, color = "#5a8a2a") +\n`;
     c += `  annotate("text", x = mean(ite_df$estimate), y = Inf, vjust = 1.5, hjust = -0.15,\n`;
     c += `           label = paste("ATE =", round(mean(ite_df$estimate), 3)),\n`;
     c += `           color = "#b85c00", size = 3.5) +\n`;
-    c += `  scale_y_discrete(breaks = NULL) +\n`;
+    c += `  scale_y_continuous(breaks = NULL) +\n`;
     c += `  labs(title = "Individuelle kausale Effekte (ICE)",\n`;
-    c += `       subtitle = "Jeder Punkt = eine Person, sortiert nach Effektgröße — Breite zeigt Effekt-Heterogenität",\n`;
-    c += `       x = expression(hat(tau)[i] ~ (ICE == hat(Y)(1) - hat(Y)(0))),\n`;
-    c += `       y = NULL) +\n`;
+    c += `       subtitle = expression(hat(tau)[i] == hat(Y)(1) - hat(Y)(0)),\n`;
+    c += `       x = expression(hat(tau)[i]), y = NULL) +\n`;
     c += `  theme_minimal(base_size = 13)\n\n`;
+
+    c += `(p_cf + p_ice) +\n`;
+    c += `  plot_annotation(\n`;
+    c += `    title    = paste("G-Computation:", "${exp}", "\\u2192", "${out}"),\n`;
+    c += `    subtitle = "Sortierung nach Ŷ(0) — gleiche Zeile = gleiche Person"\n`;
+    c += `  )\n\n`;
 
     if (showCond && moderator) {
       c += `# 3 — Konditionaler Effekt: Effekt-Heterogenität über ${moderator}\n`;
