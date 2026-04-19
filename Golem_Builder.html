@@ -2493,6 +2493,19 @@ function generateRCode() {
   }
   lines.push('', `dat <- data.frame(${observedNames.join(', ')})`);
 
+  // Auto as.factor for Bernoulli exposure (root node only)
+  if (state.exposure) {
+    const expNode = state.nodes.find(n => n.id === state.exposure && !n.latent);
+    if (expNode && getParents(state.exposure).length === 0) {
+      const { dist } = getRootDist(state.exposure);
+      if (dist === 'Bernoulli') {
+        lines.push('', `# Exposition als Faktor kodieren — vor dem Modell-Fit ausführen!`);
+        lines.push(`dat$${expNode.name} <- as.factor(dat$${expNode.name})`);
+        lines.push(`# levels(dat$${expNode.name})  # prüfen: welche Stufe ist Referenz`);
+      }
+    }
+  }
+
   return lines.join('\n');
 }
 

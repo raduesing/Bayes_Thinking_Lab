@@ -973,21 +973,26 @@ function generateLive() {
   let fullFml = fml;
   if (fml && re && !fml.includes(re)) fullFml = `${fml} + ${re}`;
 
+  const familyStr = document.getElementById('inFamily').value.trim() || 'gaussian()';
+  const fmlForFit = fullFml || (exp && out ? `${out} ~ ${exp}` : `outcome ~ exposure`);
+
   let c = '';
   c += `library(marginaleffects)\nlibrary(ggplot2)\n\n`;
 
-  // Pre-processing block (as.factor MUST come before brm/glmmTMB fit)
+  // Model fitting template
+  c += `# ══ SCHRITT 1: MODELL FITTEN ════════════════════════════════════════════════\n`;
   if (isBinary && isFactor) {
-    c += `# ══ SCHRITT 1: PRE-PROCESSING ── VOR dem Modell-Fit ausführen! ══════════════\n`;
-    c += `# ⚠ Diese Zeilen müssen ausgeführt werden BEVOR brm() / glmmTMB() aufgerufen wird!\n`;
-    c += `${dat}$${exp} <- as.factor(${dat}$${exp})\n`;
-    c += `# Referenzlevel (aktuell: levels(${dat}$${exp})[1] = erste Stufe):\n`;
-    c += `# ${dat}$${exp} <- relevel(${dat}$${exp}, ref = "KontrollGruppe")\n\n`;
-    c += `# ══ SCHRITT 2: MODELL FITTEN ════════════════════════════════════════════════\n`;
-    c += `# ${mod} <- brm(${fullFml || `${out} ~ ${exp} + ...`}, data = ${dat}, family = ...)\n\n`;
-    c += `# ══ SCHRITT 3: G-COMPUTATION ════════════════════════════════════════════════\n`;
+    c += `# Bei dichotomen Exposures: ${dat}$${exp} <- as.factor(${dat}$${exp})  # vor dem Fit!\n`;
+  }
+  if (mtype === 'brms') {
+    c += `${mod} <- brm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr},\n  chains  = 4, iter = 2000, warmup = 1000,\n  cores   = parallel::detectCores()\n)\n\n`;
+  } else if (mtype === 'glmmTMB') {
+    c += `${mod} <- glmmTMB(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr}\n)\n\n`;
+  } else {
+    c += `${mod} <- glm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr}\n)\n\n`;
   }
 
+  c += `# ══ SCHRITT 2: G-COMPUTATION ═══════════════════════════════════════════════\n`;
   c += `# ── DAG-Struktur${ST.imp ? ' (Golem Builder Import)' : ''} ──────────────────────────────────────────\n`;
   c += `# Exposition:  ${exp}\n# Outcome:     ${out}\n# Adj.-Set:    ${adjStr}\n`;
   if (fullFml) c += `# Formel:      ${fullFml}\n`;
