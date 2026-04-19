@@ -84,13 +84,6 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
   border:1.5px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent);
   font-family:'DM Mono',monospace;font-size:.7rem;color:var(--warn);margin-bottom:.5rem}
 
-/* OPTIONAL VARS (clickable covariate chips) */
-.optvar-chip{display:inline-flex;align-items:center;gap:.3rem;font-family:'DM Mono',monospace;
-  font-size:.67rem;padding:.12rem .4rem;border:1.5px solid var(--border);
-  color:var(--ink2);cursor:pointer;transition:all .15s;user-select:none;margin:.1rem}
-.optvar-chip.active{border-color:var(--a5);color:var(--a5);background:color-mix(in srgb,var(--a5) 10%,transparent)}
-.optvar-chip:hover{border-color:var(--a5);color:var(--a5)}
-
 /* VARIABLE ROLE TABLE */
 .role-section{margin-bottom:.4rem}
 .role-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem;margin-bottom:.22rem}
@@ -100,14 +93,30 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
 .role-med{border-color:var(--warn);color:var(--warn)}
 .role-coll{border-color:var(--err);color:var(--err)}
 .role-cov{border-color:var(--a6);color:var(--a6)}
-.role-post{border-color:var(--err);color:var(--err)}
-.role-chip{font-family:'DM Mono',monospace;font-size:.67rem;padding:.08rem .35rem;
-  border:1.5px solid;margin:.05rem;user-select:none}
-.role-chip-conf{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,transparent)}
-.role-chip-med{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent)}
-.role-chip-coll{border-color:var(--err);color:var(--err);background:color-mix(in srgb,var(--err) 8%,transparent);text-decoration:line-through}
+
+/* UNIFIED TOGGLEABLE VAR CHIP — all roles, all vars */
+.var-chip{display:inline-flex;align-items:center;font-family:'DM Mono',monospace;
+  font-size:.67rem;padding:.1rem .38rem;border:1.5px solid;cursor:pointer;
+  transition:all .15s;user-select:none;margin:.08rem}
+.var-chip:hover{opacity:.72}
+.var-chip.active{font-weight:500}
+/* role colors */
+.vc-conf {border-color:var(--ok);  color:var(--ok)}
+.vc-med  {border-color:var(--warn);color:var(--warn)}
+.vc-cov  {border-color:var(--a6);  color:var(--a6)}
+.vc-coll {border-color:var(--err); color:var(--err)}
+.vc-post {border-color:var(--err); color:var(--err)}
+.vc-other{border-color:var(--ink3);color:var(--ink3)}
+/* active = currently in formula */
+.vc-conf.active {background:color-mix(in srgb,var(--ok)  14%,transparent)}
+.vc-med.active  {background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.vc-cov.active  {background:color-mix(in srgb,var(--a6)  14%,transparent)}
+.vc-coll.active {background:color-mix(in srgb,var(--err) 14%,transparent)}
+.vc-post.active {background:color-mix(in srgb,var(--err) 14%,transparent)}
+.vc-other.active{background:color-mix(in srgb,var(--ink3)14%,transparent)}
 
 /* MINI DAG CANVAS */
+#dagPanel{max-width:520px}
 #dagCanvas{display:block;width:100%;border:1.5px solid var(--border);background:var(--panel)}
 
 /* VALIDATION */
@@ -198,8 +207,8 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
         <label class="lbl" style="color:var(--warn);margin-bottom:.15rem">Mediator erkannt: <span id="mediatorNames">—</span></label>
         <div id="mediatorSource" style="font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink3);margin-bottom:.25rem"></div>
         <div class="rg" style="flex-direction:column;gap:.25rem">
-          <label class="ri"><input type="radio" name="efftype" value="total" checked onchange="onAnyChange()"> Totaler Effekt — Mediator <em>nicht</em> in Formel</label>
-          <label class="ri"><input type="radio" name="efftype" value="direct" onchange="onAnyChange()"> Direkter Effekt — Mediator <em>im</em> Modell</label>
+          <label class="ri"><input type="radio" name="efftype" value="total" checked onchange="onEffTypeChange()"> Totaler Effekt — Mediator <em>nicht</em> in Formel</label>
+          <label class="ri"><input type="radio" name="efftype" value="direct" onchange="onEffTypeChange()"> Direkter Effekt — Mediator <em>im</em> Modell</label>
         </div>
         <div style="font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink3);margin-top:.3rem;line-height:1.5">Totaler Effekt = X→M→Y + X→Y. Direkter Effekt = nur X→Y (Mediator kontrolliert).</div>
       </div>
@@ -414,43 +423,85 @@ function loadLS() {
 }
 
 // ═══════════════════════════════════════════════════════
-// OPTIONAL VARS CHIPS
+// VAR CHIP TOGGLE (unified for all roles)
 // ═══════════════════════════════════════════════════════
-function renderOptVars(vars) {
-  const wrap = document.getElementById('optVarsWrap');
-  const chips = document.getElementById('optVarsChips');
-  if (!vars.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = '';
-  chips.innerHTML = vars.map(v =>
-    `<span class="optvar-chip" data-var="${escAttr(v)}" onclick="toggleOptVar(this,'${escAttr(v)}')">${v}</span>`
-  ).join('');
+function toggleVar(el, varName) {
+  const formula = document.getElementById('inFormula');
+  let fml = formula.value.trim();
+  const p = parseFormula(fml);
+  const inFormula = p ? p.vars.includes(varName) : false;
+
+  if (inFormula) {
+    // Tokenize RHS on '+' (respecting parentheses), remove this var
+    if (fml.includes('~')) {
+      const lhs = fml.split('~')[0].trim();
+      const rhs = fml.slice(fml.indexOf('~') + 1).trim();
+      const tokens = tokenizeRHS(rhs);
+      const filtered = tokens.filter(t => t !== varName);
+      formula.value = `${lhs} ~ ${filtered.length ? filtered.join(' + ') : '1'}`;
+    }
+    el.classList.remove('active');
+  } else {
+    // Add to end of formula (before RE term if present)
+    const reVal = document.getElementById('inRE').value.trim();
+    if (reVal && fml.includes(reVal)) {
+      fml = fml.replace(reVal, `${varName} + ${reVal}`);
+    } else if (fml.includes('~')) {
+      fml = `${fml} + ${varName}`;
+    } else {
+      fml = fml ? `${fml} + ${varName}` : varName;
+    }
+    formula.value = fml;
+    el.classList.add('active');
+  }
+  onAnyChange();
 }
 
-function toggleOptVar(el, varName) {
-  const formula = document.getElementById('inFormula');
-  if (ST.optActive.has(varName)) {
-    // Remove
-    ST.optActive.delete(varName);
-    el.classList.remove('active');
-    // Remove from formula: " + varName" or "varName + " or just "varName"
-    formula.value = formula.value
-      .replace(new RegExp(`\\s*\\+\\s*${escRe(varName)}`, 'g'), '')
-      .replace(new RegExp(`${escRe(varName)}\\s*\\+\\s*`, 'g'), '')
-      .trim();
-  } else {
-    // Add
-    ST.optActive.add(varName);
-    el.classList.add('active');
-    // Add before RE term if present
-    const reVal = document.getElementById('inRE').value.trim();
-    let f = formula.value.trim();
-    if (reVal && f.includes(reVal)) {
-      f = f.replace(reVal, `${varName} + ${reVal}`);
-    } else {
-      f = f ? `${f} + ${varName}` : varName;
-    }
-    formula.value = f;
+// Split RHS on '+' while respecting parentheses (for RE terms)
+function tokenizeRHS(rhs) {
+  const tokens = [];
+  let depth = 0, cur = '';
+  for (const ch of rhs + '+') {
+    if      (ch === '(') { depth++; cur += ch; }
+    else if (ch === ')') { depth--; cur += ch; }
+    else if (ch === '+' && depth === 0) {
+      const t = cur.trim();
+      if (t) tokens.push(t);
+      cur = '';
+    } else cur += ch;
   }
+  return tokens;
+}
+
+// Sync all .var-chip active states against current formula
+function syncChipActiveStates() {
+  const p = parseFormula(document.getElementById('inFormula').value);
+  const fVars = new Set(p?.vars || []);
+  document.querySelectorAll('.var-chip').forEach(chip => {
+    chip.classList.toggle('active', fVars.has(chip.dataset.var));
+  });
+}
+
+// Called when efftype radio changes — add/remove mediators in formula
+function onEffTypeChange() {
+  const effType = document.querySelector('input[name=efftype]:checked')?.value || 'total';
+  const meds = Object.entries(ST.varRoles || {})
+    .filter(([,r]) => r === 'mediator').map(([v]) => v);
+  if (!meds.length) { onAnyChange(); return; }
+
+  const formula = document.getElementById('inFormula');
+  let fml = formula.value.trim();
+
+  if (fml.includes('~')) {
+    const lhs = fml.split('~')[0].trim();
+    const rhs = fml.slice(fml.indexOf('~') + 1).trim();
+    // Remove all mediators first (avoid duplicates)
+    let tokens = tokenizeRHS(rhs).filter(t => !meds.includes(t));
+    // Add mediators if direct effect
+    if (effType === 'direct') tokens = [...tokens, ...meds];
+    formula.value = `${lhs} ~ ${tokens.length ? tokens.join(' + ') : '1'}`;
+  }
+  syncChipActiveStates();
   onAnyChange();
 }
 
@@ -629,6 +680,9 @@ function classifyVars(d) {
   // Mediators from Golem Builder export — authoritative
   (d.mediatorNames || []).forEach(v => { roles[v] = 'mediator'; });
 
+  // Colliders from Golem Builder export — authoritative
+  (d.colliderNames || []).forEach(v => { roles[v] = 'collider'; });
+
   // Classify optional variables (heuristic fallback for any not yet classified)
   (d.optionalVars || []).forEach(v => {
     const isDescX  = descX.has(v);
@@ -659,16 +713,24 @@ function classifyVars(d) {
   return roles;
 }
 
+function chip(v, roleClass, title) {
+  // Unified clickable chip; active state derived from current formula at render time
+  const p = parseFormula(document.getElementById('inFormula').value);
+  const inFml = p ? p.vars.includes(v) : false;
+  return `<span class="var-chip ${roleClass}${inFml ? ' active' : ''}" data-var="${escAttr(v)}" onclick="toggleVar(this,'${escAttr(v)}')" title="${escAttr(title)}">${v}</span>`;
+}
+
 function renderVarRoles(roles) {
   const wrap = document.getElementById('varRolesWrap');
   const cont = document.getElementById('varRolesCont');
   const adjSet   = ST.imp?.adjSet || [];
   const medVars  = ST.imp?.mediatorNames || [];
+  const collVars = ST.imp?.colliderNames || [];
   const optVars  = ST.imp?.optionalVars || [];
-  // De-duplicate: mediatorNames may overlap with optionalVars in older exports
-  const seen = new Set([...adjSet, ...medVars]);
+  // De-duplicate: collect all known vars to avoid double-listing
+  const seen = new Set([...adjSet, ...medVars, ...collVars]);
   const filteredOpt = optVars.filter(v => !seen.has(v));
-  const allVars = [...adjSet, ...medVars, ...filteredOpt];
+  const allVars = [...adjSet, ...medVars, ...collVars, ...filteredOpt];
 
   if (!allVars.length || !ST.imp) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
@@ -680,55 +742,40 @@ function renderVarRoles(roles) {
   const post  = allVars.filter(v => roles[v] === 'posttreatment');
   const other = allVars.filter(v => roles[v] === 'other');
 
-  let html = '';
+  let html = `<div style="font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink3);margin-bottom:.3rem">Klick = Formel hinzufügen / entfernen &nbsp;·&nbsp; Farbe = empfohlene Rolle</div>`;
 
-  // Confounders — must include
   if (conf.length) {
-    html += `<div class="role-row"><span class="role-lbl role-conf" title="Muss kontrolliert werden — Confounder laut Adj.-Set">Confounder ✓</span>`;
-    html += conf.map(v => `<span class="role-chip role-chip-conf">${v}</span>`).join('');
+    html += `<div class="role-row"><span class="role-lbl role-conf" title="Sollte kontrolliert werden — Confounder lt. Adj.-Set">Confounder ✓</span>`;
+    html += conf.map(v => chip(v, 'vc-conf', 'Confounder — sollte im Modell sein. Für Sensitivitätsanalyse: klick zum Entfernen.')).join('');
     html += `</div>`;
   }
-  // Mediators — choice
   if (med.length) {
-    html += `<div class="role-row"><span class="role-lbl role-med" title="Auf kausalem Pfad X→M→Y — Einschluss ändert Effekttyp">Mediator ⚠</span>`;
-    html += med.map(v => `<span class="role-chip role-chip-med" title="Totaler Effekt: nicht einschließen. Direkter Effekt: einschließen.">${v}</span>`).join('');
+    html += `<div class="role-row"><span class="role-lbl role-med" title="Mediator — Einschluss bestimmt Effekttyp (total vs. direkt)">Mediator ⚠</span>`;
+    html += med.map(v => chip(v, 'vc-med', 'Mediator — Totaler Effekt: nicht einschließen. Direkter Effekt: einschließen. Wird durch Effekttyp-Auswahl gesteuert.')).join('');
     html += `</div>`;
   }
-  // Precision covariates — safe to add
   if (cov.length) {
-    html += `<div class="role-row"><span class="role-lbl role-cov" title="Ursache von Y, nicht von X — reduziert Varianz ohne Bias">Kovariate (↑ Präzision)</span>`;
-    html += cov.map(v =>
-      `<span class="optvar-chip" data-var="${escAttr(v)}" onclick="toggleOptVar(this,'${escAttr(v)}')">${v}</span>`
-    ).join('');
+    html += `<div class="role-row"><span class="role-lbl role-cov" title="Kovariate — Ursache von Y, nicht von X. Einschluss erhöht Präzision.">Kovariate (↑ Präzision)</span>`;
+    html += cov.map(v => chip(v, 'vc-cov', 'Präzisions-Kovariate — sicher hinzuzufügen, reduziert Varianz ohne Bias.')).join('');
     html += `</div>`;
   }
-  // Colliders — do not include
   if (coll.length) {
-    html += `<div class="role-row"><span class="role-lbl role-coll" title="Collider — Kontrolle öffnet Backdoor-Pfad">Collider ✗</span>`;
-    html += coll.map(v => `<span class="role-chip role-chip-coll" title="NICHT ins Modell aufnehmen">${v}</span>`).join('');
+    html += `<div class="role-row"><span class="role-lbl role-coll" title="Collider — Kontrolle öffnet Backdoor-Pfad (Bias)">Collider ✗</span>`;
+    html += coll.map(v => chip(v, 'vc-coll', 'Collider — NICHT ins Modell aufnehmen! Eröffnet Backdoor-Pfad. Für Sensitivitätsanalyse: klick zum Hinzufügen.')).join('');
     html += `</div>`;
   }
-  // Post-treatment — do not include
   if (post.length) {
-    html += `<div class="role-row"><span class="role-lbl role-coll" title="Post-treatment Var — Kontrolle führt zu Post-treatment Bias">Post-treatment ✗</span>`;
-    html += post.map(v => `<span class="role-chip role-chip-coll" title="NICHT kontrollieren">${v}</span>`).join('');
+    html += `<div class="role-row"><span class="role-lbl role-coll" title="Post-treatment — Kontrolle führt zu Post-treatment Bias">Post-treatment ✗</span>`;
+    html += post.map(v => chip(v, 'vc-post', 'Post-treatment Variable — NICHT kontrollieren.')).join('');
     html += `</div>`;
   }
-  // Other — unclear role
   if (other.length) {
-    html += `<div class="role-row"><span class="role-lbl" style="border-color:var(--ink3);color:var(--ink3)" title="Rolle nicht eindeutig bestimmbar">Weitere</span>`;
-    html += other.map(v =>
-      `<span class="optvar-chip" data-var="${escAttr(v)}" onclick="toggleOptVar(this,'${escAttr(v)}')">${v}</span>`
-    ).join('');
+    html += `<div class="role-row"><span class="role-lbl vc-other" style="border:1px solid var(--ink3)">Weitere</span>`;
+    html += other.map(v => chip(v, 'vc-other', 'Rolle im DAG unklar — nach Bedarf einschließen.')).join('');
     html += `</div>`;
   }
 
   cont.innerHTML = html;
-
-  // Re-sync active states after re-render
-  document.querySelectorAll('#varRolesCont .optvar-chip').forEach(chip => {
-    if (ST.optActive.has(chip.dataset.var)) chip.classList.add('active');
-  });
 
   // Mediator effect type box
   const hasMed = med.length > 0;
@@ -738,7 +785,7 @@ function renderVarRoles(roles) {
     const srcEl = document.getElementById('mediatorSource');
     if (ST.imp?.effectType) {
       const label = ST.imp.effectType === 'direct' ? 'Direkter Effekt' : 'Totaler Effekt';
-      srcEl.textContent = `↑ Aus Golem Builder übernommen: ${label} — kann hier geändert werden.`;
+      srcEl.textContent = `↑ Aus Golem Builder: ${label} — kann hier geändert werden.`;
     } else {
       srcEl.textContent = '';
     }
@@ -777,6 +824,7 @@ function toggleManual() {
 // LIVE CHANGE HANDLER
 // ═══════════════════════════════════════════════════════
 function onAnyChange() {
+  syncChipActiveStates();
   updateValidation();
   generateLive();
 }

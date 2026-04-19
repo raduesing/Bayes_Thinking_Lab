@@ -1383,6 +1383,19 @@ function getEffectType() {
   return el ? el.value : 'total';
 }
 
+function getColliders() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return [];
+  const adjSetIds  = new Set(state.analysisResult?.minimal?.[0] || []);
+  const mediatorIds = new Set([...getMediators()].filter(id => id !== X && id !== Y));
+  // Heuristic: node with 2+ parents that is not confounder, mediator, X, or Y
+  return state.nodes
+    .filter(n => !n.latent && n.id !== X && n.id !== Y
+              && !adjSetIds.has(n.id) && !mediatorIds.has(n.id))
+    .filter(n => state.edges.filter(e => e.to === n.id).length >= 2)
+    .map(n => n.name);
+}
+
 function hasCycle(fromId, toId) {
   // Would adding fromId→toId create a cycle? Check if toId can reach fromId
   const visited = new Set();
@@ -2990,10 +3003,11 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
   const exposureName = getName(X);
   const outcomeName  = getName(Y);
 
-  // Effekttyp und Mediatoren
+  // Effekttyp, Mediatoren und Collider
   const effectType    = getEffectType();
   const mediatorIds   = [...getMediators()].filter(id => id !== X && id !== Y);
   const mediatorNames = mediatorIds.map(getName);
+  const colliderNames = getColliders();
 
   // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome, Adj-Set noch Mediator sind
   const optionalVars = state.nodes
@@ -3020,6 +3034,7 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
     outcome:           outcomeName,
     adjSet:            adjSetNames,
     mediatorNames,
+    colliderNames,
     effectType,
     optionalVars,
     nodePositions,
