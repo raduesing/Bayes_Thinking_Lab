@@ -2989,25 +2989,39 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
   const exposureName = getName(X);
   const outcomeName  = getName(Y);
 
+  // Effect type and mediators
+  const effectType    = getEffectType();
+  const mediatorIds   = getMediators().filter(id => id !== X && id !== Y);
+  const mediatorNames = mediatorIds.map(getName);
+
   const optionalVars = state.nodes
-    .filter(n => !n.latent && n.id !== X && n.id !== Y && !adjSetIds.includes(n.id))
+    .filter(n => !n.latent && n.id !== X && n.id !== Y
+              && !adjSetIds.includes(n.id) && !mediatorIds.includes(n.id))
     .map(n => n.name);
 
   const nodePositions = state.nodes.filter(n => !n.latent).map(n => ({
     name: n.name, x: n.x, y: n.y,
-    isExposure: n.id === X,
-    isOutcome:  n.id === Y,
-    isAdjSet:   adjSetIds.includes(n.id)
+    isExposure:  n.id === X,
+    isOutcome:   n.id === Y,
+    isAdjSet:    adjSetIds.includes(n.id),
+    isMediator:  mediatorIds.includes(n.id)
   }));
+
+  // Formula: include mediators when direct effect is requested
+  const formulaVars = effectType === 'direct'
+    ? [...adjSetNames, ...mediatorNames.filter(m => !adjSetNames.includes(m))]
+    : adjSetNames;
 
   const payload = {
     exposure:          exposureName,
     outcome:           outcomeName,
     adjSet:            adjSetNames,
+    mediatorNames,
+    effectType,
     optionalVars,
     nodePositions,
     edges:             state.edges.map(e => [getName(e.from), getName(e.to)]),
-    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...adjSetNames].join(' + ')}`,
+    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...formulaVars].join(' + ')}`,
     source:            'GolemBuilder',
     timestamp:         Date.now()
   };

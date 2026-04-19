@@ -195,7 +195,8 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
       <label class="lbl" style="margin-bottom:.35rem">Variablen-Rollen (aus DAG) <span style="color:var(--ink3);font-size:.6rem">— heuristisch</span></label>
       <div id="varRolesCont" class="role-section"></div>
       <div id="mediatorEffWrap" style="display:none;margin-top:.4rem;padding:.4rem .5rem;border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 6%,transparent)">
-        <label class="lbl" style="color:var(--warn);margin-bottom:.25rem">Mediator erkannt: <span id="mediatorNames">—</span></label>
+        <label class="lbl" style="color:var(--warn);margin-bottom:.15rem">Mediator erkannt: <span id="mediatorNames">—</span></label>
+        <div id="mediatorSource" style="font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink3);margin-bottom:.25rem"></div>
         <div class="rg" style="flex-direction:column;gap:.25rem">
           <label class="ri"><input type="radio" name="efftype" value="total" checked onchange="onAnyChange()"> Totaler Effekt — Mediator <em>nicht</em> in Formel</label>
           <label class="ri"><input type="radio" name="efftype" value="direct" onchange="onAnyChange()"> Direkter Effekt — Mediator <em>im</em> Modell</label>
@@ -311,6 +312,7 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
         <span style="color:var(--ok)">■</span> Exposition &nbsp;
         <span style="color:var(--a5)">■</span> Adj.-Set &nbsp;
         <span style="color:var(--a4)">■</span> Outcome &nbsp;
+        <span style="color:#f0c040">■</span> Mediator &nbsp;
         <span style="color:var(--ink3)">■</span> weitere
       </span>
     </div>
@@ -388,6 +390,12 @@ function loadLS() {
     ST.varRoles = classifyVars(d);
     renderVarRoles(ST.varRoles);
 
+    // Pre-select effectType from Golem Builder (user can still override)
+    if (d.effectType) {
+      const radio = document.querySelector(`input[name=efftype][value="${d.effectType}"]`);
+      if (radio) radio.checked = true;
+    }
+
     // Mini-DAG
     if (d.nodePositions && d.nodePositions.length) {
       document.getElementById('dagPanel').style.display = '';
@@ -395,8 +403,9 @@ function loadLS() {
     }
 
     const ts = d.timestamp ? new Date(d.timestamp).toLocaleTimeString('de-DE') : '';
+    const effLabel = d.effectType === 'direct' ? ' · Direkter Effekt' : d.effectType === 'total' ? ' · Totaler Effekt' : '';
     banner.className = 'imp-ok';
-    banner.textContent = `✓ Golem Builder Import${ts ? ' · ' + ts : ''}`;
+    banner.textContent = `✓ Golem Builder Import${ts ? ' · ' + ts : ''}${effLabel}`;
     onAnyChange();
   } catch(e) {
     banner.className = 'imp-warn'; banner.textContent = 'ℹ Import fehlerhaft — manuelle Eingabe';
@@ -480,6 +489,7 @@ function drawDag(d) {
     exposure: dark ? '#80cb52' : '#5a8a2a',
     outcome:  dark ? '#c87ad8' : '#7a3a8a',
     adjSet:   dark ? '#e07830' : '#b85c00',
+    mediator: dark ? '#f0c040' : '#a07800',
     other:    dark ? '#5a5448' : '#8a7f72'
   };
 
@@ -514,9 +524,9 @@ function drawDag(d) {
 
   // Draw nodes
   nodes.forEach(n => {
-    const { cx, cy, isExposure, isOutcome, isAdjSet } = nodeMap[n.name];
-    const col = isExposure ? colors.exposure : isOutcome ? colors.outcome :
-                isAdjSet   ? colors.adjSet   : colors.other;
+    const { cx, cy, isExposure, isOutcome, isAdjSet, isMediator } = nodeMap[n.name];
+    const col = isExposure ? colors.exposure : isOutcome  ? colors.outcome  :
+                isAdjSet   ? colors.adjSet   : isMediator ? colors.mediator : colors.other;
 
     ctx.beginPath();
     ctx.arc(cx, cy, 14, 0, Math.PI * 2);
@@ -541,6 +551,8 @@ function classifyVars(d) {
   if (!d || !d.edges || !d.nodePositions) return {};
   const X = d.exposure, Y = d.outcome;
   const edges = d.edges || [];
+  // If Golem Builder already identified mediators, trust those
+  const knownMediators = new Set(d.mediatorNames || []);
 
   // Build directed graph
   const ch = {}, pa = {};
@@ -577,8 +589,11 @@ function classifyVars(d) {
     const nParents = (pa[v] || []).length;
     const nChildren= (ch[v] || []).length;
 
-    if (isDescX && isAncY) {
-      // On a causal path from X to Y → mediator
+    if (knownMediators.has(v)) {
+      // Explicitly identified as mediator by Golem Builder
+      roles[v] = 'mediator';
+    } else if (isDescX && isAncY) {
+      // On a causal path from X to Y → mediator (heuristic fallback)
       roles[v] = 'mediator';
     } else if (nParents >= 2 && !isAncY && !isDescX) {
       // 2+ parents, not on causal path → likely collider (heuristic)
@@ -667,7 +682,16 @@ function renderVarRoles(roles) {
   // Mediator effect type box
   const hasMed = med.length > 0;
   document.getElementById('mediatorEffWrap').style.display = hasMed ? '' : 'none';
-  if (hasMed) document.getElementById('mediatorNames').textContent = med.join(', ');
+  if (hasMed) {
+    document.getElementById('mediatorNames').textContent = med.join(', ');
+    const srcEl = document.getElementById('mediatorSource');
+    if (ST.imp?.effectType) {
+      const label = ST.imp.effectType === 'direct' ? 'Direkter Effekt' : 'Totaler Effekt';
+      srcEl.textContent = `↑ Aus Golem Builder übernommen: ${label} — kann hier geändert werden.`;
+    } else {
+      srcEl.textContent = '';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════

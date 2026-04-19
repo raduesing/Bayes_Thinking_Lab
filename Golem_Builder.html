@@ -2990,27 +2990,41 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
   const exposureName = getName(X);
   const outcomeName  = getName(Y);
 
-  // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome noch Adj-Set sind
+  // Effekttyp und Mediatoren
+  const effectType    = getEffectType();
+  const mediatorIds   = getMediators().filter(id => id !== X && id !== Y);
+  const mediatorNames = mediatorIds.map(getName);
+
+  // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome, Adj-Set noch Mediator sind
   const optionalVars = state.nodes
-    .filter(n => !n.latent && n.id !== X && n.id !== Y && !adjSetIds.includes(n.id))
+    .filter(n => !n.latent && n.id !== X && n.id !== Y
+              && !adjSetIds.includes(n.id) && !mediatorIds.includes(n.id))
     .map(n => n.name);
 
   // Node-Positionen für Mini-DAG-Canvas
   const nodePositions = state.nodes.filter(n => !n.latent).map(n => ({
     name: n.name, x: n.x, y: n.y,
-    isExposure: n.id === X,
-    isOutcome:  n.id === Y,
-    isAdjSet:   adjSetIds.includes(n.id)
+    isExposure:  n.id === X,
+    isOutcome:   n.id === Y,
+    isAdjSet:    adjSetIds.includes(n.id),
+    isMediator:  mediatorIds.includes(n.id)
   }));
+
+  // Formel: bei direktem Effekt Mediatoren mit aufnehmen
+  const formulaVars = effectType === 'direct'
+    ? [...adjSetNames, ...mediatorNames.filter(m => !adjSetNames.includes(m))]
+    : adjSetNames;
 
   const payload = {
     exposure:          exposureName,
     outcome:           outcomeName,
     adjSet:            adjSetNames,
+    mediatorNames,
+    effectType,
     optionalVars,
     nodePositions,
     edges:             state.edges.map(e => [getName(e.from), getName(e.to)]),
-    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...adjSetNames].join(' + ')}`,
+    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...formulaVars].join(' + ')}`,
     source:            'GolemBuilder',
     timestamp:         Date.now()
   };
