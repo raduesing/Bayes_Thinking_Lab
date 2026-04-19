@@ -1508,6 +1508,32 @@ function drawResponsePanel() {
   g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
   g.append('path').datum(pts).attr('fill','none').attr('stroke',a4).attr('stroke-width',2.5).attr('d',line);
 
+  // 95%-CrI on response scale (quantiles from model scale, monotone transform)
+  if (CUR.cdf) {
+    try {
+      const q025m = findQVal(0.025), q975m = findQVal(0.975);
+      const toResp = v => (isSlope || isLog) ? Math.exp(v) : 1/(1+Math.exp(-v));
+      const q025r = toResp(q025m), q975r = toResp(q975m);
+      const ciPts = pts.filter(p => p[0] >= q025r && p[0] <= q975r);
+      if (ciPts.length > 1) {
+        const areaCI = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
+        g.append('path').datum(ciPts).attr('fill',a4).attr('fill-opacity',.18).attr('d',areaCI);
+        [q025r, q975r].forEach(qr => {
+          if (qr >= xDomain[0] && qr <= xDomain[1]) {
+            g.append('line').attr('x1',xSc(qr)).attr('x2',xSc(qr)).attr('y1',0).attr('y2',Hp)
+             .attr('stroke',a4).attr('stroke-width',1.2).attr('stroke-dasharray','4,3').attr('opacity',.7);
+          }
+        });
+        const mid = (q025r + q975r) / 2;
+        if (mid >= xDomain[0] && mid <= xDomain[1]) {
+          g.append('text').attr('x',xSc(mid)).attr('y',14)
+           .attr('text-anchor','middle').attr('fill',a4).attr('font-size','13px').attr('font-family','DM Mono,monospace')
+           .attr('opacity',.8).text('95%-CrI');
+        }
+      }
+    } catch(e){}
+  }
+
   // Reference line at OR/RR = 1 (no effect) for slopes only
   if (isSlope && 1 >= xDomain[0] && 1 <= xDomain[1]) {
     g.append('line').attr('x1',xSc(1)).attr('x2',xSc(1)).attr('y1',0).attr('y2',Hp)

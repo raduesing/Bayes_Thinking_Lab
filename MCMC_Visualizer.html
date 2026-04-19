@@ -571,7 +571,12 @@ let lastProposed=null, lastAccepted=null, lastRatio=null;
 let lastU=null, lastPropP=null, lastCurP=null;
 let proposalFlash=0;
 let startX=0, startMu=0, startSig=0;
-let isRunning=false, animId=null, frameCount=0;
+let isRunning=false, animId=null, animIsTimeout=false, frameCount=0;
+function stopAnim(){
+  if(animIsTimeout) clearTimeout(animId);
+  else cancelAnimationFrame(animId);
+  animId=null;
+}
 const TRAIL_LEN=60;
 
 function warmupN(){ return +document.getElementById('warmup-slider').value; }
@@ -1235,7 +1240,7 @@ function doNSteps(n){
 }
 function toggleRun(){
   if(isRunning){
-    isRunning=false;cancelAnimationFrame(animId);
+    isRunning=false;stopAnim();
     document.getElementById('run-btn').textContent='▶ Fortsetzen';
     document.getElementById('run-btn').classList.remove('running');
   } else {
@@ -1254,10 +1259,16 @@ function animate(){
   drawFrame();
   if(frameCount%3===0){redrawTrace();redrawHist();}
   if(frameCount%8===0) updateStats();
-  animId=requestAnimationFrame(animate);
+  // Speed 1–5: throttle via setTimeout so speed=1 ≈ 10 steps/s
+  if(s<=5){
+    const ms=Math.round(1000/(s*10));  // speed=1→100ms, speed=2→50ms, speed=5→20ms
+    animIsTimeout=true; animId=setTimeout(animate,ms);
+  } else {
+    animIsTimeout=false; animId=requestAnimationFrame(animate);
+  }
 }
 function resetSampler(redraw=true){
-  isRunning=false;cancelAnimationFrame(animId);
+  isRunning=false;stopAnim();
   curX=0;curMu=0;curSig=1.5;
   stepCount=0;acceptCount=0;samples=[];trail=[];traceData=[];
   lastProposed=null;lastAccepted=null;lastRatio=null;
