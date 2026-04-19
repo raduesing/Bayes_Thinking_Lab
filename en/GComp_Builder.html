@@ -999,7 +999,7 @@ function generateLive() {
   // Model fitting template
   c += `# ══ STEP 1: FIT MODEL ════════════════════════════════════════════════════════\n`;
   if (isBinary && isFactor) {
-    c += `# For binary exposures: ${dat}$${exp} <- as.factor(${dat}$${exp})  # before fitting!\n`;
+    c += `${dat}$${exp} <- as.factor(${dat}$${exp})  # factor encoding — required for levels() calls below\n`;
   }
   if (mtype === 'brms') {
     c += `${mod} <- brm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr},\n  chains  = 4, iter = 2000, warmup = 1000,\n  cores   = parallel::detectCores()\n)\n\n`;
@@ -1152,8 +1152,8 @@ function generateLive() {
 
   } else {
     // METRIC
-    let cval = ctype === 'range' ? 'range' : ctype === 'iqr' ? '"iqr"' :
-               ctype === 'sd'   ? '"sd"'  : `c(${manLo||'lo'}, ${manHi||'hi'})`;
+    let cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
+               ctype === 'sd'   ? '"sd"'    : `c(${manLo||'lo'}, ${manHi||'hi'})`;
     const clbl = ctype === 'range' ? 'Min → Max' : ctype === 'iqr' ? 'Q1 → Q3 (IQR)' :
                  ctype === 'sd' ? '±1 SD' : `${manLo} → ${manHi}`;
 
@@ -1163,17 +1163,19 @@ function generateLive() {
     c += `# ── Contrast: ${clbl} ─────────────────────────────────────────────────────────\n`;
     c += `ate_k <- avg_comparisons(\n  ${mod},\n  variables=list(${exp}=${cval}),\n  newdata=${dat},\n  conf_level=0.95${reArg}\n)\nprint(ate_k)\n\n`;
 
-    c += `# ── Dose-response curve (counterfactual) ────────────────────────────────────\n`;
-    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out=100)\n`;
-    c += `pred_k <- avg_predictions(${mod}, newdata=datagrid(${exp}=dose_grid)${hasRE && isBrms ? ', re_formula=NA' : ''})\n\n`;
+    c += `# ── Dose-response curve (true G-Computation) ───────────────────────────────\n`;
+    c += `# variables=list() sets X to each grid value for ALL observations and averages\n`;
+    c += `# — true marginalisation, not a "typical person" approach.\n`;
+    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out = 100)\n`;
+    c += `pred_k <- avg_predictions(\n  ${mod},\n  variables = list(${exp} = dose_grid)${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n)\n\n`;
 
     c += `# ══ VISUALISATION ════════════════════════════════════════════════════════════\n\n`;
-    c += `# 1 — Dose-response curve\nggplot(pred_k, aes(x=${exp}, y=estimate, ymin=conf.low, ymax=conf.high)) +\n`;
-    c += `  geom_ribbon(alpha=0.18, fill="#5a8a2a") +\n  geom_line(color="#5a8a2a", linewidth=1) +\n`;
-    c += `  labs(title="G-Computation: Counterfactual dose-response curve",\n`;
-    c += `       subtitle=paste("Adj. set:", "${adjStr}"),\n`;
-    c += `       x="${exp}", y=paste0("E[${out} | do(${exp}=x)]")) +\n`;
-    c += `  theme_minimal(base_size=13)\n\n`;
+    c += `# 1 — Dose-response curve\nggplot(pred_k, aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
+    c += `  geom_ribbon(alpha = 0.18, fill = "#5a8a2a") +\n  geom_line(color = "#5a8a2a", linewidth = 1) +\n`;
+    c += `  labs(title = "G-Computation: Counterfactual dose-response curve",\n`;
+    c += `       subtitle = "Average causal effect E[Y | do(${exp}=x)] across all observations",\n`;
+    c += `       x = "${exp}", y = "E[${out} | do(${exp}=x)]") +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
 
     c += `# 2 — Marginal slope (linearity check)\n`;
     c += `plot_slopes(${mod}, variables="${exp}", condition="${exp}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;

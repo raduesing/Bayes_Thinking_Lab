@@ -999,7 +999,7 @@ function generateLive() {
   // Model fitting template
   c += `# ══ SCHRITT 1: MODELL FITTEN ════════════════════════════════════════════════\n`;
   if (isBinary && isFactor) {
-    c += `# Bei dichotomen Exposures: ${dat}$${exp} <- as.factor(${dat}$${exp})  # vor dem Fit!\n`;
+    c += `${dat}$${exp} <- as.factor(${dat}$${exp})  # Faktor-Kodierung — erforderlich für levels()-Aufrufe unten\n`;
   }
   if (mtype === 'brms') {
     c += `${mod} <- brm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr},\n  chains  = 4, iter = 2000, warmup = 1000,\n  cores   = parallel::detectCores()\n)\n\n`;
@@ -1155,8 +1155,8 @@ function generateLive() {
 
   } else {
     // METRIC
-    let cval = ctype === 'range' ? 'range' : ctype === 'iqr' ? '"iqr"' :
-               ctype === 'sd'   ? '"sd"'  : `c(${manLo||'lo'}, ${manHi||'hi'})`;
+    let cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
+               ctype === 'sd'   ? '"sd"'    : `c(${manLo||'lo'}, ${manHi||'hi'})`;
     const clbl = ctype === 'range' ? 'Min → Max' : ctype === 'iqr' ? 'Q1 → Q3 (IQR)' :
                  ctype === 'sd' ? '±1 SD' : `${manLo} → ${manHi}`;
 
@@ -1166,17 +1166,19 @@ function generateLive() {
     c += `# ── Kontrast: ${clbl} ──────────────────────────────────────────────────────────\n`;
     c += `ate_k <- avg_comparisons(\n  ${mod},\n  variables=list(${exp}=${cval}),\n  newdata=${dat},\n  conf_level=0.95${reArg}\n)\nprint(ate_k)\n\n`;
 
-    c += `# ── Dosis-Wirkungs-Kurve (kontrafaktisch) ───────────────────────────────────\n`;
-    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out=100)\n`;
-    c += `pred_k <- avg_predictions(${mod}, newdata=datagrid(${exp}=dose_grid)${hasRE && isBrms ? ', re_formula=NA' : ''})\n\n`;
+    c += `# ── Dosis-Wirkungs-Kurve (echte G-Computation) ──────────────────────────────\n`;
+    c += `# variables=list() setzt X für ALLE Beobachtungen auf den jeweiligen Grid-Wert\n`;
+    c += `# und mittelt — echte Marginalisierung, kein "typical person"-Ansatz.\n`;
+    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out = 100)\n`;
+    c += `pred_k <- avg_predictions(\n  ${mod},\n  variables = list(${exp} = dose_grid)${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n)\n\n`;
 
     c += `# ══ VISUALISIERUNG ═══════════════════════════════════════════════════════════\n\n`;
-    c += `# 1 — Dosis-Wirkungs-Kurve\nggplot(pred_k, aes(x=${exp}, y=estimate, ymin=conf.low, ymax=conf.high)) +\n`;
-    c += `  geom_ribbon(alpha=0.18, fill="#5a8a2a") +\n  geom_line(color="#5a8a2a", linewidth=1) +\n`;
-    c += `  labs(title="G-Computation: Kontrafaktische Dosis-Wirkungs-Kurve",\n`;
-    c += `       subtitle=paste("Adj.-Set:", "${adjStr}"),\n`;
-    c += `       x="${exp}", y=paste0("E[${out} | do(${exp}=x)]")) +\n`;
-    c += `  theme_minimal(base_size=13)\n\n`;
+    c += `# 1 — Dosis-Wirkungs-Kurve\nggplot(pred_k, aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
+    c += `  geom_ribbon(alpha = 0.18, fill = "#5a8a2a") +\n  geom_line(color = "#5a8a2a", linewidth = 1) +\n`;
+    c += `  labs(title = "G-Computation: Kontrafaktische Dosis-Wirkungs-Kurve",\n`;
+    c += `       subtitle = "Durchschnittlicher kausaler Effekt E[Y | do(${exp}=x)] über alle Beobachtungen",\n`;
+    c += `       x = "${exp}", y = "E[${out} | do(${exp}=x)]") +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
 
     c += `# 2 — Marginaler Slope (Linearitätsprüfung)\n`;
     c += `plot_slopes(${mod}, variables="${exp}", condition="${exp}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
