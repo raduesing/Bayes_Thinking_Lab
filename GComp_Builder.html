@@ -158,12 +158,39 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a4)}
   font-family:'DM Mono',monospace;font-size:.72rem;background:var(--ink);color:var(--paper);
   padding:.4rem .9rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:999}
 #toast.show{opacity:1}
+
+/* HELP PANEL */
+#helpPanel{position:fixed;top:0;right:-400px;width:380px;height:100vh;
+  background:var(--paper);border-left:1.5px solid var(--border);z-index:300;
+  transition:right .25s ease;overflow-y:auto;display:flex;flex-direction:column;
+  box-shadow:-4px 0 16px rgba(0,0,0,.18)}
+#helpPanel.open{right:0}
+.hph{display:flex;align-items:center;justify-content:space-between;
+  padding:.65rem .9rem;border-bottom:1px solid var(--grid);flex-shrink:0}
+.hph-lbl{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--a4)}
+.hph-close{background:none;border:none;font-size:1.2rem;cursor:pointer;
+  color:var(--ink2);line-height:1;padding:0}
+.hph-close:hover{color:var(--err)}
+.hpb{padding:.85rem .95rem;font-family:'DM Mono',monospace;font-size:.69rem;
+  color:var(--ink2);line-height:1.75;flex:1}
+.hps{font-size:.6rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a4);
+  margin:1rem 0 .3rem;padding-bottom:.2rem;border-bottom:1px solid var(--grid)}
+.hps:first-child{margin-top:0}
+.hplist{padding-left:1.1rem;margin:.2rem 0 .6rem}
+.hplist li{margin-bottom:.3rem}
+.hpnote{padding:.38rem .6rem;border-left:3px solid var(--warn);
+  background:color-mix(in srgb,var(--warn) 8%,transparent);
+  font-size:.67rem;margin:.4rem 0 .7rem;line-height:1.6}
+.hpcode{font-family:'DM Mono',monospace;font-size:.67rem;background:var(--panel);
+  padding:.25rem .45rem;border:1px solid var(--grid);display:inline-block;margin:.1rem 0}
 </style>
 </head>
 <body>
 <nav>
   <a href="index_de.html" class="nav-back">← Übersicht</a>
   <div class="nav-title">G-Comp <em>Builder</em></div>
+  <button class="nb" onclick="openHelp()">ℹ Hilfe</button>
   <button class="nb" onclick="toggleTheme()">◑ Modus</button>
 </nav>
 
@@ -288,6 +315,22 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a4)}
         <div><label class="lbl">Von</label><input type="text" id="inLo" placeholder="0" oninput="onAnyChange()"></div>
         <div><label class="lbl">Bis</label><input type="text" id="inHi" placeholder="10" oninput="onAnyChange()"></div>
       </div>
+      <div class="field" style="margin-top:.3rem;border-top:1px solid var(--grid);padding-top:.45rem">
+        <label class="ci"><input type="checkbox" id="ckATTK" onchange="toggleATTK()"> ATT/ATU-Analogon <span style="color:var(--ink3)">(künstlicher Cutoff)</span></label>
+      </div>
+      <div id="attKOpts" style="display:none">
+        <div class="field">
+          <label class="lbl">Cutoff-Typ <span style="color:var(--ink3)">— X ≥ Cutoff = "Exponiert"</span></label>
+          <div class="rg">
+            <label class="ri"><input type="radio" name="ccut" value="median" checked onchange="toggleCutManual()"> Median von X</label>
+            <label class="ri"><input type="radio" name="ccut" value="manual" onchange="toggleCutManual()"> Manuell</label>
+          </div>
+        </div>
+        <div id="cutManualRow" class="field" style="display:none">
+          <label class="lbl">Cutoff-Wert</label>
+          <input type="text" id="inCutMan" placeholder="z.B. 10" oninput="onAnyChange()">
+        </div>
+      </div>
     </div>
 
     <div class="field" style="margin-top:.3rem">
@@ -354,6 +397,67 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a4)}
 
 </div><!-- /main -->
 </div><!-- /outer -->
+
+<!-- HELP PANEL -->
+<div id="helpPanel">
+  <div class="hph">
+    <span class="hph-lbl">G-Comp Builder — Hilfe</span>
+    <button class="hph-close" onclick="closeHelp()">✕</button>
+  </div>
+  <div class="hpb">
+
+    <div class="hps">Was ist G-Computation?</div>
+    <p>G-Computation (kausale Standardisierung) schätzt, was im Durchschnitt passieren würde, wenn wir <em>alle</em> Personen auf einen bestimmten Expositionswert setzen — im Gegensatz zu "welche Personen hatten diesen Wert tatsächlich".</p>
+    <div class="hpnote">marginaleffects-Schlüsselkonzept: <code class="hpcode">variables=list(X=val)</code> setzt X für <em>jede</em> Beobachtung auf <code class="hpcode">val</code> und mittelt über alle Confounder-Verteilungen. Das ist echte Marginalisierung — kein "typical person".</div>
+
+    <div class="hps">Binäre Exposition — Estimanden</div>
+    <ul class="hplist">
+      <li><strong>ATE</strong> (Average Treatment Effect): E[Y(1)−Y(0)] — Effekt in der Gesamtpopulation.</li>
+      <li><strong>ATT</strong> (on the Treated): E[Y(1)−Y(0) | X=1] — Effekt nur bei tatsächlich Exponierten.</li>
+      <li><strong>ATU</strong> (on the Untreated): E[Y(1)−Y(0) | X=0] — Effekt, wenn die Nicht-Exponierten behandelt würden.</li>
+    </ul>
+    <div class="hpnote">ATE ≠ ATT ≠ ATU bei Effekt-Heterogenität. Bei randomisierten Daten ohne Interaktionen sind sie gleich.</div>
+
+    <div class="hps">Metrische Exposition — AME &amp; ate_k</div>
+    <ul class="hplist">
+      <li><strong>AME</strong> (Average Marginal Effect): Durchschnittliche partielle Ableitung dE[Y]/dX. Antwortet: "Um wie viel ändert sich Y pro <em>einer Einheit</em> mehr X?"</li>
+      <li><strong>ate_k</strong> (kausaler Kontrast): E[Y(x_hi) − Y(x_lo)] — mittelt über alle Personen die Differenz zwischen zwei spezifischen X-Werten. Antwortet: "Was wäre der Unterschied zwischen Min und Max, Q1 und Q3, etc.?"</li>
+    </ul>
+    <div class="hpnote">AME und ate_k sind konzeptuell verschieden: AME ist ein Slope (pro Einheit), ate_k ist ein Gesamtkontrast (von–bis). Beide sind kausale Effekte wenn Confounding kontrolliert ist.</div>
+
+    <div class="hps">ate_k — Kontrast-Strings in marginaleffects</div>
+    <ul class="hplist">
+      <li><code class="hpcode">"minmax"</code> — Min → Max der Exposition</li>
+      <li><code class="hpcode">"iqr"</code> — Q1 → Q3 (25. → 75. Perzentil)</li>
+      <li><code class="hpcode">"sd"</code> — Mittelwert−SD → Mittelwert+SD</li>
+      <li><code class="hpcode">c(lo, hi)</code> — benutzerdefiniertes Interval</li>
+    </ul>
+
+    <div class="hps">ATT/ATU-Analogon (metrisch)</div>
+    <p>Für metrische Expositionen gibt es kein natürliches "Behandelt/Unbehandelt". Das Analogon teilt die Population künstlich an einem Cutoff (Standard: Median):</p>
+    <ul class="hplist">
+      <li><strong>att_k</strong>: Kontrast — nur für Personen mit X ≥ Cutoff ("Hochbelastete")</li>
+      <li><strong>atu_k</strong>: Kontrast — nur für Personen mit X &lt; Cutoff ("Niedrigbelastete")</li>
+    </ul>
+    <div class="hpnote">Nützlich um zu prüfen, ob der Effekt für bereits stark Exponierte anders ist als für wenig Exponierte — Effekt-Heterogenität auf der Expositionsachse.</div>
+
+    <div class="hps">Dosis-Wirkungs-Kurve</div>
+    <p>Schätzt E[Y | do(X=x)] für 100 Werte von min bis max. Jeder Punkt ist ein echter G-Computation-Schätzer: die gesamte Population wird "auf X=x gesetzt" und der marginale Mittelwert berechnet.</p>
+
+    <div class="hps">ICE — Individuelle kausale Effekte</div>
+    <p>Individuelle Counterfactual Effects: τ̂ᵢ = Ŷᵢ(x_hi) − Ŷᵢ(x_lo). Zeigt Heterogenität im kausalen Effekt über Personen. Sortierung nach Ŷᵢ(x_lo) — gleiche Zeile = gleiche Person in beiden Plots.</p>
+
+    <div class="hps">Workflow</div>
+    <ol class="hplist">
+      <li>DAG im Golem Builder → Export in G-Comp Builder</li>
+      <li>Formel prüfen, Modell in R fitten</li>
+      <li>Code kopieren, Estimanden berechnen</li>
+      <li>MCMC-Draws exportieren → Decision Maker</li>
+    </ol>
+    <div class="hpnote">Nur Variablen aus dem Adj.-Set sind <em>Pflicht</em> in der Formel. Precisions-Kovariaten (Ursache von Y, nicht von X) können sicher hinzugefügt werden — sie verringern die Varianz ohne Bias einzuführen.</div>
+
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -837,6 +941,21 @@ function toggleManual() {
   onAnyChange();
 }
 
+function toggleATTK() {
+  const on = document.getElementById('ckATTK').checked;
+  document.getElementById('attKOpts').style.display = on ? '' : 'none';
+  onAnyChange();
+}
+
+function toggleCutManual() {
+  const isMan = document.querySelector('input[name=ccut]:checked')?.value === 'manual';
+  document.getElementById('cutManualRow').style.display = isMan ? '' : 'none';
+  onAnyChange();
+}
+
+function openHelp()  { document.getElementById('helpPanel').classList.add('open'); }
+function closeHelp() { document.getElementById('helpPanel').classList.remove('open'); }
+
 // ═══════════════════════════════════════════════════════
 // LIVE CHANGE HANDLER
 // ═══════════════════════════════════════════════════════
@@ -1155,48 +1274,148 @@ function generateLive() {
 
   } else {
     // METRIC
-    let cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
-               ctype === 'sd'   ? '"sd"'    : `c(${manLo||'lo'}, ${manHi||'hi'})`;
+    const cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
+                 ctype === 'sd'   ? '"sd"'     : `c(${manLo||'lo'}, ${manHi||'hi'})`;
     const clbl = ctype === 'range' ? 'Min → Max' : ctype === 'iqr' ? 'Q1 → Q3 (IQR)' :
-                 ctype === 'sd' ? '±1 SD' : `${manLo} → ${manHi}`;
+                 ctype === 'sd'   ? '±1 SD'     : `${manLo} → ${manHi}`;
 
-    c += `# ── AME — Average Marginal Effect (pro 1 Einheit ${exp}) ─────────────────────────\n`;
-    c += `ame <- avg_slopes(\n  ${mod},\n  variables="${exp}",\n  newdata=${dat},\n  conf_level=0.95${reArg}\n)\nprint(ame)\n\n`;
+    // x_lo / x_hi R expressions for counterfactual patchwork
+    let xLoR, xHiR;
+    if      (ctype === 'range')  { xLoR = `min(${dat}$${exp})`;                   xHiR = `max(${dat}$${exp})`; }
+    else if (ctype === 'iqr')    { xLoR = `quantile(${dat}$${exp}, 0.25)`;        xHiR = `quantile(${dat}$${exp}, 0.75)`; }
+    else if (ctype === 'sd')     { xLoR = `mean(${dat}$${exp}) - sd(${dat}$${exp})`; xHiR = `mean(${dat}$${exp}) + sd(${dat}$${exp})`; }
+    else                         { xLoR = manLo || 'lo';                           xHiR = manHi || 'hi'; }
 
-    c += `# ── Kontrast: ${clbl} ──────────────────────────────────────────────────────────\n`;
-    c += `ate_k <- avg_comparisons(\n  ${mod},\n  variables=list(${exp}=${cval}),\n  newdata=${dat},\n  conf_level=0.95${reArg}\n)\nprint(ate_k)\n\n`;
+    const showATTK  = document.getElementById('ckATTK').checked;
+    const cutType   = document.querySelector('input[name=ccut]:checked')?.value || 'median';
+    const cutManVal = document.getElementById('inCutMan')?.value.trim() || '';
+    const cutExpr   = cutType === 'median' ? `median(${dat}$${exp})` : (cutManVal || `median(${dat}$${exp})`);
+
+    c += `# ── AME — Average Marginal Effect (pro 1 Einheit ${exp}) ───────────────────────\n`;
+    c += `# AME: Durchschnittl. partielle Ableitung dE[Y]/dX über alle Beobachtungen.\n`;
+    c += `# Antwortet: "Um wie viel ändert sich ${out} pro einer Einheit mehr ${exp}?"\n`;
+    c += `ame <- avg_slopes(\n  ${mod},\n  variables  = "${exp}",\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\nprint(ame)\n\n`;
+
+    c += `# ── ate_k — Kausaler Kontrast: ${clbl} ─────────────────────────────────────────\n`;
+    c += `# ate_k = E[Y(x_hi) − Y(x_lo)]: jede Person wird zweimal "gesehen"\n`;
+    c += `# (einmal mit X=x_lo, einmal mit X=x_hi), dann wird gemittelt.\n`;
+    c += `# Das ist echte G-Computation — keine "typical person"-Schätzung.\n`;
+    c += `ate_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\nprint(ate_k)\n\n`;
+
+    if (showATTK) {
+      c += `# ── ATT/ATU-Analogon (künstlicher Cutoff) ───────────────────────────────────\n`;
+      c += `# Teilt die Population an einem Cutoff in "Hochexponiert" (≥) und "Niedrigexponiert" (<).\n`;
+      c += `# att_k: Kontrast (${clbl}) — nur Beobachtungen mit X ≥ Cutoff\n`;
+      c += `# atu_k: Kontrast (${clbl}) — nur Beobachtungen mit X < Cutoff\n`;
+      c += `cut_val <- ${cutExpr}\n`;
+      c += `att_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = subset(${dat}, ${exp} >= cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(att_k)\n\n`;
+      c += `atu_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = subset(${dat}, ${exp} < cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(atu_k)\n\n`;
+    }
 
     c += `# ── Dosis-Wirkungs-Kurve (echte G-Computation) ──────────────────────────────\n`;
     c += `# variables=list() setzt X für ALLE Beobachtungen auf den jeweiligen Grid-Wert\n`;
-    c += `# und mittelt — echte Marginalisierung, kein "typical person"-Ansatz.\n`;
+    c += `# und mittelt — echte Marginalisierung über die Confounder-Verteilung.\n`;
     c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out = 100)\n`;
-    c += `pred_k <- avg_predictions(\n  ${mod},\n  variables = list(${exp} = dose_grid)${hasRE && isBrms ? ',\n  re_formula = NA' : ''}\n)\n\n`;
+    c += `pred_k <- avg_predictions(\n  ${mod},\n  variables = list(${exp} = dose_grid)${reArg}\n)\n\n`;
+
+    c += `# ── Individuelle kontrafaktische Outcomes + ICE ──────────────────────────────\n`;
+    c += `x_lo <- ${xLoR}\nx_hi <- ${xHiR}\n`;
+    c += `cf_lo <- predictions(${mod}, newdata = transform(${dat}, ${exp} = x_lo)${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
+    c += `cf_hi <- predictions(${mod}, newdata = transform(${dat}, ${exp} = x_hi)${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
 
     c += `# ══ VISUALISIERUNG ═══════════════════════════════════════════════════════════\n\n`;
-    c += `# 1 — Dosis-Wirkungs-Kurve\nggplot(pred_k, aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
-    c += `  geom_ribbon(alpha = 0.18, fill = "#5a8a2a") +\n  geom_line(color = "#5a8a2a", linewidth = 1) +\n`;
+
+    c += `# 1 — Dosis-Wirkungs-Kurve\n`;
+    c += `ggplot(pred_k, aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
+    c += `  geom_ribbon(alpha = 0.18, fill = "#7a3a8a") +\n`;
+    c += `  geom_line(color = "#7a3a8a", linewidth = 1) +\n`;
     c += `  labs(title = "G-Computation: Kontrafaktische Dosis-Wirkungs-Kurve",\n`;
-    c += `       subtitle = "Durchschnittlicher kausaler Effekt E[Y | do(${exp}=x)] über alle Beobachtungen",\n`;
+    c += `       subtitle = "E[Y | do(${exp}=x)] gemittelt über alle Beobachtungen (echte Marginalisierung)",\n`;
     c += `       x = "${exp}", y = "E[${out} | do(${exp}=x)]") +\n`;
     c += `  theme_minimal(base_size = 13)\n\n`;
 
-    c += `# 2 — Marginaler Slope (Linearitätsprüfung)\n`;
-    c += `plot_slopes(${mod}, variables="${exp}", condition="${exp}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
-    c += `  geom_hline(yintercept=0, linetype="dashed", color="gray60") +\n`;
-    c += `  labs(title="Marginaler Effekt entlang der Exposition (Linearitätsprüfung)",\n`;
-    c += `       subtitle="Konstant = linearer Effekt; nicht konstant = nichtlinear",\n`;
-    c += `       x="${exp}", y=paste0("dE[${out}]/d${exp}")) +\n`;
-    c += `  theme_minimal(base_size=13)\n\n`;
+    // Forest plot rows
+    const fRows = [
+      `  data.frame(Estimand = "AME (pro 1 Einheit)", as.data.frame(ame)[,c("estimate","conf.low","conf.high")])`,
+      `  data.frame(Estimand = "ATE-k (${clbl})", as.data.frame(ate_k)[,c("estimate","conf.low","conf.high")])`
+    ];
+    if (showATTK) {
+      fRows.push(`  data.frame(Estimand = "ATT-k (X\\u2265Cutoff, ${clbl})", as.data.frame(att_k)[,c("estimate","conf.low","conf.high")])`);
+      fRows.push(`  data.frame(Estimand = "ATU-k (X<Cutoff, ${clbl})", as.data.frame(atu_k)[,c("estimate","conf.low","conf.high")])`);
+    }
 
-    c += `# 3 — AME Punktschätzer\name_df <- as.data.frame(ame)\n`;
-    c += `ggplot(ame_df, aes(x=estimate, xmin=conf.low, xmax=conf.high, y=1)) +\n`;
-    c += `  geom_pointrange(color="#5a8a2a", size=0.8) +\n`;
-    c += `  geom_vline(xintercept=0, linetype="dashed", color="gray60") +\n`;
-    c += `  labs(title=paste("AME: Durchschnittl. marginaler Effekt von '${exp}'"),\n`;
-    c += `       subtitle="Pro 1 Einheit Zunahme in der Exposition",\n`;
-    c += `       x=paste("Effekt auf", "${out}"), y=NULL) +\n`;
-    c += `  scale_y_continuous(limits=c(0.5,1.5)) +\n`;
-    c += `  theme_minimal(base_size=13) + theme(axis.text.y=element_blank(), axis.ticks.y=element_blank())\n\n`;
+    c += `# 2 — Forest Plot: AME + ate_k${showATTK ? ' + att_k/atu_k' : ''}\n`;
+    c += `est_df <- rbind(\n${fRows.join(',\n')}\n)\n`;
+    c += `est_df$Estimand <- factor(est_df$Estimand, levels = rev(unique(est_df$Estimand)))\n\n`;
+
+    let scaleVals = `  scale_color_manual(values = c(\n`;
+    scaleVals += `    "AME (pro 1 Einheit)"     = "#2a6e8a",\n`;
+    scaleVals += `    "ATE-k (${clbl})"          = "#7a3a8a"`;
+    if (showATTK) {
+      scaleVals += `,\n    "ATT-k (X\\u2265Cutoff, ${clbl})" = "#5a8a2a",\n`;
+      scaleVals += `    "ATU-k (X<Cutoff, ${clbl})"       = "#b85c00"`;
+    }
+    scaleVals += `\n  )) +\n`;
+
+    c += `ggplot(est_df, aes(x = estimate, xmin = conf.low, xmax = conf.high, y = Estimand, color = Estimand)) +\n`;
+    c += `  geom_pointrange(linewidth = 0.8, size = 0.5) +\n`;
+    c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += scaleVals;
+    c += `  labs(title = paste("G-Computation (metrisch):", "'${exp}'", "\\u2192", "'${out}'"),\n`;
+    c += `       subtitle = paste("Adj.-Set:", "${adjStr}"),\n`;
+    c += `       x = paste("Kausaler Effekt auf", "${out}"), y = NULL) +\n`;
+    c += `  theme_minimal(base_size = 13) + theme(legend.position = "none")\n\n`;
+
+    c += `# 3 — Marginaler Slope (Linearitätsprüfung)\n`;
+    c += `plot_slopes(${mod}, variables = "${exp}", condition = "${exp}"${hasRE && isBrms ? ', re_formula = NA' : ''}) +\n`;
+    c += `  geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += `  labs(title = "Marginaler Effekt entlang der Exposition (Linearitätsprüfung)",\n`;
+    c += `       subtitle = "Konstant = linearer Effekt; nicht konstant = nichtlinear / Interaktion",\n`;
+    c += `       x = "${exp}", y = paste0("dE[${out}]/d${exp}")) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
+
+    c += `# 4 — Individuelle kontrafaktische Outcomes + ICE (patchwork, geteilte Sortierung)\n`;
+    c += `rank_vec <- rank(cf_lo$estimate)           # Sortierung nach Ŷ(x_lo)\n\n`;
+
+    c += `cf_long <- rbind(\n`;
+    c += `  data.frame(.id = seq_len(nrow(cf_lo)), Gruppe = paste0("X = x_lo (", round(x_lo, 2), ")"), estimate = cf_lo$estimate),\n`;
+    c += `  data.frame(.id = seq_len(nrow(cf_hi)), Gruppe = paste0("X = x_hi (", round(x_hi, 2), ")"), estimate = cf_hi$estimate)\n`;
+    c += `)\n`;
+    c += `cf_long$.rank <- rank_vec[cf_long$.id]\n\n`;
+
+    c += `p_cf <- ggplot(cf_long, aes(x = estimate, y = .rank, color = Gruppe)) +\n`;
+    c += `  geom_line(aes(group = .id), color = "gray75", linewidth = 0.3) +\n`;
+    c += `  geom_point(size = 0.9, alpha = 0.8) +\n`;
+    c += `  scale_color_manual(values = c("#2a6e8a", "#7a3a8a")) +\n`;
+    c += `  scale_y_continuous(breaks = NULL) +\n`;
+    c += `  labs(title = "Kontrafaktische Outcomes",\n`;
+    c += `       subtitle = "Ŷ(x_lo) und Ŷ(x_hi) pro Person, sortiert nach Ŷ(x_lo)",\n`;
+    c += `       x = "${out}", y = NULL, color = NULL) +\n`;
+    c += `  theme_minimal(base_size = 13) + theme(legend.position = "bottom")\n\n`;
+
+    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = list(${exp} = c(x_lo, x_hi)),\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n`;
+    c += `ite_df$.rank <- rank_vec\n\n`;
+
+    c += `p_ice <- ggplot(ite_df, aes(x = estimate, y = .rank)) +\n`;
+    c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += `  geom_vline(xintercept = mean(ite_df$estimate), color = "#b85c00", linewidth = 0.8) +\n`;
+    c += `  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),\n`;
+    c += `                 height = 0, linewidth = 0.25, alpha = 0.35, color = "#7a3a8a") +\n`;
+    c += `  geom_point(size = 0.8, color = "#7a3a8a") +\n`;
+    c += `  annotate("text", x = mean(ite_df$estimate), y = Inf, vjust = 1.5, hjust = -0.15,\n`;
+    c += `           label = paste("ATE-k =", round(mean(ite_df$estimate), 3)),\n`;
+    c += `           color = "#b85c00", size = 3.5) +\n`;
+    c += `  scale_y_continuous(breaks = NULL) +\n`;
+    c += `  labs(title = "Individuelle kausale Effekte (ICE)",\n`;
+    c += `       subtitle = expression(hat(tau)[i] == hat(Y)(x[hi]) - hat(Y)(x[lo])),\n`;
+    c += `       x = expression(hat(tau)[i]), y = NULL) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
+
+    c += `(p_cf + p_ice) +\n`;
+    c += `  plot_annotation(\n`;
+    c += `    title    = paste("G-Computation (metrisch):", "${exp}", "\\u2192", "${out}"),\n`;
+    c += `    subtitle = paste("Kontrast:", "${clbl}", "| Sortierung nach \\u0176(x_lo)")\n`;
+    c += `  )\n\n`;
   }
 
   if (doExport && isBrms) {
