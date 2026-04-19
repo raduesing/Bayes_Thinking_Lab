@@ -84,12 +84,28 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
   border:1.5px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent);
   font-family:'DM Mono',monospace;font-size:.7rem;color:var(--warn);margin-bottom:.5rem}
 
-/* OPTIONAL VARS */
+/* OPTIONAL VARS (clickable covariate chips) */
 .optvar-chip{display:inline-flex;align-items:center;gap:.3rem;font-family:'DM Mono',monospace;
   font-size:.67rem;padding:.12rem .4rem;border:1.5px solid var(--border);
   color:var(--ink2);cursor:pointer;transition:all .15s;user-select:none;margin:.1rem}
 .optvar-chip.active{border-color:var(--a5);color:var(--a5);background:color-mix(in srgb,var(--a5) 10%,transparent)}
 .optvar-chip:hover{border-color:var(--a5);color:var(--a5)}
+
+/* VARIABLE ROLE TABLE */
+.role-section{margin-bottom:.4rem}
+.role-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem;margin-bottom:.22rem}
+.role-lbl{font-family:'DM Mono',monospace;font-size:.61rem;white-space:nowrap;
+  padding:.08rem .3rem;border:1px solid;margin-right:.2rem}
+.role-conf{border-color:var(--ok);color:var(--ok)}
+.role-med{border-color:var(--warn);color:var(--warn)}
+.role-coll{border-color:var(--err);color:var(--err)}
+.role-cov{border-color:var(--a6);color:var(--a6)}
+.role-post{border-color:var(--err);color:var(--err)}
+.role-chip{font-family:'DM Mono',monospace;font-size:.67rem;padding:.08rem .35rem;
+  border:1.5px solid;margin:.05rem;user-select:none}
+.role-chip-conf{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,transparent)}
+.role-chip-med{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent)}
+.role-chip-coll{border-color:var(--err);color:var(--err);background:color-mix(in srgb,var(--err) 8%,transparent);text-decoration:line-through}
 
 /* MINI DAG CANVAS */
 #dagCanvas{display:block;width:100%;border:1.5px solid var(--border);background:var(--panel)}
@@ -175,10 +191,17 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
       <textarea id="inFormula" rows="3" placeholder="FEV1 ~ Rauchen + Alter + Sex" oninput="onAnyChange()"></textarea>
     </div>
 
-    <div id="optVarsWrap" style="display:none;margin-bottom:.5rem">
-      <label class="lbl">Weitere DAG-Variablen <span style="color:var(--warn)">⚠ Collider &amp; Outcome-Nachfolger NICHT hinzufügen!</span></label>
-      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);margin-bottom:.3rem;line-height:1.5">Nur hinzufügen wenn die Variable kein Collider und kein Nachfolger des Outcomes ist — sonst Bias-Induktion.</div>
-      <div id="optVarsChips"></div>
+    <div id="varRolesWrap" style="display:none;margin-bottom:.5rem">
+      <label class="lbl" style="margin-bottom:.35rem">Variablen-Rollen (aus DAG) <span style="color:var(--ink3);font-size:.6rem">— heuristisch</span></label>
+      <div id="varRolesCont" class="role-section"></div>
+      <div id="mediatorEffWrap" style="display:none;margin-top:.4rem;padding:.4rem .5rem;border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 6%,transparent)">
+        <label class="lbl" style="color:var(--warn);margin-bottom:.25rem">Mediator erkannt: <span id="mediatorNames">—</span></label>
+        <div class="rg" style="flex-direction:column;gap:.25rem">
+          <label class="ri"><input type="radio" name="efftype" value="total" checked onchange="onAnyChange()"> Totaler Effekt — Mediator <em>nicht</em> in Formel</label>
+          <label class="ri"><input type="radio" name="efftype" value="direct" onchange="onAnyChange()"> Direkter Effekt — Mediator <em>im</em> Modell</label>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.61rem;color:var(--ink3);margin-top:.3rem;line-height:1.5">Totaler Effekt = X→M→Y + X→Y. Direkter Effekt = nur X→Y (Mediator kontrolliert).</div>
+      </div>
     </div>
 
     <div class="field">
@@ -291,7 +314,7 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
         <span style="color:var(--ink3)">■</span> weitere
       </span>
     </div>
-    <canvas id="dagCanvas" height="180"></canvas>
+    <canvas id="dagCanvas" height="260"></canvas>
   </div>
 
   <!-- Validierung -->
@@ -324,7 +347,8 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
 // ═══════════════════════════════════════════════════════
 const ST = {
   imp: null,          // full localStorage payload
-  optActive: new Set() // active optional vars
+  optActive: new Set(), // active optional vars
+  varRoles: {}        // variable role classification from DAG
 };
 
 // ═══════════════════════════════════════════════════════
@@ -360,8 +384,9 @@ function loadLS() {
       document.getElementById('inFormula').value = d.suggestedFormula;
     }
 
-    // Optional vars chips
-    renderOptVars(d.optionalVars || []);
+    // Variable role classification + render
+    ST.varRoles = classifyVars(d);
+    renderVarRoles(ST.varRoles);
 
     // Mini-DAG
     if (d.nodePositions && d.nodePositions.length) {
@@ -430,7 +455,7 @@ function drawDag(d) {
   if (!nodes.length) return;
 
   const W = canvas.offsetWidth || 600;
-  const H = 180;
+  const H = 260;
   canvas.width  = W;
   canvas.height = H;
 
@@ -472,7 +497,7 @@ function drawDag(d) {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.strokeStyle = dark ? '#2a3040' : '#c8bfaa';
+    ctx.strokeStyle = dark ? '#4a5568' : '#a0a8b4';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -480,10 +505,10 @@ function drawDag(d) {
     const angle = Math.atan2(y2 - y1, x2 - x1);
     ctx.beginPath();
     ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - 7*Math.cos(angle-0.4), y2 - 7*Math.sin(angle-0.4));
-    ctx.lineTo(x2 - 7*Math.cos(angle+0.4), y2 - 7*Math.sin(angle+0.4));
+    ctx.lineTo(x2 - 11*Math.cos(angle-0.38), y2 - 11*Math.sin(angle-0.38));
+    ctx.lineTo(x2 - 11*Math.cos(angle+0.38), y2 - 11*Math.sin(angle+0.38));
     ctx.closePath();
-    ctx.fillStyle = dark ? '#2a3040' : '#c8bfaa';
+    ctx.fillStyle = dark ? '#8a9ab8' : '#6a7080';
     ctx.fill();
   });
 
@@ -507,6 +532,142 @@ function drawDag(d) {
     ctx.textBaseline = 'middle';
     ctx.fillText(n.name.length > 6 ? n.name.slice(0,5)+'…' : n.name, cx, cy);
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// DAG ROLE CLASSIFICATION
+// ═══════════════════════════════════════════════════════
+function classifyVars(d) {
+  if (!d || !d.edges || !d.nodePositions) return {};
+  const X = d.exposure, Y = d.outcome;
+  const edges = d.edges || [];
+
+  // Build directed graph
+  const ch = {}, pa = {};
+  d.nodePositions.forEach(n => { ch[n.name] = []; pa[n.name] = []; });
+  edges.forEach(([f, t]) => {
+    (ch[f] = ch[f] || []).push(t);
+    (pa[t] = pa[t] || []).push(f);
+  });
+
+  // BFS reachable set following directed edges forward/backward
+  function reach(start, forward) {
+    const seen = new Set(), q = [start];
+    while (q.length) {
+      const n = q.shift();
+      ((forward ? ch : pa)[n] || []).forEach(nb => {
+        if (!seen.has(nb)) { seen.add(nb); q.push(nb); }
+      });
+    }
+    return seen;
+  }
+
+  const descX = reach(X, true);   // descendants of X
+  const ancY  = reach(Y, false);  // ancestors of Y
+  const adjSet = new Set(d.adjSet || []);
+  const roles = {};
+
+  // adjSet members = confounders (must control)
+  (d.adjSet || []).forEach(v => { roles[v] = 'confounder'; });
+
+  // Classify remaining variables
+  (d.optionalVars || []).forEach(v => {
+    const isDescX  = descX.has(v);
+    const isAncY   = ancY.has(v);
+    const nParents = (pa[v] || []).length;
+    const nChildren= (ch[v] || []).length;
+
+    if (isDescX && isAncY) {
+      // On a causal path from X to Y → mediator
+      roles[v] = 'mediator';
+    } else if (nParents >= 2 && !isAncY && !isDescX) {
+      // 2+ parents, not on causal path → likely collider (heuristic)
+      roles[v] = 'collider';
+    } else if (isDescX && !isAncY) {
+      // Caused by X but doesn't cause Y → post-treatment (also bad to control)
+      roles[v] = 'posttreatment';
+    } else if (isAncY && !isDescX) {
+      // Causes Y but not caused by X → precision covariate (safe)
+      roles[v] = 'covariate';
+    } else {
+      roles[v] = 'other';
+    }
+  });
+
+  return roles;
+}
+
+function renderVarRoles(roles) {
+  const wrap = document.getElementById('varRolesWrap');
+  const cont = document.getElementById('varRolesCont');
+  const adjSet     = ST.imp?.adjSet || [];
+  const optVars    = ST.imp?.optionalVars || [];
+  const allVars    = [...adjSet, ...optVars];
+
+  if (!allVars.length || !ST.imp) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const conf  = allVars.filter(v => roles[v] === 'confounder');
+  const med   = allVars.filter(v => roles[v] === 'mediator');
+  const cov   = allVars.filter(v => roles[v] === 'covariate');
+  const coll  = allVars.filter(v => roles[v] === 'collider');
+  const post  = allVars.filter(v => roles[v] === 'posttreatment');
+  const other = allVars.filter(v => roles[v] === 'other');
+
+  let html = '';
+
+  // Confounders — must include
+  if (conf.length) {
+    html += `<div class="role-row"><span class="role-lbl role-conf" title="Muss kontrolliert werden — Confounder laut Adj.-Set">Confounder ✓</span>`;
+    html += conf.map(v => `<span class="role-chip role-chip-conf">${v}</span>`).join('');
+    html += `</div>`;
+  }
+  // Mediators — choice
+  if (med.length) {
+    html += `<div class="role-row"><span class="role-lbl role-med" title="Auf kausalem Pfad X→M→Y — Einschluss ändert Effekttyp">Mediator ⚠</span>`;
+    html += med.map(v => `<span class="role-chip role-chip-med" title="Totaler Effekt: nicht einschließen. Direkter Effekt: einschließen.">${v}</span>`).join('');
+    html += `</div>`;
+  }
+  // Precision covariates — safe to add
+  if (cov.length) {
+    html += `<div class="role-row"><span class="role-lbl role-cov" title="Ursache von Y, nicht von X — reduziert Varianz ohne Bias">Kovariate (↑ Präzision)</span>`;
+    html += cov.map(v =>
+      `<span class="optvar-chip" data-var="${escAttr(v)}" onclick="toggleOptVar(this,'${escAttr(v)}')">${v}</span>`
+    ).join('');
+    html += `</div>`;
+  }
+  // Colliders — do not include
+  if (coll.length) {
+    html += `<div class="role-row"><span class="role-lbl role-coll" title="Collider — Kontrolle öffnet Backdoor-Pfad">Collider ✗</span>`;
+    html += coll.map(v => `<span class="role-chip role-chip-coll" title="NICHT ins Modell aufnehmen">${v}</span>`).join('');
+    html += `</div>`;
+  }
+  // Post-treatment — do not include
+  if (post.length) {
+    html += `<div class="role-row"><span class="role-lbl role-coll" title="Post-treatment Var — Kontrolle führt zu Post-treatment Bias">Post-treatment ✗</span>`;
+    html += post.map(v => `<span class="role-chip role-chip-coll" title="NICHT kontrollieren">${v}</span>`).join('');
+    html += `</div>`;
+  }
+  // Other — unclear role
+  if (other.length) {
+    html += `<div class="role-row"><span class="role-lbl" style="border-color:var(--ink3);color:var(--ink3)" title="Rolle nicht eindeutig bestimmbar">Weitere</span>`;
+    html += other.map(v =>
+      `<span class="optvar-chip" data-var="${escAttr(v)}" onclick="toggleOptVar(this,'${escAttr(v)}')">${v}</span>`
+    ).join('');
+    html += `</div>`;
+  }
+
+  cont.innerHTML = html;
+
+  // Re-sync active states after re-render
+  document.querySelectorAll('#varRolesCont .optvar-chip').forEach(chip => {
+    if (ST.optActive.has(chip.dataset.var)) chip.classList.add('active');
+  });
+
+  // Mediator effect type box
+  const hasMed = med.length > 0;
+  document.getElementById('mediatorEffWrap').style.display = hasMed ? '' : 'none';
+  if (hasMed) document.getElementById('mediatorNames').textContent = med.join(', ');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -620,6 +781,26 @@ function updateValidation() {
         if (mt === 'brms') items.push({ t:'ok', txt:`Random Effects erkannt → re_formula = NA (Population-Level).` });
         else items.push({ t:'ok', txt:`Random Effects erkannt → marginale Effekte über Cluster.` });
       }
+      // Mediator checks
+      const meds = Object.entries(ST.varRoles || {}).filter(([,r]) => r === 'mediator').map(([v]) => v);
+      if (meds.length) {
+        const effT = document.querySelector('input[name=efftype]:checked')?.value || 'total';
+        const medsInFormula = meds.filter(m => p.vars.includes(m));
+        const medsNotInFormula = meds.filter(m => !p.vars.includes(m));
+        if (effT === 'total' && medsInFormula.length)
+          items.push({ t:'err', txt:`Mediator "${medsInFormula.join(', ')}" in Formel — für TOTALEN Effekt entfernen!` });
+        if (effT === 'direct' && medsNotInFormula.length)
+          items.push({ t:'warn', txt:`Mediator "${medsNotInFormula.join(', ')}" nicht in Formel — für DIREKTEN Effekt hinzufügen.` });
+        if (effT === 'total' && !medsInFormula.length)
+          items.push({ t:'ok', txt:`Mediator (${meds.join(', ')}) nicht in Formel → Totaler Effekt korrekt.` });
+        if (effT === 'direct' && !medsNotInFormula.length)
+          items.push({ t:'ok', txt:`Mediator (${meds.join(', ')}) in Formel → Direkter Effekt korrekt.` });
+      }
+      // Collider checks
+      const colls = Object.entries(ST.varRoles || {}).filter(([,r]) => r === 'collider' || r === 'posttreatment').map(([v]) => v);
+      const collsInFormula = colls.filter(c => p.vars.includes(c));
+      if (collsInFormula.length)
+        items.push({ t:'err', txt:`Collider/Post-treatment "${collsInFormula.join(', ')}" in Formel → Bias-Induktion!` });
     }
   }
 
@@ -653,6 +834,8 @@ function generateLive() {
   const showCond  = document.getElementById('ckCond').checked;
   const moderator = document.getElementById('inModerator')?.value.trim() || '';
   const doExport  = document.getElementById('ckExp').checked;
+  const effType   = document.querySelector('input[name=efftype]:checked')?.value || 'total';
+  const mediators = Object.entries(ST.varRoles || {}).filter(([,r]) => r === 'mediator').map(([v]) => v);
   const ctypeEl   = document.querySelector('input[name=ctype]:checked');
   const ctype     = ctypeEl ? ctypeEl.value : 'range';
   const manLo     = document.getElementById('inLo').value.trim();
@@ -673,6 +856,17 @@ function generateLive() {
   c += `# Exposition:  ${exp}\n# Outcome:     ${out}\n# Adj.-Set:    ${adjStr}\n`;
   if (fullFml) c += `# Formel:      ${fullFml}\n`;
   c += `\n`;
+
+  // Mediator handling
+  if (mediators.length) {
+    if (effType === 'total') {
+      c += `# ⚠ TOTALER EFFEKT — Mediatoren (${mediators.join(', ')}) sollten NICHT in der Formel stehen.\n`;
+      c += `# Sind sie in der Formel enthalten, wird nur der direkte Effekt (X→Y ohne M-Pfad) geschätzt.\n\n`;
+    } else {
+      c += `# ℹ DIREKTER EFFEKT — Mediatoren (${mediators.join(', ')}) bewusst im Modell.\n`;
+      c += `# Dieser Code schätzt den direkten Effekt X→Y; der Mediator-Pfad X→M→Y wird herausgerechnet.\n\n`;
+    }
+  }
 
   if (isBinary) {
     // Factor mode vs. manual v0/v1
@@ -809,11 +1003,27 @@ function generateLive() {
   }
 
   if (doExport && isBrms) {
-    const estObj = isBinary && showATE ? 'ate' : isBinary && showATT ? 'att' : 'ame';
-    c += `# ── Export für BTL Decision Maker ───────────────────────────────────────────\n`;
-    c += `draws <- posterior_draws(${estObj})\n`;
-    c += `write.csv(draws, "${exp}_${out}_draws.csv", row.names=FALSE)\n`;
+    c += `# ── Export für BTL Decision Maker ─────────────────────────────────────────\n`;
     c += `# → Im Decision Maker: CSV laden, Spalte "draw" auswählen\n`;
+    if (isBinary) {
+      if (showATE) {
+        c += `draws_ate <- posterior_draws(ate)\n`;
+        c += `write.csv(draws_ate, "${exp}_${out}_ATE_draws.csv", row.names = FALSE)\n`;
+      }
+      if (showATT) {
+        c += `draws_att <- posterior_draws(att)\n`;
+        c += `write.csv(draws_att, "${exp}_${out}_ATT_draws.csv", row.names = FALSE)\n`;
+      }
+      if (showATU) {
+        c += `draws_atu <- posterior_draws(atu)\n`;
+        c += `write.csv(draws_atu, "${exp}_${out}_ATU_draws.csv", row.names = FALSE)\n`;
+      }
+      if (!showATE && !showATT && !showATU)
+        c += `# Mindestens einen Estimanden (ATE/ATT/ATU) aktivieren für Export.\n`;
+    } else {
+      c += `draws_ame <- posterior_draws(ame)\n`;
+      c += `write.csv(draws_ame, "${exp}_${out}_AME_draws.csv", row.names = FALSE)\n`;
+    }
   }
 
   document.getElementById('codeArea').innerHTML = highlightR(c);
