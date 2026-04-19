@@ -176,7 +176,8 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
     </div>
 
     <div id="optVarsWrap" style="display:none;margin-bottom:.5rem">
-      <label class="lbl">Optionale Variablen hinzufügen <span style="color:var(--ink3)">(aus DAG — <em>kann</em> kontrolliert werden)</span></label>
+      <label class="lbl">Weitere DAG-Variablen <span style="color:var(--warn)">⚠ Collider &amp; Outcome-Nachfolger NICHT hinzufügen!</span></label>
+      <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);margin-bottom:.3rem;line-height:1.5">Nur hinzufügen wenn die Variable kein Collider und kein Nachfolger des Outcomes ist — sonst Bias-Induktion.</div>
       <div id="optVarsChips"></div>
     </div>
 
@@ -218,7 +219,10 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
     </div>
 
     <div id="binOpts">
-      <div class="row2 field">
+      <div class="field">
+        <label class="ci"><input type="checkbox" id="ckFactor" checked onchange="toggleFactor()"> Exposition als Faktor kodieren <span style="color:var(--ink3)">(empfohlen — automatisches Dummy-Coding)</span></label>
+      </div>
+      <div id="v01Row" class="row2 field" style="display:none">
         <div><label class="lbl">Referenz-Wert</label><input type="text" id="inV0" value="0" oninput="onAnyChange()"></div>
         <div><label class="lbl">Treatment-Wert</label><input type="text" id="inV1" value="1" oninput="onAnyChange()"></div>
       </div>
@@ -228,8 +232,12 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
           <label class="ci"><input type="checkbox" id="ckATE" checked onchange="onAnyChange()"> ATE</label>
           <label class="ci"><input type="checkbox" id="ckATT" checked onchange="onAnyChange()"> ATT</label>
           <label class="ci"><input type="checkbox" id="ckATU" onchange="onAnyChange()"> ATU</label>
-          <label class="ci"><input type="checkbox" id="ckCond" onchange="onAnyChange()"> Konditional</label>
+          <label class="ci"><input type="checkbox" id="ckCond" onchange="toggleCond()"> Konditional</label>
         </div>
+      </div>
+      <div id="condRow" class="field" style="display:none">
+        <label class="lbl">Moderator-Variable <span style="color:var(--ink3)">(Effekt-Heterogenität)</span></label>
+        <input type="text" id="inModerator" placeholder="z.B. Alter" oninput="onAnyChange()">
       </div>
     </div>
 
@@ -280,7 +288,7 @@ input[type=text]:focus,textarea:focus,select:focus{border-color:var(--a2)}
         <span style="color:var(--ok)">■</span> Exposition &nbsp;
         <span style="color:var(--a5)">■</span> Adj.-Set &nbsp;
         <span style="color:var(--a4)">■</span> Outcome &nbsp;
-        <span style="color:var(--ink3)">■</span> optional
+        <span style="color:var(--ink3)">■</span> weitere
       </span>
     </div>
     <canvas id="dagCanvas" height="180"></canvas>
@@ -325,6 +333,7 @@ const ST = {
 window.addEventListener('load', () => {
   loadLS();
   toggleExpType();
+  toggleFactor();
 });
 
 function loadLS() {
@@ -510,6 +519,18 @@ function toggleExpType() {
   onAnyChange();
 }
 
+function toggleFactor() {
+  const isFactor = document.getElementById('ckFactor').checked;
+  document.getElementById('v01Row').style.display = isFactor ? 'none' : '';
+  onAnyChange();
+}
+
+function toggleCond() {
+  const isChecked = document.getElementById('ckCond').checked;
+  document.getElementById('condRow').style.display = isChecked ? '' : 'none';
+  onAnyChange();
+}
+
 function toggleManual() {
   const isMen = document.querySelector('input[name=ctype]:checked')?.value === 'manual';
   document.getElementById('manualRow').style.display = isMen ? '' : 'none';
@@ -623,12 +644,14 @@ function generateLive() {
   const isBrms    = mtype === 'brms';
   const hasRE     = p ? p.hasRE : !!re.trim();
   const isBinary  = document.querySelector('input[name=etype]:checked').value === 'binary';
+  const isFactor  = document.getElementById('ckFactor').checked;
   const v0        = document.getElementById('inV0').value.trim() || '0';
   const v1        = document.getElementById('inV1').value.trim() || '1';
   const showATE   = document.getElementById('ckATE').checked;
   const showATT   = document.getElementById('ckATT').checked;
   const showATU   = document.getElementById('ckATU').checked;
   const showCond  = document.getElementById('ckCond').checked;
+  const moderator = document.getElementById('inModerator')?.value.trim() || '';
   const doExport  = document.getElementById('ckExp').checked;
   const ctypeEl   = document.querySelector('input[name=ctype]:checked');
   const ctype     = ctypeEl ? ctypeEl.value : 'range';
@@ -652,7 +675,27 @@ function generateLive() {
   c += `\n`;
 
   if (isBinary) {
-    const varSpec = `list(${exp} = c(${v0}, ${v1}))`;
+    // Factor mode vs. manual v0/v1
+    const varSpec   = isFactor ? `"${exp}"` : `list(${exp} = c(${v0}, ${v1}))`;
+    const subsetTrt = isFactor
+      ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[2])`
+      : `subset(${dat}, ${exp} == ${v1})`;
+    const subsetCtl = isFactor
+      ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[1])`
+      : `subset(${dat}, ${exp} == ${v0})`;
+    const cfTrt     = isFactor
+      ? `transform(${dat}, ${exp} = levels(${dat}$${exp})[2])`
+      : `transform(${dat}, ${exp} = ${v1})`;
+    const cfCtl     = isFactor
+      ? `transform(${dat}, ${exp} = levels(${dat}$${exp})[1])`
+      : `transform(${dat}, ${exp} = ${v0})`;
+
+    if (isFactor) {
+      c += `# ── Faktor-Kodierung (empfohlen) ─────────────────────────────────────────────\n`;
+      c += `${dat}$${exp} <- as.factor(${dat}$${exp})\n`;
+      c += `# Referenzlevel prüfen / ändern:\n`;
+      c += `# ${dat}$${exp} <- relevel(${dat}$${exp}, ref = "Referenzgruppe")\n\n`;
+    }
 
     if (showATE) {
       c += `# ── ATE — Average Treatment Effect (Gesamtpopulation) ──────────────────────\n`;
@@ -660,26 +703,24 @@ function generateLive() {
     }
     if (showATT) {
       c += `# ── ATT — Average Treatment Effect on the Treated ───────────────────────────\n`;
-      c += `att <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = subset(${dat}, ${exp} == ${v1}),\n  conf_level = 0.95${reArg}\n)\nprint(att)\n\n`;
+      c += `att <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${subsetTrt},\n  conf_level = 0.95${reArg}\n)\nprint(att)\n\n`;
     }
     if (showATU) {
       c += `# ── ATU — Average Treatment Effect on the Untreated ─────────────────────────\n`;
-      c += `atu <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = subset(${dat}, ${exp} == ${v0}),\n  conf_level = 0.95${reArg}\n)\nprint(atu)\n\n`;
+      c += `atu <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${subsetCtl},\n  conf_level = 0.95${reArg}\n)\nprint(atu)\n\n`;
     }
 
     // Counterfactual predictions
     c += `# ── Kontrafaktische Vorhersagen ──────────────────────────────────────────────\n`;
-    c += `pred_1 <- avg_predictions(${mod}, newdata = transform(${dat}, ${exp} = ${v1})${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
-    c += `pred_0 <- avg_predictions(${mod}, newdata = transform(${dat}, ${exp} = ${v0})${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
+    c += `pred_1 <- avg_predictions(${mod}, newdata = ${cfTrt}${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
+    c += `pred_0 <- avg_predictions(${mod}, newdata = ${cfCtl}${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
 
-    // Conditional effect
-    const interWithExp = p ? p.interactions.filter(t =>
-      t.split(/[\*:]/).map(v=>v.trim()).includes(exp)) : [];
-    const interVar = interWithExp.length
-      ? interWithExp[0].split(/[\*:]/).map(v=>v.trim()).find(v=>v!==exp) : null;
-    if (showCond && interVar) {
-      c += `# ── Konditionaler Effekt (Interaktion ${exp}:${interVar} im Modell) ────────────\n`;
-      c += `cond <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  condition  = "${interVar}",\n  conf_level = 0.95${reArg}\n)\n\n`;
+    // Conditional effect — always show when checkbox checked + moderator given
+    if (showCond && moderator) {
+      c += `# ── Konditionaler Effekt (Effekt-Heterogenität über ${moderator}) ───────────────\n`;
+      c += `cond <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  condition  = "${moderator}",\n  conf_level = 0.95${reArg}\n)\nprint(cond)\n\n`;
+    } else if (showCond && !moderator) {
+      c += `# ── Konditionaler Effekt — bitte Moderator-Variable oben angeben ─────────────\n\n`;
     }
 
     // ggplot
@@ -701,9 +742,11 @@ function generateLive() {
       c += `  theme_minimal(base_size=13) + theme(legend.position="none")\n\n`;
     }
 
+    const grpTrt = isFactor ? `levels(${dat}$${exp})[2]` : `"${exp} = ${v1}"`;
+    const grpCtl = isFactor ? `levels(${dat}$${exp})[1]` : `"${exp} = ${v0}"`;
     c += `# 2 — Kontrafaktische Outcome-Verteilungen\ncf_df <- rbind(\n`;
-    c += `  data.frame(Gruppe=paste("${exp} =", ${v1}), pred_1),\n`;
-    c += `  data.frame(Gruppe=paste("${exp} =", ${v0}), pred_0)\n)\n\n`;
+    c += `  data.frame(Gruppe=${grpTrt}, pred_1),\n`;
+    c += `  data.frame(Gruppe=${grpCtl}, pred_0)\n)\n\n`;
     c += `ggplot(cf_df, aes(x=estimate, fill=Gruppe, color=Gruppe)) +\n`;
     c += `  geom_density(alpha=0.22, linewidth=0.8) +\n`;
     c += `  scale_fill_manual(values=c("#5a8a2a","#2a6e8a")) +\n`;
@@ -712,12 +755,12 @@ function generateLive() {
     c += `       x="${out}", y="Dichte", fill=NULL, color=NULL) +\n`;
     c += `  theme_minimal(base_size=13)\n\n`;
 
-    if (showCond && interVar) {
-      c += `# 3 — Konditionaler Effekt: Effekt-Heterogenität über ${interVar}\n`;
-      c += `plot_comparisons(${mod}, variables="${exp}", condition="${interVar}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
+    if (showCond && moderator) {
+      c += `# 3 — Konditionaler Effekt: Effekt-Heterogenität über ${moderator}\n`;
+      c += `plot_comparisons(${mod}, variables=${varSpec}, condition="${moderator}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
       c += `  labs(title=paste("Konditionaler Effekt von '${exp}'"),\n`;
-      c += `       subtitle="Effekt-Heterogenität — Interaktion mit '${interVar}'",\n`;
-      c += `       y=paste("Kausaler Effekt auf '${out}'"), x="${interVar}") +\n`;
+      c += `       subtitle="Effekt-Heterogenität — Moderator '${moderator}'",\n`;
+      c += `       y=paste("Kausaler Effekt auf '${out}'"), x="${moderator}") +\n`;
       c += `  theme_minimal(base_size=13)\n\n`;
     }
 
