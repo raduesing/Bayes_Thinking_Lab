@@ -1088,21 +1088,27 @@ function generateLive() {
     c += `       x="${out}", y="Dichte", fill=NULL, color=NULL) +\n`;
     c += `  theme_minimal(base_size=13)\n\n`;
 
-    // ITE plot: individual causal effects = Ŷ(1) - Ŷ(0) per person
-    c += `# 2b — Individuelle kausale Effekte (ITE = Ŷ(1) − Ŷ(0) pro Person)\n`;
-    c += `# comparisons() ohne avg_ liefert den Effekt für jede Beobachtung\n`;
-    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n\n`;
-    c += `ggplot(ite_df, aes(x=estimate)) +\n`;
-    c += `  geom_histogram(bins=40, fill="#5a8a2a", color="white", alpha=0.85) +\n`;
-    c += `  geom_vline(xintercept=0, linetype="dashed", color="gray50") +\n`;
-    c += `  geom_vline(xintercept=mean(ite_df$estimate), color="#b85c00", linewidth=0.9) +\n`;
-    c += `  annotate("text", x=mean(ite_df$estimate), y=Inf, vjust=1.5, hjust=-0.1,\n`;
-    c += `           label=paste("ATE =", round(mean(ite_df$estimate),3)),\n`;
-    c += `           color="#b85c00", size=3.5) +\n`;
-    c += `  labs(title="Verteilung der individuellen kausalen Effekte (ITE)",\n`;
-    c += `       subtitle="Effekt-Heterogenität: Wie stark variiert der Effekt zwischen Personen?",\n`;
-    c += `       x=paste("ITE: Ŷ(1) − Ŷ(0)"), y="Anzahl") +\n`;
-    c += `  theme_minimal(base_size=13)\n\n`;
+    // ITE plot: individual causal effects sorted by magnitude (Solomon Kurz style)
+    c += `# 2b — Individuelle kausale Effekte (ICE = Ŷ(1) − Ŷ(0) pro Person, sortiert)\n`;
+    c += `# Jeder Punkt = eine Person; Y-Achse sortiert nach Effektgröße (wie Solomon Kurz)\n`;
+    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n`;
+    c += `ite_df$.id <- seq_len(nrow(ite_df))  # Personen-ID für Y-Achse\n\n`;
+    c += `ggplot(ite_df, aes(x = estimate, y = reorder(.id, estimate))) +\n`;
+    c += `  geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +\n`;
+    c += `  geom_vline(xintercept = mean(ite_df$estimate),\n`;
+    c += `             color = "#b85c00", linewidth = 0.9) +\n`;
+    c += `  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),\n`;
+    c += `                 height = 0, linewidth = 0.25, alpha = 0.4, color = "#5a8a2a") +\n`;
+    c += `  geom_point(size = 0.8, color = "#5a8a2a") +\n`;
+    c += `  annotate("text", x = mean(ite_df$estimate), y = Inf, vjust = 1.5, hjust = -0.15,\n`;
+    c += `           label = paste("ATE =", round(mean(ite_df$estimate), 3)),\n`;
+    c += `           color = "#b85c00", size = 3.5) +\n`;
+    c += `  scale_y_discrete(breaks = NULL) +\n`;
+    c += `  labs(title = "Individuelle kausale Effekte (ICE)",\n`;
+    c += `       subtitle = "Jeder Punkt = eine Person, sortiert nach Effektgröße — Breite zeigt Effekt-Heterogenität",\n`;
+    c += `       x = expression(hat(tau)[i] ~ (ICE == hat(Y)(1) - hat(Y)(0))),\n`;
+    c += `       y = NULL) +\n`;
+    c += `  theme_minimal(base_size = 13)\n\n`;
 
     if (showCond && moderator) {
       c += `# 3 — Konditionaler Effekt: Effekt-Heterogenität über ${moderator}\n`;
