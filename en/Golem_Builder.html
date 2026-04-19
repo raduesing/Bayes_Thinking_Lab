@@ -893,7 +893,7 @@ canvas {
     <div id="edgeCoefSection">
       <div class="section-title">Edge Weights (β)</div>
       <table class="coef-table">
-        <thead><tr><th>From</th><th>→ To</th><th>β-Coefficient</th></tr></thead>
+        <thead><tr><th>From</th><th>→ To</th><th>β</th><th>×M (Moderator)</th><th>β_int</th></tr></thead>
         <tbody id="edgeCoefBody"></tbody>
       </table>
     </div>
@@ -2152,7 +2152,7 @@ function applyStdMode() {
   let anyInvalid = false;
   document.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
     const nodeId = inp.dataset.nonrootSd;
-    if (getNonRootDist(nodeId) === 'Bernoulli') return; // no σ for Bernoulli nodes
+    if (getNonRootDist(nodeId) !== 'Normal') return; // no σ_residual auto-compute for non-Normal nodes
     if (STD_MODE) {
       const { sigma, sumB2, invalid } = computeStdSigma(nodeId);
       if (invalid) anyInvalid = true;
@@ -2213,6 +2213,16 @@ function getEdgeCoef(edgeId) {
   return input ? parseFloat(input.value) || 0.5 : 0.5;
 }
 
+function getEdgeModerator(edgeId) {
+  const sel = document.querySelector(`[data-edge-mod="${edgeId}"]`);
+  return sel ? sel.value : '';
+}
+
+function getEdgeIntCoef(edgeId) {
+  const inp = document.querySelector(`[data-edge-int="${edgeId}"]`);
+  return inp ? (parseFloat(inp.value) || 0) : 0;
+}
+
 function getRootDist(nodeId) {
   const distSel = document.querySelector(`[data-root-dist="${nodeId}"]`);
   const meanInp = document.querySelector(`[data-root-mean="${nodeId}"]`);
@@ -2227,22 +2237,46 @@ function getRootDist(nodeId) {
 function updateEdgeCoefTable() {
   const tbody = document.getElementById('edgeCoefBody');
   if (state.edges.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="empty-note" style="padding:.4rem .5rem;">Noch keine Kanten definiert.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-note" style="padding:.4rem .5rem;">No edges defined yet.</td></tr>';
     return;
   }
-  // Keep existing values
-  const existing = {};
-  tbody.querySelectorAll('[data-edge-coef]').forEach(inp => {
-    existing[inp.dataset.edgeCoef] = inp.value;
-  });
+  const existing = {}, existingMod = {}, existingInt = {};
+  tbody.querySelectorAll('[data-edge-coef]').forEach(inp => { existing[inp.dataset.edgeCoef] = inp.value; });
+  tbody.querySelectorAll('[data-edge-mod]').forEach(sel => { existingMod[sel.dataset.edgeMod] = sel.value; });
+  tbody.querySelectorAll('[data-edge-int]').forEach(inp => { existingInt[inp.dataset.edgeInt] = inp.value; });
+
+  const observableNodes = state.nodes.filter(n => !n.latent);
+
   tbody.innerHTML = state.edges.map(e => {
-    const val = existing[e.id] !== undefined ? existing[e.id] : '0.5';
+    const val    = existing[e.id]    !== undefined ? existing[e.id]    : '0.5';
+    const modVal = existingMod[e.id] !== undefined ? existingMod[e.id] : '';
+    const intVal = existingInt[e.id] !== undefined ? existingInt[e.id] : '0';
+    const intDis = !modVal ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
+    const modOpts = observableNodes
+      .filter(n => n.id !== e.from && n.id !== e.to)
+      .map(n => `<option value="${escHtml(n.name)}"${modVal===n.name?' selected':''}>${escHtml(n.name)}</option>`)
+      .join('');
     return `<tr>
       <td>${escHtml(getNodeName(e.from))}</td>
       <td>→ ${escHtml(getNodeName(e.to))}</td>
       <td><input type="number" class="coef-input" data-edge-coef="${e.id}" value="${val}" step="0.1" oninput="if(STD_MODE)applyStdMode()"></td>
+      <td><select class="dist-select" data-edge-mod="${e.id}" style="min-width:4rem">
+        <option value="">—</option>${modOpts}
+      </select></td>
+      <td><input type="number" class="coef-input" data-edge-int="${e.id}" value="${intVal}" step="0.1"${intDis}></td>
     </tr>`;
   }).join('');
+
+  tbody.querySelectorAll('[data-edge-mod]').forEach(sel => {
+    const intInp = tbody.querySelector(`[data-edge-int="${sel.dataset.edgeMod}"]`);
+    sel.addEventListener('change', () => {
+      if (intInp) {
+        intInp.disabled      = sel.value === '';
+        intInp.style.opacity = sel.value === '' ? '.35' : '';
+        intInp.style.cursor  = sel.value === '' ? 'not-allowed' : '';
+      }
+    });
+  });
 }
 
 function updateRootNodeTable() {
@@ -2308,29 +2342,35 @@ function updateNonRootSdTable() {
     const sdVal   = existingSd[n.id]   !== undefined ? existingSd[n.id]   : '1';
     const intVal  = existingInt[n.id]  !== undefined ? existingInt[n.id]  : '0';
     const distVal = existingDist[n.id] !== undefined ? existingDist[n.id] : 'Normal';
-    const sdDisabled = distVal === 'Bernoulli' ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
+    const needsSigma = distVal === 'Normal' || distVal === 'Gamma';
+    const sdDisabled = !needsSigma ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
+    const sdTitle    = distVal === 'Gamma' ? ' title="Shape parameter φ (precision)"' : '';
     return `<tr>
       <td>${escHtml(n.name)}</td>
       <td>
         <select class="dist-select" data-nonroot-dist="${n.id}">
           <option${distVal==='Normal'?' selected':''}>Normal</option>
           <option${distVal==='Bernoulli'?' selected':''}>Bernoulli</option>
+          <option${distVal==='Poisson'?' selected':''}>Poisson</option>
+          <option${distVal==='Gamma'?' selected':''}>Gamma</option>
         </select>
       </td>
       <td><input type="number" class="sd-input" data-nonroot-intercept="${n.id}" value="${intVal}" step="0.1"></td>
-      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${sdVal}" step="0.1" min="0.01"${sdDisabled}></td>
+      <td><input type="number" class="sd-input" data-nonroot-sd="${n.id}" value="${sdVal}" step="0.1" min="0.01"${sdDisabled}${sdTitle}></td>
     </tr>`;
   }).join('');
 
-  // Wire up dist change → toggle σ disabled state
+  // Wire up dist change → toggle σ / shape disabled state
   tbody.querySelectorAll('[data-nonroot-dist]').forEach(sel => {
     const nodeId = sel.dataset.nonrootDist;
     const sdInp = tbody.querySelector(`[data-nonroot-sd="${nodeId}"]`);
     sel.addEventListener('change', () => {
       if (sdInp) {
-        sdInp.disabled = sel.value === 'Bernoulli';
-        sdInp.style.opacity = sel.value === 'Bernoulli' ? '.35' : '';
-        sdInp.style.cursor  = sel.value === 'Bernoulli' ? 'not-allowed' : '';
+        const needs = sel.value === 'Normal' || sel.value === 'Gamma';
+        sdInp.disabled      = !needs;
+        sdInp.style.opacity = !needs ? '.35' : '';
+        sdInp.style.cursor  = !needs ? 'not-allowed' : '';
+        sdInp.title = sel.value === 'Gamma' ? 'Shape parameter φ (precision)' : 'σ_residual';
       }
       updatePartB();
       generateRCode && document.getElementById('rCodeOutput') && (document.getElementById('rCodeOutput').textContent = generateRCode());
@@ -2346,6 +2386,13 @@ function getNonRootSd(nodeId) {
 function getNonRootDist(nodeId) {
   const sel = document.querySelector(`[data-nonroot-dist="${nodeId}"]`);
   return sel ? sel.value : 'Normal';
+}
+
+function getOutcomeDist() {
+  const Y = state.outcome;
+  if (!Y) return 'Normal';
+  if (getParents(Y).length === 0) return getRootDist(Y).dist;
+  return getNonRootDist(Y);
 }
 
 function getNonRootIntercept(nodeId) {
@@ -2493,6 +2540,7 @@ function generateRCode() {
       lines.push('', '# Endogenous observable nodes (topological order)');
       observedNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
+        const dist  = getNonRootDist(nd.id);
         const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
@@ -2500,18 +2548,36 @@ function generateRCode() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           return `${coef} * ${getNodeName(pid)}`;
         });
-        const muTerms = alpha !== 0 ? [String(alpha), ...betaTerms] : betaTerms;
+        const intTerms = parents.flatMap(pid => {
+          const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
+          if (!edge) return [];
+          const mod  = getEdgeModerator(edge.id);
+          const bint = getEdgeIntCoef(edge.id);
+          return (mod && bint !== 0) ? [`${bint} * ${getNodeName(pid)} * ${mod}`] : [];
+        });
+        const allLinear = [...betaTerms, ...intTerms];
+        const muTerms = alpha !== 0 ? [String(alpha), ...allLinear] : allLinear;
         const commentParts = alpha !== 0 ? [`alpha=${alpha}`] : [];
         parents.forEach(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
+          const mod  = edge ? getEdgeModerator(edge.id) : '';
+          const bint = edge ? getEdgeIntCoef(edge.id) : 0;
+          if (mod && bint !== 0) commentParts.push(`beta_int(${getNodeName(pid)}×${mod})=${bint}`);
         });
-        if (getNonRootDist(nd.id) === 'Bernoulli') {
-          lines.push(`${nd.name} <- rbinom(n, 1, plogis(${muTerms.join(' + ')}))  # ${commentParts.join(', ')}`);
+        const muExpr = muTerms.join(' + ') || '0';
+        if (dist === 'Bernoulli') {
+          lines.push(`${nd.name} <- rbinom(n, 1, plogis(${muExpr}))  # ${commentParts.join(', ')}`);
+        } else if (dist === 'Poisson') {
+          lines.push(`${nd.name} <- rpois(n, exp(${muExpr}))  # ${commentParts.join(', ')}`);
+        } else if (dist === 'Gamma') {
+          const shapeVal = getNonRootSd(nd.id);
+          commentParts.push(`shape=φ=${shapeVal}`);
+          lines.push(`${nd.name} <- rgamma(n, shape = ${shapeVal}, rate = ${shapeVal} / exp(${muExpr}))  # ${commentParts.join(', ')}`);
         } else {
           commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
-          lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # ${commentParts.join(', ')}`);
+          lines.push(`${nd.name} <- rnorm(n, ${muExpr}, ${sigma})  # ${commentParts.join(', ')}`);
         }
       });
     }
@@ -2556,6 +2622,29 @@ function getAdjSetNames() {
     return [...new Set([...baseSet, ...medNames])];
   }
   return baseSet;
+}
+
+function buildFormulaRHS(targetId) {
+  const X = state.exposure;
+  const xName = X ? getNodeName(X) : 'X';
+  const adjNames = getAdjSetNames();
+  const baseTerms = [xName, ...adjNames];
+  const intPairs = targetId
+    ? state.edges.filter(e => e.to === targetId).flatMap(e => {
+        const mod = getEdgeModerator(e.id);
+        return mod ? [{ a: getNodeName(e.from), b: mod }] : [];
+      })
+    : [];
+  if (intPairs.length === 0) return baseTerms.join(' + ');
+  const processed = [...baseTerms];
+  for (const { a, b } of intPairs) {
+    const ai = processed.indexOf(a);
+    if (ai >= 0) processed.splice(ai, 1);
+    const bi = processed.indexOf(b);
+    if (bi >= 0) processed.splice(bi, 1);
+    processed.push(`${a} * ${b}`);
+  }
+  return processed.join(' + ');
 }
 
 function generateBrmsCode() {
@@ -2635,8 +2724,14 @@ function generateBrmsCode() {
 
   // General case
   const adjNames = getAdjSetNames();
-  const rhs = [xName, ...adjNames].join(' + ');
+  const rhs = buildFormulaRHS(Y);
   const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(no adjustment set needed)';
+
+  const outDist = getOutcomeDist();
+  const brmsFamily = { Normal: 'gaussian()', Bernoulli: 'bernoulli("logit")', Poisson: 'poisson("log")', Gamma: 'Gamma("log")' }[outDist] || 'gaussian()';
+  let brmsPriorBlock = '    prior(normal(0, 1), class = b),\n    prior(normal(0, 1), class = Intercept)';
+  if (outDist === 'Normal')    brmsPriorBlock += ',\n    prior(exponential(1), class = sigma)';
+  else if (outDist === 'Gamma') brmsPriorBlock += ',\n    prior(exponential(1), class = shape)';
 
   return [
     'library(brms)',
@@ -2645,11 +2740,9 @@ function generateBrmsCode() {
     'fit_brms <- brm(',
     `  ${yName} ~ ${rhs},`,
     '  data = dat,',
-    '  family = gaussian(),',
+    `  family = ${brmsFamily},`,
     '  prior = c(',
-    '    prior(normal(0, 1), class = b),',
-    '    prior(normal(0, 1), class = Intercept),',
-    '    prior(exponential(1), class = sigma)',
+    brmsPriorBlock,
     '  ),',
     '  chains = 4, iter = 2000, warmup = 1000, cores = 4,',
     '  seed = 42',
@@ -2671,10 +2764,13 @@ function generateTMBCode() {
   // (would be misleading there, as naive Y~X is biased due to U)
   const hasSpecialPattern = instruments.length > 0 || frontDoorMediators.length > 0;
 
+  const outDist = getOutcomeDist();
+  const glmmFamily = { Normal: 'gaussian()', Bernoulli: 'binomial(link="logit")', Poisson: 'poisson(link="log")', Gamma: 'Gamma(link="log")' }[outDist] || 'gaussian()';
+
   let baseCode = [];
   if (!hasSpecialPattern) {
     const adjNames = getAdjSetNames();
-    const rhs = [xName, ...adjNames].join(' + ');
+    const rhs = buildFormulaRHS(Y);
     const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(no adjustment set needed)';
     baseCode = [
       'library(glmmTMB)',
@@ -2683,7 +2779,7 @@ function generateTMBCode() {
       'fit_tmb <- glmmTMB(',
       `  ${yName} ~ ${rhs},`,
       '  data = dat,',
-      '  family = gaussian()',
+      `  family = ${glmmFamily}`,
       ')',
       'summary(fit_tmb)',
     ];
@@ -2712,7 +2808,7 @@ function generateTMBCode() {
       `dat$${xName}_hat <- fitted(fit_iv1)   # X̂ contains only Z-variation, not U`,
       '',
       `# Stage 2: regress ${yName} on X̂ — U's influence is no longer in X̂`,
-      `fit_iv2 <- glmmTMB(${yName} ~ ${xName}_hat, data = dat, family = gaussian())`,
+      `fit_iv2 <- glmmTMB(${yName} ~ ${xName}_hat, data = dat, family = ${glmmFamily})`,
       'summary(fit_iv2)',
       '# WARNING: Standard errors from stage 2 are too small (2SLS problem).',
       '# For correct SEs: use ivreg() or bootstrap.',
@@ -2720,7 +2816,7 @@ function generateTMBCode() {
       `cat("IV estimator (2SLS) for ${xName}→${yName}: ", iv_effect, "\\n")`,
       '',
       '# For comparison: naive estimator (biased due to U)',
-      `fit_naive_freq <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`,
+      `fit_naive_freq <- glmmTMB(${yName} ~ ${xName}, data = dat, family = ${glmmFamily})`,
       `cat("Naive estimator (biased): ", fixef(fit_naive_freq)$cond["${xName}"], "\\n")`,
     ]);
   }
@@ -2746,7 +2842,7 @@ function generateTMBCode() {
       `# Stage 2: ${yName} ~ ${mName} + ${xName}`,
       `# ${xName} as control NECESSARY: blocks backdoor ${mName}←${xName}←U→${yName}`,
       `# Without ${xName}, U's influence on ${yName} would be falsely attributed to ${mName}!`,
-      `fit_fd2 <- glmmTMB(${yName} ~ ${mName} + ${xName}, data = dat, family = gaussian())`,
+      `fit_fd2 <- glmmTMB(${yName} ~ ${mName} + ${xName}, data = dat, family = ${glmmFamily})`,
       `beta_MY <- fixef(fit_fd2)$cond["${mName}"]`,
       `cat("Step 2 — ${mName}→${yName} effect controlling for ${xName} (β_MY): ", beta_MY, "\\n")`,
       '',
@@ -3075,6 +3171,20 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
     ? [...adjSetNames, ...mediatorNames.filter(m => !adjSetNames.includes(m))]
     : adjSetNames;
 
+  const intPairsForExport = state.edges.filter(e => e.to === Y).flatMap(e => {
+    const mod = getEdgeModerator(e.id);
+    return mod ? [{ a: getName(e.from), b: mod }] : [];
+  });
+  const baseFormulaVars = [exposureName, ...formulaVars];
+  let exportRhsTerms = [...baseFormulaVars];
+  for (const { a, b } of intPairsForExport) {
+    const ai = exportRhsTerms.indexOf(a);
+    if (ai >= 0) exportRhsTerms.splice(ai, 1);
+    const bi = exportRhsTerms.indexOf(b);
+    if (bi >= 0) exportRhsTerms.splice(bi, 1);
+    exportRhsTerms.push(`${a} * ${b}`);
+  }
+
   const payload = {
     exposure:          exposureName,
     outcome:           outcomeName,
@@ -3085,7 +3195,8 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
     optionalVars,
     nodePositions,
     edges:             state.edges.map(e => [getName(e.from), getName(e.to)]),
-    suggestedFormula:  `${outcomeName} ~ ${[exposureName, ...formulaVars].join(' + ')}`,
+    suggestedFormula:  `${outcomeName} ~ ${exportRhsTerms.join(' + ')}`,
+    outcomeDist:       getOutcomeDist(),
     source:            'GolemBuilder',
     timestamp:         Date.now()
   };
