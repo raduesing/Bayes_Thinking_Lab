@@ -472,18 +472,62 @@ function drawDag(d) {
   const dark = document.documentElement.dataset.theme === 'dark';
   ctx.clearRect(0, 0, W, H);
 
-  // Scale node positions to canvas
-  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
-  const pad = 40;
+  // ── Hierarchical layout (topological levels, left-to-right) ──────────────
+  const names = nodes.map(n => n.name);
+  const ch = {}, pa = {};
+  names.forEach(n => { ch[n] = []; pa[n] = []; });
+  edges.forEach(([f, t]) => {
+    if (names.includes(f) && names.includes(t)) {
+      ch[f].push(t); pa[t].push(f);
+    }
+  });
 
-  const sx = n => pad + (n.x - minX) / rangeX * (W - 2 * pad);
-  const sy = n => pad + (n.y - minY) / rangeY * (H - 2 * pad);
+  // Longest-path level assignment
+  const level = {};
+  names.forEach(n => { if (pa[n].length === 0) level[n] = 0; });
+  for (let iter = 0; iter < names.length * 2; iter++) {
+    names.forEach(n => {
+      const pars = pa[n];
+      if (!pars.length) return;
+      if (pars.every(p => level[p] !== undefined)) {
+        const lv = Math.max(...pars.map(p => level[p])) + 1;
+        if (level[n] === undefined || level[n] < lv) level[n] = lv;
+      }
+    });
+  }
+  names.forEach(n => { if (level[n] === undefined) level[n] = 0; });
+
+  // Group by level
+  const byL = {};
+  names.forEach(n => { (byL[level[n]] = byL[level[n]] || []).push(n); });
+  const maxL = Math.max(...Object.keys(byL).map(Number));
+
+  // Sort within each level: exposure top, outcome bottom-ish, adjSet/mediator middle
+  const expName = nodes.find(n => n.isExposure)?.name;
+  const outName = nodes.find(n => n.isOutcome)?.name;
+  Object.values(byL).forEach(ns => ns.sort((a, b) => {
+    const rank = v => v === expName ? 0 : v === outName ? 99 :
+                      (nodes.find(n=>n.name===v)?.isAdjSet ? 1 :
+                       nodes.find(n=>n.name===v)?.isMediator ? 2 : 3);
+    return rank(a) - rank(b);
+  }));
+
+  // Assign pixel coordinates
+  const pad = 44;
+  const posMap = {};
+  Object.entries(byL).forEach(([l, ns]) => {
+    const x = pad + (Number(l) / Math.max(maxL, 1)) * (W - 2 * pad);
+    ns.forEach((n, i) => {
+      const y = pad + (i + 0.5) / ns.length * (H - 2 * pad);
+      posMap[n] = { x, y };
+    });
+  });
 
   const nodeMap = {};
-  nodes.forEach(n => { nodeMap[n.name] = { ...n, cx: sx(n), cy: sy(n) }; });
+  nodes.forEach(n => {
+    const p = posMap[n.name] || { x: W/2, y: H/2 };
+    nodeMap[n.name] = { ...n, cx: p.x, cy: p.y };
+  });
 
   const colors = {
     exposure: dark ? '#80cb52' : '#5a8a2a',
@@ -582,7 +626,10 @@ function classifyVars(d) {
   // adjSet members = confounders (must control)
   (d.adjSet || []).forEach(v => { roles[v] = 'confounder'; });
 
-  // Classify remaining variables
+  // Mediators from Golem Builder export — authoritative
+  (d.mediatorNames || []).forEach(v => { roles[v] = 'mediator'; });
+
+  // Classify optional variables (heuristic fallback for any not yet classified)
   (d.optionalVars || []).forEach(v => {
     const isDescX  = descX.has(v);
     const isAncY   = ancY.has(v);
@@ -615,9 +662,13 @@ function classifyVars(d) {
 function renderVarRoles(roles) {
   const wrap = document.getElementById('varRolesWrap');
   const cont = document.getElementById('varRolesCont');
-  const adjSet     = ST.imp?.adjSet || [];
-  const optVars    = ST.imp?.optionalVars || [];
-  const allVars    = [...adjSet, ...optVars];
+  const adjSet   = ST.imp?.adjSet || [];
+  const medVars  = ST.imp?.mediatorNames || [];
+  const optVars  = ST.imp?.optionalVars || [];
+  // De-duplicate: mediatorNames may overlap with optionalVars in older exports
+  const seen = new Set([...adjSet, ...medVars]);
+  const filteredOpt = optVars.filter(v => !seen.has(v));
+  const allVars = [...adjSet, ...medVars, ...filteredOpt];
 
   if (!allVars.length || !ST.imp) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
