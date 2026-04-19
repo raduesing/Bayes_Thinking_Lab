@@ -41,7 +41,7 @@ The lab is organized into five sections that build on each other. Work through t
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | GLM Conditional Distributions · GLM 3D · Interactive GLMM |
 | **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
 | **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
-| **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Prior & Posterior PPC · LOO Lab |
+| **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Prior & Posterior PC · LOO Lab |
 | **V · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · G-Comp Builder · Decision Lab · Decision Maker |
 
 > **⬡ Workflow tip:** Use the **Golem Builder** (Section III — Small Worlds) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. Transfer everything to the **G-Comp Builder** (Section V) at the click of a button — it generates ready-to-run `marginaleffects` R code for ATE, ATT, and ATU, and exports MCMC draws directly to the **Decision Maker**.
@@ -112,10 +112,10 @@ The lab is organized into five sections that build on each other. Work through t
 ### V. Posterior Decision
 *Move from estimation to decision.*
 
-* **Causal Calculator** — A worked example of causal effect estimation via **G-Computation (standardization)**. Shows how to make confounding visible, correct naive regression bias, and compare ATE, ATT, and ATU — visualized as counterfactual distributions. Ideal entry point into G-Computation; for your own analyses use the G-Comp Builder.
-* **G-Comp Builder** — Generates ready-to-run R code for G-Computation via `marginaleffects`: ATE, ATT, and ATU for binary exposures; AME and dose-response curve for metric exposures. Import DAG structure, exposure, outcome, and adjustment set directly from the Golem Builder at the click of a button. Generates CSV export code for MCMC draws compatible with the Decision Maker — completing the causal inference workflow entirely in the browser.
 * **Decision Lab** — Apply three principled decision frameworks to any posterior distribution: **Kruschke's HDI vs. ROPE trichotomy** (accept / reject / undecided), **Full ROPE %** (probability of practical equivalence), and **ETI vs. ROPE**. Supports Normal, Student-t, and Gamma posteriors with analytically correct HDI and ETI computation.
 * **Decision Maker** — Upload your own posterior samples via CSV (from brms, Stan, or rstanarm), define transformations and derived quantities as formulas (Cohen's d, Odds Ratios, etc.), compute HDI and ETI, and export a complete **APA-formatted decision report** — ready to paste into a manuscript.
+* **Causal Calculator** — A worked example of causal effect estimation via **G-Computation (standardization)**. Shows how to make confounding visible, correct naive regression bias, and compare ATE, ATT, and ATU — visualized as counterfactual distributions. Ideal entry point into G-Computation; for your own analyses use the G-Comp Builder.
+* **G-Comp Builder** — Generates ready-to-run R code for G-Computation via `marginaleffects`: ATE, ATT, and ATU for binary exposures; AME and dose-response curve for metric exposures. Import DAG structure, exposure, outcome, and adjustment set directly from the Golem Builder at the click of a button. Generates CSV export code for MCMC draws compatible with the Decision Maker — completing the causal inference workflow entirely in the browser.
 
 ---
 
@@ -140,7 +140,7 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 | :--- | :--- | :--- |
 | **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Prior Lab (CI-Solver) · Bayes Interactive |
 | **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
-| **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PPC · LOO Lab · Causal Calculator · G-Comp Builder · Decision Maker |
+| **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PC · LOO Lab · Causal Calculator · G-Comp Builder · Decision Maker |
 
 ---
 
