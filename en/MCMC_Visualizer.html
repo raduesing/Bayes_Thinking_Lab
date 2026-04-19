@@ -429,9 +429,9 @@ canvas.plot{display:block;width:100%;border:1px solid var(--grid)}
     </div>
     <div class="ctrl-group">
       <span class="ctrl-lbl">Speed</span>
-      <input type="range" id="speed-slider" min="1" max="40" step="1" value="6"
-             oninput="updCtrl('speed-slider','v-speed',0)">
-      <span class="ctrl-val" id="v-speed">6</span>
+      <input type="range" id="speed-slider" min="1" max="10" step="1" value="3"
+             oninput="updSpeed()">
+      <span class="ctrl-val" id="v-speed">30/s</span>
     </div>
   </div>
 
@@ -1254,18 +1254,16 @@ function toggleRun(){
 function animate(){
   if(!isRunning)return;
   const s=speedN();
-  for(let i=0;i<s;i++) mhStep();
+  mhStep();
   frameCount++;
   drawFrame();
   if(frameCount%3===0){redrawTrace();redrawHist();}
   if(frameCount%8===0) updateStats();
-  // Speed 1–5: throttle via setTimeout so speed=1 ≈ 10 steps/s
-  if(s<=5){
-    const ms=Math.round(1000/(s*10));  // speed=1→100ms, speed=2→50ms, speed=5→20ms
-    animIsTimeout=true; animId=setTimeout(animate,ms);
-  } else {
-    animIsTimeout=false; animId=requestAnimationFrame(animate);
-  }
+  // s=1→100ms(10/s) … s=10→10ms(100/s)
+  animIsTimeout=true; animId=setTimeout(animate, Math.round(100/s));
+}
+function updSpeed(){
+  document.getElementById('v-speed').textContent=speedN()*10+'/s';
 }
 function resetSampler(redraw=true){
   isRunning=false;stopAnim();
@@ -1292,7 +1290,7 @@ window.addEventListener('resize',()=>{drawFrame();redrawTrace();redrawHist();});
 function init(){
   updCtrl('step-slider','v-step',2);
   updCtrl('warmup-slider','v-warmup',0);
-  updCtrl('speed-slider','v-speed',0);
+  updSpeed();
   buildContour();
   setStage(0);
   // Watch for resize to redraw all canvases correctly
