@@ -1077,12 +1077,16 @@ function drawPlot() {
   g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
   g.append('path').datum(pts).attr('fill','none').attr('stroke',a2).attr('stroke-width',2.5).attr('d',line);
 
-  // Mean line
+  // Mean line — stops at density peak, label just above it
   const mn = CUR.mean(PARAMS);
   if (typeof mn==='number' && isFinite(mn) && mn>=lo && mn<=hi) {
-    g.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',0).attr('y2',Hp)
+    let mnDensY = 0;
+    try { const v=CUR.pdf(mn,PARAMS); mnDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
+    const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
+    const mnLblY  = Math.max(mnTopPx-5, 28);
+    g.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',mnTopPx).attr('y2',Hp)
      .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-    g.append('text').attr('x',xSc(mn)+4).attr('y',13)
+    g.append('text').attr('x',xSc(mn)+4).attr('y',mnLblY)
      .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text('E[x]');
   }
 
@@ -1543,14 +1547,23 @@ function drawResponsePanel() {
      .text('= 1');
   }
 
-  // Mean line (transformed mean)
+  // Mean line (transformed mean) — stops at density peak
   const mn = CUR.mean(PARAMS);
   if (typeof mn === 'number' && isFinite(mn)) {
     const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
     if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
-      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
+      let mnDensY = 0;
+      try {
+        const v = (isSlope||isLog)
+          ? CUR.pdf(Math.log(mn_r),PARAMS)/mn_r
+          : CUR.pdf(Math.log(mn_r/(1-mn_r)),PARAMS)/(mn_r*(1-mn_r));
+        mnDensY = isFinite(v)&&v>=0 ? Math.min(v,yMax) : 0;
+      } catch(e){}
+      const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
+      const mnLblY  = Math.max(mnTopPx-5, 28);
+      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',mnTopPx).attr('y2',Hp)
        .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-      g.append('text').attr('x',xSc(mn_r)+4).attr('y',13)
+      g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
        .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
        .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
     }
