@@ -1042,10 +1042,11 @@ function generateLive() {
       c += `atu <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${subsetCtl},\n  conf_level = 0.95${reArg}\n)\nprint(atu)\n\n`;
     }
 
-    // Counterfactual predictions
-    c += `# ── Kontrafaktische Vorhersagen ──────────────────────────────────────────────\n`;
-    c += `pred_1 <- avg_predictions(${mod}, newdata = ${cfTrt}${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
-    c += `pred_0 <- avg_predictions(${mod}, newdata = ${cfCtl}${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
+    // Counterfactual predictions (individual-level for density plot)
+    c += `# ── Kontrafaktische Vorhersagen (individuell, für Verteilungsplot) ────────────\n`;
+    c += `# predictions() liefert eine Zeile pro Beobachtung — benötigt für geom_density()\n`;
+    c += `pred_1 <- predictions(${mod}, newdata = ${cfTrt}${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
+    c += `pred_0 <- predictions(${mod}, newdata = ${cfCtl}${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
 
     // Conditional effect — always show when checkbox checked + moderator given
     if (showCond && moderator) {
@@ -1083,8 +1084,24 @@ function generateLive() {
     c += `  geom_density(alpha=0.22, linewidth=0.8) +\n`;
     c += `  scale_fill_manual(values=c("#5a8a2a","#2a6e8a")) +\n`;
     c += `  scale_color_manual(values=c("#5a8a2a","#2a6e8a")) +\n`;
-    c += `  labs(title="Kontrafaktische Outcome-Verteilungen",\n`;
+    c += `  labs(title="Kontrafaktische Outcome-Verteilungen (Ŷ(1) vs. Ŷ(0))",\n`;
     c += `       x="${out}", y="Dichte", fill=NULL, color=NULL) +\n`;
+    c += `  theme_minimal(base_size=13)\n\n`;
+
+    // ITE plot: individual causal effects = Ŷ(1) - Ŷ(0) per person
+    c += `# 2b — Individuelle kausale Effekte (ITE = Ŷ(1) − Ŷ(0) pro Person)\n`;
+    c += `# comparisons() ohne avg_ liefert den Effekt für jede Beobachtung\n`;
+    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n\n`;
+    c += `ggplot(ite_df, aes(x=estimate)) +\n`;
+    c += `  geom_histogram(bins=40, fill="#5a8a2a", color="white", alpha=0.85) +\n`;
+    c += `  geom_vline(xintercept=0, linetype="dashed", color="gray50") +\n`;
+    c += `  geom_vline(xintercept=mean(ite_df$estimate), color="#b85c00", linewidth=0.9) +\n`;
+    c += `  annotate("text", x=mean(ite_df$estimate), y=Inf, vjust=1.5, hjust=-0.1,\n`;
+    c += `           label=paste("ATE =", round(mean(ite_df$estimate),3)),\n`;
+    c += `           color="#b85c00", size=3.5) +\n`;
+    c += `  labs(title="Verteilung der individuellen kausalen Effekte (ITE)",\n`;
+    c += `       subtitle="Effekt-Heterogenität: Wie stark variiert der Effekt zwischen Personen?",\n`;
+    c += `       x=paste("ITE: Ŷ(1) − Ŷ(0)"), y="Anzahl") +\n`;
     c += `  theme_minimal(base_size=13)\n\n`;
 
     if (showCond && moderator) {
