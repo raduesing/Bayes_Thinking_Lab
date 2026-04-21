@@ -2302,31 +2302,64 @@ function updateRootNodeTable() {
   tbody.innerHTML = roots.map(n => {
     const ex = existing[n.id] || {};
     const dist = ex.dist || 'Normal';
-    const mean = ex.mean !== undefined ? ex.mean : '0';
     const sd = ex.sd !== undefined ? ex.sd : '1';
+    // Per-distribution mean defaults and constraints
+    let mean = ex.mean !== undefined ? ex.mean
+             : dist==='Bernoulli' ? '0.5'
+             : dist==='Poisson'   ? '1'
+             : '0';
+    let meanMin='', meanMax='', meanStep='0.1';
+    if (dist==='Bernoulli') {
+      meanMin='0'; meanMax='1'; meanStep='0.01';
+      if (+mean <= 0 || +mean >= 1) mean = '0.5';
+    } else if (dist==='Poisson') {
+      meanMin='0.01';
+      if (+mean <= 0) mean = '1';
+    }
+    const meanMinAttr = meanMin ? ` min="${meanMin}"` : '';
+    const meanMaxAttr = meanMax ? ` max="${meanMax}"` : '';
+    // SD disabled for Bernoulli (SD=√(p(1-p))) and Poisson (SD=√λ)
+    const sdDis = dist!=='Normal' ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
+    const sdTip = dist==='Bernoulli' ? ' title="SD = √(p·(1−p)) — derived from p"'
+                : dist==='Poisson'   ? ' title="SD = √λ — derived from the mean"' : '';
     return `<tr>
       <td>${escHtml(n.name)}</td>
       <td>
-        <select class="dist-select" data-root-dist="${n.id}">
+        <select class="dist-select" data-root-dist="${n.id}" onchange="updateRootDist(this,'${n.id}')">
           <option${dist==='Normal'?' selected':''}>Normal</option>
           <option${dist==='Bernoulli'?' selected':''}>Bernoulli</option>
           <option${dist==='Poisson'?' selected':''}>Poisson</option>
         </select>
       </td>
-      <td><input type="number" class="mean-input" data-root-mean="${n.id}" value="${mean}" step="0.1"></td>
-      <td><input type="number" class="sd-input" data-root-sd="${n.id}" value="${sd}" step="0.1" min="0.01"></td>
+      <td><input type="number" class="mean-input" data-root-mean="${n.id}" value="${mean}" step="${meanStep}"${meanMinAttr}${meanMaxAttr}></td>
+      <td><input type="number" class="sd-input" data-root-sd="${n.id}" value="${sd}" step="0.1" min="0.01"${sdDis}${sdTip}></td>
     </tr>`;
   }).join('');
+}
 
-  // Toggle SD column based on distribution
-  tbody.querySelectorAll('[data-root-dist]').forEach(sel => {
-    const nodeId = sel.dataset.rootDist;
-    const sdInp = tbody.querySelector(`[data-root-sd="${nodeId}"]`);
-    sel.addEventListener('change', () => {
-      if (sdInp) sdInp.disabled = sel.value !== 'Normal';
-    });
-    if (sdInp) sdInp.disabled = sel.value !== 'Normal';
-  });
+function updateRootDist(sel, nodeId) {
+  const dist    = sel.value;
+  const meanInp = document.querySelector(`[data-root-mean="${nodeId}"]`);
+  const sdInp   = document.querySelector(`[data-root-sd="${nodeId}"]`);
+  if (meanInp) {
+    if (dist === 'Bernoulli') {
+      meanInp.min = '0'; meanInp.max = '1'; meanInp.step = '0.01';
+      if (meanInp.value === '' || +meanInp.value <= 0 || +meanInp.value >= 1) meanInp.value = '0.5';
+    } else if (dist === 'Poisson') {
+      meanInp.min = '0.01'; meanInp.max = ''; meanInp.step = '0.1';
+      if (+meanInp.value <= 0) meanInp.value = '1';
+    } else {
+      meanInp.min = ''; meanInp.max = ''; meanInp.step = '0.1';
+    }
+  }
+  if (sdInp) {
+    const needsSd = dist === 'Normal';
+    sdInp.disabled      = !needsSd;
+    sdInp.style.opacity = needsSd ? '' : '.35';
+    sdInp.style.cursor  = needsSd ? '' : 'not-allowed';
+    sdInp.title = dist==='Bernoulli' ? 'SD = √(p·(1−p)) — derived from p'
+                : dist==='Poisson'   ? 'SD = √λ — derived from the mean' : '';
+  }
 }
 
 function updateNonRootSdTable() {
