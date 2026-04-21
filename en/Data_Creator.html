@@ -789,15 +789,20 @@ function renderMeanGrid(){
   const bCells=getBetweenCells(), wCells=getWithinCells();
   const hasB=ST.between.length>0, hasW=ST.within.length>0;
   const lik=document.getElementById('likSel')?.value||'gaussian';
+  const useSd=['gaussian','student','lognormal'].includes(lik);
+  const sdTip='Spread determined by distribution parameters — no free σ';
+  const sdInpAttr=useSd?'':` disabled title="${sdTip}"`;
+  const sdInpStyle=`border-color:var(--a2)${useSd?'':';opacity:.35;cursor:not-allowed'}`;
   syncMeanKeys();
 
   // Helper: display value based on rawMode
   const dispVal=(mKey)=>rawMode?etaToRaw(ST.means[mKey]??0,mKey,lik).toFixed(4):(ST.means[mKey]??0);
   const muLabel=rawMode?'E[Y] <span style="font-style:italic;font-weight:300">(response scale)</span>':'μ <span style="font-style:italic;font-weight:300">(model scale)</span>';
   const muRowLabel=rawMode?'E[Y]':'μ';
+  const sdNote=useSd?'<span style="color:var(--a2)">σ</span> = residual SD':'<span style="color:var(--ink3)">σ locked</span> — spread determined by distribution parameters';
   const footNote=rawMode
-    ?'E[Y] on response scale → stored internally as η (model scale) &nbsp;·&nbsp; <span style="color:var(--a2)">σ</span> = residual SD'
-    :'μ = mean on model scale (η) &nbsp;·&nbsp; <span style="color:var(--a2)">σ</span> = residual SD per cell';
+    ?`E[Y] on response scale → stored internally as η (model scale) &nbsp;·&nbsp; ${sdNote}`
+    :`μ = mean on model scale (η) &nbsp;·&nbsp; ${sdNote}`;
 
   // Update button + hint label
   const btn=document.getElementById('rawModeBtn');
@@ -814,9 +819,9 @@ function renderMeanGrid(){
         <div><div class="sec-title" style="margin-bottom:.25rem">Mean ${muLabel}</div>
           <input class="mean-inp" type="number" step="0.01" value="${dispAll}"
                  oninput="setMeanRaw('all',this.value)" style="width:90px"></div>
-        <div><div class="sec-title" style="margin-bottom:.25rem">Residual-SD σ</div>
+        <div style="opacity:${useSd?'1':'.5'}"><div class="sec-title" style="margin-bottom:.25rem">Residual-SD σ</div>
           <input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds['all']??1}"
-                 oninput="ST.sds['all']=+this.value" style="width:90px;border-color:var(--a2)"></div>
+                 oninput="ST.sds['all']=+this.value" style="width:90px;${sdInpStyle}"${sdInpAttr}></div>
       </div>`;
     return;
   }
@@ -826,7 +831,7 @@ function renderMeanGrid(){
     let html=`<div class="mean-grid-wrap"><table class="mean-grid"><thead><tr>`;
     html+=`<th>${ST.between.map(f=>f.name).join(' × ')}</th>`;
     html+=`<th>${muLabel}</th>`;
-    html+=`<th style="color:var(--a2)">σ</th>`;
+    html+=`<th style="color:${useSd?'var(--a2)':'var(--ink3)'}">σ</th>`;
     html+=`</tr></thead><tbody>`;
     bCells.forEach(bc=>{
       const bk=cellKey(bc);
@@ -835,7 +840,7 @@ function renderMeanGrid(){
       html+=`<td><input class="mean-inp" type="number" step="0.01" value="${dispVal(bk)}"
                oninput="setMeanRaw('${bk}',this.value)"></td>`;
       html+=`<td><input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds[bk]??1}"
-               oninput="ST.sds['${bk}']=+this.value" style="border-color:var(--a2)"></td>`;
+               oninput="ST.sds['${bk}']=+this.value" style="${sdInpStyle}"${sdInpAttr}></td>`;
       html+=`</tr>`;
     });
     html+=`</tbody></table>
@@ -871,12 +876,12 @@ function renderMeanGrid(){
     });
     html+=`</tr>`;
     // σ row
-    html+=`<tr class="sd-row">`;
-    html+=`<td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a2);padding:.2rem .35rem;white-space:nowrap">σ</td>`;
+    html+=`<tr class="sd-row"${useSd?'':' style="opacity:.45"'}>`;
+    html+=`<td style="font-family:'DM Mono',monospace;font-size:.72rem;color:${useSd?'var(--a2)':'var(--ink3)'};padding:.2rem .35rem;white-space:nowrap">σ</td>`;
     wHeaders.forEach(wh=>{
       const mKey=[bk,wh].filter(s=>s&&s!=='all').join('_')||'all';
       html+=`<td><input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds[mKey]??1}"
-               oninput="ST.sds['${mKey}']=+this.value" style="border-color:var(--a2)"></td>`;
+               oninput="ST.sds['${mKey}']=+this.value" style="${sdInpStyle}"${sdInpAttr}></td>`;
     });
     html+=`</tr>`;
   });
@@ -1907,9 +1912,15 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       return `    ${key} = c(${vals.join(', ')})`;
     });
 
-    // sd: ALWAYS named list when between-factors exist (explicit, even if uniform)
+    // sd: for SD-likelihoods (gaussian, student, lognormal) use cell SDs from grid.
+    // For all others (Poisson, Bernoulli, Binomial, Gamma, Beta, NegBin): sd = 0 —
+    // sim_design() generates constant η = cell mean; variability comes from the
+    // target distribution itself (rpois, rbinom, …), so no σ on η-scale.
+    const noSdLik=!['gaussian','student','lognormal'].includes(lik);
     let sdPart;
-    if(!hasB){
+    if(noSdLik){
+      sdPart=`0  # no σ on η-scale — spread from ${lik} distribution`;
+    } else if(!hasB){
       const vals=wNames.map(lv=>(ST.sds[lv]??ST.sds['all']??1).toFixed(2));
       sdPart=`c(${vals.join(', ')})`;
     } else {
@@ -2626,7 +2637,7 @@ function cleanR(str){
 function rTransformLambda(lik, extra){
   const phi=extra.phi||2, ntrials=extra.ntrials||10, nu=extra.nu||4;
   switch(lik){
-    case 'student':     return `\\(eta) qt(pnorm(eta), df = ${nu})`;
+    case 'student':     return `\\(eta) { m <- mean(eta); s <- sd(eta); if(s < 1e-9) return(eta); m + s * qt(pnorm((eta - m) / s), df = ${nu}) }`;
     case 'lognormal':   return '\\(eta) exp(eta)';
     case 'gamma':       return `\\(eta) rgamma(n(), shape = ${phi}, rate = ${phi} / exp(eta))`;
     case 'bernoulli':   return '\\(eta) rbinom(n(), 1, plogis(eta))';
