@@ -212,7 +212,7 @@ canvas#dist-canvas{display:block;width:100%}
 
   <div id="dl-right">
     <div id="canvas-wrap">
-      <canvas id="dist-canvas" height="320"></canvas>
+      <canvas id="dist-canvas" height="480"></canvas>
     </div>
     <div id="dist-info"></div>
   </div>
@@ -343,9 +343,10 @@ const DISTS = {
     supportFn:p=>[p.mu-4.5*p.sigma, p.mu+4.5*p.sigma],
     meanFn:p=>p.mu, varianceFn:p=>p.sigma*p.sigma, modeFn:p=>p.mu,
     info:{
-      was:'Die <strong>Normalverteilung</strong> ist symmetrisch und glockenförmig — das Fundament linearer Modelle (<code>lm</code>, <code>brms family = gaussian</code>). Typisch für Mess- und Zufallsfehler, Körpergrößen, Prüfungsnoten.',
-      parameter:'<strong>μ</strong> = Mittelwert (Lage der Glocke). <strong>σ</strong> = Standardabweichung (Breite, σ > 0). Bei σ = 1, μ = 0: Standardnormalverteilung N(0,1).',
-      technik:'<strong>Grenzwertsatz:</strong> Summen vieler unabhängiger Zufallsvariablen → Normal, unabhängig von der Ausgangsverteilung. E[Y] = μ, Var(Y) = σ². Beziehung: Student-t(ν → ∞) → Normal; Normal(0,1)² ~ Chi²(1). <em>brms:</em> <code>gaussian()</code>, Link: <code>identity</code>.'
+      was:'Die <strong>Normalverteilung</strong> (Gauß\'sche Glockenkurve) ist symmetrisch um ihren Mittelwert, unbegrenzt auf beiden Seiten, und gehorcht der klassischen Glockenform. Sie ist das Fundament linearer Modelle — die Fehlerterme werden als normalverteilt angenommen.',
+      einsatz:'Körpergrößen, IQ-Werte, Messfehler in physikalischen Experimenten, Prüfungsnoten, Gewicht von Produkten vom Fließband. Überall, wo ein Phänomen durch viele kleine, unabhängige Zufallseinflüsse entsteht, erscheint die Normalverteilung. <em>brms:</em> <code>family = gaussian()</code>.',
+      parameter:'<strong>μ</strong> = Mittelwert — der Gipfel der Glocke, der häufigste und mittlere Wert. <em>Beispiel:</em> μ = 170 cm → mittlere Körpergröße. <strong>σ</strong> = Standardabweichung — die Breite der Glocke. <em>Faustregel:</em> 68% aller Werte liegen in [μ−σ, μ+σ], 95% in [μ−2σ, μ+2σ]. <em>Beispiel:</em> σ = 7 cm → 68% der Personen zwischen 163 und 177 cm.',
+      technik:'<strong>Zentraler Grenzwertsatz:</strong> Summen vieler unabhängiger Zufallsvariablen → Normal, unabhängig von der Ausgangsverteilung. E[Y] = μ, Var(Y) = σ². Student-t(ν→∞) → Normal. Normal(0,1)² ~ Chi²(1). Link: <code>identity</code>.'
     }
   },
 
@@ -368,9 +369,10 @@ const DISTS = {
     varianceFn:p=>p.nu>2?p.sigma*p.sigma*p.nu/(p.nu-2):NaN,
     modeFn:p=>p.mu,
     info:{
-      was:'Wie die Normalverteilung, aber mit <strong>schwereren Rändern</strong> (tails). Je kleiner ν, desto extremer die Ausreißer-Wahrscheinlichkeit. Für <strong>robuste Regression</strong> und Daten mit Ausreißern.',
-      parameter:'<strong>ν</strong> = Freiheitsgrade (heaviness of tails, ν > 0). Bei ν = 1: Cauchy-Verteilung (kein endlicher Mittelwert). Bei ν → ∞: Normal. <strong>μ</strong> = Lage, <strong>σ</strong> = Skalierung.',
-      technik:'E[Y] = μ (für ν > 1), Var(Y) = σ²ν/(ν-2) (für ν > 2). <em>brms:</em> <code>student(nu, mu, sigma)</code>, Link: <code>identity</code>. Praxis: ν-Prior oft <code>gamma(2, 0.1)</code> in brms.'
+      was:'Wie die Normalverteilung, aber mit <strong>dickeren Rändern</strong> — extreme Werte kommen häufiger vor. Je kleiner ν, desto mehr Ausreißerwahrscheinlichkeit. Bei ν = 30 kaum von Normal zu unterscheiden; bei ν = 2 oder 3 sieht man deutlich breitere Ränder.',
+      einsatz:'Reaktionszeiten oder Testergebnisse mit vereinzelten Extremwerten, biologische Messungen mit Ausreißern, robuste lineare Regression. In der Bayesianischen Statistik oft als Prior für Parameter gewählt, wenn man schwache Regularisierung wünscht. <em>brms:</em> <code>family = student()</code>.',
+      parameter:'<strong>ν</strong> = Freiheitsgrade — steuert die Schwere der Ränder. <em>Beispiel:</em> ν = 3 → viele Ausreißer sichtbar; ν = 30 → kaum von Normal zu unterscheiden. Bei ν = 1: Cauchy-Verteilung (kein endlicher Mittelwert!). <strong>μ</strong> = Lage. <strong>σ</strong> = Skalierung (nicht die Standardabweichung, da Var = σ²ν/(ν−2) ≠ σ²).',
+      technik:'E[Y] = μ (ν > 1), Var(Y) = σ²ν/(ν−2) (ν > 2). <em>brms:</em> <code>student(nu, mu, sigma)</code>. ν-Prior-Empfehlung: <code>gamma(2, 0.1)</code> erlaubt sowohl robuste (kleine ν) als auch fast-normale Anpassung (große ν).'
     }
   },
 
@@ -391,9 +393,10 @@ const DISTS = {
     varianceFn:p=>{const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha); return p.omega*p.omega*(1-2*d*d/Math.PI);},
     modeFn:null, // numerical
     info:{
-      was:'Die <strong>Schief-Normalverteilung</strong> ist eine Erweiterung der Normalverteilung um Asymmetrie. α > 0: rechtsschiefe Verteilung; α < 0: linksschiefe; α = 0: identisch mit Normal.',
-      parameter:'<strong>ξ</strong> = Lageparameter, <strong>ω</strong> = Skalierungsparameter (ω > 0), <strong>α</strong> = Schiefeparameter. Der Mittelwert liegt nicht bei ξ — Lage und Mittelwert sind verschieden.',
-      technik:'PDF = 2/ω · φ((x−ξ)/ω) · Φ(α·(x−ξ)/ω). Mittelwert = ξ + ω·δ·√(2/π), δ = α/√(1+α²). Modus numerisch. <em>brms:</em> <code>skew_normal(xi, omega, alpha)</code>.'
+      was:'Eine Normalverteilung mit einstellbarer <strong>Asymmetrie</strong>. Bei α = 0 identisch mit Normal. Positive α-Werte ziehen die rechte Seite in die Länge (längerer rechter Rand), negative α-Werte die linke Seite.',
+      einsatz:'Reaktionszeiten (leicht rechtsschief, ohne extreme Ausreißer), Prüfungsleistungen mit Boden- oder Deckeneffekt, Körpergewicht. Überall dort, wo Normalverteilung fast passt, aber die Daten leicht asymmetrisch sind. <em>brms:</em> <code>family = skew_normal()</code>.',
+      parameter:'<strong>ξ</strong> = Lageparameter (ungefähr der Modus). <em>Beispiel:</em> ξ = 400 ms für eine typische Reaktionszeit. <strong>ω</strong> = Skalierungsparameter (Breite, ω > 0). <strong>α</strong> = Schiefheitsparameter. <em>Beispiel:</em> α = 5 → deutlich rechtsschief mit längerem rechten Rand. Achtung: Der Mittelwert liegt nicht bei ξ, sondern ist durch α nach rechts/links verschoben.',
+      technik:'PDF = 2/ω · φ((x−ξ)/ω) · Φ(α·(x−ξ)/ω). E[Y] = ξ + ω·δ·√(2/π), δ = α/√(1+α²). Modus numerisch berechnet. <em>brms:</em> <code>skew_normal(xi, omega, alpha)</code>.'
     }
   },
 
@@ -409,9 +412,10 @@ const DISTS = {
     varianceFn:p=>(Math.exp(p.sigma*p.sigma)-1)*Math.exp(2*p.mu+p.sigma*p.sigma),
     modeFn:p=>Math.exp(p.mu-p.sigma*p.sigma),
     info:{
-      was:'Wenn <strong>log(Y)</strong> normalverteilt ist, dann Y lognormal. Typisch für <strong>rechtsschiefe positive Daten</strong>: Einkommen, Reaktionszeiten, biologische Konzentrationen, Latenzzeiten.',
-      parameter:'<strong>μ</strong> = Mittelwert auf <em>log-Skala</em> (nicht der Mittelwert von Y selbst). <strong>σ</strong> = Standardabweichung auf log-Skala (σ > 0).',
-      technik:'E[Y] = exp(μ + σ²/2), Modus = exp(μ − σ²), Var(Y) = (exp(σ²)−1)·exp(2μ+σ²). <em>brms:</em> <code>lognormal(mu, sigma)</code>, Link: <code>log</code>. Größeres σ → stärkere Rechtsschiefe und höheres Verhältnis Mittelwert/Median.'
+      was:'Wenn man die <strong>logarithmierten Werte</strong> normalverteilt sind, folgt die Originalskala einer Lognormalverteilung. Typisch für positive, rechtsschiefe Daten — die meisten Werte sind klein oder mittelgroß, ein langer Schwanz nach rechts.',
+      einsatz:'Haushaltseinkommen (die meisten Haushalte verdienen moderat, wenige sehr viel), Reaktionszeiten in kognitiven Experimenten, Blutkonzentrationen von Medikamenten, Unternehmensgrößen, Downloadzeiten. <em>brms:</em> <code>family = lognormal()</code>, Link: <code>log</code>.',
+      parameter:'<strong>μ</strong> = Mittelwert auf der <em>log</em>-Skala — nicht der Mittelwert von Y! <em>Beispiel:</em> μ = 0 → Median von Y = e⁰ = 1. μ = 2 → Median von Y = e² ≈ 7.4. <strong>σ</strong> = Streuung auf der log-Skala. <em>Beispiel:</em> σ = 0.5 → mäßige Schiefe; σ = 1.5 → sehr starke Rechtsschiefe, Mittelwert liegt weit über dem Median.',
+      technik:'E[Y] = e^(μ+σ²/2), Median = e^μ, Modus = e^(μ−σ²). Mittelwert > Median immer. <em>brms:</em> <code>lognormal(mu, sigma)</code>, Link: <code>log</code>.'
     }
   },
 
@@ -428,9 +432,10 @@ const DISTS = {
     varianceFn:p=>(Math.exp(p.sigma*p.sigma)-1)*Math.exp(2*p.mu+p.sigma*p.sigma),
     modeFn:p=>p.delta+Math.exp(p.mu-p.sigma*p.sigma),
     info:{
-      was:'Lognormal mit einem <strong>bekannten Minimum δ</strong> — Y − δ ~ LogNormal. Modell für <strong>Reaktionszeiten</strong> (δ = minimale Verarbeitungszeit), wo die Antwort nie unter δ liegen kann.',
-      parameter:'<strong>μ, σ</strong> = Parameter der LogNormal-Komponente. <strong>δ</strong> = Shift-Parameter / Minimum (in brms: <code>ndt</code>, non-decision time). Support: Y > δ.',
-      technik:'E[Y] = δ + exp(μ + σ²/2). <em>brms:</em> <code>shifted_lognormal(mu, sigma, ndt)</code>. Praktischer Hinweis: δ sollte kleiner als das Stichproben-Minimum sein; als Startpunkt eignet sich min(Y) · 0.9.'
+      was:'Eine Lognormalverteilung, die erst oberhalb eines <strong>Mindestwerts δ</strong> beginnt — Y − δ ist lognormalverteilt. Werte kleiner als δ sind strukturell ausgeschlossen.',
+      einsatz:'<strong>Reaktionszeiten</strong> in der kognitiven Psychologie: Es gibt eine minimale Verarbeitungszeit (z.B. 200 ms), unter der keine Reaktion möglich ist. In brms heißt δ daher <code>ndt</code> (non-decision time). Auch für Wartezeiten mit bekannter Mindestdauer. <em>brms:</em> <code>family = shifted_lognormal()</code>.',
+      parameter:'<strong>μ, σ</strong> = Parameter der Lognormal-Komponente (beschreiben die Form nach Abzug von δ). <strong>δ</strong> = Minimum / Shift. <em>Beispiel:</em> δ = 0.2 s → keine Reaktionszeit unter 200 ms möglich; die eigentliche Entscheidungszeit ist lognormalverteilt ab 200 ms. Alle Berechnungen (Mittelwert etc.) müssen δ addieren.',
+      technik:'E[Y] = δ + e^(μ+σ²/2). Support: Y > δ. <em>brms:</em> <code>shifted_lognormal(mu, sigma, ndt)</code>. Startpunkt für ndt-Prior: ca. 0.8 × min(Y). ndt-Prior: z.B. <code>normal(0, 0.3)</code> für ms-Skala.'
     }
   },
 
@@ -455,9 +460,10 @@ const DISTS = {
       ?{alpha:p.phi, beta_rate:p.phi/p.mu}
       :{mu:p.alpha/p.beta_rate, phi:p.alpha},
     info:{
-      was:'<strong>Positive, rechtsschiefe</strong> Daten — Wartezeiten, Dauern, Konzentrationen. Sehr flexibel: kann exponentialförmig (α ≈ 1), schief (α < 3) oder fast symmetrisch (α ≫ 1) sein.',
-      parameter:'<strong>brms (μ, φ):</strong> μ = E[Y] (direkt der Mittelwert), φ = Shape/Präzision — größeres φ bedeutet weniger Streuung und symmetrischere Form. <strong>Klassisch (α, β):</strong> α = Shape, β = Rate (= 1/Scale). Umrechnung: μ = α/β, φ = α.',
-      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ = α/β². Modus = (α−1)/β für α > 1, sonst 0. Spezialfälle: Exponential(λ) = Gamma(1, λ); Chi²(k) = Gamma(k/2, 1/2). <em>brms:</em> <code>Gamma(shape, rate)</code> — intern α = φ, β_rate = φ/μ.'
+      was:'Die <strong>Gamma-Verteilung</strong> beschreibt positive, rechtsschiefe Daten und ist sehr flexibel: Bei kleinem Shape fast wie eine absteigende Kurve mit Maximum nahe 0, bei großem Shape fast symmetrisch — aber immer auf positive Werte begrenzt.',
+      einsatz:'Wartezeiten auf ein Ereignis, Behandlungsdauern in klinischen Studien, Konzentrationen von Hormonen oder Medikamenten im Blut, Kosten pro Patient, Niederschlagsmengen. Immer wenn Daten positiv und rechtsschiefe sind. <em>brms:</em> <code>family = Gamma()</code>, Link: <code>log</code>.',
+      parameter:'<strong>brms-Parametrisierung (μ, φ):</strong> μ = direkter Mittelwert. <em>Beispiel:</em> μ = 3 Stunden mittlere Wartezeit. φ = Shape/Präzision. <em>Beispiel:</em> φ = 1 → Exponentialform, breite Streuung; φ = 4 → deutlich glockenförmiger; φ = 20 → sehr konzentriert um μ. <strong>Klassisch (α, β):</strong> α = Shape (= φ), β = Rate (= φ/μ). Umrechnung: α = φ, Rate = φ/μ.',
+      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ. Modus = μ·(φ−1)/φ für φ > 1. Spezialfälle: Exponential = Gamma(1, λ); Chi²(k) = Gamma(k/2, 1/2). <em>brms:</em> <code>Gamma(shape, rate)</code> intern; mit brms-Syntax über Link log.'
     }
   },
 
@@ -471,9 +477,10 @@ const DISTS = {
     meanFn:p=>1/p.lambda, varianceFn:p=>1/(p.lambda*p.lambda),
     modeFn:p=>0,
     info:{
-      was:'Sonderfall Gamma(α=1). Modelliert <strong>Wartezeiten bis zum nächsten Ereignis</strong> bei konstantem Risiko — Lebensdaueranalyse, Poisson-Prozesse, Reaktionszeiten ohne Minimum.',
-      parameter:'<strong>λ</strong> = Rate (λ > 0). 1/λ = Mittelwert. Größeres λ → kürzere mittlere Wartezeit.',
-      technik:'<strong>Gedächtnislosigkeit:</strong> P(Y > s+t | Y > s) = P(Y > t). Modus ist immer 0. Wenn Ereignisse Poisson(λ) folgen, sind Zwischenankunftszeiten Exponential(λ). <em>brms:</em> Exponential als Gamma(1, λ) oder via Stan direkt.'
+      was:'Der einfachste Fall einer Wartezeit-Verteilung: Die Zeit bis zum nächsten zufälligen Ereignis bei <strong>konstantem, gleichbleibendem Risiko</strong>. Sonderfall der Gamma-Verteilung mit α = 1. Immer monoton abfallend — kurze Wartezeiten sind am häufigsten.',
+      einsatz:'Zeit zwischen zwei Telefonanrufen in einer Zentrale, Lebensdauer von Geräten ohne Verschleiß (Glühbirnen, einfache Elektronik), Zeit bis zur nächsten Arztvisite bei gleichbleibendem Gesundheitsrisiko, radioaktiver Zerfall.',
+      parameter:'<strong>λ</strong> = Rate — wie viele Ereignisse pro Zeiteinheit im Schnitt auftreten. Mittelwert = 1/λ. <em>Beispiel:</em> λ = 2 Anrufe/Stunde → mittlere Wartezeit = 0.5 Stunden = 30 Minuten. <em>Beispiel:</em> λ = 0.5 → mittlere Wartezeit = 2 Stunden. Der Modus ist immer 0 — die häufigste Wartezeit ist minimal kurz.',
+      technik:'Gedächtnislosigkeit: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ, Var = 1/λ². Wenn Ereignisse Poisson(λ) pro Zeiteinheit folgen, sind Zwischenankunftszeiten Exponential(λ). <em>brms:</em> Gamma(1, λ) oder direkt via Stan.'
     }
   },
 
@@ -488,9 +495,10 @@ const DISTS = {
     meanFn:p=>p.mu, varianceFn:p=>p.mu*p.mu*p.mu/p.lam,
     modeFn:p=>p.mu*(Math.sqrt(1+9*p.mu*p.mu/(4*p.lam*p.lam))-3*p.mu/(2*p.lam)),
     info:{
-      was:'Positive, oft <strong>stark rechtsschiefe</strong> Verteilung. Beschreibt die Erste-Passage-Zeit eines Brownschen Diffusionsprozesses — Reaktionszeitmodelle (HDDM), Wartezeiten.',
-      parameter:'<strong>μ</strong> = Mittelwert (μ > 0). <strong>λ</strong> = Shape-Parameter (λ > 0). Größeres λ → weniger Streuung, symmetrischere Form.',
-      technik:'Var(Y) = μ³/λ. Stark rechtsschief wenn λ ≪ μ. <em>brms:</em> <code>inv_gaussian(mu, lambda)</code>, Link: <code>1/mu²</code> (inverse squared).'
+      was:'Beschreibt die Zeit, bis ein <strong>zufälliger Prozess mit Drift</strong> eine Schwelle überschreitet. Positiv, oft stark rechtsschief. Entsteht, wenn eine Partikel (oder eine Entscheidung) gegen zufälligen Widerstand auf ein Ziel zuläuft.',
+      einsatz:'Reaktionszeitmodelle in der kognitiven Psychologie (Drift-Diffusion-Modell: Informationsakkumulation bis zur Entscheidungsschwelle), Wartezeiten in biologischen Prozessen, Latenzzeiten in Netzwerken. Wenn Lognormal zu viel Schiefe zeigt, kann Inverse Gauß besser passen. <em>brms:</em> <code>family = inv_gaussian()</code>.',
+      parameter:'<strong>μ</strong> = Mittelwert (= mittlere Zeit bis zur Schwelle). <em>Beispiel:</em> μ = 0.5 s für eine mittlere Reaktionszeit von 500 ms. <strong>λ</strong> = Shape/Präzision. <em>Beispiel:</em> λ = 1 → starke Rechtsschiefe, viele kurze und wenige sehr lange Zeiten; λ = 10 → schmalere, symmetrischere Verteilung.',
+      technik:'Var(Y) = μ³/λ. Modus < Median < Mittelwert (bei starker Schiefe). <em>brms:</em> <code>inv_gaussian(mu, lambda)</code>, Link: <code>1/mu²</code>.'
     }
   },
 
@@ -504,9 +512,10 @@ const DISTS = {
     meanFn:p=>Math.round(p.k), varianceFn:p=>2*Math.round(p.k),
     modeFn:p=>Math.max(0, Math.round(p.k)-2),
     info:{
-      was:'Summe von <strong>k quadrierten standard-normalverteilten</strong> Zufallsvariablen. Basis zahlreicher Hypothesentests: χ²-Anpassungstest, Likelihood-Ratio-Test, Wald-Test.',
-      parameter:'<strong>k</strong> = Freiheitsgrade (integer, k ≥ 1). Bei k = 1 oder 2: stark rechtsschiefe Form; bei k ≫ 1: annähernd symmetrisch (Zentraler Grenzwertsatz).',
-      technik:'Chi²(k) = Gamma(k/2, 1/2). E[Y] = k, Var(Y) = 2k, Modus = max(k−2, 0). <strong>2·log(LR)</strong> ist asymptotisch Chi²(df) — Grundlage aller Likelihood-Ratio-Tests. F(d₁, d₂) ≡ [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂].'
+      was:'Entsteht, wenn man k unabhängige Standard-Normalvariablen quadriert und summiert. Deshalb immer positiv, und für kleine k stark rechtsschief. Mit wachsendem k wird sie symmetrischer.',
+      einsatz:'Fast ausschließlich als <strong>Werkzeug für statistische Tests</strong>: χ²-Anpassungstest (Passen beobachtete Häufigkeiten zur Erwartung?), Likelihood-Ratio-Test (Ist ein komplexeres Modell signifikant besser?), Wald-Test in der Regression. Selten als direktes Likelihood-Modell.',
+      parameter:'<strong>k</strong> = Freiheitsgrade — die Anzahl der quadrierten Normalvariablen. <em>Beispiel:</em> k = 1 → fast senkrechter Abfall ab 0; k = 5 → rechtsschiefe Glocke mit Mittelwert 5; k = 20 → fast symmetrische Glocke um 20. Der Mittelwert ist immer gleich k.',
+      technik:'Chi²(k) = Gamma(k/2, 1/2). E[Y] = k, Var(Y) = 2k. <strong>Wichtigste Anwendung:</strong> 2·ln(LR) ~ Chi²(Δdf) asymptotisch — Grundlage aller Likelihood-Ratio-Tests und LOO/WAIC-Vergleiche. F(d₁,d₂) ≡ [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂].'
     }
   },
 
@@ -525,9 +534,10 @@ const DISTS = {
     modeFn:p=>{const d1=Math.round(p.d1),d2=Math.round(p.d2);
       return d1>2?d2*(d1-2)/(d1*(d2+2)):0;},
     info:{
-      was:'Verhältnis zweier skalierter Chi²-Variablen. Basis von <strong>F-Tests</strong>: ANOVA, Vergleich verschachtelter Regressionsmodelle, Test auf Varianzgleichheit.',
-      parameter:'<strong>d₁</strong> = Zähler-Freiheitsgrade, <strong>d₂</strong> = Nenner-Freiheitsgrade. Die Form ändert sich stark mit d₁ und d₂.',
-      technik:'E[Y] = d₂/(d₂−2) für d₂ > 2, Modus = d₂(d₁−2)/(d₁(d₂+2)) für d₁ > 2. Beziehung: F(d₁, d₂) = [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂]. Für d₂ → ∞: F(d₁, ∞) → Chi²(d₁)/d₁. 1/F(d₁,d₂) ~ F(d₂,d₁).'
+      was:'Das Verhältnis zweier unabhängiger Chi²-Variablen, jeweils geteilt durch ihre Freiheitsgrade. Immer positiv und rechtsschief. Die Form ändert sich stark mit den beiden Freiheitsgrad-Parametern.',
+      einsatz:'Basis aller <strong>F-Tests</strong> in der klassischen Statistik: ANOVA (Sind Gruppenunterschiede signifikant?), Vergleich verschachtelter Regressionsmodelle (Erklärt ein erweitertes Modell signifikant mehr Varianz?), Levene-Test auf Varianzgleichheit. Als direktes Likelihood-Modell eher selten.',
+      parameter:'<strong>d₁</strong> = Zähler-Freiheitsgrade (entspricht der Anzahl getesteter Einschränkungen). <strong>d₂</strong> = Nenner-Freiheitsgrade (entspricht den Residuen). <em>Beispiel:</em> ANOVA mit 3 Gruppen und 60 Beobachtungen → F(2, 57). Kritischer F-Wert für p < .05 ≈ 3.16. <em>Beispiel:</em> Bei d₁ = 1: F = t² (F-Test ist quadrierter t-Test).',
+      technik:'E[Y] = d₂/(d₂−2) für d₂ > 2. F(d₁,d₂) = [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂]. Für d₂ → ∞: F(d₁, ∞) → Chi²(d₁)/d₁. 1/F(d₁,d₂) ~ F(d₂,d₁).'
     }
   },
 
@@ -552,9 +562,10 @@ const DISTS = {
       ?{alpha:p.mu*p.phi, beta_:(1-p.mu)*p.phi}
       :{mu:p.alpha/(p.alpha+p.beta_), phi:p.alpha+p.beta_},
     info:{
-      was:'Verteilung auf <strong>[0, 1]</strong> für <strong>Anteile und Wahrscheinlichkeiten</strong>. Sehr flexibel: U-förmig, gleichmäßig, glockenförmig, J-förmig — je nach Parameter. Als Prior für Binomial-p.',
-      parameter:'<strong>brms (μ, φ):</strong> μ = E[Y] (direkt der Mittelpunkt), φ = Präzision/Konzentration — größeres φ → konzentrierter um μ. <strong>Klassisch (α, β):</strong> α = Shape1, β = Shape2. Umrechnung: μ = α/(α+β), φ = α+β.',
-      technik:'E[Y] = μ = α/(α+β), Var(Y) = μ(1−μ)/(1+φ). Modus = (α−1)/(α+β−2) für α,β > 1; bei α ≤ 1 oder β ≤ 1: U-Form oder Randmaxima. Beta(1,1) = Uniform[0,1]. <em>brms:</em> <code>beta(mu, phi)</code>, Link: <code>logit</code>.'
+      was:'Verteilung für <strong>Anteile und Wahrscheinlichkeiten</strong> auf dem Intervall [0, 1]. Extrem flexibel: glockenförmig, schief, J-förmig, U-förmig oder gleichmäßig — je nach Parameterwahl.',
+      einsatz:'Anteil korrekt gelöster Aufgaben pro Person, Anteile in der Ökologie (Flächenbedeckung), Compliance-Raten, als <strong>Prior für Binomial-Wahrscheinlichkeiten</strong> in Bayes. Überall wo die Daten echte Anteile zwischen 0 und 1 sind (ohne strukturelle Nullen oder Einsen). <em>brms:</em> <code>family = beta()</code>, Link: <code>logit</code>.',
+      parameter:'<strong>brms (μ, φ):</strong> μ = Mittelwert (wo die Masse liegt). <em>Beispiel:</em> μ = 0.7 → im Schnitt 70% richtig. φ = Präzision. <em>Beispiel:</em> φ = 3 → breite Verteilung (SD ≈ 0.22); φ = 10 → engere Glocke; φ = 50 → sehr konzentriert. Bei φ < 2 beginnt die Verteilung U-förmig zu werden. <strong>Klassisch (α, β):</strong> Umrechnung: μ = α/(α+β), φ = α+β.',
+      technik:'E[Y] = μ, Var = μ(1−μ)/(1+φ). Modus = (α−1)/(α+β−2) für α,β > 1. Beta(1,1) = Uniform[0,1]. <em>brms:</em> <code>beta(mu, phi)</code>. Für Daten mit strukturellen Nullen → ZI-Beta; mit Nullen und Einsen → ZOIB.'
     }
   },
 
@@ -569,9 +580,10 @@ const DISTS = {
     meanFn:p=>p.p, varianceFn:p=>p.p*(1-p.p),
     modeFn:p=>p.p>0.5?1:p.p<0.5?0:NaN,
     info:{
-      was:'Einmaliger Binärversuch: Erfolg (1) mit Wahrscheinlichkeit p, Misserfolg (0) mit 1−p. Grundlage der <strong>logistischen Regression</strong>. Für jede binäre Outcome-Variable.',
-      parameter:'<strong>p</strong> = Erfolgswahrscheinlichkeit (0 ≤ p ≤ 1). E[Y] = p, Var(Y) = p(1−p). Maximale Varianz bei p = 0.5.',
-      technik:'n unabhängige Bernoulli(p) → Binomial(n, p). Bernoulli = Binomial(1, p). <em>brms:</em> <code>bernoulli(logit)</code> für logistische Regression — p wird durch den logistischen Link modelliert: logit(p) = log(p/(1−p)) = Xβ.'
+      was:'Der einfachste diskrete Fall: <strong>genau eine Beobachtung</strong>, entweder Erfolg (Y = 1) oder Misserfolg (Y = 0). Jedes binäre Phänomen folgt einer Bernoulli-Verteilung.',
+      einsatz:'Bestanden/Nicht bestanden, Krank/Gesund, Klick/Kein Klick auf eine Werbung, Rückfall/Kein Rückfall in einer Therapiestudie, Ja/Nein-Antworten im Experiment. <strong>Basis der logistischen Regression</strong> — die häufigste Modellform für binäre Ergebnisse. <em>brms:</em> <code>family = bernoulli()</code>, Link: <code>logit</code>.',
+      parameter:'<strong>p</strong> = Erfolgswahrscheinlichkeit. <em>Beispiel:</em> p = 0.30 → 30% Wahrscheinlichkeit für Erfolg (z.B. Rückfall), 70% für Misserfolg. E[Y] = p. Die Streuung Var = p(1−p) ist maximal bei p = 0.5 (größte Ungewissheit) und sinkt gegen 0 wenn p → 0 oder p → 1 (Ergebnis fast sicher).',
+      technik:'Bernoulli(p) = Binomial(1, p). n unabhängige Bernoulli → Binomial(n, p). <em>brms:</em> <code>bernoulli(logit)</code> — p = 1/(1+e^(−Xβ)), d.h. der lineare Prediktor Xβ wird durch den logistischen Link in eine Wahrscheinlichkeit umgerechnet.'
     }
   },
 
@@ -593,9 +605,10 @@ const DISTS = {
     meanFn:p=>(1-p.zi)*p.mu, varianceFn:p=>null,
     modeFn:p=>p.zi>0.5?0:null,
     info:{
-      was:'<strong>Beta-Verteilung mit extra Punktmasse bei 0</strong>. Wenn Daten viele exakte Nullen enthalten (z.B. Anteil Studierender, die 0% Zeit mit Sport verbringen), aber sonst kontinuierliche Anteile.',
-      parameter:'<strong>μ</strong> = Mittelwert der Beta-Komponente, <strong>φ</strong> = Präzision. <strong>zi</strong> = P(Y = 0) — Anteil der strukturellen Nullen.',
-      technik:'Y = 0 mit P = zi; Y ~ Beta(μ·φ, (1−μ)·φ) mit P = 1−zi. E[Y] = (1−zi)·μ. <em>brms:</em> <code>zero_inflated_beta(mu, phi, zi)</code>. Balken im Plot = Punktmasse P(Y=0).'
+      was:'Eine <strong>gemischte Verteilung</strong>: Mit Wahrscheinlichkeit zi tritt exakt 0 auf (strukturelle Null, kein Zufall), und mit Wahrscheinlichkeit 1−zi folgt der Wert einer Beta-Verteilung auf (0,1). Der rote Balken zeigt die Punktmasse bei 0.',
+      einsatz:'Anteil Studierender, die überhaupt keine Zeit mit Sport verbringen (echte Abstinenz ≠ zufälliger Anteil nahe 0), Alkoholkonsum-Anteil mit echten Nichtkonsumenten, Spielzeit in Spielen (0% = hat nie gespielt). Überall wo es eine echte Null-Gruppe und eine kontinuierliche Gruppe gibt. <em>brms:</em> <code>family = zero_inflated_beta()</code>.',
+      parameter:'<strong>μ</strong> = Mittelwert der Beta-Komponente (was passiert bei den Nicht-Null-Fällen). <strong>φ</strong> = Präzision der Beta-Komponente. <strong>zi</strong> = Anteil echter Nullen. <em>Beispiel:</em> zi = 0.35 → 35% der Personen haben exakt 0; die übrigen 65% haben kontinuierliche Werte um μ herum.',
+      technik:'E[Y] = (1−zi)·μ. Balken im Plot = zi; Kurve = (1−zi)·BetaPDF. <em>brms:</em> <code>zero_inflated_beta(mu, phi, zi)</code>. zi wird getrennt modelliert, z.B. mit einer eigenen logistischen Regression.'
     }
   },
 
@@ -618,9 +631,10 @@ const DISTS = {
     meanFn:p=>p.zoi*p.coi+(1-p.zoi)*p.mu, varianceFn:p=>null,
     modeFn:p=>null,
     info:{
-      was:'<strong>Zero-and-One-Inflated Beta</strong>: Beta mit Punktmassen bei 0 <em>und</em> 1. Für Anteile, die genau 0% oder 100% sein können — z.B. vollständige Abstinenz vs. vollständiger Konsum.',
-      parameter:'<strong>μ, φ</strong> = Beta-Komponente. <strong>zoi</strong> = P(Y ∈ {0,1}), <strong>coi</strong> = P(Y=1 | Y ∈ {0,1}). Also: P(Y=0) = zoi·(1−coi), P(Y=1) = zoi·coi.',
-      technik:'E[Y] = zoi·coi + (1−zoi)·μ. <em>brms:</em> <code>zero_one_inflated_beta(mu, phi, zoi, coi)</code>. Die beiden Balken im Plot zeigen P(Y=0) und P(Y=1); die Kurve ist die skalierte Beta-Dichte.'
+      was:'Wie ZI-Beta, aber mit Punktmassen bei <strong>0 und 1</strong> gleichzeitig. Anteile, die entweder exakt 0% oder exakt 100% betragen können — strukturelle Extreme auf beiden Seiten. Die zwei roten Balken zeigen die Punktmassen bei 0 und 1.',
+      einsatz:'Anteil abgeschlossener Aufgaben pro Person (0% = nichts versucht, 100% = alles gelöst), vollständige Abstinenz vs. täglicher Konsum, Compliance in klinischen Studien (0% vs. 100%), Leistungstests mit Boden- und Deckeneffekten. <em>brms:</em> <code>family = zero_one_inflated_beta()</code>.',
+      parameter:'<strong>μ, φ</strong> = Beta-Anteil (für Werte zwischen 0 und 1). <strong>zoi</strong> = P(Y ist 0 oder 1), also der Gesamtanteil der Extremfälle. <strong>coi</strong> = P(Y=1 | Y ist Extremfall). <em>Beispiel:</em> zoi = 0.20, coi = 0.60 → 20% Extremfälle, davon 60% Einsen → 12% der Stichprobe hat Y=1, 8% hat Y=0, 80% hat Werte auf (0,1).',
+      technik:'P(Y=0) = zoi·(1−coi), P(Y=1) = zoi·coi. E[Y] = zoi·coi + (1−zoi)·μ. <em>brms:</em> <code>zero_one_inflated_beta(mu, phi, zoi, coi)</code>. zoi und coi werden oft separat mit eigenen Prädiktoren modelliert.'
     }
   },
 
@@ -635,9 +649,10 @@ const DISTS = {
     meanFn:p=>p.lambda, varianceFn:p=>p.lambda,
     modeFn:p=>Math.floor(p.lambda),
     info:{
-      was:'<strong>Zähldaten</strong> pro Zeiteinheit, Fläche oder Person. Grundlage von Poisson-GLMs. Kennzeichen: <strong>Equidispersion</strong> — Erwartungswert gleich Varianz (E[Y] = Var[Y] = λ).',
-      parameter:'<strong>λ</strong> = Rate (= Erwartungswert = Varianz, λ > 0). Interpretierbar als "erwartete Anzahl Ereignisse pro Einheit".',
-      technik:'PMF: e^(−λ)·λ^k/k!. Modus = ⌊λ⌋. Bei λ → ∞: → Normal(λ, √λ). Wenn Var > E[Y] in den Daten → Überdispersion → Negative Binomial. <em>brms:</em> <code>poisson(log)</code>, Link: <code>log</code>.'
+      was:'Die <strong>Grundverteilung für Zähldaten</strong> — diskrete Werte 0, 1, 2, 3, ... Zählt, wie oft ein zufälliges Ereignis pro Einheit auftritt. Das charakteristische Merkmal: Mittelwert und Varianz sind identisch (Equidispersion).',
+      einsatz:'Anzahl Emails pro Tag, Anzahl Unfälle pro Monat auf einer Strecke, Anzahl Arztbesuche pro Jahr, Anzahl Wörter pro Satz, Anzahl Tore pro Fußballspiel, Anzahl Fehler pro Code-Zeile. Überall wo man etwas zählt, das selten bis mittelselten vorkommt. <em>brms:</em> <code>family = poisson()</code>, Link: <code>log</code>.',
+      parameter:'<strong>λ</strong> = Rate (gleichzeitig Mittelwert und Varianz, λ > 0). <em>Beispiel:</em> λ = 3 → im Schnitt 3 Ereignisse pro Einheit, Standardabweichung = √3 ≈ 1.7. <em>Beispiel:</em> λ = 0.5 → seltene Ereignisse, meistens 0 oder 1. Der häufigste Wert (Modus) ist ⌊λ⌋.',
+      technik:'PMF: P(Y=k) = e^(−λ)·λ^k/k!. Für große λ: → Normal(λ, √λ). <strong>Diagnose:</strong> Wenn empirisch Var(Y) ≫ E[Y] → Überdispersion → Negative Binomial als robustere Alternative wählen. <em>brms:</em> <code>poisson(log)</code>.'
     }
   },
 
@@ -653,9 +668,10 @@ const DISTS = {
     meanFn:p=>p.mu, varianceFn:p=>p.mu+p.mu*p.mu/p.phi,
     modeFn:null, // numerical
     info:{
-      was:'Wie Poisson, aber mit <strong>Überdispersion</strong> (Var > E[Y]). In der Praxis häufiger als Poisson, da empirische Zähldaten oft variabler als das Poisson-Modell zulässt.',
-      parameter:'<strong>μ</strong> = Mittelwert, <strong>φ</strong> = Shape-Parameter (Präzision). Var(Y) = μ + μ²/φ. <em>Kleineres φ → stärkere Überdispersion.</em> Für φ → ∞: → Poisson(μ).',
-      technik:'Poisson-Gamma-Mischung: Y | ω ~ Poisson(ω), ω ~ Gamma(φ, φ/μ). <em>brms:</em> <code>negbinomial(mu, phi)</code>, Link: <code>log</code>. Verwandt: <code>negbinomial2</code> in Stan.'
+      was:'Wie Poisson, aber mit <strong>flexibler Varianz</strong>: Die Varianz darf größer sein als der Mittelwert (Überdispersion). In der Praxis fast immer besser als Poisson, weil reale Zähldaten fast immer variabler sind als das Poisson-Modell erlaubt.',
+      einsatz:'Anzahl Arztbesuche pro Jahr (manche Personen gehen sehr oft, die meisten selten), Anzahl Social-Media-Posts, Anzahl Symptome, Anzahl Tage krank pro Jahr. Empfehlung: <strong>Als Standard für Zähldaten</strong> einsetzen und nur bei explizit nachgewiesener Equidispersion zu Poisson wechseln. <em>brms:</em> <code>family = negbinomial()</code>, Link: <code>log</code>.',
+      parameter:'<strong>μ</strong> = Mittelwert. <em>Beispiel:</em> μ = 5 → im Schnitt 5 Ereignisse. <strong>φ</strong> = Präzisionsparameter. <em>Beispiel:</em> φ = 1 → Var = 5 + 25/1 = 30, sehr viel mehr als bei Poisson (Var = 5); φ = 10 → Var = 7.5, mäßige Überdispersion; φ = 100 → kaum von Poisson zu unterscheiden. Kleines φ = starke Überdispersion.',
+      technik:'Var(Y) = μ + μ²/φ. Grenzfall φ→∞: → Poisson(μ). Interpretation als Mischung: Y|ω ~ Poisson(ω), ω ~ Gamma(φ, φ/μ). <em>brms:</em> <code>negbinomial(mu, phi)</code>.'
     }
   },
 
@@ -671,9 +687,10 @@ const DISTS = {
     meanFn:p=>Math.round(p.n)*p.p, varianceFn:p=>Math.round(p.n)*p.p*(1-p.p),
     modeFn:p=>{const n=Math.round(p.n); return Math.floor((n+1)*p.p);},
     info:{
-      was:'Anzahl Erfolge aus <strong>n Bernoulli-Versuchen</strong> mit gleicher Wahrscheinlichkeit p. Für Proportions-Daten mit bekanntem Nenner (z.B. k von n Studierenden bestanden).',
-      parameter:'<strong>n</strong> = Anzahl Versuche (integer). <strong>p</strong> = Erfolgswahrscheinlichkeit. E[Y] = n·p, Var(Y) = n·p·(1−p).',
-      technik:'Spezialfall Bernoulli(p) = Binomial(1, p). Bei großem n und moderatem p: → Normal(np, √(np(1−p))). <em>brms:</em> <code>binomial(logit)</code> — n als <code>trials()</code> im Modell angeben. Logistisches Regressionsmodell auf Proportionen.'
+      was:'Zählt die <strong>Anzahl Erfolge aus n unabhängigen Bernoulli-Versuchen</strong> mit gleicher Erfolgswahrscheinlichkeit p. Das klassische Urnenmodell — man zieht n mal und schaut, wie viele „Treffer" dabei sind.',
+      einsatz:'Anzahl korrekt gelöster Aufgaben von n = 20 Aufgaben, Anzahl Therapieerfolge von n = 100 Patienten, Anzahl positiver Tests aus n = 50 Stichproben, Anzahl Tore in n = 10 Schüssen. Wichtig: Der Nenner n muss für alle Beobachtungen bekannt sein. <em>brms:</em> <code>family = binomial()</code>, Link: <code>logit</code>.',
+      parameter:'<strong>n</strong> = Anzahl Versuche (fest, integer). <strong>p</strong> = Erfolgswahrscheinlichkeit. <em>Beispiel:</em> n = 20 Aufgaben, p = 0.6 → erwartete Anzahl richtig = 12, SD = √(20×0.6×0.4) ≈ 2.2. <em>Beispiel:</em> Münzwurf n = 10, p = 0.5 → Mittelwert = 5, SD ≈ 1.6. Maximale Streuung bei p = 0.5.',
+      technik:'P(Y=k) = C(n,k)·p^k·(1−p)^(n−k). Bernoulli = Binomial(1, p). Für großes n: → Normal(np, √(np(1−p))). <em>brms:</em> <code>binomial(logit)</code> — n als <code>trials(n)</code> im Modell. Für Überdispersion → Beta-Binomial.'
     }
   },
 
@@ -692,9 +709,10 @@ const DISTS = {
       return n*a*b*(ab+n)/(ab*ab*(ab+1));},
     modeFn:null, // numerical
     info:{
-      was:'<strong>Binomial mit Beta-verteilter Erfolgswahrscheinlichkeit p</strong>. p schwankt zwischen Gruppen/Personen → Überdispersion. Für geclusterte Proportionsdaten.',
-      parameter:'<strong>n</strong> = Versuche, <strong>μ</strong> = mittlere Erfolgswahrscheinlichkeit (brms), <strong>φ</strong> = Konzentration der Beta-Verteilung für p. Kleineres φ → mehr Variation in p.',
-      technik:'α = μ·φ, β = (1−μ)·φ. E[Y] = n·μ, Var(Y) > n·μ·(1−μ). Bei φ → ∞: → Binomial(n, μ). <em>brms:</em> <code>beta_binomial(n, mu, phi)</code>.'
+      was:'Eine Binomialverteilung, bei der die Erfolgswahrscheinlichkeit p <strong>von Person zu Person variiert</strong> — p ist selbst Beta-verteilt. Das erzeugt mehr Streuung als reine Binomial: Überdispersion.',
+      einsatz:'Testergebnisse, bei denen die Fähigkeit zwischen Personen schwankt (nicht alle lösen 20 Aufgaben mit derselben Wahrscheinlichkeit), Anzahl positiver Antworten über heterogene Gruppen, klinische Trials mit unterschiedlich ansprechenden Patienten. Überall wo Binomial zu wenig Streuung zeigt. <em>brms:</em> <code>family = beta_binomial()</code>.',
+      parameter:'<strong>n</strong> = Anzahl Versuche. <strong>μ</strong> = mittlere Erfolgswahrscheinlichkeit über alle Personen. <strong>φ</strong> = Konzentration der Beta-Verteilung für p. <em>Beispiel:</em> φ = 1 → p variiert stark zwischen Personen (einige schaffen fast nichts, andere fast alles); φ = 10 → p variiert nur wenig; φ = 100 → kaum von Binomial zu unterscheiden.',
+      technik:'Intern: α = μ·φ, β = (1−μ)·φ. E[Y] = n·μ, Var > n·μ·(1−μ). Grenzfall φ→∞: → Binomial(n, μ). <em>brms:</em> <code>beta_binomial(n, mu, phi)</code>.'
     }
   },
 
@@ -844,11 +862,15 @@ function updateInfo(){
       <div class="info-body">${d.info.was}</div>
     </div>
     <div class="info-block">
-      <div class="info-h">Parameter-Bedeutung</div>
+      <div class="info-h">Typischer Einsatz &amp; Beispiele</div>
+      <div class="info-body">${d.info.einsatz}</div>
+    </div>
+    <div class="info-block">
+      <div class="info-h">Was bedeuten die Parameter?</div>
       <div class="info-body">${d.info.parameter}</div>
     </div>
     <div class="info-block">
-      <div class="info-h">Technische Zusammenhänge</div>
+      <div class="info-h">Technische Details</div>
       <div class="info-body">${d.info.technik}</div>
     </div>`;
 }
@@ -885,7 +907,7 @@ function renderDist(){
   canvas.width=Math.max(100,W);
   const H=canvas.height;
   const ctx=canvas.getContext('2d');
-  const m={l:54,r:18,t:14,b:36};
+  const m={l:62,r:18,t:20,b:40};
 
   // Get canonical params for toggle-dists
   let cp=PARAMS;
@@ -940,26 +962,27 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   }
 
   // Axis labels
-  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
-  ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#a8c4d8':'#5a5248';
+  ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   const nXLbl=5;
   for(let i=0;i<=nXLbl;i++){
     const v=xlo+i*(xhi-xlo)/nXLbl;
     const s=Math.abs(v)<0.001&&v!==0?'0':v.toFixed(Math.abs(v)<1?2:(Math.abs(v)<10?1:0));
-    ctx.fillText(s, toX(v), H-m.b+13);
+    ctx.fillText(s, toX(v), H-m.b+15);
   }
   ctx.textAlign='right';
   for(let i=1;i<=nyTick;i++){
     const v=i*ymax/nyTick;
-    ctx.fillText(v.toFixed(v<0.1?3:v<1?2:1), m.l-4, toY(v)+3);
+    ctx.fillText(v.toFixed(v<0.1?3:v<1?2:1), m.l-5, toY(v)+4);
   }
-  ctx.fillStyle=DARK?'#1e2a40':'#8a7f72'; ctx.textAlign='center';
-  ctx.fillText('y', m.l+Wp/2, H-2);
-  ctx.save(); ctx.translate(11,m.t+Hp/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#7aaabe':'#5a5248'; ctx.textAlign='center';
+  ctx.font='12px DM Mono,monospace';
+  ctx.fillText('y', m.l+Wp/2, H-3);
+  ctx.save(); ctx.translate(13,m.t+Hp/2); ctx.rotate(-Math.PI/2);
   ctx.fillText('Dichte f(y)',0,0); ctx.restore();
 
   // Axis frame
-  ctx.strokeStyle=DARK?'#2a3a55':'#c5bba8'; ctx.lineWidth=1.2;
+  ctx.strokeStyle=DARK?'#3a5060':'#c5bba8'; ctx.lineWidth=1.2;
   ctx.strokeRect(m.l,m.t,Wp,Hp);
 
   // PDF fill
@@ -1013,8 +1036,8 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const px=toX(val);
     ctx.strokeStyle=color; ctx.beginPath();
     ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke();
-    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl, px, m.t-2);
+    ctx.fillStyle=color; ctx.font='11px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, m.t-3);
   });
   ctx.restore();
 
@@ -1042,26 +1065,27 @@ function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.beginPath(); ctx.moveTo(m.l,toY(y)); ctx.lineTo(W-m.r,toY(y)); ctx.stroke();
   }
   // Axis labels
-  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
-  ctx.font='11px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#a8c4d8':'#5a5248';
+  ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   // x labels: show every few
   const skip=Math.max(1,Math.ceil((khi-klo)/12));
   ks.forEach(k=>{
     if((k-klo)%skip===0)
-      ctx.fillText(k, toX(k), H-m.b+13);
+      ctx.fillText(k, toX(k), H-m.b+15);
   });
   ctx.textAlign='right';
   for(let i=1;i<=nyTick;i++){
     const v=i*ymax/nyTick;
-    ctx.fillText(v.toFixed(v<0.01?3:v<0.1?2:2), m.l-4, toY(v)+3);
+    ctx.fillText(v.toFixed(v<0.01?3:v<0.1?2:2), m.l-5, toY(v)+4);
   }
-  ctx.fillStyle=DARK?'#1e2a40':'#8a7f72'; ctx.textAlign='center';
-  ctx.fillText('k', m.l+Wp/2, H-2);
-  ctx.save(); ctx.translate(11,m.t+Hp/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#7aaabe':'#5a5248'; ctx.textAlign='center';
+  ctx.font='12px DM Mono,monospace';
+  ctx.fillText('k', m.l+Wp/2, H-3);
+  ctx.save(); ctx.translate(13,m.t+Hp/2); ctx.rotate(-Math.PI/2);
   ctx.fillText('P(Y = k)',0,0); ctx.restore();
 
   // Frame
-  ctx.strokeStyle=DARK?'#2a3a55':'#c5bba8'; ctx.lineWidth=1.2;
+  ctx.strokeStyle=DARK?'#3a5060':'#c5bba8'; ctx.lineWidth=1.2;
   ctx.strokeRect(m.l,m.t,Wp,Hp);
 
   // Bars
@@ -1100,8 +1124,8 @@ function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     if(px<m.l||px>W-m.r)return;
     ctx.strokeStyle=color; ctx.beginPath();
     ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke();
-    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl, px, m.t-2);
+    ctx.fillStyle=color; ctx.font='11px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, m.t-3);
   });
   ctx.restore();
 
@@ -1145,21 +1169,22 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   });
 
   // Axis labels
-  ctx.fillStyle=DARK?'#2a3a55':'#8a7f72';
-  ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
-  [0,0.25,0.5,0.75,1].forEach(v=>ctx.fillText(v.toFixed(2),toX(v),H-m.b+13));
+  ctx.fillStyle=DARK?'#a8c4d8':'#5a5248';
+  ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
+  [0,0.25,0.5,0.75,1].forEach(v=>ctx.fillText(v.toFixed(2),toX(v),H-m.b+15));
   ctx.textAlign='right';
   for(let i=1;i<=4;i++){
     const v=i*ymax/4;
-    ctx.fillText(v.toFixed(v<0.1?2:1), m.l-4, toY(v)+3);
+    ctx.fillText(v.toFixed(v<0.1?2:1), m.l-5, toY(v)+4);
   }
-  ctx.fillStyle=DARK?'#1e2a40':'#8a7f72'; ctx.textAlign='center';
-  ctx.fillText('y', m.l+Wp/2, H-2);
-  ctx.save(); ctx.translate(11,m.t+Hp/2); ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#7aaabe':'#5a5248'; ctx.textAlign='center';
+  ctx.font='12px DM Mono,monospace';
+  ctx.fillText('y', m.l+Wp/2, H-3);
+  ctx.save(); ctx.translate(13,m.t+Hp/2); ctx.rotate(-Math.PI/2);
   ctx.fillText('Dichte / P(punkt)',0,0); ctx.restore();
 
   // Frame
-  ctx.strokeStyle=DARK?'#2a3a55':'#c5bba8'; ctx.lineWidth=1.2;
+  ctx.strokeStyle=DARK?'#3a5060':'#c5bba8'; ctx.lineWidth=1.2;
   ctx.strokeRect(m.l,m.t,Wp,Hp);
 
   const a6=cv('--a6');
@@ -1174,8 +1199,8 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeStyle=cv('--a1'); ctx.lineWidth=1.5;
     ctx.strokeRect(cx-impPx/2, H-m.b-bh, impPx, bh);
     // Label: P=...
-    ctx.fillStyle=cv('--a1'); ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText('P='+prob.toFixed(2), cx, H-m.b-bh-4);
+    ctx.fillStyle=cv('--a1'); ctx.font='11px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('P='+prob.toFixed(2), cx, H-m.b-bh-5);
   });
 
   // Continuous Beta part
@@ -1234,8 +1259,8 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const px=toX(val);
     ctx.strokeStyle=color; ctx.beginPath();
     ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke();
-    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl, px, m.t-2);
+    ctx.fillStyle=color; ctx.font='11px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, m.t-3);
   });
   ctx.restore();
 
