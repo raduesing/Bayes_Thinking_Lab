@@ -404,6 +404,12 @@ select.inp option{background:var(--paper);color:var(--ink)}
     <div id="withinList" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.4rem"></div>
     <div id="withinAddBtn"><button class="btn btn-sm" onclick="addFactor('within')">+ Within-Faktor</button></div>
     <div id="withinNote" class="info-box" style="display:none;margin-top:.3rem">v1: max. 1 Within-Faktor</div>
+    <div id="withinSlopeRow" style="display:none;margin-top:.4rem">
+      <label style="cursor:pointer;display:flex;align-items:center;gap:.35rem">
+        <input type="checkbox" id="withinSlopeOnId" onchange="updateFormula()" style="accent-color:var(--a5)">
+        <span style="font-family:'DM Mono',monospace;font-size:.73rem">Random Slope auf id: <code style="font-size:.71rem">(1 + … | id)</code></span>
+      </label>
+    </div>
   </div>
 
   <div>
@@ -757,6 +763,12 @@ function renderFactors(){
   renderFactorList('within',  document.getElementById('withinList'));
   const wa=document.getElementById('withinAddBtn');
   if(wa) wa.style.display=ST.within.length>=1?'none':'';
+  const slopeRow=document.getElementById('withinSlopeRow');
+  if(slopeRow) slopeRow.style.display=ST.within.length>0?'block':'none';
+  if(ST.within.length===0){
+    const cb=document.getElementById('withinSlopeOnId');
+    if(cb) cb.checked=false;
+  }
 }
 
 function renderFactorList(kind,el){
@@ -1185,6 +1197,7 @@ function renderCovariates(){
 function updateFormula(){
   const bTerms=ST.between.map(f=>cleanR(f.name));
   const wTerms=ST.within.map(f=>cleanR(f.name));
+  const hasW=ST.within.length>0;
   const clActive=document.getElementById('clusterActive')?.checked;
   const clName=document.getElementById('clusterName')?.value||'school';
   const lik=document.getElementById('likSel')?.value||'gaussian';
@@ -1196,13 +1209,20 @@ function updateFormula(){
   const fmSlopeFactor=allFmFactors.find(f=>f.id===slopeOnId)||allFmFactors[0]||null;
   const hasSlope=clActive&&clTau1>0&&fmSlopeFactor!=null;
 
-  // Vollständige Interaktionen: alle Prädiktoren mit * (robustestes Modell)
+  // Fixed effects
   const allTerms=[...bTerms,...wTerms];
   const factorFixed=allTerms.length>1?allTerms.join(' * '):(allTerms[0]||'1');
   const covTerms=ST.covariates.map(c=>cleanR(c.name));
   const fixed=covTerms.length>0?factorFixed+' + '+covTerms.join(' + '):factorFixed;
-  let re='';
-  if(clActive) re=hasSlope?` + (1 + ${cleanR(fmSlopeFactor.name)} | ${cleanR(clName)})`:` + (1 | ${cleanR(clName)})`;
+
+  // Random effects: (1 | id) immer wenn Within-Faktor vorhanden; Cluster-RE zusätzlich
+  const reTerms=[];
+  if(hasW){
+    const idSlope=document.getElementById('withinSlopeOnId')?.checked;
+    reTerms.push(idSlope?`(1 + ${wTerms[0]} | id)`:`(1 | id)`);
+  }
+  if(clActive) reTerms.push(hasSlope?`(1 + ${cleanR(fmSlopeFactor.name)} | ${cleanR(clName)})`:`(1 | ${cleanR(clName)})`);
+  const re=reTerms.length?' + '+reTerms.join(' + '):'';
 
   const lme4=`${yName} ~ ${fixed}${re}`;
   const brms=`bf(${yName} ~ ${fixed}${re}${lik!=='gaussian'?`, family = ${brmsFamily(lik)}`:''})`;
@@ -2418,7 +2438,10 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   // ── Formel für Power-Sim (mit korrekten RE) ───────────────
   // (1|id) für Within-Designs; Slopes aus Hauptmodell übernommen
   const pwReTerms=[];
-  if(hasW) pwReTerms.push('(1 | id)');
+  if(hasW){
+    const withinSlopeOnId=document.getElementById('withinSlopeOnId')?.checked;
+    pwReTerms.push(withinSlopeOnId?`(1 + ${wfNameR} | id)`:`(1 | id)`);
+  }
   if(clActive) pwReTerms.push(hasSlopes?`(1 + ${sfNameR} | ${clNameR})`:`(1 | ${clNameR})`);
   const pwReStr=pwReTerms.length?' + '+pwReTerms.join(' + '):'';
   const pwCovR=ST.covariates.map(c=>cleanR(c.name));
