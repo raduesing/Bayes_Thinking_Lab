@@ -13,7 +13,7 @@
 
 ### 🌐 [www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)
 
-**20 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
+**21 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -38,7 +38,7 @@ The lab is organized into five sections that build on each other. Work through t
 | Section | What you will learn | Key Tools |
 | :--- | :--- | :--- |
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
-| **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | GLM Conditional Distributions · GLM 3D · Interactive GLMM |
+| **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | Distribution Lab · GLM Conditional Distributions · GLM 3D · Interactive GLMM |
 | **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
 | **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
 | **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Prior & Posterior PC · LOO Lab |
@@ -64,6 +64,8 @@ The lab is organized into five sections that build on each other. Work through t
 
 ### I. From LM to GLMM
 *Scale the hierarchy of linear modeling.*
+
+* **Distribution Lab** — Explore **18 probability distributions** interactively — adjust parameters, show moments, and read off brms parameterisation and link functions directly. Covers all major GLM and Bayesian likelihood families: Normal, Student-t, Skew-Normal, Log-Normal, Gamma, Beta, Bernoulli, Poisson, Negative Binomial, ZI-Beta, ZOIB, Beta-Binomial, and more. Ideal preparation before fitting GLMs or specifying priors in brms.
 
 * **GLM Conditional Distributions** — Visualize the conditional distribution y|x along a predictor across **8 model families**: Normal, Student-t, Bernoulli (logistic), Poisson, Gamma, Ordinal (cumulative logit), Zero-Inflated Poisson, and Hurdle-Poisson. Compare parameter behavior and link functions across families.
 * **GLM in 3D** — Interact with regression planes and residuals in a spatial environment. Explore how multiple predictors jointly determine the outcome surface.
@@ -138,7 +140,7 @@ The Bayes Thinking Lab is a **serverless web application**. No installation, no 
 
 | Level | Recommended Entry Point | Tools to Explore |
 | :--- | :--- | :--- |
-| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · Prior Lab (CI-Solver) · Bayes Interactive |
+| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · **Distribution Lab** · Prior Lab (CI-Solver) · Bayes Interactive |
 | **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
 | **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PC · LOO Lab · Causal Calculator · G-Comp Builder · Decision Maker |
 
