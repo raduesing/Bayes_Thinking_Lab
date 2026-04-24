@@ -206,7 +206,7 @@ canvas#dist-canvas{display:block;width:100%}
 
 <div class="intro-strip">
   <strong>Distribution Lab</strong> — Wahrscheinlichkeitsverteilungen interaktiv erkunden.
-  &nbsp;·&nbsp; <em>18 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Rollen &amp; Parametrisierung · X-Achse fixierbar · Verteilungsbeziehungen
+  &nbsp;·&nbsp; <em>19 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Rollen &amp; Parametrisierung · X-Achse fixierbar · Verteilungsbeziehungen
 </div>
 
 <div id="cat-tabs"></div>
@@ -488,6 +488,14 @@ function invGaussPDF(x,mu,lam){
   if(x<=0||mu<=0||lam<=0)return 0;
   return Math.sqrt(lam/(2*Math.PI*x*x*x))*Math.exp(-lam*(x-mu)*(x-mu)/(2*mu*mu*x));
 }
+function exGaussPDF(x,mu,sigma,beta){
+  if(sigma<=0||beta<=0)return 0;
+  const z=(x-mu)/sigma-sigma/beta;
+  const phiVal=Phi(z);
+  if(phiVal<=0)return 0;
+  const logVal=-Math.log(beta)+(mu-x)/beta+(sigma*sigma)/(2*beta*beta)+Math.log(phiVal);
+  return isFinite(logVal)?Math.exp(logVal):0;
+}
 function fDistPDF(x,d1,d2){
   if(x<=0||d1<=0||d2<=0)return 0;
   return Math.exp(0.5*d1*Math.log(d1)+0.5*d2*Math.log(d2)+(0.5*d1-1)*Math.log(x)
@@ -525,7 +533,7 @@ function betaBinomPMF(k,n,a,b){
 
 const CATS = [
   {label:'Kontinuierlich\nunbegrenzt', dists:['normal','student_t','skew_normal']},
-  {label:'Kontinuierlich\npositiv', dists:['lognormal','shifted_lognormal','gamma','exponential','inv_gaussian','chi_sq','f_dist']},
+  {label:'Kontinuierlich\npositiv', dists:['lognormal','shifted_lognormal','gamma','exponential','exgaussian','inv_gaussian','chi_sq','f_dist']},
   {label:'Begrenzt [0,1]', dists:['beta','bernoulli','zi_beta','zoib']},
   {label:'Zähldaten', dists:['poisson','negbin','binomial','beta_binomial']},
 ];
@@ -690,6 +698,27 @@ const DISTS = {
     }
   },
 
+  exgaussian:{
+    name:'ExGaussian', group:1, notation:'Y ~ ExGauss(μ, σ, β)',
+    params:[
+      {id:'mu',    label:'μ (Mittelwert)',    min:-2, max:5,  step:0.1, val:1.5, fmt:v=>v.toFixed(1)},
+      {id:'sigma', label:'σ (Normal-SD)',     min:0.1, max:3, step:0.1, val:0.5, fmt:v=>v.toFixed(1)},
+      {id:'beta',  label:'β (Exp-Mittelwert)',min:0.1, max:3, step:0.1, val:0.5, fmt:v=>v.toFixed(1)},
+    ],
+    pdf:(x,p)=>exGaussPDF(x,p.mu,p.sigma,p.beta),
+    supportFn:p=>{const sd=Math.sqrt(p.sigma*p.sigma+p.beta*p.beta); return [p.mu-3*p.sigma, p.mu+p.beta+6*sd];},
+    meanFn:p=>p.mu+p.beta,
+    varianceFn:p=>p.sigma*p.sigma+p.beta*p.beta,
+    modeFn:p=>p.mu+p.beta,
+    info:{
+      was:'Faltung einer Normalverteilung N(μ, σ) mit einer Exponentialverteilung Exp(1/β): Y = Z + E, wobei Z ~ N(μ, σ) und E ~ Exp(1/β) unabhängig sind. Ergibt eine <strong>rechtsschiefe, glockenförmige</strong> Verteilung — mit der Glätte einer Normalverteilung, aber einem nach rechts verzogenen Schweif.',
+      einsatz:'<strong>Reaktionszeiten in der kognitiven Psychologie:</strong> Oft wird die Gesamtreaktionszeit als Summe eines normalverteilten Entscheidungsanteils (Z) und einer exponentiell verteilten motorischen Verzögerung (E) modelliert. <strong>Fehlerreaktionszeiten:</strong> Die ExGaussian beschreibt den rechten Schweif von RT-Verteilungen besonders gut. <strong>Epidemiologie &amp; Netzwerklatenz:</strong> Überall dort, wo ein normalverteilter Kern und ein exponentiell abklingender Schweif plausibel sind.<br><br><strong>Abgrenzung zur Inverse-Gauß-Verteilung:</strong> Die ExGaussian ist ein <em>deskriptives Mischmodell</em> ohne Prozessannahme — sie passt gut, wenn man RT-Verteilungen parametrisieren möchte, ohne eine mechanistische Theorie zu unterstellen. Die Inverse-Gauß hingegen hat einen klaren <em>generativen Mechanismus</em>: Sie beschreibt exakt die Erstpassagezeit eines Drift-Diffusion-Prozesses (Brownsche Bewegung mit Drift). Wenn die Theorie verlangt, dass die RT durch eine Schwellenüberschreitung eines akkumulierenden Beweisprozesses entsteht, ist die Inverse-Gauß das korrektere Modell.',
+      parameter:'<strong>μ (Mittelwert der Normalkomponente):</strong> Lage der Verteilung. Zusammen mit β bestimmt μ den Gesamtmittelwert: E[Y] = μ + β.<br><br><strong>σ (Standardabweichung der Normalkomponente):</strong> Steuert die Breite des Kerns. Kleines σ → schmale Glocke mit langem Schweif. Großes σ → breite, flache Verteilung.<br><br><strong>β (Mittelwert der Exponentialkomponente):</strong> Steuert den rechten Schweif. Kleines β → nahe an Normal(μ, σ), kaum Schiefe. Großes β → starker rechter Schweif, stark rechtsskief.<br><br><strong>Intuition:</strong> β/√(σ²+β²) ist ein Schiefemaß — je größer β relativ zu σ, desto stärker die Asymmetrie.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — direkt in brms verfügbar:<br><code>brm(rt ~ x, data = d, family = exgaussian())</code><br>→ mu wird mit dem Prädiktor verknüpft (Identity-Link)<br>→ sigma und beta werden als distributional parameters mitgeschätzt:<br><code>brm(bf(rt ~ x, sigma ~ 1, beta ~ 1), data = d, family = exgaussian())</code><br><br><strong>Prior-Empfehlungen (RT in Sekunden):</strong><br><code>prior(normal(0.5, 0.2), class = Intercept)  # mu: mittlere RT</code><br><code>prior(normal(0.1, 0.05), class = sigma)      # sigma: Normalkomponente</code><br><code>prior(normal(0.1, 0.05), class = beta)       # beta: Exp-Schweif</code></div><div class="brms-role"><strong>Als Prior:</strong> Nicht üblich.</div>',
+      technik:'Y = Z + E, Z ~ N(μ, σ), E ~ Exp(1/β) unabhängig. E[Y] = μ + β, Var(Y) = σ² + β². PDF: f(x) = (1/β)·exp((μ−x)/β + σ²/(2β²))·Φ((x−μ)/σ − σ/β). Für β→0 konvergiert ExGauss → N(μ, σ). Schiefe = 2·(β/√(σ²+β²))³.'
+    }
+  },
+
   inv_gaussian:{
     name:'Inverse Gauß', group:1, notation:'Y ~ InvGauß(μ, λ)',
     params:[
@@ -702,7 +731,7 @@ const DISTS = {
     modeFn:p=>p.mu*(Math.sqrt(1+9*p.mu*p.mu/(4*p.lam*p.lam))-3*p.mu/(2*p.lam)),
     info:{
       was:'Beschreibt die Zeit, bis ein <strong>zufälliger Prozess mit Drift</strong> eine Schwelle überschreitet. Positiv, oft stark rechtsschief. Entsteht, wenn eine Partikel (oder eine Entscheidung) gegen zufälligen Widerstand auf ein Ziel zuläuft.',
-      einsatz:'<strong>Reaktionszeitmodelle:</strong> Das Drift-Diffusion-Modell in der kognitiven Psychologie erklärt Reaktionszeiten als Prozess, bei dem Beweis gegen einen Rauschprozess akkumuliert wird, bis eine Entscheidungsschwelle erreicht wird. Die Zeit bis zu diesem Schwellenübertritt folgt der Inverse-Gauß-Verteilung. <strong>Latenzzeiten</strong> in Netzwerken und biologischen Prozessen. <strong>Wann wählen?</strong> Wenn Lognormal "zu viel" Schiefe produziert — Inverse Gauß hat einen leicht anderen Schweifverlauf.',
+      einsatz:'<strong>Reaktionszeitmodelle:</strong> Das Drift-Diffusion-Modell in der kognitiven Psychologie erklärt Reaktionszeiten als Prozess, bei dem Beweis gegen einen Rauschprozess akkumuliert wird, bis eine Entscheidungsschwelle erreicht wird. Die Zeit bis zu diesem Schwellenübertritt folgt der Inverse-Gauß-Verteilung. <strong>Latenzzeiten</strong> in Netzwerken und biologischen Prozessen. <strong>Wann wählen?</strong> Wenn Lognormal "zu viel" Schiefe produziert — Inverse Gauß hat einen leicht anderen Schweifverlauf.<br><br><strong>Abgrenzung zur ExGaussian-Verteilung:</strong> Die ExGaussian ist ein <em>deskriptives Mischmodell</em> (Normal + Exponential) ohne theoretische Prozessannahme — ideal, wenn man RT-Verteilungen parametrisieren, aber keine Driftmodell-Theorie unterstellen möchte. Die Inverse-Gauß hingegen hat einen klaren <em>generativen Mechanismus</em>: Sie ist die exakte Erstpassagezeit-Verteilung eines akkumulierenden Prozesses mit Drift. Wenn das Drift-Diffusion-Modell inhaltlich passt, ist die Inverse-Gauß das theoretisch begründetere Modell.',
       parameter:'<strong>μ (Mittelwert):</strong> Die mittlere Wartezeit bis zur Schwelle. <em>Beispiel:</em> μ = 0.5 s → im Schnitt 500 ms Reaktionszeit.<br><br><strong>λ (Shape/Präzision):</strong> Steuert die Schiefe. Kleines λ (z.B. 1) → stark rechtsschief, lange Ausreißer. Großes λ (z.B. 20) → konzentrierter, schmalere Verteilung. Hinweis: Var(Y) = μ³/λ, also hängt die Streuung kubisch vom Mittelwert ab — bei größerem μ nimmt die Varianz viel schneller zu.',
       brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für Reaktionszeiten und ähnliche positive Prozesse:<br><code>brm(y ~ x, data = d, family = inverse.gaussian(link = "1/mu^2"))</code><br>→ oder Link: <code>"log"</code> für einfachere Interpretation.<br>→ Seltener genutzt als Lognormal; sinnvoll bei bestimmten Reaktionszeitmodellen.</div><div class="brms-role"><strong>Als Prior:</strong> Nicht üblich.</div>',
       technik:'Var(Y) = μ³/λ. Modus < Median < Mittelwert (bei starker Schiefe). <em>brms:</em> <code>inv_gaussian(mu, lambda)</code>, Link: <code>1/mu²</code>.'
