@@ -126,6 +126,16 @@ The lab is organized into five sections that build on each other. Work through t
 
 The Bayes Thinking Lab is a **serverless web application**. No installation, no backend, and no data leaves your machine.
 
+### Option 1 — Use it online (recommended)
+
+Open the hosted version directly in your browser:
+
+🌐 **[www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)**
+
+No setup required.
+
+### Option 2 — Run it locally
+
 1. **Clone the repository:**
     ```bash
     git clone https://github.com/raduesing/Bayes_Thinking_Lab.git
