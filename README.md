@@ -84,6 +84,7 @@ The lab is organized into five sections that build on each other. Work through t
 * **MCMC Visualizer** — Watch the Metropolis-Hastings sampler navigate the posterior landscape — the "animated hiker" analogy made interactive.
 
 <p align="center"><img src="images/MCMC.gif" width="580"></p>
+
 * **Bayes Interactive** — Manipulate prior strength, likelihood, and sample size and see how they jointly shape the posterior. Includes CI and PPI bands for the full posterior predictive.
 
 ---
