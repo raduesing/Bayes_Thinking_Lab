@@ -133,6 +133,40 @@ canvas#dist-canvas{display:block;width:100%}
 .info-body code{background:var(--panel);border:1px solid var(--border);
   color:var(--a2);padding:.02rem .3rem;font-size:.64rem}
 
+/* ── OVERLAY KARTE ── */
+#overlay-karte{display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.55);
+  align-items:center;justify-content:center}
+#overlay-karte.open{display:flex}
+.ok-box{background:var(--paper);border:1.5px solid var(--border);max-width:720px;width:95vw;
+  max-height:90vh;overflow-y:auto;box-shadow:6px 6px 0 rgba(0,0,0,.25)}
+.ok-head{display:flex;justify-content:space-between;align-items:center;
+  padding:.5rem .85rem;border-bottom:1px solid var(--grid);position:sticky;top:0;background:var(--paper);z-index:1}
+.ok-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:500;color:var(--a4)}
+.ok-close{font-family:'DM Mono',monospace;font-size:.85rem;background:transparent;
+  border:none;cursor:pointer;color:var(--ink2);line-height:1}
+.ok-close:hover{color:var(--ink)}
+.ok-body{padding:1rem}
+.ok-body svg{width:100%;height:auto;display:block}
+
+/* info brms block */
+.info-h-brms{color:var(--a4) !important}
+.brms-block{background:var(--panel);border:1px solid var(--border);
+  padding:.45rem .65rem;margin-top:.25rem;border-left:3px solid var(--a4)}
+.brms-role{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);
+  margin-bottom:.2rem;line-height:1.7}
+.brms-role strong{color:var(--ink)}
+.brms-role em{color:var(--a4);font-style:normal}
+.brms-role code{background:var(--bg);border:1px solid var(--border);color:var(--a2);
+  padding:.02rem .3rem;font-size:.62rem}
+
+/* tool links */
+.tool-links{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.3rem}
+.tool-link{font-family:'DM Mono',monospace;font-size:.62rem;padding:.18rem .55rem;
+  border:1px solid var(--a6);color:var(--a6);text-decoration:none;
+  transition:all .13s;background:transparent}
+.tool-link:hover{background:var(--a6);color:var(--paper)}
+
 /* ── HELP PANEL ── */
 #help-panel{display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
   width:300px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
@@ -163,6 +197,8 @@ canvas#dist-canvas{display:block;width:100%}
   </div>
   <div style="display:flex;gap:.35rem;align-items:flex-start">
     <button class="tbtn" onclick="window.open('index_de.html','_self')" style="border-color:var(--a5);color:var(--a5)">← Übersicht</button>
+    <button class="tbtn" id="btn-xfix" onclick="toggleXFix()">X fix</button>
+    <button class="tbtn" id="btn-karte" onclick="toggleKarte()" style="border-color:var(--a4);color:var(--a4)">⊞ Beziehungen</button>
     <button class="tbtn" onclick="toggleHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Hilfe</button>
     <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
@@ -170,7 +206,7 @@ canvas#dist-canvas{display:block;width:100%}
 
 <div class="intro-strip">
   <strong>Distribution Lab</strong> — Wahrscheinlichkeitsverteilungen interaktiv erkunden.
-  &nbsp;·&nbsp; <em>18 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Parametrisierung
+  &nbsp;·&nbsp; <em>18 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Rollen &amp; Parametrisierung · X-Achse fixierbar · Verteilungsbeziehungen
 </div>
 
 <div id="cat-tabs"></div>
@@ -218,6 +254,163 @@ canvas#dist-canvas{display:block;width:100%}
   </div>
 </div>
 
+<!-- Overlay Karte: Verteilungsbeziehungen -->
+<div id="overlay-karte">
+  <div class="ok-box">
+    <div class="ok-head">
+      <span class="ok-title">Beziehungen zwischen Verteilungen</span>
+      <button class="ok-close" onclick="toggleKarte()">✕</button>
+    </div>
+    <div class="ok-body">
+      <svg viewBox="0 0 700 520" xmlns="http://www.w3.org/2000/svg" font-family="DM Mono,monospace" font-size="11">
+        <defs>
+          <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#888"/>
+          </marker>
+          <marker id="arr-grau" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#aaa"/>
+          </marker>
+        </defs>
+
+        <!-- Legende -->
+        <text x="10" y="18" font-size="10" fill="#888" letter-spacing="1">LEGENDE:</text>
+        <line x1="70" y1="13" x2="100" y2="13" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="103" y="17" font-size="10" fill="#888">Grenzwert / Spezialfall</text>
+        <line x1="240" y1="13" x2="270" y2="13" stroke="#888" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+        <text x="273" y="17" font-size="10" fill="#888">Konstruiert aus</text>
+
+        <!-- ═══ GRUPPE A: Kontinuierlich unbegrenzt ═══ -->
+        <rect x="5" y="28" width="690" height="115" rx="4" fill="none" stroke="#2bc7c4" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>
+        <text x="12" y="42" font-size="9" fill="#2bc7c4" letter-spacing="1.5" opacity=".8">KONTINUIERLICH UNBEGRENZT</text>
+
+        <!-- Normal -->
+        <rect x="280" y="50" width="120" height="38" rx="3" fill="#2bc7c4" fill-opacity=".15" stroke="#2bc7c4" stroke-width="1.5"/>
+        <text x="340" y="66" text-anchor="middle" font-weight="bold" fill="#2bc7c4" font-size="12">Normal</text>
+        <text x="340" y="80" text-anchor="middle" fill="#2bc7c4" font-size="9">Y ~ N(μ, σ)</text>
+
+        <!-- Student-t -->
+        <rect x="80" y="50" width="120" height="38" rx="3" fill="#2bc7c4" fill-opacity=".1" stroke="#2bc7c4" stroke-width="1"/>
+        <text x="140" y="66" text-anchor="middle" fill="#2bc7c4" font-size="12">Student-t</text>
+        <text x="140" y="80" text-anchor="middle" fill="#2bc7c4" font-size="9">t(ν, μ, σ)</text>
+        <line x1="200" y1="69" x2="278" y2="69" stroke="#2bc7c4" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="225" y="64" text-anchor="middle" fill="#2bc7c4" font-size="9">ν → ∞</text>
+
+        <!-- Skew-Normal -->
+        <rect x="480" y="50" width="120" height="38" rx="3" fill="#2bc7c4" fill-opacity=".1" stroke="#2bc7c4" stroke-width="1"/>
+        <text x="540" y="66" text-anchor="middle" fill="#2bc7c4" font-size="12">Skew-Normal</text>
+        <text x="540" y="80" text-anchor="middle" fill="#2bc7c4" font-size="9">SN(ξ, ω, α)</text>
+        <line x1="480" y1="69" x2="402" y2="69" stroke="#2bc7c4" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="455" y="64" text-anchor="middle" fill="#2bc7c4" font-size="9">α = 0</text>
+
+        <!-- Chi² konstruiert aus Normal -->
+        <text x="340" y="130" text-anchor="middle" fill="#888" font-size="9">χ²(k) = Z₁² + Z₂² + … + Zₖ²  (Zᵢ ~ Normal(0,1))</text>
+
+        <!-- ═══ GRUPPE B: Kontinuierlich positiv ═══ -->
+        <rect x="5" y="153" width="430" height="130" rx="4" fill="none" stroke="#e07830" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>
+        <text x="12" y="167" font-size="9" fill="#e07830" letter-spacing="1.5" opacity=".8">KONTINUIERLICH POSITIV</text>
+
+        <!-- Gamma -->
+        <rect x="155" y="175" width="120" height="38" rx="3" fill="#e07830" fill-opacity=".15" stroke="#e07830" stroke-width="1.5"/>
+        <text x="215" y="191" text-anchor="middle" font-weight="bold" fill="#e07830" font-size="12">Gamma</text>
+        <text x="215" y="205" text-anchor="middle" fill="#e07830" font-size="9">Γ(α, β)</text>
+
+        <!-- Exponential -->
+        <rect x="15" y="175" width="110" height="38" rx="3" fill="#e07830" fill-opacity=".1" stroke="#e07830" stroke-width="1"/>
+        <text x="70" y="191" text-anchor="middle" fill="#e07830" font-size="12">Exponential</text>
+        <text x="70" y="205" text-anchor="middle" fill="#e07830" font-size="9">Exp(λ)</text>
+        <line x1="125" y1="194" x2="153" y2="194" stroke="#e07830" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="139" y="189" text-anchor="middle" fill="#e07830" font-size="9">α=1</text>
+
+        <!-- Chi² -->
+        <rect x="155" y="230" width="120" height="38" rx="3" fill="#e07830" fill-opacity=".1" stroke="#e07830" stroke-width="1"/>
+        <text x="215" y="246" text-anchor="middle" fill="#e07830" font-size="12">Chi²</text>
+        <text x="215" y="260" text-anchor="middle" fill="#e07830" font-size="9">χ²(k)</text>
+        <line x1="215" y1="230" x2="215" y2="213" stroke="#e07830" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <text x="228" y="224" fill="#e07830" font-size="9">= Γ(k/2, ½)</text>
+
+        <!-- Inv. Gauß + LogNormal -->
+        <rect x="300" y="175" width="115" height="38" rx="3" fill="#e07830" fill-opacity=".1" stroke="#e07830" stroke-width="1"/>
+        <text x="357" y="191" text-anchor="middle" fill="#e07830" font-size="11">Inv. Gauß</text>
+        <text x="357" y="205" text-anchor="middle" fill="#e07830" font-size="9">IG(μ, λ)</text>
+
+        <rect x="300" y="230" width="115" height="38" rx="3" fill="#e07830" fill-opacity=".1" stroke="#e07830" stroke-width="1"/>
+        <text x="357" y="246" text-anchor="middle" fill="#e07830" font-size="11">Log-Normal</text>
+        <text x="357" y="260" text-anchor="middle" fill="#e07830" font-size="9">LN(μ, σ)</text>
+
+        <!-- F-Verteilung -->
+        <rect x="15" y="230" width="110" height="38" rx="3" fill="#e07830" fill-opacity=".1" stroke="#e07830" stroke-width="1"/>
+        <text x="70" y="246" text-anchor="middle" fill="#e07830" font-size="12">F-Verteilung</text>
+        <text x="70" y="260" text-anchor="middle" fill="#e07830" font-size="9">F(d₁, d₂)</text>
+        <line x1="125" y1="249" x2="153" y2="249" stroke="#e07830" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <text x="139" y="244" text-anchor="middle" fill="#e07830" font-size="9">χ²/χ²</text>
+
+        <!-- ═══ GRUPPE C: Begrenzt [0,1] ═══ -->
+        <rect x="445" y="153" width="250" height="130" rx="4" fill="none" stroke="#80cb52" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>
+        <text x="452" y="167" font-size="9" fill="#80cb52" letter-spacing="1.5" opacity=".8">BEGRENZT [0,1]</text>
+
+        <!-- Beta -->
+        <rect x="520" y="175" width="120" height="38" rx="3" fill="#80cb52" fill-opacity=".15" stroke="#80cb52" stroke-width="1.5"/>
+        <text x="580" y="191" text-anchor="middle" font-weight="bold" fill="#80cb52" font-size="12">Beta</text>
+        <text x="580" y="205" text-anchor="middle" fill="#80cb52" font-size="9">Beta(α, β)</text>
+
+        <!-- Uniform als Spezialfall -->
+        <text x="580" y="230" text-anchor="middle" fill="#80cb52" font-size="9">Beta(1,1) = Uniform[0,1]</text>
+
+        <!-- ZI-Beta, ZOIB -->
+        <text x="455" y="248" fill="#80cb52" font-size="9">+ Null → ZI-Beta</text>
+        <text x="455" y="262" fill="#80cb52" font-size="9">+ 0 und 1 → ZOIB</text>
+        <line x1="520" y1="200" x2="475" y2="244" stroke="#80cb52" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+        <!-- ═══ GRUPPE D: Zähldaten ═══ -->
+        <rect x="5" y="295" width="690" height="130" rx="4" fill="none" stroke="#4ab0d8" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>
+        <text x="12" y="309" font-size="9" fill="#4ab0d8" letter-spacing="1.5" opacity=".8">ZÄHLDATEN (DISKRET)</text>
+
+        <!-- Poisson -->
+        <rect x="280" y="315" width="120" height="38" rx="3" fill="#4ab0d8" fill-opacity=".15" stroke="#4ab0d8" stroke-width="1.5"/>
+        <text x="340" y="331" text-anchor="middle" font-weight="bold" fill="#4ab0d8" font-size="12">Poisson</text>
+        <text x="340" y="345" text-anchor="middle" fill="#4ab0d8" font-size="9">Pois(λ)</text>
+
+        <!-- Neg. Binomial -->
+        <rect x="480" y="315" width="130" height="38" rx="3" fill="#4ab0d8" fill-opacity=".1" stroke="#4ab0d8" stroke-width="1"/>
+        <text x="545" y="331" text-anchor="middle" fill="#4ab0d8" font-size="11">Neg. Binomial</text>
+        <text x="545" y="345" text-anchor="middle" fill="#4ab0d8" font-size="9">NB(μ, φ)</text>
+        <line x1="480" y1="334" x2="402" y2="334" stroke="#4ab0d8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="448" y="329" text-anchor="middle" fill="#4ab0d8" font-size="9">φ → ∞</text>
+
+        <!-- Binomial -->
+        <rect x="80" y="315" width="120" height="38" rx="3" fill="#4ab0d8" fill-opacity=".1" stroke="#4ab0d8" stroke-width="1"/>
+        <text x="140" y="331" text-anchor="middle" fill="#4ab0d8" font-size="12">Binomial</text>
+        <text x="140" y="345" text-anchor="middle" fill="#4ab0d8" font-size="9">Bin(n, p)</text>
+        <line x1="200" y1="334" x2="278" y2="334" stroke="#4ab0d8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="234" y="329" text-anchor="middle" fill="#4ab0d8" font-size="9">n→∞, p→0</text>
+
+        <!-- Bernoulli -->
+        <rect x="80" y="370" width="120" height="38" rx="3" fill="#4ab0d8" fill-opacity=".1" stroke="#4ab0d8" stroke-width="1"/>
+        <text x="140" y="386" text-anchor="middle" fill="#4ab0d8" font-size="12">Bernoulli</text>
+        <text x="140" y="400" text-anchor="middle" fill="#4ab0d8" font-size="9">Bern(p)</text>
+        <line x1="140" y1="353" x2="140" y2="368" stroke="#4ab0d8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="155" y="364" fill="#4ab0d8" font-size="9">= Bin(1,p)</text>
+
+        <!-- Beta-Binomial -->
+        <rect x="280" y="370" width="130" height="38" rx="3" fill="#4ab0d8" fill-opacity=".1" stroke="#4ab0d8" stroke-width="1"/>
+        <text x="345" y="386" text-anchor="middle" fill="#4ab0d8" font-size="11">Beta-Binomial</text>
+        <text x="345" y="400" text-anchor="middle" fill="#4ab0d8" font-size="9">BetaBin(n, μ, φ)</text>
+        <line x1="345" y1="370" x2="345" y2="355" stroke="#4ab0d8" stroke-width="1.5" marker-end="url(#arr)"/>
+        <text x="370" y="364" fill="#4ab0d8" font-size="9">φ → ∞</text>
+
+        <!-- Verbindung Beta → Beta-Binomial -->
+        <line x1="580" y1="213" x2="410" y2="390" stroke="#888" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-grau)" opacity=".5"/>
+        <text x="510" y="310" fill="#888" font-size="9" opacity=".7">p ~ Beta</text>
+
+        <!-- ═══ HINWEIS ═══ -->
+        <text x="350" y="465" text-anchor="middle" fill="#888" font-size="10">Normal = Grenzwert von Student-t (ν→∞), Gamma (α→∞) und Binomial (n→∞, p→0)</text>
+        <text x="350" y="480" text-anchor="middle" fill="#888" font-size="10">Fett umrandet = zentrale Verteilungen je Gruppe; Pfeile = Spezialfälle oder Grenzwerte</text>
+        <text x="350" y="495" text-anchor="middle" fill="#888" font-size="10">Quelle: Ben Lambert, A Student's Guide to Bayesian Statistics (2018), S. 225</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
 <!-- Help Panel -->
 <div id="help-panel">
   <div class="hp-head">
@@ -226,20 +419,24 @@ canvas#dist-canvas{display:block;width:100%}
   </div>
   <div class="hp-body">
     <div class="hp-sect">Überblick</div>
-    <strong>Distribution Lab</strong> zeigt 18 Wahrscheinlichkeitsverteilungen interaktiv — als Vorbereitung auf GLMs und bayesianische Modelle in brms. Welche Verteilung passt zu welchen Daten?
+    <strong>Distribution Lab</strong> zeigt 18 Wahrscheinlichkeitsverteilungen interaktiv — als Vorbereitung auf GLMs und bayesianische Modelle in brms. Welche Verteilung passt zu welchen Daten? Für jede Verteilung: Beschreibung, Einsatzszenarien, Parameter-Erklärung, brms-Verwendung und Technische Details.
     <div class="hp-sect">Navigation</div>
     <strong>Kategorie-Tabs</strong> (oben) wählen die Verteilungsgruppe.<br>
     <strong>Verteilungs-Buttons</strong> darunter wählen die konkrete Verteilung.<br>
     <strong>Schieberegler</strong> links passen die Parameter in Echtzeit an.
+    <div class="hp-sect">X-Achse fixieren</div>
+    <strong>X fix</strong>-Button (Topbar): Friert die X-Achse ein, damit man bei Parameteränderungen (z.B. μ oder σ) die Formänderung direkt sieht — statt dass sich die Achse mitskaliert. Wird beim Wechsel der Verteilung automatisch zurückgesetzt.
+    <div class="hp-sect">Verteilungsbeziehungen</div>
+    <strong>⊞ Beziehungen</strong>-Button öffnet eine Übersichtskarte aller Verteilungen und ihrer Zusammenhänge: Spezialfälle, Grenzwerte, Konstruktionen. Orientierung im "Verteilungs-Zoo".
     <div class="hp-sect">Momente</div>
-    <strong>Mittelwert</strong> (blau — —), <strong>Median</strong> (grün — —), <strong>Modus</strong> (orange — —) als vertikale gestrichelte Linien. Jedes Moment unabhängig ein-/ausschaltbar.
-    <div class="hp-sect">Parametrisierung</div>
-    Für <strong>Gamma</strong> und <strong>Beta</strong>: Toggle zwischen der <strong>brms-Parametrisierung</strong> (μ = Mittelwert, φ = Präzision) und der <strong>klassischen Parametrisierung</strong> (α = Shape, β = Rate). Der Toggle rechnet die Werte automatisch um.<br><br>
-    brms-Parametrisierung ist intuitiver für die Modellierung: man setzt direkt den erwarteten Mittelwert.
+    <strong>Mittelwert</strong> (blau), <strong>Median</strong> (grün), <strong>Modus</strong> (orange) als vertikale gestrichelte Linien. Jedes Moment unabhängig ein-/ausschaltbar.
+    <div class="hp-sect">brms-Parametrisierung</div>
+    Für <strong>Gamma</strong> und <strong>Beta</strong>: Toggle zwischen brms (μ, φ) und klassisch (α, β). Automatische Umrechnung. brms-Parametrisierung ist intuitiver: man setzt direkt den Mittelwert.<br><br>
+    Der Abschnitt <strong>"Verwendung in brms"</strong> zeigt für jede Verteilung: Als Likelihood (family-Syntax, Link) und als Prior (prior()-Syntax) — inkl. typischer Parametrisierungen.
     <div class="hp-sect">Gemischte Verteilungen</div>
-    <strong>ZI-Beta</strong> und <strong>ZOIB</strong> sind Mischverteilungen. Punktmassen bei 0 und/oder 1 werden als schmale gefüllte Balken dargestellt; der kontinuierliche Beta-Anteil als Kurve im Maßstab (1 − zi) bzw. (1 − zoi).
+    <strong>ZI-Beta</strong> und <strong>ZOIB</strong>: Punktmassen bei 0/1 als rote Balken, Beta-Anteil als Kurve.
     <div class="hp-sect">Diskrete Verteilungen</div>
-    Balkendiagramm der PMF. Momente werden als Linien über dem Diagramm gezeichnet — der Modus ist der höchste Balken.
+    Balkendiagramm der PMF. Modus = höchster Balken.
   </div>
 </div>
 
@@ -251,6 +448,8 @@ let CAT_IDX = 0;
 let DIST_KEY = 'normal';
 let PARAMS = {};
 let BRMS_MODE = true;
+let X_FIXED = false;
+let FIXED_XRANGE = null;
 
 function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
 
@@ -344,8 +543,9 @@ const DISTS = {
     meanFn:p=>p.mu, varianceFn:p=>p.sigma*p.sigma, modeFn:p=>p.mu,
     info:{
       was:'Die <strong>Normalverteilung</strong> (Gauß\'sche Glockenkurve) ist symmetrisch um ihren Mittelwert, unbegrenzt auf beiden Seiten, und gehorcht der klassischen Glockenform. Sie ist das Fundament linearer Modelle — die Fehlerterme werden als normalverteilt angenommen.',
-      einsatz:'Körpergrößen, IQ-Werte, Messfehler in physikalischen Experimenten, Prüfungsnoten, Gewicht von Produkten vom Fließband. Überall, wo ein Phänomen durch viele kleine, unabhängige Zufallseinflüsse entsteht, erscheint die Normalverteilung. <em>brms:</em> <code>family = gaussian()</code>.',
-      parameter:'<strong>μ</strong> = Mittelwert — der Gipfel der Glocke, der häufigste und mittlere Wert. <em>Beispiel:</em> μ = 170 cm → mittlere Körpergröße. <strong>σ</strong> = Standardabweichung — die Breite der Glocke. <em>Faustregel:</em> 68% aller Werte liegen in [μ−σ, μ+σ], 95% in [μ−2σ, μ+2σ]. <em>Beispiel:</em> σ = 7 cm → 68% der Personen zwischen 163 und 177 cm.',
+      einsatz:'Körpergrößen (z.B. μ = 170 cm, σ = 7 cm bei erwachsenen Frauen), IQ-Werte (μ = 100, σ = 15 per Definition), Messfehler in physikalischen Experimenten, Prüfungsnoten, Blutdruck, Reaktionszeiten in einfachen Aufgaben. Das <strong>Grundprinzip:</strong> Immer wenn ein Ergebnis durch viele kleine, unabhängige Einflüsse entsteht, die sich addieren, erscheint die Normalverteilung — egal ob Körpergröße durch hunderte genetische Faktoren oder Messfehler durch viele kleine Störquellen. <strong>Typischer Einsatz in brms:</strong> Standardmodell für kontinuierliche Outcomes ohne natürliche Grenzen.',
+      parameter:'<strong>μ (Mittelwert):</strong> Der Gipfel der Glocke — der häufigste, der mittlere und der Erwartungswert gleichzeitig. Verschieben Sie μ: Die ganze Glocke wandert nach links oder rechts, aber ihre Form bleibt gleich. <em>Beispiel:</em> μ = 170 cm → die mittlere Körpergröße liegt bei 170 cm.<br><br><strong>σ (Standardabweichung):</strong> Die Breite der Glocke. Kleines σ → schmale, spitze Glocke (Werte eng beisammen). Großes σ → breite, flache Glocke (Werte sehr verstreut). <em>Goldene Regel:</em> 68% aller Werte fallen in [μ−σ, μ+σ], 95% in [μ−2σ, μ+2σ], 99.7% in [μ−3σ, μ+3σ]. <em>Beispiel:</em> σ = 7 cm → 68% der Personen zwischen 163 und 177 cm, 95% zwischen 156 und 184 cm.<br><br><strong>Typische Prior-Parametrisierungen:</strong><br>• <code>Normal(0, 1)</code> — Standard-Regularisierungs-Prior für Regressionskoeffizienten auf standardisierter Skala<br>• <code>Normal(0, 2.5)</code> — etwas breiter, erlaubt größere Effekte<br>• <code>Normal(0, 10)</code> — schwach-informativer Prior, fast flach',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — wenn das Outcome kontinuierlich und nicht begrenzt ist:<br><code>brm(y ~ x, data = d, family = gaussian())</code><br>→ Link: <em>identity</em> — der lineare Prediktor Xβ modelliert direkt den Mittelwert μ.<br>→ σ wird automatisch geschätzt (globale Residualstreuung).<br>→ Entspricht der klassischen linearen Regression.<br><br><strong>σ durch Prädiktoren vorhersagen</strong> — um Varianzheterogenität zuzulassen:<br><code>brm(bf(y ~ x, sigma ~ gruppe), data = d, family = gaussian())</code><br>→ σ bekommt eine eigene Subformel: die Streuung darf sich zwischen Gruppen oder entlang eines Prädiktors unterscheiden. Nützlich wenn z.B. die Varianz mit dem Mittelwert zunimmt oder zwischen Bedingungen verschieden ist.</div><div class="brms-role"><strong>Als Prior</strong> — für fast jeden Parameter verwendbar:<br><code>prior(normal(0, 1), class = b)</code> für Regressionskoeffizienten<br><code>prior(normal(0, 2.5), class = Intercept)</code> für den Achsenabschnitt<br>→ Beliebtester Prior überhaupt: schwach-informativ, zentriert auf 0, erlaubt vernünftige Effektgrößen, unterdrückt extreme Werte leicht.</div>',
       technik:'<strong>Zentraler Grenzwertsatz:</strong> Summen vieler unabhängiger Zufallsvariablen → Normal, unabhängig von der Ausgangsverteilung. E[Y] = μ, Var(Y) = σ². Student-t(ν→∞) → Normal. Normal(0,1)² ~ Chi²(1). Link: <code>identity</code>.'
     }
   },
@@ -370,8 +570,9 @@ const DISTS = {
     modeFn:p=>p.mu,
     info:{
       was:'Wie die Normalverteilung, aber mit <strong>dickeren Rändern</strong> — extreme Werte kommen häufiger vor. Je kleiner ν, desto mehr Ausreißerwahrscheinlichkeit. Bei ν = 30 kaum von Normal zu unterscheiden; bei ν = 2 oder 3 sieht man deutlich breitere Ränder.',
-      einsatz:'Reaktionszeiten oder Testergebnisse mit vereinzelten Extremwerten, biologische Messungen mit Ausreißern, robuste lineare Regression. In der Bayesianischen Statistik oft als Prior für Parameter gewählt, wenn man schwache Regularisierung wünscht. <em>brms:</em> <code>family = student()</code>.',
-      parameter:'<strong>ν</strong> = Freiheitsgrade — steuert die Schwere der Ränder. <em>Beispiel:</em> ν = 3 → viele Ausreißer sichtbar; ν = 30 → kaum von Normal zu unterscheiden. Bei ν = 1: Cauchy-Verteilung (kein endlicher Mittelwert!). <strong>μ</strong> = Lage. <strong>σ</strong> = Skalierung (nicht die Standardabweichung, da Var = σ²ν/(ν−2) ≠ σ²).',
+      einsatz:'<strong>Kognitive Testwerte</strong> (IQ, Arbeitsgedächtnis) in heterogenen Stichproben mit vereinzelten Extremleistungen. <strong>Physiologische Messungen</strong> wie Blutdruck oder Cortisol-Spiegel, bei denen gelegentlich extreme Ausreißer auftreten. <strong>Residuen robuster Regressionsmodelle</strong> — der häufigste Einsatz: man verwendet Student-t statt Normalverteilung als Likelihood, wenn man annimmt, dass die Fehlerterme symmetrisch, aber gelegentlich sehr groß sind.<br><br><strong>Wann wählen?</strong> Immer wenn eine Normalverteilung grundsätzlich passen würde, die Daten aber vereinzelte Extremwerte enthalten, die das Modell nicht ignorieren soll. Die Student-t-Verteilung weist Ausreißern mehr Plausibilität zu, statt sie als unmöglich zu behandeln.<br><br><strong>Empfehlung:</strong> Statt einer Normalverteilung als Likelihood immer eine Student-t-Verteilung wählen! Wenn es keine Ausreißer gibt, konvergiert ν gegen große Werte (ν &gt; 30) und die Student-t liefert praktisch dieselben Ergebnisse wie eine Normalverteilung. Gibt es doch Ausreißer, bietet sie automatisch eine robustere Alternative — man verliert also nichts.<br><br><strong>Reaktionszeiten — Achtung:</strong> Einzelne Reaktionszeiten sind typischerweise rechtsschief (Untergrenze bei ~150 ms, langer rechter Schwanz) und sollten mit Lognormal oder Shifted-Lognormal modelliert werden, <em>nicht</em> mit Student-t. Eine Ausnahme wäre, wenn die mittleren Reaktionszeiten pro Person über viele Versuche gemittelt werden — diese Personenmittelwerte sind durch den zentralen Grenzwertsatz symmetrischer und könnten mit Student-t modelliert werden, wenn einzelne Personen extreme Mittelwerte aufweisen.',
+      parameter:'<strong>ν (Freiheitsgrade):</strong> Steuert die Schwere der Ränder — wie wahrscheinlich sind Extremwerte? <em>Vergleich:</em> Ν = 1 (Cauchy-Verteilung): extrem schwere Ränder, kein endlicher Mittelwert — theoretisch möglich, aber in der Praxis selten sinnvoll. ν = 3–5: deutlich sichtbare Ausreißerwahrscheinlichkeit. ν = 10: mäßige Schwerränder. ν = 30+: kaum von Normal zu unterscheiden. <em>Faustregeln:</em> ν < 30 = Student-t sinnvoll; ν ≥ 30 = Normal ausreichend.<br><br><strong>μ (Lage):</strong> Entspricht dem Mittelwert (für ν > 1). Wie bei der Normalverteilung.<br><br><strong>σ (Skalierung):</strong> Achtung: σ ist nicht die Standardabweichung! Die tatsächliche SD ist σ·√(ν/(ν−2)) für ν > 2 — also größer als σ. Bei ν = 5 ist SD ≈ 1.29·σ.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — robuste Regression mit schweren Rändern:<br><code>brm(y ~ x, data = d, family = student())</code><br>→ σ und ν werden automatisch mitgeschätzt.<br>→ Geeignet wenn Ausreißer erwartet werden, die das Ergebnis nicht dominieren sollen.<br><br><strong>σ und ν durch Prädiktoren vorhersagen</strong> — beide Parameter können eigene Subformeln erhalten:<br><code>brm(bf(y ~ x, sigma ~ gruppe, nu ~ 1), data = d, family = student())</code><br>→ <em>sigma ~ gruppe</em>: lässt die Streuung zwischen Gruppen variieren (Varianzheterogenität).<br>→ <em>nu ~ 1</em>: ν als globaler Parameter (Standard); alternativ <em>nu ~ x</em> wenn sich die Ausreißerneigung systematisch mit einem Prädiktor ändert — z.B. mehr Ausreißer in einer Bedingung.</div><div class="brms-role"><strong>Als Prior</strong> — schwach-informativ für Koeffizienten:<br><code>prior(student_t(3, 0, 2.5), class = b)</code><br>→ Empfehlung des Stan-Teams: ν = 3, Zentrierung bei 0, moderate Breite.<br>→ Erlaubt seltene aber große Werte, ohne unbegrenzte Extrapolation.<br><br><strong>Prior für ν selbst:</strong><br><code>prior(gamma(2, 0.1), class = nu)</code><br>→ Erlaubt sowohl kleines ν (robust) als auch großes ν (fast-normal); Standardwahl in brms.</div>',
       technik:'E[Y] = μ (ν > 1), Var(Y) = σ²ν/(ν−2) (ν > 2). <em>brms:</em> <code>student(nu, mu, sigma)</code>. ν-Prior-Empfehlung: <code>gamma(2, 0.1)</code> erlaubt sowohl robuste (kleine ν) als auch fast-normale Anpassung (große ν).'
     }
   },
@@ -394,8 +595,9 @@ const DISTS = {
     modeFn:null, // numerical
     info:{
       was:'Eine Normalverteilung mit einstellbarer <strong>Asymmetrie</strong>. Bei α = 0 identisch mit Normal. Positive α-Werte ziehen die rechte Seite in die Länge (längerer rechter Rand), negative α-Werte die linke Seite.',
-      einsatz:'Reaktionszeiten (leicht rechtsschief, ohne extreme Ausreißer), Prüfungsleistungen mit Boden- oder Deckeneffekt, Körpergewicht. Überall dort, wo Normalverteilung fast passt, aber die Daten leicht asymmetrisch sind. <em>brms:</em> <code>family = skew_normal()</code>.',
-      parameter:'<strong>ξ</strong> = Lageparameter (ungefähr der Modus). <em>Beispiel:</em> ξ = 400 ms für eine typische Reaktionszeit. <strong>ω</strong> = Skalierungsparameter (Breite, ω > 0). <strong>α</strong> = Schiefheitsparameter. <em>Beispiel:</em> α = 5 → deutlich rechtsschief mit längerem rechten Rand. Achtung: Der Mittelwert liegt nicht bei ξ, sondern ist durch α nach rechts/links verschoben.',
+      einsatz:'Reaktionszeiten in kognitiven Experimenten — die meisten Reaktionen sind schnell, aber es gibt einen langen rechten Rand mit langsameren Antworten (α > 0). Prüfungsleistungen mit Bodeneffekt (alle können gut, wenige sehr schlecht → α < 0). Körpergewicht in manchen Populationen. Allgemein: Überall wo eine Normalverteilung fast passt, aber die Daten leicht in eine Richtung gezogen sind. <strong>Vorteil gegenüber Lognormal:</strong> Skew-Normal bleibt auf der Originalskala, kein Sprung auf log-Einheiten nötig.',
+      parameter:'<strong>ξ (Lage):</strong> Ungefähr der Modus (häufigster Wert), aber nicht exakt! <em>Beispiel:</em> ξ = 500 ms für eine typische Reaktionszeit. Achtung: Der Mittelwert liegt wegen der Schiefe nicht bei ξ.<br><br><strong>ω (Skalierung, > 0):</strong> Die Breite der Verteilung, analog zu σ bei Normal. Je größer ω, desto mehr Streuung.<br><br><strong>α (Schiefe):</strong> Das entscheidende neue Element. α = 0 → identisch mit Normalverteilung. α > 0 → rechter Rand verlängert (rechtsschiefe Kurve, z.B. α = 5 zeigt deutlichen langen rechten Schwanz). α < 0 → linker Rand verlängert. <em>Merkregel:</em> Die Verteilung "zieht in die Richtung des Vorzeichens von α".',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für leicht asymmetrische kontinuierliche Outcomes:<br><code>brm(y ~ x, data = d, family = skew_normal())</code><br>→ σ (Skalierung, = ω) und α (Schiefe) werden beide automatisch mitgeschätzt.<br>→ Sinnvoll wenn Normalverteilung fast passt, aber Residuen leicht schief sind.<br><br><strong>σ und α durch Prädiktoren vorhersagen:</strong><br><code>brm(bf(y ~ x, sigma ~ gruppe, alpha ~ 1), data = d, family = skew_normal())</code><br>→ Beide Parameter können eigene Subformeln erhalten — z.B. wenn die Schiefe oder Streuung zwischen Gruppen variiert.<br><br><strong>Parametrisierung:</strong> Beide Verwendungen — Likelihood und Prior — nutzen dieselbe Azzalini-Notation (ξ, ω, α): ξ = Lage, ω = Skalierung (&gt; 0), α = Schiefe. Kein Unterschied zwischen den Schreibweisen.</div><div class="brms-role"><strong>Als Prior:</strong> Selten eingesetzt, aber möglich für "gerichtete" Priors:<br><code>prior(skew_normal(0, 1, 3), class = b)</code> → (ξ=0, ω=1, α=3) in Azzalini-Notation<br>→ Setzt a priori positive Effekte als wahrscheinlicher an als negative. Identische Parametrisierung wie die Likelihood.</div>',
       technik:'PDF = 2/ω · φ((x−ξ)/ω) · Φ(α·(x−ξ)/ω). E[Y] = ξ + ω·δ·√(2/π), δ = α/√(1+α²). Modus numerisch berechnet. <em>brms:</em> <code>skew_normal(xi, omega, alpha)</code>.'
     }
   },
@@ -412,10 +614,11 @@ const DISTS = {
     varianceFn:p=>(Math.exp(p.sigma*p.sigma)-1)*Math.exp(2*p.mu+p.sigma*p.sigma),
     modeFn:p=>Math.exp(p.mu-p.sigma*p.sigma),
     info:{
-      was:'Wenn man die <strong>logarithmierten Werte</strong> normalverteilt sind, folgt die Originalskala einer Lognormalverteilung. Typisch für positive, rechtsschiefe Daten — die meisten Werte sind klein oder mittelgroß, ein langer Schwanz nach rechts.',
-      einsatz:'Haushaltseinkommen (die meisten Haushalte verdienen moderat, wenige sehr viel), Reaktionszeiten in kognitiven Experimenten, Blutkonzentrationen von Medikamenten, Unternehmensgrößen, Downloadzeiten. <em>brms:</em> <code>family = lognormal()</code>, Link: <code>log</code>.',
-      parameter:'<strong>μ</strong> = Mittelwert auf der <em>log</em>-Skala — nicht der Mittelwert von Y! <em>Beispiel:</em> μ = 0 → Median von Y = e⁰ = 1. μ = 2 → Median von Y = e² ≈ 7.4. <strong>σ</strong> = Streuung auf der log-Skala. <em>Beispiel:</em> σ = 0.5 → mäßige Schiefe; σ = 1.5 → sehr starke Rechtsschiefe, Mittelwert liegt weit über dem Median.',
-      technik:'E[Y] = e^(μ+σ²/2), Median = e^μ, Modus = e^(μ−σ²). Mittelwert > Median immer. <em>brms:</em> <code>lognormal(mu, sigma)</code>, Link: <code>log</code>.'
+      was:'Eine flexible Verteilung für <strong>positive, rechtsschiefe Daten</strong>. Formal: wenn log(Y) normalverteilt ist (Mittelwert μ, Streuung σ), dann ist Y lognormalverteilt. Die Rohdaten werden direkt übergeben — keine manuelle Transformation nötig.',
+      einsatz:'<strong>Typische Anwendungen:</strong> Reaktionszeiten (in Sekunden), Einkommen, Konzentrationen, Preise — wenn Werte immer positiv und rechtsskief sind und keine strukturelle Untergrenze modelliert werden muss.<br><br><strong>Diagnose:</strong> Logarithmieren Sie die Daten: wenn log(Y) annähernd normalverteilt ist, passt die Lognormal.<br><br><strong>Abgrenzung:</strong> Shifted-Lognormal wählen, wenn eine explizite Mindestzeit (Non-Decision-Time) Teil des Modells sein soll.',
+      parameter:'<strong>μ (log-Skala-Mittelwert):</strong> Der Mittelwert von log(Y) — nicht von Y selbst. Kann negativ sein, wenn typische Y-Werte unter 1 liegen (z.B. RT in Sekunden). Median(Y) = e^μ. <em>Beispiele:</em> μ = 0 → Median = 1; μ = −0.7 → Median ≈ 0.5; μ = 2 → Median ≈ 7.4.<br><br><strong>σ (log-Streuung):</strong> Streuung von log(Y). σ = 0.3 → mäßige Schiefe; σ = 1.0 → starke Rechtsschiefe.',
+      brms:'<div class="brms-role"><strong>Als Likelihood:</strong><br><code>brm(y ~ x, data = d, family = lognormal())</code><br>→ Link: <em>identity</em> (Standard) — Xβ = μ = E[log(Y)] direkt.<br><br><strong>Koeffizienten — auf der log-Skala!</strong><br>μ ist der Mittelwert von log(Y), daher ist β in log-Einheiten — kein additiver Effekt in den Originaleinheiten:<br>• β₁ = 0.5 → log-Mittel von Gruppe 1 ist 0.5 größer → Median Gruppe 1 = Referenz-Median × e^0.5 ≈ ×1.65.<br>• <em>Nicht:</em> "0.5 Einheiten länger/mehr" — das wäre die Gaussian-Interpretation!<br>• Für additive Effekte in Originaleinheiten → <code>family = gaussian()</code> wählen.<br><br>Intercept β₀ → Referenz-Median = e^β₀. <em>Beispiel RT in Sekunden:</em> Median ≈ 0.37 s → β₀ ≈ log(0.37) ≈ −1 (negatives Intercept ist normal und korrekt).</div><div class="brms-role"><strong>Als Prior:</strong> z.B. für Streuungsparameter:<br><code>prior(lognormal(0, 1), class = sigma)</code></div>',
+      technik:'E[Y] = e^(μ+σ²/2), Median = e^μ, Modus = e^(μ−σ²). <em>brms:</em> <code>lognormal(mu, sigma)</code>, Link: <code>identity</code>.'
     }
   },
 
@@ -433,8 +636,9 @@ const DISTS = {
     modeFn:p=>p.delta+Math.exp(p.mu-p.sigma*p.sigma),
     info:{
       was:'Eine Lognormalverteilung, die erst oberhalb eines <strong>Mindestwerts δ</strong> beginnt — Y − δ ist lognormalverteilt. Werte kleiner als δ sind strukturell ausgeschlossen.',
-      einsatz:'<strong>Reaktionszeiten</strong> in der kognitiven Psychologie: Es gibt eine minimale Verarbeitungszeit (z.B. 200 ms), unter der keine Reaktion möglich ist. In brms heißt δ daher <code>ndt</code> (non-decision time). Auch für Wartezeiten mit bekannter Mindestdauer. <em>brms:</em> <code>family = shifted_lognormal()</code>.',
-      parameter:'<strong>μ, σ</strong> = Parameter der Lognormal-Komponente (beschreiben die Form nach Abzug von δ). <strong>δ</strong> = Minimum / Shift. <em>Beispiel:</em> δ = 0.2 s → keine Reaktionszeit unter 200 ms möglich; die eigentliche Entscheidungszeit ist lognormalverteilt ab 200 ms. Alle Berechnungen (Mittelwert etc.) müssen δ addieren.',
+      einsatz:'<strong>Reaktionszeiten</strong> in der kognitiven Psychologie und Psycholinguistik: Es gibt eine biologische Untergrenze — es dauert immer mindestens einige hundert Millisekunden, bis eine Entscheidung getroffen und eine Antwort ausgeführt werden kann. Dieser Mindestwert δ heißt Non-Decision-Time (ndt). In brms ist dies direkt eingebaut! <em>Beispiel:</em> δ = 0.2 s → alle beobachteten Reaktionszeiten ≥ 200 ms; die eigentliche Entscheidungszeit darüber ist lognormalverteilt.',
+      parameter:'<strong>μ, σ</strong> = Parameter der Lognormal-Komponente — beschreiben die Form der Reaktionszeit nach Abzug der Non-Decision-Time. <em>Beispiel:</em> μ = −1, σ = 0.4 auf log-Skala (Reaktionszeiten in Sekunden).<br><br><strong>δ (Minimum / Shift):</strong> Die absolute Untergrenze. Kein beobachteter Wert kann kleiner sein als δ. <em>Praxistipp:</em> Starten Sie mit δ ≈ 0.8 × min(Y) als Ausgangspunkt für den Prior.<br><br><strong>Alle drei Parameter zusammen:</strong> E[Y] = δ + e^(μ + σ²/2). Die Untergrenze δ verschiebt die gesamte Verteilung nach rechts.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — speziell für Reaktionszeiten mit biologischer Untergrenze:<br><code>brm(rt ~ condition, data = d, family = shifted_lognormal())</code><br>→ ndt (Non-Decision-Time) = δ wird mitgeschätzt.<br>→ Wichtig: ndt muss kleiner als min(Y) sein — Prior entsprechend wählen!</div><div class="brms-role"><strong>Typischer ndt-Prior:</strong><br><code>prior(normal(0.3, 0.15), class = ndt)</code> für Reaktionszeiten in Sekunden<br>→ Startpunkt: ca. 80% des Minimalwerts Ihrer beobachteten Daten.<br><br><strong>Als Prior:</strong> Nicht üblich.</div>',
       technik:'E[Y] = δ + e^(μ+σ²/2). Support: Y > δ. <em>brms:</em> <code>shifted_lognormal(mu, sigma, ndt)</code>. Startpunkt für ndt-Prior: ca. 0.8 × min(Y). ndt-Prior: z.B. <code>normal(0, 0.3)</code> für ms-Skala.'
     }
   },
@@ -461,9 +665,10 @@ const DISTS = {
       :{mu:p.alpha/p.beta_rate, phi:p.alpha},
     info:{
       was:'Die <strong>Gamma-Verteilung</strong> beschreibt positive, rechtsschiefe Daten und ist sehr flexibel: Bei kleinem Shape fast wie eine absteigende Kurve mit Maximum nahe 0, bei großem Shape fast symmetrisch — aber immer auf positive Werte begrenzt.',
-      einsatz:'Wartezeiten auf ein Ereignis, Behandlungsdauern in klinischen Studien, Konzentrationen von Hormonen oder Medikamenten im Blut, Kosten pro Patient, Niederschlagsmengen. Immer wenn Daten positiv und rechtsschiefe sind. <em>brms:</em> <code>family = Gamma()</code>, Link: <code>log</code>.',
-      parameter:'<strong>brms-Parametrisierung (μ, φ):</strong> μ = direkter Mittelwert. <em>Beispiel:</em> μ = 3 Stunden mittlere Wartezeit. φ = Shape/Präzision. <em>Beispiel:</em> φ = 1 → Exponentialform, breite Streuung; φ = 4 → deutlich glockenförmiger; φ = 20 → sehr konzentriert um μ. <strong>Klassisch (α, β):</strong> α = Shape (= φ), β = Rate (= φ/μ). Umrechnung: α = φ, Rate = φ/μ.',
-      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ. Modus = μ·(φ−1)/φ für φ > 1. Spezialfälle: Exponential = Gamma(1, λ); Chi²(k) = Gamma(k/2, 1/2). <em>brms:</em> <code>Gamma(shape, rate)</code> intern; mit brms-Syntax über Link log.'
+      einsatz:'<strong>Wartezeiten:</strong> Zeit bis zur nächsten Arztvisite, Zeit bis zur Genesung, Zeit bis zum nächsten technischen Ausfall. <strong>Klinische Studien:</strong> Behandlungsdauer, Krankenhausverweildauer. <strong>Biologie:</strong> Hormonkonzentrationen im Blut (immer positiv, oft rechtsskief). <strong>Kosten:</strong> Kosten pro Patient, Behandlungskosten — immer positiv, nie negativ. <strong>Kernmerkmal:</strong> Die Gamma-Verteilung passt immer wenn Daten positiv und rechtsskief sind — und ist dabei flexibler als die Lognormal, weil der Shape-Parameter die Form fundamental ändert.',
+      parameter:'<strong>Zwei verschiedene Schreibweisen — je nach Verwendung:</strong><br><br><strong>① Als Likelihood (Schieberegler: μ, φ):</strong> Die brms-Likelihood-Parametrisierung.<br>• <strong>μ (Mittelwert):</strong> Direkt der erwartete Outcome-Wert. <em>Beispiel:</em> μ = 3 → mittlere Wartezeit 3 Stunden. Dieser Wert wird über den log-Link modelliert.<br>• <strong>φ (Shape):</strong> Steuert die Form. φ = 1 → Exponential-ähnlich. φ = 2–3 → erkennbar glockenförmig. φ = 10+ → fast symmetrisch um μ. Var(Y) = μ²/φ — je größer φ, desto weniger Streuung.<br>→ Intern rechnet brms um: shape = φ, rate = φ/μ.<br><br><strong>② Als Prior — klassische Notation <code>gamma(α, β)</code>:</strong> Wenn Gamma als Prior für einen anderen Parameter genutzt wird (z.B. für ν oder σ), lautet die Syntax <code>prior(gamma(α, β), ...)</code> mit <strong>α = shape</strong> und <strong>β = rate</strong> — <em>nicht</em> μ und φ!<br>• Mittelwert = α/β, also: <code>gamma(2, 0.1)</code> → Mittelwert = 2/0.1 = 20.<br>• <em>Merkhilfe:</em> Im <code>prior()</code>-Befehl immer klassisch (shape, rate); in der <code>family = Gamma()</code>-Likelihood modelliert brms μ via log-Link.<br><br><strong>Klassische Parametrisierung (Schieberegler: α, β):</strong> α = Shape (= φ), β = Rate (= φ/μ).',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für positive, rechtsschiefe Outcomes:<br><code>brm(y ~ x, data = d, family = Gamma(link = "log"))</code><br>→ brms modelliert den Mittelwert μ über den log-Link: log(μ) = Xβ.<br>→ Der Shape-Parameter φ wird automatisch geschätzt — Prior: <code>prior(exponential(1), class = shape)</code><br>→ Koeffizienteninterpretation: exp(β) = multiplikativer Effekt auf μ.<br>→ <em>Achtung:</em> Stan arbeitet intern mit shape und rate = shape/μ — das ist implementierungsintern, nicht der User-API.</div><div class="brms-role"><strong>Als Prior</strong> — Notation <code>gamma(shape, rate)</code>, d.h. klassisch:<br><code>prior(gamma(2, 0.1), class = nu)</code> → Prior für ν in Student-t (Mittelwert = 20, erlaubt kleine bis große ν)<br><code>prior(gamma(0.01, 0.01), class = shape)</code> → sehr diffuser Prior für Shape-Parameter<br>→ <em>Wichtig:</em> In <code>prior(gamma(α, β), ...)</code> ist α = shape, β = rate. Das ist eine <strong>andere Notation</strong> als die Likelihood-Parametrisierung (μ, φ)!</div>',
+      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ = α/β². Modus = (α−1)/β = μ·(φ−1)/φ für φ > 1. Spezialfälle: Exponential = Gamma(α=1, β=λ); Chi²(k) = Gamma(α=k/2, β=1/2). <strong>Intern in Stan/brms:</strong> shape = φ (= α), rate = φ/μ (= β) — das ist die Stan-Notation; die brms-Likelihood-API zeigt dem User μ und shape.'
     }
   },
 
@@ -478,8 +683,9 @@ const DISTS = {
     modeFn:p=>0,
     info:{
       was:'Der einfachste Fall einer Wartezeit-Verteilung: Die Zeit bis zum nächsten zufälligen Ereignis bei <strong>konstantem, gleichbleibendem Risiko</strong>. Sonderfall der Gamma-Verteilung mit α = 1. Immer monoton abfallend — kurze Wartezeiten sind am häufigsten.',
-      einsatz:'Zeit zwischen zwei Telefonanrufen in einer Zentrale, Lebensdauer von Geräten ohne Verschleiß (Glühbirnen, einfache Elektronik), Zeit bis zur nächsten Arztvisite bei gleichbleibendem Gesundheitsrisiko, radioaktiver Zerfall.',
-      parameter:'<strong>λ</strong> = Rate — wie viele Ereignisse pro Zeiteinheit im Schnitt auftreten. Mittelwert = 1/λ. <em>Beispiel:</em> λ = 2 Anrufe/Stunde → mittlere Wartezeit = 0.5 Stunden = 30 Minuten. <em>Beispiel:</em> λ = 0.5 → mittlere Wartezeit = 2 Stunden. Der Modus ist immer 0 — die häufigste Wartezeit ist minimal kurz.',
+      einsatz:'Zeit zwischen zwei Telefonanrufen in einer Zentrale, Lebensdauer von Geräten ohne Verschleiß (Glühbirnen, einfache Elektronik), Zeit bis zur nächsten Arztvisite bei gleichbleibendem Gesundheitsrisiko, radioaktiver Zerfall. <strong>Kernmerkmal:</strong> Die Exponential-Verteilung beschreibt Wartezeiten wenn das Risiko eines Ereignisses immer gleich bleibt — unabhängig davon, wie lange man schon wartet. Ein altes Gerät ohne Verschleiß hat dieselbe Ausfallwahrscheinlichkeit pro Stunde wie ein neues.',
+      parameter:'<strong>λ (Rate):</strong> Wie viele Ereignisse durchschnittlich pro Zeiteinheit auftreten. Der Mittelwert der Wartezeit ist der Kehrwert: 1/λ. <em>Beispiel:</em> λ = 2 Anrufe/Stunde → mittlere Wartezeit = 1/2 Stunde = 30 Minuten. <em>Beispiel:</em> λ = 0.1 → mittlere Wartezeit = 10 Stunden, seltene Ereignisse.<br><br><strong>Intuition:</strong> Stellen Sie sich vor, Sie würden raten — "wann kommt der nächste Anruf?". Ohne Zusatzinformation ist Ihre beste Schätzung immer gleich weit in der Zukunft, egal ob Sie gerade erst angefangen haben zu warten oder schon lange. Das ist Gedächtnislosigkeit — und genau das macht die Exponential-Verteilung aus.',
+      brms:'<div class="brms-role"><strong>Als Likelihood:</strong> Kein eigenständiges <code>family = exponential()</code> in brms.<br>Empfehlung: <code>family = Gamma(link = "log")</code> mit fixiertem Shape = 1 in Stan, oder Gamma mit einem starken Prior auf shape ≈ 1.<br>→ Alternativ direkt in Stan: <code>target += exponential_lpdf(y | lambda);</code></div><div class="brms-role"><strong>Als Prior:</strong> Häufig für positive Parameter:<br><code>prior(exponential(1), class = sigma)</code> — schwach-informativer Prior für Standardabweichungen<br><code>prior(exponential(1), class = shape)</code> — für Shape-Parameter in Gamma/NegBin<br>→ Exponential(1) hat Mittelwert = 1 und Standardabweichung = 1, deckt positive Werte mit abklingendem Gewicht ab.</div>',
       technik:'Gedächtnislosigkeit: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ, Var = 1/λ². Wenn Ereignisse Poisson(λ) pro Zeiteinheit folgen, sind Zwischenankunftszeiten Exponential(λ). <em>brms:</em> Gamma(1, λ) oder direkt via Stan.'
     }
   },
@@ -496,8 +702,9 @@ const DISTS = {
     modeFn:p=>p.mu*(Math.sqrt(1+9*p.mu*p.mu/(4*p.lam*p.lam))-3*p.mu/(2*p.lam)),
     info:{
       was:'Beschreibt die Zeit, bis ein <strong>zufälliger Prozess mit Drift</strong> eine Schwelle überschreitet. Positiv, oft stark rechtsschief. Entsteht, wenn eine Partikel (oder eine Entscheidung) gegen zufälligen Widerstand auf ein Ziel zuläuft.',
-      einsatz:'Reaktionszeitmodelle in der kognitiven Psychologie (Drift-Diffusion-Modell: Informationsakkumulation bis zur Entscheidungsschwelle), Wartezeiten in biologischen Prozessen, Latenzzeiten in Netzwerken. Wenn Lognormal zu viel Schiefe zeigt, kann Inverse Gauß besser passen. <em>brms:</em> <code>family = inv_gaussian()</code>.',
-      parameter:'<strong>μ</strong> = Mittelwert (= mittlere Zeit bis zur Schwelle). <em>Beispiel:</em> μ = 0.5 s für eine mittlere Reaktionszeit von 500 ms. <strong>λ</strong> = Shape/Präzision. <em>Beispiel:</em> λ = 1 → starke Rechtsschiefe, viele kurze und wenige sehr lange Zeiten; λ = 10 → schmalere, symmetrischere Verteilung.',
+      einsatz:'<strong>Reaktionszeitmodelle:</strong> Das Drift-Diffusion-Modell in der kognitiven Psychologie erklärt Reaktionszeiten als Prozess, bei dem Beweis gegen einen Rauschprozess akkumuliert wird, bis eine Entscheidungsschwelle erreicht wird. Die Zeit bis zu diesem Schwellenübertritt folgt der Inverse-Gauß-Verteilung. <strong>Latenzzeiten</strong> in Netzwerken und biologischen Prozessen. <strong>Wann wählen?</strong> Wenn Lognormal "zu viel" Schiefe produziert — Inverse Gauß hat einen leicht anderen Schweifverlauf.',
+      parameter:'<strong>μ (Mittelwert):</strong> Die mittlere Wartezeit bis zur Schwelle. <em>Beispiel:</em> μ = 0.5 s → im Schnitt 500 ms Reaktionszeit.<br><br><strong>λ (Shape/Präzision):</strong> Steuert die Schiefe. Kleines λ (z.B. 1) → stark rechtsschief, lange Ausreißer. Großes λ (z.B. 20) → konzentrierter, schmalere Verteilung. Hinweis: Var(Y) = μ³/λ, also hängt die Streuung kubisch vom Mittelwert ab — bei größerem μ nimmt die Varianz viel schneller zu.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für Reaktionszeiten und ähnliche positive Prozesse:<br><code>brm(y ~ x, data = d, family = inverse.gaussian(link = "1/mu^2"))</code><br>→ oder Link: <code>"log"</code> für einfachere Interpretation.<br>→ Seltener genutzt als Lognormal; sinnvoll bei bestimmten Reaktionszeitmodellen.</div><div class="brms-role"><strong>Als Prior:</strong> Nicht üblich.</div>',
       technik:'Var(Y) = μ³/λ. Modus < Median < Mittelwert (bei starker Schiefe). <em>brms:</em> <code>inv_gaussian(mu, lambda)</code>, Link: <code>1/mu²</code>.'
     }
   },
@@ -513,8 +720,9 @@ const DISTS = {
     modeFn:p=>Math.max(0, Math.round(p.k)-2),
     info:{
       was:'Entsteht, wenn man k unabhängige Standard-Normalvariablen quadriert und summiert. Deshalb immer positiv, und für kleine k stark rechtsschief. Mit wachsendem k wird sie symmetrischer.',
-      einsatz:'Fast ausschließlich als <strong>Werkzeug für statistische Tests</strong>: χ²-Anpassungstest (Passen beobachtete Häufigkeiten zur Erwartung?), Likelihood-Ratio-Test (Ist ein komplexeres Modell signifikant besser?), Wald-Test in der Regression. Selten als direktes Likelihood-Modell.',
-      parameter:'<strong>k</strong> = Freiheitsgrade — die Anzahl der quadrierten Normalvariablen. <em>Beispiel:</em> k = 1 → fast senkrechter Abfall ab 0; k = 5 → rechtsschiefe Glocke mit Mittelwert 5; k = 20 → fast symmetrische Glocke um 20. Der Mittelwert ist immer gleich k.',
+      einsatz:'Fast ausschließlich als <strong>theoretisches Werkzeug für statistische Tests</strong>, nicht als Modell für echte Daten. Wichtigste Anwendungsfälle: <strong>χ²-Anpassungstest</strong> — passen beobachtete Häufigkeiten (z.B. Würfelergebnisse) zur theoretischen Erwartung? <strong>Likelihood-Ratio-Test</strong> — ist ein komplexeres Modell signifikant besser als ein einfacheres? <strong>LOO/WAIC</strong> — die elpd-Differenzen sind asymptotisch χ²-verteilt. In der Bayesianischen Statistik tritt die Chi²-Verteilung als Spezialfall der Gamma-Verteilung auf.',
+      parameter:'<strong>k (Freiheitsgrade):</strong> Entspricht der Anzahl quadrierter Standard-Normalvariablen. Der Mittelwert ist immer gleich k — das ist die "goldene Regel".<br><br><em>Beispiele:</em><br>• k = 1 → steilt abfallende Kurve mit Maximum bei 0; Quadrat einer Standardnormalverteilung<br>• k = 5 → rechtsschiefe Glocke mit Mittelwert = 5<br>• k = 10 → mäßig rechtsskief, Mittelwert = 10<br>• k = 30 → fast symmetrisch, kaum von Normal zu unterscheiden<br><br><strong>Warum Freiheitsgrade?</strong> In einem t-Test mit n=20 Personen und einem geschätzten Parameter haben Sie df = 19 "freie" Informationen — deshalb die Verbindung zu k.',
+      brms:'<div class="brms-role"><strong>Nicht als brms-Likelihood verfügbar.</strong> χ²(k) = Gamma(k/2, 1/2) — kann theoretisch über Gamma modelliert werden, ist aber in der Praxis selten sinnvoll.<br><br>In Stan direkt möglich: <code>target += chi_square_lpdf(y | k);</code></div><div class="brms-role"><strong>Als Prior:</strong> Selten, aber möglich für Freiheitsgrade:<br><code>prior(chi_square(3), class = nu)</code><br>→ Gibt einem kleinen ν-Wert mehr Gewicht, erzwingt Student-t-ähnliches Verhalten.</div>',
       technik:'Chi²(k) = Gamma(k/2, 1/2). E[Y] = k, Var(Y) = 2k. <strong>Wichtigste Anwendung:</strong> 2·ln(LR) ~ Chi²(Δdf) asymptotisch — Grundlage aller Likelihood-Ratio-Tests und LOO/WAIC-Vergleiche. F(d₁,d₂) ≡ [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂].'
     }
   },
@@ -535,8 +743,9 @@ const DISTS = {
       return d1>2?d2*(d1-2)/(d1*(d2+2)):0;},
     info:{
       was:'Das Verhältnis zweier unabhängiger Chi²-Variablen, jeweils geteilt durch ihre Freiheitsgrade. Immer positiv und rechtsschief. Die Form ändert sich stark mit den beiden Freiheitsgrad-Parametern.',
-      einsatz:'Basis aller <strong>F-Tests</strong> in der klassischen Statistik: ANOVA (Sind Gruppenunterschiede signifikant?), Vergleich verschachtelter Regressionsmodelle (Erklärt ein erweitertes Modell signifikant mehr Varianz?), Levene-Test auf Varianzgleichheit. Als direktes Likelihood-Modell eher selten.',
-      parameter:'<strong>d₁</strong> = Zähler-Freiheitsgrade (entspricht der Anzahl getesteter Einschränkungen). <strong>d₂</strong> = Nenner-Freiheitsgrade (entspricht den Residuen). <em>Beispiel:</em> ANOVA mit 3 Gruppen und 60 Beobachtungen → F(2, 57). Kritischer F-Wert für p < .05 ≈ 3.16. <em>Beispiel:</em> Bei d₁ = 1: F = t² (F-Test ist quadrierter t-Test).',
+      einsatz:'Fast ausschließlich als theoretisches Objekt für klassische Tests. <strong>ANOVA</strong>: Unterscheiden sich 3+ Gruppenmitten signifikant? Der F-Wert vergleicht die Varianz zwischen Gruppen mit der Varianz innerhalb der Gruppen. <strong>Vergleich von Regressionsmodellen</strong>: Erklärt ein erweitertes Modell signifikant mehr Varianz? F(d₁ = Δdf, d₂ = Residualdf). <strong>Levene-Test</strong>: Haben zwei Gruppen gleiche Varianzen? In der Bayesianischen Statistik wird die F-Verteilung kaum direkt eingesetzt — Modellvergleiche erfolgen über LOO/WAIC.',
+      parameter:'<strong>d₁ (Zähler-Freiheitsgrade):</strong> Entspricht der Anzahl getesteter Parameter-Einschränkungen. <em>Beispiel:</em> Vergleich von 3 Gruppen → d₁ = 2 (3 − 1 = 2 freie Gruppenunterschiede).<br><br><strong>d₂ (Nenner-Freiheitsgrade):</strong> Entspricht den Residuen (Beobachtungen − geschätzte Parameter). <em>Beispiel:</em> n = 60, 3 Gruppen → d₂ = 57.<br><br><strong>Zusammen:</strong> F(2, 57) ist der klassische F-Test für 3-Gruppen-ANOVA mit n = 60. Kritischer Wert für α = .05 ≈ 3.16. Wenn F > 3.16, wäre das Ergebnis "signifikant".<br><br><strong>Spezialfall:</strong> F(1, d₂) = t²(d₂) — ein t-Test ist ein F-Test mit d₁ = 1.',
+      brms:'<div class="brms-role"><strong>Nicht als brms-Likelihood verfügbar.</strong> Nur theoretisches Hilfsmittel für klassische Inferenz.<br><br>In Stan direkt: <code>target += f_lpdf(y | d1, d2);</code> — sehr selten benötigt.</div><div class="brms-role"><strong>Als Prior:</strong> Nicht üblich.<br><br>In der Bayesianischen Statistik: Modellvergleiche über <code>loo()</code> und <code>loo_compare()</code> statt F-Tests (→ LOO Lab).</div>',
       technik:'E[Y] = d₂/(d₂−2) für d₂ > 2. F(d₁,d₂) = [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂]. Für d₂ → ∞: F(d₁, ∞) → Chi²(d₁)/d₁. 1/F(d₁,d₂) ~ F(d₂,d₁).'
     }
   },
@@ -563,8 +772,9 @@ const DISTS = {
       :{mu:p.alpha/(p.alpha+p.beta_), phi:p.alpha+p.beta_},
     info:{
       was:'Verteilung für <strong>Anteile und Wahrscheinlichkeiten</strong> auf dem Intervall [0, 1]. Extrem flexibel: glockenförmig, schief, J-förmig, U-förmig oder gleichmäßig — je nach Parameterwahl.',
-      einsatz:'Anteil korrekt gelöster Aufgaben pro Person, Anteile in der Ökologie (Flächenbedeckung), Compliance-Raten, als <strong>Prior für Binomial-Wahrscheinlichkeiten</strong> in Bayes. Überall wo die Daten echte Anteile zwischen 0 und 1 sind (ohne strukturelle Nullen oder Einsen). <em>brms:</em> <code>family = beta()</code>, Link: <code>logit</code>.',
-      parameter:'<strong>brms (μ, φ):</strong> μ = Mittelwert (wo die Masse liegt). <em>Beispiel:</em> μ = 0.7 → im Schnitt 70% richtig. φ = Präzision. <em>Beispiel:</em> φ = 3 → breite Verteilung (SD ≈ 0.22); φ = 10 → engere Glocke; φ = 50 → sehr konzentriert. Bei φ < 2 beginnt die Verteilung U-förmig zu werden. <strong>Klassisch (α, β):</strong> Umrechnung: μ = α/(α+β), φ = α+β.',
+      einsatz:'<strong>Als Likelihood:</strong> Anteil korrekt gelöster Aufgaben pro Person (z.B. 14/20 = 0.70), Flächenbedeckung in der Ökologie (Anteil Grünfläche), Compliance-Raten in klinischen Studien, Proportionen in der Biologie. <em>Voraussetzung:</em> Die Werte müssen echte Anteile zwischen 0 und 1 sein (ohne strukturelle Nullen oder Einsen).<br><br><strong>Als Prior für Binomial-Wahrscheinlichkeiten:</strong> Das ist ein Klassiker! Beta(α, β) ist der konjugierte Prior für die Erfolgswahrscheinlichkeit p einer Binomialverteilung. Wenn man p priori nicht kennt und keine Meinung hat, nimmt man Beta(1,1) = Uniform. Mit Daten wird dieser Prior zu Beta(α + Treffer, β + Misserfolge) — kein MCMC nötig!',
+      parameter:'<strong>brms-Parametrisierung (μ, φ):</strong><br>• <strong>μ (Mittelwert):</strong> Wo liegt die Masse der Verteilung? μ = 0.5 → symmetrisch; μ = 0.7 → im Schnitt 70% Richtige.<br>• <strong>φ (Präzision):</strong> Wie konzentriert sind die Werte? Kleines φ → viel Streuung; großes φ → wenig Streuung. φ < 2 → U-förmig! φ = 5 → moderate Glocke; φ = 20 → enge Glocke. Var(Y) = μ(1−μ)/(1+φ).<br><br><strong>Klassische Parametrisierung (α, β):</strong> Umrechnung: μ = α/(α+β), φ = α+β.<br><br><strong>Typische Lehrbuch-Parametrisierungen:</strong><br>• <code>Beta(1, 1)</code> = Uniform[0,1] → uniformer Prior: "Keine Ahnung, alle Wahrscheinlichkeiten gleich plausibel"<br>• <code>Beta(2, 8)</code> → "Ich denke p liegt eher unter 50%" (Mittelwert = 0.2)<br>• <code>Beta(5, 5)</code> → "Ich denke p liegt um 50%" mit mäßiger Überzeugung<br>• <code>Beta(0.5, 0.5)</code> = Jeffreys Prior → U-förmig, bevorzugt Extreme',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für Anteilswerte in (0,1):<br><code>brm(y ~ x, data = d, family = Beta(link = "logit"))</code><br>→ Link: <em>logit</em> — der lineare Prediktor modelliert logit(μ) = log(μ/(1−μ)).<br>→ Koeffizienteninterpretation: exp(β) = Odds Ratio für μ.<br>→ Achtung: Werte exakt 0 oder 1 sind nicht erlaubt → dann ZI-Beta oder ZOIB.</div><div class="brms-role"><strong>Als Prior</strong> — klassisch für Wahrscheinlichkeitsparameter:<br><code>prior(beta(1, 1), class = zi)</code> → uniformer Prior für Zero-Inflation-Anteil<br><code>prior(beta(2, 8), class = ...)</code> → informierter Prior "eher kleine Wahrscheinlichkeit"<br>→ Wird in brms für Parameter wie <code>zi</code>, <code>zoi</code>, <code>coi</code> verwendet, die Anteile zwischen 0 und 1 sind.</div>',
       technik:'E[Y] = μ, Var = μ(1−μ)/(1+φ). Modus = (α−1)/(α+β−2) für α,β > 1. Beta(1,1) = Uniform[0,1]. <em>brms:</em> <code>beta(mu, phi)</code>. Für Daten mit strukturellen Nullen → ZI-Beta; mit Nullen und Einsen → ZOIB.'
     }
   },
@@ -581,8 +791,9 @@ const DISTS = {
     modeFn:p=>p.p>0.5?1:p.p<0.5?0:NaN,
     info:{
       was:'Der einfachste diskrete Fall: <strong>genau eine Beobachtung</strong>, entweder Erfolg (Y = 1) oder Misserfolg (Y = 0). Jedes binäre Phänomen folgt einer Bernoulli-Verteilung.',
-      einsatz:'Bestanden/Nicht bestanden, Krank/Gesund, Klick/Kein Klick auf eine Werbung, Rückfall/Kein Rückfall in einer Therapiestudie, Ja/Nein-Antworten im Experiment. <strong>Basis der logistischen Regression</strong> — die häufigste Modellform für binäre Ergebnisse. <em>brms:</em> <code>family = bernoulli()</code>, Link: <code>logit</code>.',
-      parameter:'<strong>p</strong> = Erfolgswahrscheinlichkeit. <em>Beispiel:</em> p = 0.30 → 30% Wahrscheinlichkeit für Erfolg (z.B. Rückfall), 70% für Misserfolg. E[Y] = p. Die Streuung Var = p(1−p) ist maximal bei p = 0.5 (größte Ungewissheit) und sinkt gegen 0 wenn p → 0 oder p → 1 (Ergebnis fast sicher).',
+      einsatz:'<strong>Binäre Outcomes:</strong> Bestanden/Nicht bestanden, Krank/Gesund, Klick/Kein Klick, Rückfall/Kein Rückfall in einer Therapiestudie, Ja/Nein-Antworten. <strong>Das ist die Grundlage der logistischen Regression</strong> — dem häufigsten Modell für binäre Ergebnisse überhaupt. Wenn eine Zeile Ihrer Daten entweder 0 oder 1 enthält, ist Bernoulli die richtige Likelihood.',
+      parameter:'<strong>p (Erfolgswahrscheinlichkeit):</strong> Die einzige Information, die eine Bernoulli-Verteilung beschreibt. p = 0.30 → 30% Wahrscheinlichkeit für Y = 1 (Erfolg), 70% für Y = 0 (Misserfolg).<br><br><strong>E[Y] = p</strong> — der Mittelwert ist direkt die Wahrscheinlichkeit. Einfacher geht es nicht.<br><br><strong>Var = p(1−p):</strong> Die Unsicherheit ist am größten bei p = 0.5 (maximale Ungewissheit: Münzwurf). Bei p nahe 0 oder 1 ist das Ergebnis fast vorhersagbar, die Varianz geht gegen 0.<br><br><strong>In der logistischen Regression</strong> wird p nicht direkt modelliert, sondern log(p/(1−p)) = logit(p), damit negative Zahlen entstehen können (ohne dass p < 0 oder p > 1 wird). Der Koeffizient β ist ein Log-Odds-Ratio.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — logistische Regression für 0/1-Outcomes:<br><code>brm(y ~ x1 + x2, data = d, family = bernoulli(link = "logit"))</code><br>→ Link: <em>logit</em> — p = 1/(1+exp(−Xβ)), der lineare Prediktor wird in eine Wahrscheinlichkeit transformiert.<br>→ Koeffizienteninterpretation: exp(β) = Odds Ratio.</div><div class="brms-role"><strong>Typische Priors für logistische Regression:</strong><br><code>prior(normal(0, 1.5), class = b)</code> → auf logit-Skala; entspricht Wahrscheinlichkeitseffekten von ca. ±25%<br><code>prior(normal(0, 2.5), class = b)</code> → breiter, erlaubt größere Effekte<br>→ Ein β von ±4 auf logit-Skala entspricht fast dem vollen Intervall [0.02, 0.98] auf Wahrscheinlichkeitsskala — deshalb sind Priors mit σ < 5 sinnvoll.</div>',
       technik:'Bernoulli(p) = Binomial(1, p). n unabhängige Bernoulli → Binomial(n, p). <em>brms:</em> <code>bernoulli(logit)</code> — p = 1/(1+e^(−Xβ)), d.h. der lineare Prediktor Xβ wird durch den logistischen Link in eine Wahrscheinlichkeit umgerechnet.'
     }
   },
@@ -606,8 +817,9 @@ const DISTS = {
     modeFn:p=>p.zi>0.5?0:null,
     info:{
       was:'Eine <strong>gemischte Verteilung</strong>: Mit Wahrscheinlichkeit zi tritt exakt 0 auf (strukturelle Null, kein Zufall), und mit Wahrscheinlichkeit 1−zi folgt der Wert einer Beta-Verteilung auf (0,1). Der rote Balken zeigt die Punktmasse bei 0.',
-      einsatz:'Anteil Studierender, die überhaupt keine Zeit mit Sport verbringen (echte Abstinenz ≠ zufälliger Anteil nahe 0), Alkoholkonsum-Anteil mit echten Nichtkonsumenten, Spielzeit in Spielen (0% = hat nie gespielt). Überall wo es eine echte Null-Gruppe und eine kontinuierliche Gruppe gibt. <em>brms:</em> <code>family = zero_inflated_beta()</code>.',
-      parameter:'<strong>μ</strong> = Mittelwert der Beta-Komponente (was passiert bei den Nicht-Null-Fällen). <strong>φ</strong> = Präzision der Beta-Komponente. <strong>zi</strong> = Anteil echter Nullen. <em>Beispiel:</em> zi = 0.35 → 35% der Personen haben exakt 0; die übrigen 65% haben kontinuierliche Werte um μ herum.',
+      einsatz:'<strong>Schlüsselunterschied zu reiner Beta:</strong> Es gibt echte Nullen — nicht weil der Anteil zufällig sehr nahe 0 ist, sondern weil eine strukturell andere Gruppe exakt 0 hat. <em>Beispiele:</em> Sportanteil an der Wochenzeit — manche Personen treiben grundsätzlich keinen Sport (echte 0%), andere irgendwo zwischen 1% und 100%. Alkoholkonsum-Anteil — echte Abstinente (0%) vs. Konsumierende. Spielzeit — hat die Person das Spiel nie angestartet (0%) vs. gespielt.',
+      parameter:'<strong>μ (Beta-Mittelwert):</strong> Der Mittelwert bei den Personen, die nicht exakt 0 sind. <em>Beispiel:</em> μ = 0.3 → bei den Sport-Treibenden liegt die durchschnittliche Sportzeit bei 30%.<br><br><strong>φ (Beta-Präzision):</strong> Wie konzentriert sind die Werte der kontinuierlichen Gruppe? Wie bei normaler Beta-Verteilung.<br><br><strong>zi (Zero-Inflation):</strong> Der Anteil echter Nullen in der Gesamtstichprobe. <em>Beispiel:</em> zi = 0.40 → 40% der Personen haben exakt 0 (echte Abstinenz); 60% haben kontinuierliche Werte mit Mittelwert μ. Der Gesamtmittelwert ist dann E[Y] = (1 − zi) × μ.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Anteile mit strukturellen Nullen:<br><code>brm(bf(y ~ x1, zi ~ x2), data = d, family = zero_inflated_beta())</code><br>→ Die Null-Inflation <em>zi</em> kann separat modelliert werden — andere Prädiktoren können vorhersagen wer die echte-Null-Gruppe ist.<br>→ <em>zi</em> wird auf logit-Skala modelliert (default).</div><div class="brms-role"><strong>Prior für zi:</strong><br><code>prior(beta(1, 1), class = zi)</code> → uniformer Prior: alle Null-Anteile gleich plausibel<br><code>prior(normal(-1, 1), class = zi, dpar = "zi")</code> → auf logit-Skala: Null-Inflation eher klein</div>',
       technik:'E[Y] = (1−zi)·μ. Balken im Plot = zi; Kurve = (1−zi)·BetaPDF. <em>brms:</em> <code>zero_inflated_beta(mu, phi, zi)</code>. zi wird getrennt modelliert, z.B. mit einer eigenen logistischen Regression.'
     }
   },
@@ -632,8 +844,9 @@ const DISTS = {
     modeFn:p=>null,
     info:{
       was:'Wie ZI-Beta, aber mit Punktmassen bei <strong>0 und 1</strong> gleichzeitig. Anteile, die entweder exakt 0% oder exakt 100% betragen können — strukturelle Extreme auf beiden Seiten. Die zwei roten Balken zeigen die Punktmassen bei 0 und 1.',
-      einsatz:'Anteil abgeschlossener Aufgaben pro Person (0% = nichts versucht, 100% = alles gelöst), vollständige Abstinenz vs. täglicher Konsum, Compliance in klinischen Studien (0% vs. 100%), Leistungstests mit Boden- und Deckeneffekten. <em>brms:</em> <code>family = zero_one_inflated_beta()</code>.',
-      parameter:'<strong>μ, φ</strong> = Beta-Anteil (für Werte zwischen 0 und 1). <strong>zoi</strong> = P(Y ist 0 oder 1), also der Gesamtanteil der Extremfälle. <strong>coi</strong> = P(Y=1 | Y ist Extremfall). <em>Beispiel:</em> zoi = 0.20, coi = 0.60 → 20% Extremfälle, davon 60% Einsen → 12% der Stichprobe hat Y=1, 8% hat Y=0, 80% hat Werte auf (0,1).',
+      einsatz:'<strong>Wenn Nullen UND Einsen strukturell auftreten:</strong> Anteil abgeschlossener Aufgaben — manche Personen haben nichts versucht (0%), manche alles gelöst (100%), die meisten irgendwo dazwischen. Compliance in klinischen Studien — vollständige Nicht-Compliance (0%) vs. vollständige Compliance (100%) als echte Kategorien, nicht nur zufällige Extremwerte. Tests mit harten Boden- und Deckeneffekten.',
+      parameter:'<strong>μ, φ</strong> = Beta-Parameter für den kontinuierlichen Anteil (wie bei ZI-Beta).<br><br><strong>zoi (Zero-One-Inflation):</strong> Der Gesamtanteil der Personen, die ein Extremwert (0 oder 1) haben. <em>Beispiel:</em> zoi = 0.20 → 20% aller Personen haben entweder exakt 0% oder exakt 100%.<br><br><strong>coi (Conditional-One):</strong> Innerhalb der Extremgruppe: Wie viele haben 1 (statt 0)? <em>Beispiel:</em> coi = 0.60 → von den 20% Extremfällen haben 60% Y=1 und 40% Y=0.<br><br><strong>Rechnen:</strong> P(Y=0) = zoi × (1−coi) = 0.20 × 0.40 = 8%. P(Y=1) = zoi × coi = 0.20 × 0.60 = 12%. Kontinuierliche Werte: 80%.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Anteile mit strukturellen Nullen UND Einsen:<br><code>brm(bf(y ~ x1, zoi ~ x2, coi ~ x3), data = d, family = zero_one_inflated_beta())</code><br>→ zoi und coi können jeweils eigene Prädiktoren bekommen — z.B. kann x2 vorhersagen wer zur Extremgruppe gehört, x3 ob das ein 0- oder 1-Fall ist.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(beta(1, 1), class = zoi)</code><br><code>prior(beta(1, 1), class = coi)</code><br>→ uniformer Prior für beide Extremanteile; oder Normal auf logit-Skala für informiertere Priors.</div>',
       technik:'P(Y=0) = zoi·(1−coi), P(Y=1) = zoi·coi. E[Y] = zoi·coi + (1−zoi)·μ. <em>brms:</em> <code>zero_one_inflated_beta(mu, phi, zoi, coi)</code>. zoi und coi werden oft separat mit eigenen Prädiktoren modelliert.'
     }
   },
@@ -650,8 +863,9 @@ const DISTS = {
     modeFn:p=>Math.floor(p.lambda),
     info:{
       was:'Die <strong>Grundverteilung für Zähldaten</strong> — diskrete Werte 0, 1, 2, 3, ... Zählt, wie oft ein zufälliges Ereignis pro Einheit auftritt. Das charakteristische Merkmal: Mittelwert und Varianz sind identisch (Equidispersion).',
-      einsatz:'Anzahl Emails pro Tag, Anzahl Unfälle pro Monat auf einer Strecke, Anzahl Arztbesuche pro Jahr, Anzahl Wörter pro Satz, Anzahl Tore pro Fußballspiel, Anzahl Fehler pro Code-Zeile. Überall wo man etwas zählt, das selten bis mittelselten vorkommt. <em>brms:</em> <code>family = poisson()</code>, Link: <code>log</code>.',
-      parameter:'<strong>λ</strong> = Rate (gleichzeitig Mittelwert und Varianz, λ > 0). <em>Beispiel:</em> λ = 3 → im Schnitt 3 Ereignisse pro Einheit, Standardabweichung = √3 ≈ 1.7. <em>Beispiel:</em> λ = 0.5 → seltene Ereignisse, meistens 0 oder 1. Der häufigste Wert (Modus) ist ⌊λ⌋.',
+      einsatz:'<strong>Zählen diskreter Ereignisse:</strong> Anzahl Emails pro Tag, Unfälle pro Monat auf einer Straße, Arztbesuche pro Jahr, Wörter pro Satz, Tore pro Fußballspiel, Pilze pro Quadratmeter Wald. <strong>Kernvoraussetzung:</strong> Mittelwert = Varianz (Equidispersion). In der Praxis ist diese Annahme oft verletzt — dann Negative Binomial verwenden. <strong>Faustregel:</strong> Wenn Var(Y) > 1.5 × E[Y] in den Daten, lieber NegBin.',
+      parameter:'<strong>λ (Rate/Mittelwert):</strong> Das ist gleichzeitig der Mittelwert und die Varianz! Das unterscheidet Poisson von allen anderen Verteilungen hier.<br><br><em>Beispiele:</em><br>• λ = 0.5 → seltene Ereignisse, >60% der Beobachtungen sind 0<br>• λ = 3 → mittlere Rate, Verteilung mit Gipfel bei 2–3, SD = √3 ≈ 1.7<br>• λ = 10 → häufige Ereignisse, beginnt sich normal-ähnlich zu verhalten<br>• λ = 25 → fast symmetrische Glocke um 25<br><br><strong>In brms (log-Link):</strong> Prädiktoren modellieren log(λ). Ein Koeffizient β = 0.4 bedeutet: Faktor e^0.4 ≈ 1.5 mal so viele Ereignisse (+50%). Ein negativer Koeffizient bedeutet weniger Ereignisse.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Zähldaten ohne Überdispersion:<br><code>brm(y ~ x1 + x2, data = d, family = poisson(link = "log"))</code><br>→ Link: <em>log</em> — λ = exp(Xβ), immer positiv.<br>→ Koeffizienteninterpretation: exp(β) = multiplikativer Effekt auf die Rate λ.<br>→ <strong>Immer zuerst prüfen:</strong> Ist Var(Y) ≈ E[Y]? Wenn Var ≫ E → Negative Binomial.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1), class = b)</code> → auf log-Skala; exp(1) = 2.7, also werden Faktor-3-Unterschiede als plausibel markiert<br><code>prior(normal(1, 1), class = Intercept)</code> → Intercept für einen Basislevel λ ≈ e¹ ≈ 2.7 Ereignisse</div>',
       technik:'PMF: P(Y=k) = e^(−λ)·λ^k/k!. Für große λ: → Normal(λ, √λ). <strong>Diagnose:</strong> Wenn empirisch Var(Y) ≫ E[Y] → Überdispersion → Negative Binomial als robustere Alternative wählen. <em>brms:</em> <code>poisson(log)</code>.'
     }
   },
@@ -669,8 +883,9 @@ const DISTS = {
     modeFn:null, // numerical
     info:{
       was:'Wie Poisson, aber mit <strong>flexibler Varianz</strong>: Die Varianz darf größer sein als der Mittelwert (Überdispersion). In der Praxis fast immer besser als Poisson, weil reale Zähldaten fast immer variabler sind als das Poisson-Modell erlaubt.',
-      einsatz:'Anzahl Arztbesuche pro Jahr (manche Personen gehen sehr oft, die meisten selten), Anzahl Social-Media-Posts, Anzahl Symptome, Anzahl Tage krank pro Jahr. Empfehlung: <strong>Als Standard für Zähldaten</strong> einsetzen und nur bei explizit nachgewiesener Equidispersion zu Poisson wechseln. <em>brms:</em> <code>family = negbinomial()</code>, Link: <code>log</code>.',
-      parameter:'<strong>μ</strong> = Mittelwert. <em>Beispiel:</em> μ = 5 → im Schnitt 5 Ereignisse. <strong>φ</strong> = Präzisionsparameter. <em>Beispiel:</em> φ = 1 → Var = 5 + 25/1 = 30, sehr viel mehr als bei Poisson (Var = 5); φ = 10 → Var = 7.5, mäßige Überdispersion; φ = 100 → kaum von Poisson zu unterscheiden. Kleines φ = starke Überdispersion.',
+      einsatz:'<strong>Der robustere Standard für Zähldaten.</strong> Arztbesuche pro Jahr (wenige Personen gehen sehr oft, viele selten → starke Überdispersion), Social-Media-Posts, Symptomanzahl, Tage krank. <strong>Goldene Regel:</strong> Als Standard für Zähldaten wählen; nur dann zu Poisson wechseln, wenn Equidispersion (Var ≈ Mean) nachgewiesen oder theoretisch begründet ist. In der Praxis ist Zähldaten-Überdispersion die Regel, nicht die Ausnahme.',
+      parameter:'<strong>μ (Mittelwert):</strong> Wie bei Poisson. <em>Beispiel:</em> μ = 5 → im Schnitt 5 Ereignisse pro Person.<br><br><strong>φ (Präzision/Dispersion):</strong> Kleines φ = starke Überdispersion (viel mehr Streuung als Poisson). Großes φ → kaum von Poisson zu unterscheiden.<br><br><strong>Vergleich Var(Y) für μ = 5:</strong><br>• φ = 0.5 → Var = 5 + 25/0.5 = 55 (extreme Überdispersion)<br>• φ = 1 → Var = 5 + 25 = 30 (starke Überdispersion)<br>• φ = 5 → Var = 5 + 5 = 10 (mäßige Überdispersion)<br>• φ = 50 → Var = 5.5 (kaum von Poisson zu unterscheiden)<br>• φ → ∞ → Var = 5 (= Poisson)<br><br><strong>Diagnose:</strong> Wenn Var(Daten) > 1.5 × Mean(Daten) → NegBin statt Poisson wählen.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Zähldaten mit Überdispersion (Standard-Empfehlung):<br><code>brm(y ~ x1 + x2, data = d, family = negbinomial(link = "log"))</code><br>→ φ (shape) wird automatisch mitgeschätzt.<br>→ Interpretation wie Poisson: exp(β) = Faktoreffekt auf μ.<br>→ Standard-Prior für shape: <code>prior(exponential(1), class = shape)</code></div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1), class = b)</code><br><code>prior(exponential(1), class = shape)</code> → breiter positiver Prior für φ<br>→ Alternativ: <code>prior(gamma(0.01, 0.01), class = shape)</code> für sehr diffusen Prior</div>',
       technik:'Var(Y) = μ + μ²/φ. Grenzfall φ→∞: → Poisson(μ). Interpretation als Mischung: Y|ω ~ Poisson(ω), ω ~ Gamma(φ, φ/μ). <em>brms:</em> <code>negbinomial(mu, phi)</code>.'
     }
   },
@@ -688,8 +903,9 @@ const DISTS = {
     modeFn:p=>{const n=Math.round(p.n); return Math.floor((n+1)*p.p);},
     info:{
       was:'Zählt die <strong>Anzahl Erfolge aus n unabhängigen Bernoulli-Versuchen</strong> mit gleicher Erfolgswahrscheinlichkeit p. Das klassische Urnenmodell — man zieht n mal und schaut, wie viele „Treffer" dabei sind.',
-      einsatz:'Anzahl korrekt gelöster Aufgaben von n = 20 Aufgaben, Anzahl Therapieerfolge von n = 100 Patienten, Anzahl positiver Tests aus n = 50 Stichproben, Anzahl Tore in n = 10 Schüssen. Wichtig: Der Nenner n muss für alle Beobachtungen bekannt sein. <em>brms:</em> <code>family = binomial()</code>, Link: <code>logit</code>.',
-      parameter:'<strong>n</strong> = Anzahl Versuche (fest, integer). <strong>p</strong> = Erfolgswahrscheinlichkeit. <em>Beispiel:</em> n = 20 Aufgaben, p = 0.6 → erwartete Anzahl richtig = 12, SD = √(20×0.6×0.4) ≈ 2.2. <em>Beispiel:</em> Münzwurf n = 10, p = 0.5 → Mittelwert = 5, SD ≈ 1.6. Maximale Streuung bei p = 0.5.',
+      einsatz:'<strong>Wenn der Nenner bekannt ist:</strong> Anzahl korrekt gelöster Aufgaben von n = 20 (nicht einfach "Punkte", sondern Treffer von n Versuchen), Anzahl Therapieerfolge von n = 100 Patienten, Klickrate (k Klicks aus n Anzeigen), Anzahl Tore von n Schüssen. <strong>Schlüsselunterschied zu Bernoulli:</strong> Binomial summiert n unabhängige Bernoulli-Versuche auf — jeder Versuch hat dieselbe Wahrscheinlichkeit p.',
+      parameter:'<strong>n (Anzahl Versuche):</strong> Muss für jede Beobachtung bekannt sein — das ist die wichtigste Voraussetzung.<br><br><strong>p (Erfolgswahrscheinlichkeit):</strong> Dieselbe Wahrscheinlichkeit für jeden der n Versuche.<br><br><em>Beispiele:</em><br>• n = 20, p = 0.6 → E[Y] = 12 richtige Antworten, SD ≈ 2.2<br>• n = 100, p = 0.3 → E[Y] = 30 Erfolge, SD ≈ 4.6<br>• n = 10, p = 0.5 → Münzwurf × 10: E[Y] = 5, SD ≈ 1.6<br><br><strong>Maximale Streuung bei p = 0.5</strong> — wenn man nicht weiß, welches Ergebnis kommt, ist die Unsicherheit am größten. Bei p nahe 0 oder 1 ist das Ergebnis fast vorhersagbar.<br><br><strong>In brms:</strong> n wird als <code>trials(n)</code> angegeben, und der logit-Link modelliert p.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Anzahl Erfolge aus bekanntem n:<br><code>brm(k | trials(n) ~ x1 + x2, data = d, family = binomial(link = "logit"))</code><br>→ n muss als Spalte in den Daten vorliegen.<br>→ Link: <em>logit</em> — p = 1/(1+exp(−Xβ))<br>→ Koeffizienteninterpretation: exp(β) = Odds Ratio für p.<br>→ Für Überdispersion (Var > n·p·(1−p)) → Beta-Binomial verwenden.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> → auf logit-Skala<br>→ Entspricht einem Effekt von maximal ±4 logit-Einheiten als plausibel, was die Wahrscheinlichkeit von ~0.02 bis ~0.98 abdeckt.</div>',
       technik:'P(Y=k) = C(n,k)·p^k·(1−p)^(n−k). Bernoulli = Binomial(1, p). Für großes n: → Normal(np, √(np(1−p))). <em>brms:</em> <code>binomial(logit)</code> — n als <code>trials(n)</code> im Modell. Für Überdispersion → Beta-Binomial.'
     }
   },
@@ -710,8 +926,9 @@ const DISTS = {
     modeFn:null, // numerical
     info:{
       was:'Eine Binomialverteilung, bei der die Erfolgswahrscheinlichkeit p <strong>von Person zu Person variiert</strong> — p ist selbst Beta-verteilt. Das erzeugt mehr Streuung als reine Binomial: Überdispersion.',
-      einsatz:'Testergebnisse, bei denen die Fähigkeit zwischen Personen schwankt (nicht alle lösen 20 Aufgaben mit derselben Wahrscheinlichkeit), Anzahl positiver Antworten über heterogene Gruppen, klinische Trials mit unterschiedlich ansprechenden Patienten. Überall wo Binomial zu wenig Streuung zeigt. <em>brms:</em> <code>family = beta_binomial()</code>.',
-      parameter:'<strong>n</strong> = Anzahl Versuche. <strong>μ</strong> = mittlere Erfolgswahrscheinlichkeit über alle Personen. <strong>φ</strong> = Konzentration der Beta-Verteilung für p. <em>Beispiel:</em> φ = 1 → p variiert stark zwischen Personen (einige schaffen fast nichts, andere fast alles); φ = 10 → p variiert nur wenig; φ = 100 → kaum von Binomial zu unterscheiden.',
+      einsatz:'<strong>Wenn Binomial zu streng ist</strong> — nicht alle Personen haben dieselbe Wahrscheinlichkeit p! Testergebnisse in heterogenen Gruppen (manche Personen sind grundsätzlich besser als andere → p variiert zwischen Personen). Klinische Trials mit unterschiedlich ansprechenden Patienten. Sprachproduktion (manche Personen machen generell mehr Fehler). <strong>Diagnose:</strong> Var(Daten) > n × p̄ × (1−p̄) → Beta-Binomial statt Binomial.',
+      parameter:'<strong>n (Anzahl Versuche):</strong> Wie bei Binomial.<br><br><strong>μ (mittlere Wahrscheinlichkeit):</strong> Der Durchschnitt von p über alle Personen. <em>Beispiel:</em> μ = 0.6 → im Schnitt 60% richtig.<br><br><strong>φ (Konzentration):</strong> Wie stark variiert p zwischen Personen?<br>• φ = 0.5 → extreme Variation: manche fast immer falsch, manche fast immer richtig<br>• φ = 2 → deutliche Person-zu-Person-Unterschiede<br>• φ = 10 → moderate Unterschiede<br>• φ = 100 → kaum Unterschiede, fast wie Binomial<br>• φ → ∞ → identisch mit Binomial(n, μ)<br><br><strong>Intuition:</strong> Stellen Sie sich vor, jede Person hat ihr eigenes p, gezogen aus einer Beta(μ·φ, (1−μ)·φ)-Verteilung. Die Beta-Binomial ist das Ergebnis dieser Mischung.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — überdispergierte Binomialdaten:<br><code>brm(k | trials(n) ~ x1, data = d, family = beta_binomial(link = "logit"))</code><br>→ φ (Präzision der Beta-Verteilung für p) wird automatisch geschätzt.<br>→ Standard-Prior für φ: <code>prior(exponential(1), class = phi)</code></div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> für Koeffizienten<br><code>prior(exponential(1), class = phi)</code> für Überdispersionsparameter<br>→ Kleines φ (starke Überdispersion) und großes φ (fast Binomial) beide a priori plausibel.</div>',
       technik:'Intern: α = μ·φ, β = (1−μ)·φ. E[Y] = n·μ, Var > n·μ·(1−μ). Grenzfall φ→∞: → Binomial(n, μ). <em>brms:</em> <code>beta_binomial(n, mu, phi)</code>.'
     }
   },
@@ -761,6 +978,10 @@ function selectCat(idx){
 }
 
 function selectDist(key){
+  // Reset X-Fix when switching distributions
+  if(X_FIXED){ X_FIXED=false; FIXED_XRANGE=null;
+    const b=document.getElementById('btn-xfix');
+    b.textContent='X fix'; b.style.borderColor=''; b.style.color=''; }
   DIST_KEY=key;
   document.querySelectorAll('.dist-btn').forEach(b=>{
     b.classList.toggle('sel', b.textContent===DISTS[key].name);
@@ -870,8 +1091,21 @@ function updateInfo(){
       <div class="info-body">${d.info.parameter}</div>
     </div>
     <div class="info-block">
+      <div class="info-h info-h-brms">Verwendung in brms</div>
+      <div class="brms-block">${d.info.brms||'<span style="color:var(--ink2)">Nicht direkt als brms-Family verfügbar — wird intern über andere Familien oder Stan-Code abgebildet.</span>'}</div>
+    </div>
+    <div class="info-block">
       <div class="info-h">Technische Details</div>
       <div class="info-body">${d.info.technik}</div>
+    </div>
+    <div class="info-block">
+      <div class="info-h">Verwandte Tools</div>
+      <div class="info-body" style="font-size:.67rem;color:var(--ink2);margin-bottom:.4rem">Weiterführende interaktive Werkzeuge:</div>
+      <div class="tool-links">
+        <a class="tool-link" href="Bayesian_Prior_Lab.html">⬡ Prior Lab</a>
+        <a class="tool-link" href="GLM_cond_dist.html">⊞ Bedingte Verteilungen</a>
+        <a class="tool-link" href="GLM_3D_visual.html">◈ GLM in 3D</a>
+      </div>
     </div>`;
 }
 
@@ -891,6 +1125,33 @@ function updateStats(mean, median, mode, variance){
 
 function toggleHelp(){
   document.getElementById('help-panel').classList.toggle('open');
+}
+function toggleKarte(){
+  document.getElementById('overlay-karte').classList.toggle('open');
+}
+function toggleXFix(){
+  const d=DISTS[DIST_KEY];
+  // X-Fix nur für kontinuierliche, nicht-gemischte Verteilungen sinnvoll
+  if(d.discrete||d.mixed){ return; }
+  X_FIXED=!X_FIXED;
+  const btn=document.getElementById('btn-xfix');
+  if(X_FIXED){
+    // Aktuelle Range einfrieren
+    let cp=PARAMS;
+    if(d.hasBrmsToggle) cp=d.toCanonical(PARAMS,BRMS_MODE);
+    let [xlo,xhi]=d.supportFn(cp);
+    if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
+    FIXED_XRANGE=[xlo,xhi];
+    btn.style.borderColor='var(--a6)';
+    btn.style.color='var(--a6)';
+    btn.textContent='X frei';
+  } else {
+    FIXED_XRANGE=null;
+    btn.style.borderColor='';
+    btn.style.color='';
+    btn.textContent='X fix';
+  }
+  renderDist();
 }
 function toggleTheme(){
   DARK=!DARK;
@@ -928,9 +1189,14 @@ function renderDist(){
 
 // ── Continuous ────────────────────────────────────────────────
 function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
-  const support=d.supportFn(cp);
-  let [xlo,xhi]=support;
-  if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; } // beta-like: tiny padding
+  let xlo,xhi;
+  if(X_FIXED&&FIXED_XRANGE){
+    [xlo,xhi]=FIXED_XRANGE;
+  } else {
+    const support=d.supportFn(cp);
+    [xlo,xhi]=support;
+    if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
+  }
 
   const N=400;
   const dx=(xhi-xlo)/N;
