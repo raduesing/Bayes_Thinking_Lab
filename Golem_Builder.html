@@ -1347,39 +1347,60 @@ function detectInstruments() {
   return instruments;
 }
 
+// Topological sort of a subset of node IDs using hasDirectedPath
+function topologicalSort(nodeIds) {
+  const result = [...nodeIds];
+  result.sort((a, b) => {
+    if (hasDirectedPath(a, b)) return -1;
+    if (hasDirectedPath(b, a)) return 1;
+    return 0;
+  });
+  return result;
+}
+
+// Returns { mediators: [id, ...], topology: 'serial'|'parallel'|null }
+// Serial:   each mediator lies on ALL causal X→Y paths (chain X→M1→M2→…→Y)
+// Parallel: mediators collectively cover all paths but none covers all (X→M1→Y ‖ X→M2→Y)
 function detectFrontDoor() {
   const X = state.exposure, Y = state.outcome;
-  if (!X || !Y) return [];
-  // Find all directed paths from X to Y
+  if (!X || !Y) return { mediators: [], topology: null };
+
   const allPaths = findAllPaths(X, Y);
   const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
-  if (causalPaths.length === 0) return [];
+  if (causalPaths.length === 0) return { mediators: [], topology: null };
 
-  // Get all intermediate nodes on causal paths
-  const candidateMediators = new Set();
+  // Collect all intermediate nodes on causal paths
+  const candidateSet = new Set();
   causalPaths.forEach(path => {
-    for (let i = 1; i < path.length - 1; i++) candidateMediators.add(path[i]);
+    for (let i = 1; i < path.length - 1; i++) candidateSet.add(path[i]);
   });
 
-  const validMediators = [];
-  candidateMediators.forEach(M => {
-    // Condition 1: M is on ALL directed paths from X to Y
-    const allPassThroughM = causalPaths.every(path => path.includes(M));
-    if (!allPassThroughM) return;
-
-    // Condition 2: No unblocked backdoor path from X to M
-    const XMPaths = findAllPaths(X, M);
-    const XMBackdoors = XMPaths.filter(isBackdoorPath);
-    if (XMBackdoors.some(p => isPathActive(p, []))) return;
-
-    // Condition 3: All backdoor paths from M to Y are blocked by X
-    const MYPaths = findAllPaths(M, Y);
-    const MYBackdoors = MYPaths.filter(isBackdoorPath);
-    if (!MYBackdoors.every(p => !isPathActive(p, [X]))) return;
-
-    validMediators.push(M);
+  // Keep only candidates satisfying conditions 2 & 3 individually
+  const validCandidates = [...candidateSet].filter(M => {
+    // Condition 2: no unblocked backdoor from X to M
+    const XMBackdoors = findAllPaths(X, M).filter(isBackdoorPath);
+    if (XMBackdoors.some(p => isPathActive(p, []))) return false;
+    // Condition 3: all backdoor paths from M to Y are blocked by X
+    const MYBackdoors = findAllPaths(M, Y).filter(isBackdoorPath);
+    if (!MYBackdoors.every(p => !isPathActive(p, [X]))) return false;
+    return true;
   });
-  return validMediators;
+
+  if (validCandidates.length === 0) return { mediators: [], topology: null };
+
+  // Condition 1 (set-level): every causal path passes through at least one valid candidate
+  const covers = causalPaths.every(path =>
+    validCandidates.some(M => path.slice(1, -1).includes(M))
+  );
+  if (!covers) return { mediators: [], topology: null };
+
+  // Topology: serial if every mediator lies on ALL causal paths; otherwise parallel
+  const isSerial = validCandidates.every(M =>
+    causalPaths.every(path => path.slice(1, -1).includes(M))
+  );
+  const topology = isSerial ? 'serial' : 'parallel';
+
+  return { mediators: topologicalSort(validCandidates), topology };
 }
 
 function getEffectType() {
@@ -1964,7 +1985,7 @@ function runAnalysis() {
 
   // IV / Front Door detection
   const instruments = detectInstruments();
-  const frontDoorMediators = detectFrontDoor();
+  const { mediators: frontDoorMediators, topology: fdTopology } = detectFrontDoor();
 
   // Update sidebar analysis summary
   document.getElementById('sidebarAnalysisWrap').style.display = 'block';
@@ -1974,7 +1995,8 @@ function runAnalysis() {
     summaryHtml += `<div class="msg-ok">Instrument gefunden: ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} → IV-Schätzer möglich</div>`;
   }
   if (frontDoorMediators.length > 0) {
-    summaryHtml += `<div class="msg-ok">Front Door Mediator: ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} → Front Door Adjustment möglich</div>`;
+    const fdTypeLabel = fdTopology === 'serial' ? 'Serielle Mediation' : 'Parallele Mediation';
+    summaryHtml += `<div class="msg-ok">Front Door (${fdTypeLabel}): ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} → Front Door Adjustment möglich</div>`;
   }
   if (result.unblockableLatentPaths && result.unblockableLatentPaths.length > 0) {
     const latentNames = [...result.latentIds].map(id=>escHtml(getNodeName(id))).join(', ');
@@ -2080,9 +2102,17 @@ function runAnalysis() {
   }
   if (frontDoorMediators.length > 0) {
     const xName = escHtml(getNodeName(X)), yName = escHtml(getNodeName(Y));
+    const fdTypeLabel = fdTopology === 'serial' ? 'Serielle Mediation' : 'Parallele Mediation';
+    const fdMedStr = frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ');
+    const fdEffectStr = fdTopology === 'serial'
+      ? frontDoorMediators.map((id,i,a)=>{
+          const prev = i===0?xName:escHtml(getNodeName(a[i-1]));
+          return `β_${prev}${escHtml(getNodeName(id))}`;
+        }).concat([`β_${escHtml(getNodeName(frontDoorMediators[frontDoorMediators.length-1]))}${yName}`]).join(' × ')
+      : frontDoorMediators.map(id=>`β_${xName}${escHtml(getNodeName(id))} × β_${escHtml(getNodeName(id))}${yName}`).join(' + ');
     specialHtml += `<div style="margin-top:.6rem;padding:.45rem .6rem;background:var(--bg);border:1px solid var(--a4);border-radius:4px;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a4);">
-      <strong>Front Door Mediator:</strong> ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} erfüllt Front Door Kriterium.
-      Kausaler Effekt ${xName}→${yName} über β_XM × β_MY identifizierbar ohne U zu messen.
+      <strong>Front Door (${fdTypeLabel}):</strong> {${fdMedStr}} erfüllt Front Door Kriterium.<br>
+      Kausaler Effekt ${xName}→${yName}: ${fdEffectStr} — identifizierbar ohne U zu messen.
     </div>`;
   }
   if (specialHtml) {
@@ -2446,7 +2476,7 @@ function generateRCode() {
 
   // Detect special patterns for comment header
   const instruments = state.exposure && state.outcome ? detectInstruments() : [];
-  const frontDoorMediators = state.exposure && state.outcome ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators, topology: fdTopology } = state.exposure && state.outcome ? detectFrontDoor() : { mediators: [], topology: null };
 
   const lines = [
     '# Golem Builder — Simulierter Datensatz',
@@ -2463,10 +2493,11 @@ function generateRCode() {
       '#'
     );
   } else if (frontDoorMediators.length > 0) {
+    const fdType = fdTopology === 'serial' ? 'Serielle Mediation' : 'Parallele Mediation';
     lines.push(
-      '# FRONT DOOR Simulation',
+      `# FRONT DOOR Simulation (${fdType})`,
       '# U ist latent und konfundiert X und Y.',
-      `# ${frontDoorMediators.map(id=>getNodeName(id)).join(', ')} ist der Mediator: X→M→Y, kein direktes X→Y, kein U→M.`,
+      `# {${frontDoorMediators.map(id=>getNodeName(id)).join(', ')}} erfüllt Front Door Kriterium: kein direktes X→Y, kein U→M.`,
       '# Front Door Adjustment identifiziert den kausalen Effekt ohne U zu messen.',
       '#'
     );
@@ -2697,30 +2728,33 @@ function generateBrmsCode() {
 
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
-  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
 
   if (instruments.length > 0) {
-    const zName = getNodeName(instruments[0]);
+    const zNames = instruments.map(id => getNodeName(id));
+    const zStr = zNames.join(' + ');
+    const zLabel = zNames.join(', ');
     return [
-      '# INSTRUMENTALVARIABLE — Bayesianisches joint model (McElreath SR 2020, Kap. 15)',
-      '# Beide Gleichungen werden gemeinsam geschätzt (Seemingly Unrelated Regressions).',
-      '# Hinweis: rescor = TRUE fängt unbeobachtete Confounder (U) ab.',
-      `# rho = rescor__${xName}__${yName} schätzt die Stärke der Konfundierung durch U.`,
-      `# b_${yName}_${xName} ist der kausale Effekt von ${xName} auf ${yName}, korrekt geschätzt trotz U.`,
+      `# INSTRUMENTALVARIABLE — Bayesianisches joint model (McElreath SR 2020, Kap. 15)`,
+      `# Instrumente: ${zLabel}`,
+      '# Beide Gleichungen gemeinsam geschätzt (Seemingly Unrelated Regressions).',
+      '# rescor = TRUE fängt unbeobachtete Confounder (U) ab.',
+      `# rho = rescor__${xName}__${yName} schätzt die Konfundierungsstärke durch U.`,
+      `# b_${yName}_${xName} ist der kausale Effekt von ${xName} auf ${yName}, korrekt trotz U.`,
       '',
       'library(brms)',
-      `bf_${xName} <- bf(${xName} ~ ${zName})`,
+      `bf_${xName} <- bf(${xName} ~ ${zStr})`,
       `bf_${yName} <- bf(${yName} ~ ${xName})`,
       '',
       'fit_iv_bayes <- brm(',
       `  mvbf(bf_${xName}, bf_${yName}, rescor = TRUE),`,
       '  data = dat,',
       '  prior = c(',
-      `    prior(normal(0, 1), class = b, resp = "${xName}"),  # Effekt von ${zName} auf ${xName}`,
+      `    prior(normal(0, 1), class = b, resp = "${xName}"),  # Effekte ${zLabel} → ${xName}`,
       `    prior(normal(0, 1), class = b, resp = "${yName}"),  # Kausaler Effekt ${xName}→${yName}`,
       `    prior(exponential(1), class = sigma, resp = "${xName}"),`,
       `    prior(exponential(1), class = sigma, resp = "${yName}"),`,
-      '    prior(lkj(2), class = rescor)               # Prior für Korrelation der Residuen (U\'s Einfluss)',
+      `    prior(lkj(2), class = rescor)               # Prior für Korrelation der Residuen (U's Einfluss)`,
       '  ),',
       '  chains = 4, iter = 2000',
       ')',
@@ -2730,39 +2764,81 @@ function generateBrmsCode() {
   }
 
   if (frontDoorMediators.length > 0) {
-    const mName = getNodeName(frontDoorMediators[0]);
-    return [
-      '# FRONT DOOR ADJUSTMENT — Bayesianisches joint model (Pearl 2009, Kap. 3.3)',
-      `# Zwei Gleichungen: (1) ${mName} ~ ${xName}, (2) ${yName} ~ ${mName} + ${xName}`,
-      `# ${xName} in Gleichung 2 blockt den Backdoor ${mName}←${xName}←U→${yName}.`,
-      '# rescor=FALSE: nach Konditionierung auf M und X sind Residuen unkorreliert.',
-      `# Kausaler Gesamteffekt = b_${mName}_${xName} × b_${yName}_${mName} (wird als posterior quantity berechnet).`,
-      '',
-      'library(brms)',
-      `bf_${mName} <- bf(${mName} ~ ${xName})`,
-      `bf_${yName} <- bf(${yName} ~ ${mName} + ${xName})   # ${xName} als Kontrolle — blockt Backdoor ${mName}←${xName}←U→${yName}`,
-      '',
-      'fit_fd_bayes <- brm(',
-      `  mvbf(bf_${mName}, bf_${yName}, rescor = FALSE),`,
-      '  data = dat,',
-      '  prior = c(',
-      '    prior(normal(0, 1), class = b),',
-      '    prior(exponential(1), class = sigma)',
-      '  ),',
-      '  chains = 4, iter = 2000',
-      ')',
-      '',
-      `# Kausaler Gesamteffekt ${xName}→${yName} via Front Door:`,
-      'library(posterior)',
-      'draws <- as_draws_df(fit_fd_bayes)',
-      `fd_effect <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`,
-      `cat("Front Door Effekt ${xName}→${yName}: ", mean(fd_effect),`,
-      '    " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")',
-      '',
-      '# Zum Vergleich: naiver (verzerrter) Schätzer',
-      `fit_naive <- lm(${yName} ~ ${xName}, data = dat)`,
-      `cat("Naiver Schätzer (verzerrt wegen U): ", coef(fit_naive)["${xName}"], "\\n")`,
-    ].join('\n');
+    const medNames = frontDoorMediators.map(id => getNodeName(id));
+    const lines = [];
+
+    if (fdTopology === 'serial') {
+      // Serial chain: X→M1→M2→…→Y
+      lines.push(`# FRONT DOOR ADJUSTMENT — Serielle Mediation (Pearl 2009, Kap. 3.3)`);
+      lines.push(`# Kette: ${xName}→${medNames.join('→')}→${yName}`);
+      const chainFactors = medNames.map((m,i)=>`β_${i===0?xName:medNames[i-1]}_${m}`).concat([`β_${medNames[medNames.length-1]}_${yName}`]);
+      lines.push(`# Kausaler Gesamteffekt = ${chainFactors.join(' × ')}`);
+      lines.push('');
+      lines.push('library(brms)');
+      medNames.forEach((mName, i) => {
+        const pred = i === 0 ? xName : `${medNames[i-1]} + ${xName}`;
+        lines.push(`bf_${mName} <- bf(${mName} ~ ${pred})`);
+      });
+      const lastM = medNames[medNames.length - 1];
+      lines.push(`bf_${yName} <- bf(${yName} ~ ${lastM} + ${xName})   # ${xName} blockt Backdoor ${lastM}←…←${xName}←U→${yName}`);
+      lines.push('');
+      lines.push('fit_fd_bayes <- brm(');
+      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
+      lines.push('  data = dat,');
+      lines.push('  prior = c(');
+      lines.push('    prior(normal(0, 1), class = b),');
+      lines.push('    prior(exponential(1), class = sigma)');
+      lines.push('  ),');
+      lines.push('  chains = 4, iter = 2000');
+      lines.push(')');
+      lines.push('');
+      lines.push(`# Kausaler Gesamteffekt ${xName}→${yName} via serieller Front Door:`);
+      lines.push('library(posterior)');
+      lines.push('draws <- as_draws_df(fit_fd_bayes)');
+      const factors = medNames.map((m,i) => {
+        const pred = i === 0 ? xName : medNames[i-1];
+        return `draws$b_${m}_${pred}`;
+      });
+      factors.push(`draws$b_${yName}_${lastM}`);
+      lines.push(`fd_effect <- ${factors.join(' * ')}`);
+      lines.push(`cat("Front Door Effekt ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
+    } else {
+      // Parallel: X→M1→Y, X→M2→Y, …
+      lines.push(`# FRONT DOOR ADJUSTMENT — Parallele Mediation (Pearl 2009, Kap. 3.3)`);
+      lines.push(`# Pfade: ${medNames.map(m=>`${xName}→${m}→${yName}`).join(', ')}`);
+      lines.push(`# Kausaler Gesamteffekt = ${medNames.map(m=>`β_${xName}_${m} × β_${m}_${yName}`).join(' + ')}`);
+      lines.push('');
+      lines.push('library(brms)');
+      medNames.forEach(mName => {
+        lines.push(`bf_${mName} <- bf(${mName} ~ ${xName})`);
+      });
+      lines.push(`bf_${yName} <- bf(${yName} ~ ${medNames.join(' + ')} + ${xName})   # ${xName} blockt Backdoor-Pfade aller M's zu ${yName}`);
+      lines.push('');
+      lines.push('fit_fd_bayes <- brm(');
+      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
+      lines.push('  data = dat,');
+      lines.push('  prior = c(');
+      lines.push('    prior(normal(0, 1), class = b),');
+      lines.push('    prior(exponential(1), class = sigma)');
+      lines.push('  ),');
+      lines.push('  chains = 4, iter = 2000');
+      lines.push(')');
+      lines.push('');
+      lines.push(`# Kausaler Gesamteffekt ${xName}→${yName} via paralleler Front Door:`);
+      lines.push('library(posterior)');
+      lines.push('draws <- as_draws_df(fit_fd_bayes)');
+      medNames.forEach(mName => {
+        lines.push(`fd_via_${mName} <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`);
+      });
+      lines.push(`fd_effect <- ${medNames.map(m=>`fd_via_${m}`).join(' + ')}`);
+      lines.push(`cat("Front Door Effekt ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
+    }
+
+    lines.push('');
+    lines.push('# Zum Vergleich: naiver (verzerrter) Schätzer');
+    lines.push(`fit_naive <- lm(${yName} ~ ${xName}, data = dat)`);
+    lines.push(`cat("Naiver Schätzer (verzerrt wegen U): ", coef(fit_naive)["${xName}"], "\\n")`);
+    return lines.join('\n');
   }
 
   // General case
@@ -2801,7 +2877,7 @@ function generateTMBCode() {
 
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
-  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
 
   // Bei IV oder Front Door: kein Standard-Adjustierungsmodell voranstellen
   // (wäre dort irreführend, da naives Y~X wegen U verzerrt ist)
@@ -2829,25 +2905,28 @@ function generateTMBCode() {
   }
 
   if (instruments.length > 0) {
-    const zName = getNodeName(instruments[0]);
+    const zNames = instruments.map(id => getNodeName(id));
+    const zStr = zNames.join(' + ');
+    const zLabel = zNames.join(', ');
     baseCode = baseCode.concat([
       '',
       '# ============================================================',
-      '# INSTRUMENTALVARIABLE — Frequentistisch',
+      `# INSTRUMENTALVARIABLE — Frequentistisch  (Instrumente: ${zLabel})`,
       '# Quelle: Angrist & Pischke (2009) Mostly Harmless Econometrics',
       '# ============================================================',
       '',
       '# Option A: ivreg() — Two-Stage Least Squares (empfohlen für lineares IV)',
-      `# Das | ${zName} bedeutet: "instrumentiere ${xName} durch ${zName}"`,
-      '# Diagnostik: Wu-Hausman Test (ist X endogen?), Schwaches Instrument Test',
+      `# Das | ${zStr} bedeutet: "${xName} wird durch ${zLabel} instrumentiert"`,
+      `# Mehrere Instrumente → überidentifiziertes Modell → Sargan/Hansen-Test möglich`,
+      '# Diagnostik: Wu-Hausman (X endogen?), Schwaches Instrument Test (F > 10)',
       'library(AER)',
-      `fit_iv_freq <- ivreg(${yName} ~ ${xName} | ${zName}, data = dat)`,
+      `fit_iv_freq <- ivreg(${yName} ~ ${xName} | ${zStr}, data = dat)`,
       'summary(fit_iv_freq, diagnostics = TRUE)',
       '',
       '# Option B: manuelles 2SLS mit glmmTMB (für GLM-Verteilungen)',
       'library(glmmTMB)',
-      `# Stufe 1: ${xName} auf ${zName} regressieren → U-bereinigtes X̂`,
-      `fit_iv1 <- glmmTMB(${xName} ~ ${zName}, data = dat, family = gaussian())`,
+      `# Stufe 1: ${xName} auf alle Instrumente regressieren → U-bereinigtes X̂`,
+      `fit_iv1 <- glmmTMB(${xName} ~ ${zStr}, data = dat, family = gaussian())`,
       `dat$${xName}_hat <- fitted(fit_iv1)   # X̂ enthält nur Z-Variation, nicht U`,
       '',
       `# Stufe 2: ${yName} auf X̂ regressieren — U's Einfluss ist in X̂ nicht mehr enthalten`,
@@ -2865,38 +2944,70 @@ function generateTMBCode() {
   }
 
   if (frontDoorMediators.length > 0) {
-    const mName = getNodeName(frontDoorMediators[0]);
-    baseCode = baseCode.concat([
+    const medNames = frontDoorMediators.map(id => getNodeName(id));
+    const fdLines = [
       '',
       '# ============================================================',
-      '# FRONT DOOR ADJUSTMENT — Frequentistisch',
+      `# FRONT DOOR ADJUSTMENT — Frequentistisch (${fdTopology === 'serial' ? 'Serielle Mediation' : 'Parallele Mediation'})`,
       '# Quelle: Pearl (2009) Causality, Kap. 3.3',
-      '# Pearl, Glymour & Jewell (2016) Causal Inference in Statistics: A Primer',
       '# ============================================================',
       '',
       'library(glmmTMB)',
       '',
-      `# Stufe 1: ${mName} ~ ${xName}`,
-      `# Kein Backdoor von ${xName} nach ${mName} (U beeinflusst ${mName} nicht direkt) → OLS unverzerrte`,
-      `fit_fd1 <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`,
-      `beta_XM <- fixef(fit_fd1)$cond["${xName}"]`,
-      `cat("Schritt 1 — ${xName}→${mName} Effekt (β_XM): ", beta_XM, "\\n")`,
-      '',
-      `# Stufe 2: ${yName} ~ ${mName} + ${xName}`,
-      `# ${xName} als Kontrolle NOTWENDIG: blockt Backdoor ${mName}←${xName}←U→${yName}`,
-      `# Ohne ${xName} würde U's Einfluss auf ${yName} fälschlicherweise ${mName} zugeschrieben!`,
-      `fit_fd2 <- glmmTMB(${yName} ~ ${mName} + ${xName}, data = dat, family = ${glmmFamily})`,
-      `beta_MY <- fixef(fit_fd2)$cond["${mName}"]`,
-      `cat("Schritt 2 — ${mName}→${yName} Effekt kontrolliert für ${xName} (β_MY): ", beta_MY, "\\n")`,
-      '',
-      '# Front Door Gesamteffekt = β_XM × β_MY',
-      'fd_effect_freq <- beta_XM * beta_MY',
-      `cat("Front Door Effekt ${xName}→${yName} (β_XM × β_MY): ", fd_effect_freq, "\\n")`,
-      '',
-      '# Zum Vergleich: naiver Schätzer (verzerrt wegen U)',
-      `fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`,
-      `cat("Naiver Schätzer (verzerrt wegen U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`,
-    ]);
+    ];
+
+    if (fdTopology === 'serial') {
+      // Serial chain: X→M1→M2→…→Y
+      const betaVars = [];
+      medNames.forEach((mName, i) => {
+        const pred = i === 0 ? xName : `${medNames[i-1]} + ${xName}`;
+        const predLabel = i === 0 ? xName : medNames[i-1];
+        const bVar = `beta_${i===0?xName:medNames[i-1]}_${mName}`;
+        fdLines.push(`# Stufe ${i+1}: ${mName} ~ ${pred}`);
+        fdLines.push(`fit_fd${i+1} <- glmmTMB(${mName} ~ ${pred}, data = dat, family = gaussian())`);
+        fdLines.push(`${bVar} <- fixef(fit_fd${i+1})$cond["${predLabel}"]`);
+        fdLines.push(`cat("Schritt ${i+1} — ${predLabel}→${mName}: ", ${bVar}, "\\n")`);
+        fdLines.push('');
+        betaVars.push(bVar);
+      });
+      const lastM = medNames[medNames.length - 1];
+      const nSteps = medNames.length + 1;
+      const lastBeta = `beta_${lastM}_${yName}`;
+      fdLines.push(`# Stufe ${nSteps}: ${yName} ~ ${lastM} + ${xName}  (${xName} blockt Backdoor ${lastM}←…←${xName}←U→${yName})`);
+      fdLines.push(`fit_fd${nSteps} <- glmmTMB(${yName} ~ ${lastM} + ${xName}, data = dat, family = ${glmmFamily})`);
+      fdLines.push(`${lastBeta} <- fixef(fit_fd${nSteps})$cond["${lastM}"]`);
+      fdLines.push(`cat("Schritt ${nSteps} — ${lastM}→${yName}: ", ${lastBeta}, "\\n")`);
+      fdLines.push('');
+      betaVars.push(lastBeta);
+      fdLines.push(`# Kausaler Gesamteffekt = ${betaVars.join(' × ')}`);
+      fdLines.push(`fd_effect_freq <- ${betaVars.join(' * ')}`);
+      fdLines.push(`cat("Front Door Effekt ${xName}→${yName}: ", fd_effect_freq, "\\n")`);
+    } else {
+      // Parallel: X→M1→Y, X→M2→Y, …
+      medNames.forEach((mName, i) => {
+        const bVar = `beta_X_${mName}`;
+        fdLines.push(`# Stufe 1${String.fromCharCode(97+i)}: ${mName} ~ ${xName}`);
+        fdLines.push(`fit_fd1${String.fromCharCode(97+i)} <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`);
+        fdLines.push(`${bVar} <- fixef(fit_fd1${String.fromCharCode(97+i)})$cond["${xName}"]`);
+        fdLines.push(`cat("Schritt 1${String.fromCharCode(97+i)} — ${xName}→${mName}: ", ${bVar}, "\\n")`);
+        fdLines.push('');
+      });
+      fdLines.push(`# Stufe 2: ${yName} ~ ${medNames.join(' + ')} + ${xName}  (${xName} blockt Backdoor-Pfade aller M's zu ${yName})`);
+      fdLines.push(`fit_fd2 <- glmmTMB(${yName} ~ ${medNames.join(' + ')} + ${xName}, data = dat, family = ${glmmFamily})`);
+      medNames.forEach(mName => {
+        fdLines.push(`beta_${mName}_${yName} <- fixef(fit_fd2)$cond["${mName}"]`);
+      });
+      fdLines.push('');
+      fdLines.push(`# Kausaler Gesamteffekt = ${medNames.map(m=>`beta_X_${m} × beta_${m}_${yName}`).join(' + ')}`);
+      fdLines.push(`fd_effect_freq <- ${medNames.map(m=>`beta_X_${m} * beta_${m}_${yName}`).join(' + ')}`);
+      fdLines.push(`cat("Front Door Effekt ${xName}→${yName}: ", fd_effect_freq, "\\n")`);
+    }
+
+    fdLines.push('');
+    fdLines.push('# Zum Vergleich: naiver Schätzer (verzerrt wegen U)');
+    fdLines.push(`fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`);
+    fdLines.push(`cat("Naiver Schätzer (verzerrt wegen U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`);
+    baseCode = baseCode.concat(fdLines);
   }
 
   return baseCode.join('\n');
