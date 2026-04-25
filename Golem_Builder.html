@@ -2801,8 +2801,11 @@ function generateBrmsCode() {
       lines.push('');
       lines.push('library(brms)');
       medNames.forEach((mName, i) => {
-        const pred = i === 0 ? xName : `${medNames[i-1]} + ${xName}`;
+        const hasDirectX = i > 0 && state.edges.some(e => e.from === X && e.to === frontDoorMediators[i]);
+        const pred = i === 0 ? xName : hasDirectX ? `${medNames[i-1]} + ${xName}` : medNames[i-1];
         lines.push(`bf_${mName} <- bf(${mName} ~ ${pred})`);
+        if (i > 0 && !hasDirectX)
+          lines.push(`# Kein direkter ${xName}→${mName}-Pfad im DAG — ${xName} ausgelassen (Pearl-konform). Sensitivität: bf_${mName} <- bf(${mName} ~ ${medNames[i-1]} + ${xName})`);
       });
       const lastM = medNames[medNames.length - 1];
       lines.push(`bf_${yName} <- bf(${yName} ~ ${lastM} + ${xName})   # ${xName} blockt Backdoor ${lastM}←…←${xName}←U→${yName}`);
@@ -2985,10 +2988,13 @@ function generateTMBCode() {
       // Serial chain: X→M1→M2→…→Y
       const betaVars = [];
       medNames.forEach((mName, i) => {
-        const pred = i === 0 ? xName : `${medNames[i-1]} + ${xName}`;
+        const hasDirectX = i > 0 && state.edges.some(e => e.from === X && e.to === frontDoorMediators[i]);
+        const pred = i === 0 ? xName : hasDirectX ? `${medNames[i-1]} + ${xName}` : medNames[i-1];
         const predLabel = i === 0 ? xName : medNames[i-1];
         const bVar = `beta_${i===0?xName:medNames[i-1]}_${mName}`;
         fdLines.push(`# Stufe ${i+1}: ${mName} ~ ${pred}`);
+        if (i > 0 && !hasDirectX)
+          fdLines.push(`# Kein direkter ${xName}→${mName}-Pfad im DAG — ${xName} ausgelassen (Pearl-konform). Sensitivität: glmmTMB(${mName} ~ ${medNames[i-1]} + ${xName}, ...)`);
         fdLines.push(`fit_fd${i+1} <- glmmTMB(${mName} ~ ${pred}, data = dat, family = gaussian())`);
         fdLines.push(`${bVar} <- fixef(fit_fd${i+1})$cond["${predLabel}"]`);
         fdLines.push(`cat("Schritt ${i+1} — ${predLabel}→${mName}: ", ${bVar}, "\\n")`);
