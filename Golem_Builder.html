@@ -1092,6 +1092,7 @@ const state = {
   selectedNode: null,
   dragging: null,
   selectedEdge: null,
+  hoveredEdge: null,
   analysisResult: null,
   highlightAdjSet: new Set(),
   highlightColliders: new Set(),
@@ -1585,9 +1586,11 @@ function drawCanvas() {
     if (!fn||!tn) return;
     const ep = getEdgeEndpoints(fn, tn);
     const isSelected = state.selectedEdge === edge.id;
-    const color = isSelected ? a1 : ink2;
+    const isHovered  = !isSelected && state.hoveredEdge === edge.id;
+    const color = isSelected ? a1 : isHovered ? a2 : ink2;
     ctx.save();
     if (isSelected) { ctx.setLineDash([6,3]); }
+    if (isHovered)  { ctx.lineWidth = 2.5; }  // slightly thicker on hover
     drawArrow(ctx, ep.x1, ep.y1, ep.x2, ep.y2, color);
     ctx.setLineDash([]);
     ctx.restore();
@@ -1697,17 +1700,29 @@ function hitNode(pos) {
   return null;
 }
 
+// Perpendicular distance from point (px,py) to line segment (x1,y1)–(x2,y2)
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2-x1, dy = y2-y1;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq < 1) return Math.sqrt((px-x1)*(px-x1) + (py-y1)*(py-y1));
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (py-y1)*dy) / lenSq));
+  const cx = x1+t*dx, cy = y1+t*dy;
+  return Math.sqrt((px-cx)*(px-cx) + (py-cy)*(py-cy));
+}
+
+// Returns closest edge within HIT_EDGE_THRESHOLD px of the full segment (not just midpoint)
+const HIT_EDGE_THRESHOLD = 8;
 function hitEdge(pos) {
+  let best = null, bestDist = HIT_EDGE_THRESHOLD;
   for (const edge of state.edges) {
     const fn = state.nodes.find(n=>n.id===edge.from);
     const tn = state.nodes.find(n=>n.id===edge.to);
     if (!fn||!tn) continue;
-    const mx = (fn.x+NODE_W/2 + tn.x+NODE_W/2)/2;
-    const my = (fn.y+NODE_H/2 + tn.y+NODE_H/2)/2;
-    const dx = pos.x-mx, dy = pos.y-my;
-    if (Math.sqrt(dx*dx+dy*dy) < 14) return edge;
+    const ep = getEdgeEndpoints(fn, tn);
+    const d = distToSegment(pos.x, pos.y, ep.x1, ep.y1, ep.x2, ep.y2);
+    if (d < bestDist) { bestDist = d; best = edge; }
   }
-  return null;
+  return best;
 }
 
 let dragStartPos = null;
@@ -1738,19 +1753,30 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
-  if (!state.dragging) return;
   const pos = getCanvasPos(e);
-  const dx = pos.x - dragStartPos.x, dy = pos.y - dragStartPos.y;
-  if (Math.sqrt(dx*dx+dy*dy) > 4) didDrag = true;
-  const node = state.nodes.find(n=>n.id===state.dragging.nodeId);
-  if (node) {
-    const dpr = 1;
-    const W = container.getBoundingClientRect().width;
-    const H = container.getBoundingClientRect().height;
-    node.x = Math.max(0, Math.min(W - NODE_W, pos.x - state.dragging.offsetX));
-    node.y = Math.max(0, Math.min(H - NODE_H, pos.y - state.dragging.offsetY));
-    drawCanvas();
+
+  if (state.dragging) {
+    const dx = pos.x - dragStartPos.x, dy = pos.y - dragStartPos.y;
+    if (Math.sqrt(dx*dx+dy*dy) > 4) didDrag = true;
+    const node = state.nodes.find(n=>n.id===state.dragging.nodeId);
+    if (node) {
+      const W = container.getBoundingClientRect().width;
+      const H = container.getBoundingClientRect().height;
+      node.x = Math.max(0, Math.min(W - NODE_W, pos.x - state.dragging.offsetX));
+      node.y = Math.max(0, Math.min(H - NODE_H, pos.y - state.dragging.offsetY));
+      drawCanvas();
+    }
+    canvas.style.cursor = 'grabbing';
+    return;
   }
+
+  // Hover detection: update cursor + visually highlight nearest edge
+  const overNode = hitNode(pos);
+  const overEdge = overNode ? null : hitEdge(pos);
+  const prevHover = state.hoveredEdge;
+  state.hoveredEdge = overEdge ? overEdge.id : null;
+  canvas.style.cursor = overNode ? 'grab' : overEdge ? 'pointer' : 'default';
+  if (state.hoveredEdge !== prevHover) drawCanvas();
 });
 
 canvas.addEventListener('mouseup', e => {
@@ -1766,10 +1792,9 @@ canvas.addEventListener('mouseup', e => {
 });
 
 canvas.addEventListener('mouseleave', () => {
-  if (state.dragging) {
-    state.dragging = null;
-    drawCanvas();
-  }
+  if (state.dragging) { state.dragging = null; }
+  if (state.hoveredEdge) { state.hoveredEdge = null; drawCanvas(); }
+  canvas.style.cursor = 'default';
 });
 
 function handleNodeClick(nodeId) {
