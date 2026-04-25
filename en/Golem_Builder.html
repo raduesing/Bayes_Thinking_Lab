@@ -1092,6 +1092,7 @@ const state = {
   selectedNode: null,
   dragging: null,
   selectedEdge: null,
+  hoveredEdge: null,
   analysisResult: null,
   highlightAdjSet: new Set(),
   highlightColliders: new Set(),
@@ -1347,39 +1348,60 @@ function detectInstruments() {
   return instruments;
 }
 
+// Topological sort of a subset of node IDs using hasDirectedPath
+function topologicalSort(nodeIds) {
+  const result = [...nodeIds];
+  result.sort((a, b) => {
+    if (hasDirectedPath(a, b)) return -1;
+    if (hasDirectedPath(b, a)) return 1;
+    return 0;
+  });
+  return result;
+}
+
+// Returns { mediators: [id, ...], topology: 'serial'|'parallel'|null }
+// Serial:   each mediator lies on ALL causal X→Y paths (chain X→M1→M2→…→Y)
+// Parallel: mediators collectively cover all paths but none covers all (X→M1→Y ‖ X→M2→Y)
 function detectFrontDoor() {
   const X = state.exposure, Y = state.outcome;
-  if (!X || !Y) return [];
-  // Find all directed paths from X to Y
+  if (!X || !Y) return { mediators: [], topology: null };
+
   const allPaths = findAllPaths(X, Y);
   const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
-  if (causalPaths.length === 0) return [];
+  if (causalPaths.length === 0) return { mediators: [], topology: null };
 
-  // Get all intermediate nodes on causal paths
-  const candidateMediators = new Set();
+  // Collect all intermediate nodes on causal paths
+  const candidateSet = new Set();
   causalPaths.forEach(path => {
-    for (let i = 1; i < path.length - 1; i++) candidateMediators.add(path[i]);
+    for (let i = 1; i < path.length - 1; i++) candidateSet.add(path[i]);
   });
 
-  const validMediators = [];
-  candidateMediators.forEach(M => {
-    // Condition 1: M is on ALL directed paths from X to Y
-    const allPassThroughM = causalPaths.every(path => path.includes(M));
-    if (!allPassThroughM) return;
-
-    // Condition 2: No unblocked backdoor path from X to M
-    const XMPaths = findAllPaths(X, M);
-    const XMBackdoors = XMPaths.filter(isBackdoorPath);
-    if (XMBackdoors.some(p => isPathActive(p, []))) return;
-
-    // Condition 3: All backdoor paths from M to Y are blocked by X
-    const MYPaths = findAllPaths(M, Y);
-    const MYBackdoors = MYPaths.filter(isBackdoorPath);
-    if (!MYBackdoors.every(p => !isPathActive(p, [X]))) return;
-
-    validMediators.push(M);
+  // Keep only candidates satisfying conditions 2 & 3 individually
+  const validCandidates = [...candidateSet].filter(M => {
+    // Condition 2: no unblocked backdoor from X to M
+    const XMBackdoors = findAllPaths(X, M).filter(isBackdoorPath);
+    if (XMBackdoors.some(p => isPathActive(p, []))) return false;
+    // Condition 3: all backdoor paths from M to Y are blocked by X
+    const MYBackdoors = findAllPaths(M, Y).filter(isBackdoorPath);
+    if (!MYBackdoors.every(p => !isPathActive(p, [X]))) return false;
+    return true;
   });
-  return validMediators;
+
+  if (validCandidates.length === 0) return { mediators: [], topology: null };
+
+  // Condition 1 (set-level): every causal path passes through at least one valid candidate
+  const covers = causalPaths.every(path =>
+    validCandidates.some(M => path.slice(1, -1).includes(M))
+  );
+  if (!covers) return { mediators: [], topology: null };
+
+  // Topology: serial if every mediator lies on ALL causal paths; otherwise parallel
+  const isSerial = validCandidates.every(M =>
+    causalPaths.every(path => path.slice(1, -1).includes(M))
+  );
+  const topology = isSerial ? 'serial' : 'parallel';
+
+  return { mediators: topologicalSort(validCandidates), topology };
 }
 
 function getEffectType() {
@@ -1563,9 +1585,11 @@ function drawCanvas() {
     if (!fn||!tn) return;
     const ep = getEdgeEndpoints(fn, tn);
     const isSelected = state.selectedEdge === edge.id;
-    const color = isSelected ? a1 : ink2;
+    const isHovered  = !isSelected && state.hoveredEdge === edge.id;
+    const color = isSelected ? a1 : isHovered ? a2 : ink2;
     ctx.save();
     if (isSelected) { ctx.setLineDash([6,3]); }
+    if (isHovered)  { ctx.lineWidth = 2.5; }
     drawArrow(ctx, ep.x1, ep.y1, ep.x2, ep.y2, color);
     ctx.setLineDash([]);
     ctx.restore();
@@ -1675,17 +1699,29 @@ function hitNode(pos) {
   return null;
 }
 
+// Perpendicular distance from point (px,py) to line segment (x1,y1)–(x2,y2)
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2-x1, dy = y2-y1;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq < 1) return Math.sqrt((px-x1)*(px-x1) + (py-y1)*(py-y1));
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (py-y1)*dy) / lenSq));
+  const cx = x1+t*dx, cy = y1+t*dy;
+  return Math.sqrt((px-cx)*(px-cx) + (py-cy)*(py-cy));
+}
+
+// Returns closest edge within HIT_EDGE_THRESHOLD px of the full segment (not just midpoint)
+const HIT_EDGE_THRESHOLD = 8;
 function hitEdge(pos) {
+  let best = null, bestDist = HIT_EDGE_THRESHOLD;
   for (const edge of state.edges) {
     const fn = state.nodes.find(n=>n.id===edge.from);
     const tn = state.nodes.find(n=>n.id===edge.to);
     if (!fn||!tn) continue;
-    const mx = (fn.x+NODE_W/2 + tn.x+NODE_W/2)/2;
-    const my = (fn.y+NODE_H/2 + tn.y+NODE_H/2)/2;
-    const dx = pos.x-mx, dy = pos.y-my;
-    if (Math.sqrt(dx*dx+dy*dy) < 14) return edge;
+    const ep = getEdgeEndpoints(fn, tn);
+    const d = distToSegment(pos.x, pos.y, ep.x1, ep.y1, ep.x2, ep.y2);
+    if (d < bestDist) { bestDist = d; best = edge; }
   }
-  return null;
+  return best;
 }
 
 let dragStartPos = null;
@@ -1716,19 +1752,30 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
-  if (!state.dragging) return;
   const pos = getCanvasPos(e);
-  const dx = pos.x - dragStartPos.x, dy = pos.y - dragStartPos.y;
-  if (Math.sqrt(dx*dx+dy*dy) > 4) didDrag = true;
-  const node = state.nodes.find(n=>n.id===state.dragging.nodeId);
-  if (node) {
-    const dpr = 1;
-    const W = container.getBoundingClientRect().width;
-    const H = container.getBoundingClientRect().height;
-    node.x = Math.max(0, Math.min(W - NODE_W, pos.x - state.dragging.offsetX));
-    node.y = Math.max(0, Math.min(H - NODE_H, pos.y - state.dragging.offsetY));
-    drawCanvas();
+
+  if (state.dragging) {
+    const dx = pos.x - dragStartPos.x, dy = pos.y - dragStartPos.y;
+    if (Math.sqrt(dx*dx+dy*dy) > 4) didDrag = true;
+    const node = state.nodes.find(n=>n.id===state.dragging.nodeId);
+    if (node) {
+      const W = container.getBoundingClientRect().width;
+      const H = container.getBoundingClientRect().height;
+      node.x = Math.max(0, Math.min(W - NODE_W, pos.x - state.dragging.offsetX));
+      node.y = Math.max(0, Math.min(H - NODE_H, pos.y - state.dragging.offsetY));
+      drawCanvas();
+    }
+    canvas.style.cursor = 'grabbing';
+    return;
   }
+
+  // Hover detection: update cursor + visually highlight nearest edge
+  const overNode = hitNode(pos);
+  const overEdge = overNode ? null : hitEdge(pos);
+  const prevHover = state.hoveredEdge;
+  state.hoveredEdge = overEdge ? overEdge.id : null;
+  canvas.style.cursor = overNode ? 'grab' : overEdge ? 'pointer' : 'default';
+  if (state.hoveredEdge !== prevHover) drawCanvas();
 });
 
 canvas.addEventListener('mouseup', e => {
@@ -1744,10 +1791,12 @@ canvas.addEventListener('mouseup', e => {
 });
 
 canvas.addEventListener('mouseleave', () => {
+  state.hoveredEdge = null;
+  canvas.style.cursor = 'default';
   if (state.dragging) {
     state.dragging = null;
-    drawCanvas();
   }
+  drawCanvas();
 });
 
 function handleNodeClick(nodeId) {
@@ -1963,17 +2012,18 @@ function runAnalysis() {
 
   // IV / Front Door detection
   const instruments = detectInstruments();
-  const frontDoorMediators = detectFrontDoor();
+  const { mediators: frontDoorMediators, topology: fdTopology } = detectFrontDoor();
 
   // Update sidebar analysis summary
   document.getElementById('sidebarAnalysisWrap').style.display = 'block';
   const summaryEl = document.getElementById('sidebarAnalysisSummary');
   let summaryHtml = '';
   if (instruments.length > 0) {
-    summaryHtml += `<div class="msg-ok">Instrument gefunden: ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} → IV estimator possible</div>`;
+    summaryHtml += `<div class="msg-ok">Instrument found: ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} → IV estimator possible</div>`;
   }
   if (frontDoorMediators.length > 0) {
-    summaryHtml += `<div class="msg-ok">Front Door Mediator: ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} → Front Door Adjustment possible</div>`;
+    const fdTypeLabel = fdTopology === 'serial' ? 'Serial mediation' : 'Parallel mediation';
+    summaryHtml += `<div class="msg-ok">Front Door (${fdTypeLabel}): ${frontDoorMediators.map(id=>escHtml(getNodeName(id))).join(', ')} → Front Door Adjustment possible</div>`;
   }
   if (result.unblockableLatentPaths && result.unblockableLatentPaths.length > 0) {
     const latentNames = [...result.latentIds].map(id=>escHtml(getNodeName(id))).join(', ');
@@ -2444,7 +2494,7 @@ function generateRCode() {
 
   // Detect special patterns for comment header
   const instruments = state.exposure && state.outcome ? detectInstruments() : [];
-  const frontDoorMediators = state.exposure && state.outcome ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators } = state.exposure && state.outcome ? detectFrontDoor() : { mediators: [] };
 
   const lines = [
     '# Golem Builder — Simulated Dataset',
@@ -2689,30 +2739,33 @@ function generateBrmsCode() {
 
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
-  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
 
   if (instruments.length > 0) {
-    const zName = getNodeName(instruments[0]);
+    const zNames = instruments.map(id => getNodeName(id));
+    const zStr = zNames.join(' + ');
+    const zLabel = zNames.join(', ');
     return [
-      '# INSTRUMENTAL VARIABLE — Bayesian joint model (McElreath SR 2020, Ch. 15)',
-      '# Both equations are estimated jointly (Seemingly Unrelated Regressions).',
-      '# Note: rescor = TRUE captures unobserved confounders (U).',
+      `# INSTRUMENTAL VARIABLE — Bayesian joint model (McElreath SR 2020, Ch. 15)`,
+      `# Instruments: ${zLabel}`,
+      '# Both equations estimated jointly (Seemingly Unrelated Regressions).',
+      '# rescor = TRUE captures unobserved confounders (U).',
       `# rho = rescor__${xName}__${yName} estimates the confounding strength of U.`,
       `# b_${yName}_${xName} is the causal effect of ${xName} on ${yName}, correctly estimated despite U.`,
       '',
       'library(brms)',
-      `bf_${xName} <- bf(${xName} ~ ${zName})`,
+      `bf_${xName} <- bf(${xName} ~ ${zStr})`,
       `bf_${yName} <- bf(${yName} ~ ${xName})`,
       '',
       'fit_iv_bayes <- brm(',
       `  mvbf(bf_${xName}, bf_${yName}, rescor = TRUE),`,
       '  data = dat,',
       '  prior = c(',
-      `    prior(normal(0, 1), class = b, resp = "${xName}"),  # Effect of ${zName} on ${xName}`,
+      `    prior(normal(0, 1), class = b, resp = "${xName}"),  # Effects ${zLabel} → ${xName}`,
       `    prior(normal(0, 1), class = b, resp = "${yName}"),  # Causal effect ${xName}→${yName}`,
       `    prior(exponential(1), class = sigma, resp = "${xName}"),`,
       `    prior(exponential(1), class = sigma, resp = "${yName}"),`,
-      '    prior(lkj(2), class = rescor)               # Prior for residual correlation (U\'s influence)',
+      `    prior(lkj(2), class = rescor)               # Prior for residual correlation (U's influence)`,
       '  ),',
       '  chains = 4, iter = 2000',
       ')',
@@ -2722,39 +2775,84 @@ function generateBrmsCode() {
   }
 
   if (frontDoorMediators.length > 0) {
-    const mName = getNodeName(frontDoorMediators[0]);
-    return [
-      '# FRONT DOOR ADJUSTMENT — Bayesian joint model (Pearl 2009, Ch. 3.3)',
-      `# Zwei Gleichungen: (1) ${mName} ~ ${xName}, (2) ${yName} ~ ${mName} + ${xName}`,
-      `# ${xName} in equation 2 blocks the backdoor ${mName}←${xName}←U→${yName}.`,
-      '# rescor=FALSE: after conditioning on M and X, residuals are uncorrelated.',
-      `# Total causal effect = b_${mName}_${xName} × b_${yName}_${mName} (computed as posterior quantity).`,
-      '',
-      'library(brms)',
-      `bf_${mName} <- bf(${mName} ~ ${xName})`,
-      `bf_${yName} <- bf(${yName} ~ ${mName} + ${xName})   # ${xName} as control — blocks backdoor ${mName}←${xName}←U→${yName}`,
-      '',
-      'fit_fd_bayes <- brm(',
-      `  mvbf(bf_${mName}, bf_${yName}, rescor = FALSE),`,
-      '  data = dat,',
-      '  prior = c(',
-      '    prior(normal(0, 1), class = b),',
-      '    prior(exponential(1), class = sigma)',
-      '  ),',
-      '  chains = 4, iter = 2000',
-      ')',
-      '',
-      `# Total causal effect ${xName}→${yName} via Front Door:`,
-      'library(posterior)',
-      'draws <- as_draws_df(fit_fd_bayes)',
-      `fd_effect <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`,
-      `cat("Front Door effect ${xName}→${yName}: ", mean(fd_effect),`,
-      '    " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")',
-      '',
-      '# For comparison: naive (biased) estimator',
-      `fit_naive <- lm(${yName} ~ ${xName}, data = dat)`,
-      `cat("Naive estimator (biased due to U): ", coef(fit_naive)["${xName}"], "\\n")`,
-    ].join('\n');
+    const medNames = frontDoorMediators.map(id => getNodeName(id));
+    const lines = [];
+
+    if (fdTopology === 'serial') {
+      // Serial chain: X→M1→M2→…→Y
+      lines.push(`# FRONT DOOR ADJUSTMENT — Serial mediation (Pearl 2009, Ch. 3.3)`);
+      lines.push(`# Chain: ${xName}→${medNames.join('→')}→${yName}`);
+      const chainFactors = medNames.map((m,i)=>`β_${i===0?xName:medNames[i-1]}_${m}`).concat([`β_${medNames[medNames.length-1]}_${yName}`]);
+      lines.push(`# Total causal effect = ${chainFactors.join(' × ')}`);
+      lines.push('');
+      lines.push('library(brms)');
+      medNames.forEach((mName, i) => {
+        const hasDirectX = i > 0 && state.edges.some(e => e.from === X && e.to === frontDoorMediators[i]);
+        const pred = i === 0 ? xName : hasDirectX ? `${medNames[i-1]} + ${xName}` : medNames[i-1];
+        lines.push(`bf_${mName} <- bf(${mName} ~ ${pred})`);
+        if (i > 0 && !hasDirectX)
+          lines.push(`# No direct ${xName}→${mName} edge in DAG — ${xName} omitted (Pearl-consistent). Sensitivity: bf_${mName} <- bf(${mName} ~ ${medNames[i-1]} + ${xName})`);
+      });
+      const lastM = medNames[medNames.length - 1];
+      lines.push(`bf_${yName} <- bf(${yName} ~ ${lastM} + ${xName})   # ${xName} blocks backdoor ${lastM}←…←${xName}←U→${yName}`);
+      lines.push('');
+      lines.push('fit_fd_bayes <- brm(');
+      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
+      lines.push('  data = dat,');
+      lines.push('  prior = c(');
+      lines.push('    prior(normal(0, 1), class = b),');
+      lines.push('    prior(exponential(1), class = sigma)');
+      lines.push('  ),');
+      lines.push('  chains = 4, iter = 2000');
+      lines.push(')');
+      lines.push('');
+      lines.push(`# Total causal effect ${xName}→${yName} via serial Front Door:`);
+      lines.push('library(posterior)');
+      lines.push('draws <- as_draws_df(fit_fd_bayes)');
+      const factors = medNames.map((m,i) => {
+        const pred = i === 0 ? xName : medNames[i-1];
+        return `draws$b_${m}_${pred}`;
+      });
+      factors.push(`draws$b_${yName}_${lastM}`);
+      lines.push(`fd_effect <- ${factors.join(' * ')}`);
+      lines.push(`cat("Front Door effect ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
+    } else {
+      // Parallel: X→M1→Y, X→M2→Y, …
+      lines.push(`# FRONT DOOR ADJUSTMENT — Parallel mediation (Pearl 2009, Ch. 3.3)`);
+      lines.push(`# Paths: ${medNames.map(m=>`${xName}→${m}→${yName}`).join(', ')}`);
+      lines.push(`# Total causal effect = ${medNames.map(m=>`β_${xName}_${m} × β_${m}_${yName}`).join(' + ')}`);
+      lines.push('');
+      lines.push('library(brms)');
+      medNames.forEach(mName => {
+        lines.push(`bf_${mName} <- bf(${mName} ~ ${xName})`);
+      });
+      lines.push(`bf_${yName} <- bf(${yName} ~ ${medNames.join(' + ')} + ${xName})   # ${xName} blocks backdoor paths of all M's to ${yName}`);
+      lines.push('');
+      lines.push('fit_fd_bayes <- brm(');
+      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
+      lines.push('  data = dat,');
+      lines.push('  prior = c(');
+      lines.push('    prior(normal(0, 1), class = b),');
+      lines.push('    prior(exponential(1), class = sigma)');
+      lines.push('  ),');
+      lines.push('  chains = 4, iter = 2000');
+      lines.push(')');
+      lines.push('');
+      lines.push(`# Total causal effect ${xName}→${yName} via parallel Front Door:`);
+      lines.push('library(posterior)');
+      lines.push('draws <- as_draws_df(fit_fd_bayes)');
+      medNames.forEach(mName => {
+        lines.push(`fd_via_${mName} <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`);
+      });
+      lines.push(`fd_effect <- ${medNames.map(m=>`fd_via_${m}`).join(' + ')}`);
+      lines.push(`cat("Front Door effect ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
+    }
+
+    lines.push('');
+    lines.push('# For comparison: naive (biased) estimator');
+    lines.push(`fit_naive <- lm(${yName} ~ ${xName}, data = dat)`);
+    lines.push(`cat("Naive estimator (biased due to U): ", coef(fit_naive)["${xName}"], "\\n")`);
+    return lines.join('\n');
   }
 
   // General case
@@ -2793,9 +2891,9 @@ function generateTMBCode() {
 
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
-  const frontDoorMediators = X && Y ? detectFrontDoor() : [];
+  const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
 
-  // Bei IV oder Front Door: kein Standard-Adjustierungsmodell voranstellen
+  // For IV or Front Door: do not prepend standard adjustment model
   // (would be misleading there, as naive Y~X is biased due to U)
   const hasSpecialPattern = instruments.length > 0 || frontDoorMediators.length > 0;
 
@@ -2821,25 +2919,28 @@ function generateTMBCode() {
   }
 
   if (instruments.length > 0) {
-    const zName = getNodeName(instruments[0]);
+    const zNames = instruments.map(id => getNodeName(id));
+    const zStr = zNames.join(' + ');
+    const zLabel = zNames.join(', ');
     baseCode = baseCode.concat([
       '',
       '# ============================================================',
-      '# INSTRUMENTAL VARIABLE — Frequentist',
-      '# Quelle: Angrist & Pischke (2009) Mostly Harmless Econometrics',
+      `# INSTRUMENTAL VARIABLE — Frequentist  (Instruments: ${zLabel})`,
+      '# Source: Angrist & Pischke (2009) Mostly Harmless Econometrics',
       '# ============================================================',
       '',
       '# Option A: ivreg() — Two-Stage Least Squares (recommended for linear IV)',
-      `# The | ${zName} means: "instrument ${xName} by ${zName}"`,
-      '# Diagnostics: Wu-Hausman test (is X endogenous?), Weak instrument test',
+      `# The | ${zStr} means: "instrument ${xName} by ${zLabel}"`,
+      `# Multiple instruments → overidentified model → Sargan/Hansen test possible`,
+      '# Diagnostics: Wu-Hausman (X endogenous?), Weak instrument test (F > 10)',
       'library(AER)',
-      `fit_iv_freq <- ivreg(${yName} ~ ${xName} | ${zName}, data = dat)`,
+      `fit_iv_freq <- ivreg(${yName} ~ ${xName} | ${zStr}, data = dat)`,
       'summary(fit_iv_freq, diagnostics = TRUE)',
       '',
       '# Option B: manual 2SLS with glmmTMB (for GLM families)',
       'library(glmmTMB)',
-      `# Stage 1: regress ${xName} on ${zName} → U-purged X̂`,
-      `fit_iv1 <- glmmTMB(${xName} ~ ${zName}, data = dat, family = gaussian())`,
+      `# Stage 1: regress ${xName} on all instruments → U-purged X̂`,
+      `fit_iv1 <- glmmTMB(${xName} ~ ${zStr}, data = dat, family = gaussian())`,
       `dat$${xName}_hat <- fitted(fit_iv1)   # X̂ contains only Z-variation, not U`,
       '',
       `# Stage 2: regress ${yName} on X̂ — U's influence is no longer in X̂`,
@@ -2857,38 +2958,73 @@ function generateTMBCode() {
   }
 
   if (frontDoorMediators.length > 0) {
-    const mName = getNodeName(frontDoorMediators[0]);
-    baseCode = baseCode.concat([
+    const medNames = frontDoorMediators.map(id => getNodeName(id));
+    const fdLines = [
       '',
       '# ============================================================',
-      '# FRONT DOOR ADJUSTMENT — Frequentist',
-      '# Quelle: Pearl (2009) Causality, Kap. 3.3',
-      '# Pearl, Glymour & Jewell (2016) Causal Inference in Statistics: A Primer',
+      `# FRONT DOOR ADJUSTMENT — Frequentist (${fdTopology === 'serial' ? 'Serial mediation' : 'Parallel mediation'})`,
+      '# Source: Pearl (2009) Causality, Ch. 3.3',
       '# ============================================================',
       '',
       'library(glmmTMB)',
       '',
-      `# Stage 1: ${mName} ~ ${xName}`,
-      `# No backdoor from ${xName} to ${mName} (U does not directly affect ${mName}) → OLS unbiased`,
-      `fit_fd1 <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`,
-      `beta_XM <- fixef(fit_fd1)$cond["${xName}"]`,
-      `cat("Step 1 — ${xName}→${mName} effect (β_XM): ", beta_XM, "\\n")`,
-      '',
-      `# Stage 2: ${yName} ~ ${mName} + ${xName}`,
-      `# ${xName} as control NECESSARY: blocks backdoor ${mName}←${xName}←U→${yName}`,
-      `# Without ${xName}, U's influence on ${yName} would be falsely attributed to ${mName}!`,
-      `fit_fd2 <- glmmTMB(${yName} ~ ${mName} + ${xName}, data = dat, family = ${glmmFamily})`,
-      `beta_MY <- fixef(fit_fd2)$cond["${mName}"]`,
-      `cat("Step 2 — ${mName}→${yName} effect controlling for ${xName} (β_MY): ", beta_MY, "\\n")`,
-      '',
-      '# Front Door total effect = β_XM × β_MY',
-      'fd_effect_freq <- beta_XM * beta_MY',
-      `cat("Front Door effect ${xName}→${yName} (β_XM × β_MY): ", fd_effect_freq, "\\n")`,
-      '',
-      '# For comparison: naive estimator (biased due to U)',
-      `fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`,
-      `cat("Naive estimator (biased due to U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`,
-    ]);
+    ];
+
+    if (fdTopology === 'serial') {
+      // Serial chain: X→M1→M2→…→Y
+      const betaVars = [];
+      medNames.forEach((mName, i) => {
+        const hasDirectX = i > 0 && state.edges.some(e => e.from === X && e.to === frontDoorMediators[i]);
+        const pred = i === 0 ? xName : hasDirectX ? `${medNames[i-1]} + ${xName}` : medNames[i-1];
+        const predLabel = i === 0 ? xName : medNames[i-1];
+        const bVar = `beta_${i===0?xName:medNames[i-1]}_${mName}`;
+        fdLines.push(`# Stage ${i+1}: ${mName} ~ ${pred}`);
+        if (i > 0 && !hasDirectX)
+          fdLines.push(`# No direct ${xName}→${mName} edge in DAG — ${xName} omitted (Pearl-consistent). Sensitivity: glmmTMB(${mName} ~ ${medNames[i-1]} + ${xName}, ...)`);
+        fdLines.push(`fit_fd${i+1} <- glmmTMB(${mName} ~ ${pred}, data = dat, family = gaussian())`);
+        fdLines.push(`${bVar} <- fixef(fit_fd${i+1})$cond["${predLabel}"]`);
+        fdLines.push(`cat("Step ${i+1} — ${predLabel}→${mName}: ", ${bVar}, "\\n")`);
+        fdLines.push('');
+        betaVars.push(bVar);
+      });
+      const lastM = medNames[medNames.length - 1];
+      const nSteps = medNames.length + 1;
+      const lastBeta = `beta_${lastM}_${yName}`;
+      fdLines.push(`# Stage ${nSteps}: ${yName} ~ ${lastM} + ${xName}  (${xName} blocks backdoor ${lastM}←…←${xName}←U→${yName})`);
+      fdLines.push(`fit_fd${nSteps} <- glmmTMB(${yName} ~ ${lastM} + ${xName}, data = dat, family = ${glmmFamily})`);
+      fdLines.push(`${lastBeta} <- fixef(fit_fd${nSteps})$cond["${lastM}"]`);
+      fdLines.push(`cat("Step ${nSteps} — ${lastM}→${yName}: ", ${lastBeta}, "\\n")`);
+      fdLines.push('');
+      betaVars.push(lastBeta);
+      fdLines.push(`# Total causal effect = ${betaVars.join(' × ')}`);
+      fdLines.push(`fd_effect_freq <- ${betaVars.join(' * ')}`);
+      fdLines.push(`cat("Front Door effect ${xName}→${yName}: ", fd_effect_freq, "\\n")`);
+    } else {
+      // Parallel: X→M1→Y, X→M2→Y, …
+      medNames.forEach((mName, i) => {
+        const bVar = `beta_X_${mName}`;
+        fdLines.push(`# Stage 1${String.fromCharCode(97+i)}: ${mName} ~ ${xName}`);
+        fdLines.push(`fit_fd1${String.fromCharCode(97+i)} <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`);
+        fdLines.push(`${bVar} <- fixef(fit_fd1${String.fromCharCode(97+i)})$cond["${xName}"]`);
+        fdLines.push(`cat("Step 1${String.fromCharCode(97+i)} — ${xName}→${mName}: ", ${bVar}, "\\n")`);
+        fdLines.push('');
+      });
+      fdLines.push(`# Stage 2: ${yName} ~ ${medNames.join(' + ')} + ${xName}  (${xName} blocks backdoor paths of all M's to ${yName})`);
+      fdLines.push(`fit_fd2 <- glmmTMB(${yName} ~ ${medNames.join(' + ')} + ${xName}, data = dat, family = ${glmmFamily})`);
+      medNames.forEach(mName => {
+        fdLines.push(`beta_${mName}_${yName} <- fixef(fit_fd2)$cond["${mName}"]`);
+      });
+      fdLines.push('');
+      fdLines.push(`# Total causal effect = ${medNames.map(m=>`beta_X_${m} × beta_${m}_${yName}`).join(' + ')}`);
+      fdLines.push(`fd_effect_freq <- ${medNames.map(m=>`beta_X_${m} * beta_${m}_${yName}`).join(' + ')}`);
+      fdLines.push(`cat("Front Door effect ${xName}→${yName}: ", fd_effect_freq, "\\n")`);
+    }
+
+    fdLines.push('');
+    fdLines.push('# For comparison: naive estimator (biased due to U)');
+    fdLines.push(`fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`);
+    fdLines.push(`cat("Naive estimator (biased due to U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`);
+    baseCode = baseCode.concat(fdLines);
   }
 
   return baseCode.join('\n');
