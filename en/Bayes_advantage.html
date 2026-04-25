@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Why Bayesian parameter estimation? Answering probability questions directly — explore interactively.">
+<meta property="og:title" content="Why Bayes? — Bayes Thinking Lab">
+<meta property="og:type" content="website">
+<title>Why Bayes? — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     min-height:100vh;transition:background .25s,color .25s}
+
+/* TOPBAR */
+#topbar{position:sticky;top:0;z-index:200;background:var(--paper);
+  border-bottom:1.5px solid var(--border);padding:.5rem 1.4rem;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.tb-left{flex:1}
+.tb-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em}
+.tb-title em{font-style:italic;color:var(--a3)}
+.tb-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  margin-top:.18rem;letter-spacing:.04em}
+.tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--a3);color:var(--a3)}
+
+/* LAYOUT */
+#wrap{max-width:1100px;margin:0 auto;padding:1.5rem 2rem 4rem}
+
+/* SCENARIO STRIP */
+.scenario-strip{background:var(--panel);border:1px solid var(--border);
+  padding:.6rem 1.1rem;margin-bottom:1.5rem;
+  display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.stag{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.1rem .4rem;border:1px solid var(--a5);color:var(--a5);flex-shrink:0}
+
+/* ACT HEADER */
+.act{margin-bottom:3rem}
+.act-hdr{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;
+  padding-bottom:.5rem;border-bottom:2px solid var(--grid)}
+.act-num{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.12em;
+  text-transform:uppercase;padding:.18rem .55rem;border:1.5px solid;white-space:nowrap}
+.act-num.c3{border-color:var(--a3);color:var(--a3)}
+.act-num.c2{border-color:var(--a2);color:var(--a2)}
+.act-title{font-size:1.15rem;font-weight:600;letter-spacing:-.02em}
+.act-title em{font-style:italic}
+
+/* HELP TOGGLE */
+.htoggle{font-family:'DM Mono',monospace;font-size:.75rem;padding:.2rem .65rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.htoggle:hover,.htoggle.open{border-color:var(--a3);color:var(--a3)}
+
+/* HELP PANEL (dropdown) */
+.help-panel{display:none;gap:1px;background:var(--grid);margin-bottom:1px}
+.help-panel.open{display:grid;grid-template-columns:1fr 1fr}
+.hcard{background:var(--panel);padding:.75rem 1rem}
+.hcard-h{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--a3);margin-bottom:.35rem;
+  padding-bottom:.2rem;border-bottom:1px solid var(--grid)}
+.hcard-body{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  line-height:1.75}
+.hcard-body strong{color:var(--ink)}
+
+/* ACT 1 — TWO PANELS */
+.act1-grid{display:grid;grid-template-columns:340px 1fr;gap:1px;
+  background:var(--grid);margin-bottom:1px}
+.a1-panel{background:var(--paper)}
+.panel-lbl{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.7rem 1.1rem .4rem;
+  border-bottom:1px solid var(--grid)}
+.panel-lbl.freq{color:var(--a1)}
+.panel-lbl.bayes{color:var(--a2)}
+
+/* FREQ OUTPUT */
+.freq-box{padding:.9rem 1.1rem;font-family:'DM Mono',monospace;font-size:.82rem;
+  line-height:2;color:var(--ink)}
+.fk{color:var(--ink2)}
+.fv{font-weight:500}
+.fsep{border:none;border-top:1px solid var(--grid);margin:.6rem 0}
+.f-limit{display:flex;align-items:center;gap:.45rem;padding:.1rem 0;font-size:.78rem}
+.f-cross{color:var(--a1)}
+.f-q{color:var(--ink)}
+.f-note{color:var(--a1);font-size:.7rem;opacity:.85}
+
+/* BAYES PANEL CANVAS */
+.canvas-wrap{position:relative;cursor:ew-resize;line-height:0}
+canvas{display:block;width:100%;height:auto}
+.prob-overlay{position:absolute;top:.9rem;right:1rem;
+  font-family:'DM Mono',monospace;text-align:right;pointer-events:none;
+  user-select:none}
+.prob-big{font-size:2.6rem;font-weight:500;line-height:1;color:var(--a2)}
+.prob-sub{font-size:.78rem;color:var(--ink2);margin-top:.25rem}
+.drag-hint{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  opacity:.55;text-align:center;padding:.3rem;background:var(--panel)}
+
+/* Q STRIP */
+.q-strip{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--grid)}
+.q-cell{background:var(--paper);padding:.9rem 1rem}
+.q-question{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  margin-bottom:.55rem;line-height:1.6}
+.q-thresh-val{color:var(--a3);font-weight:500}
+.q-freq{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a1);
+  margin-bottom:.3rem;display:flex;align-items:flex-start;gap:.35rem}
+.q-bayes{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--a2);
+  font-weight:500;display:flex;align-items:flex-start;gap:.35rem}
+.q-bayes b{color:var(--a2)}
+
+/* ACT 2 PRIOR SELECTOR */
+.prior-sel{display:flex;gap:2px;background:var(--grid);margin-bottom:1px}
+.pbtn{flex:1;font-family:'DM Mono',monospace;font-size:.75rem;
+  padding:.65rem .9rem;background:var(--panel);border:none;cursor:pointer;
+  color:var(--ink2);text-align:left;transition:all .15s;
+  border-bottom:2.5px solid transparent}
+.pbtn:hover{background:var(--paper);color:var(--ink)}
+.pbtn.sel{background:var(--paper);color:var(--a3);border-bottom-color:var(--a3)}
+.pbtn .pb-name{display:block;font-weight:500;margin-bottom:.12rem}
+.pbtn .pb-meta{display:block;font-size:.7rem;opacity:.7}
+
+/* CUSTOM SLIDERS */
+.slider-row{background:var(--panel);border-bottom:1px solid var(--grid);
+  padding:.65rem 1.1rem;display:flex;align-items:center;gap:.9rem;flex-wrap:wrap;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.slider-row input[type=range]{flex:1;min-width:80px;accent-color:var(--a3)}
+.sv{color:var(--a3);font-weight:500;min-width:2.8rem}
+
+/* ACT 2 CANVAS */
+.a2-wrap{background:var(--paper);position:relative;line-height:0}
+
+/* CRI COMPARISON */
+.cri-compare{display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:1px;background:var(--grid);margin-bottom:1px}
+.cri-cell{background:var(--paper);padding:.8rem 1rem}
+.cri-lbl{font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.5rem}
+.cri-track{height:12px;background:var(--bg);position:relative;margin-bottom:.4rem;
+  border:1px solid var(--grid)}
+.cri-fill{height:100%;position:absolute;left:0;top:0;opacity:.85;
+  transition:width .4s ease}
+.cri-nums{font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500}
+.cri-w{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);margin-top:.15rem}
+
+/* MESSAGE */
+.msg{background:var(--panel);border:1px solid var(--border);
+  padding:.85rem 1.2rem;display:flex;align-items:flex-start;gap:.85rem;
+  font-family:'DM Mono',monospace;font-size:.78rem;line-height:1.7}
+.msg-arrow{color:var(--a3);font-size:1.3rem;flex-shrink:0;margin-top:.05rem}
+.msg strong{color:var(--ink)}
+.msg span{color:var(--ink2)}
+
+/* SCALE NOTE */
+.scale-note{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);
+  padding:.3rem 1rem;background:var(--panel);border-bottom:1px solid var(--grid);
+  display:flex;align-items:center;gap:.4rem}
+.scale-note strong{color:var(--a5)}
+
+@media(max-width:720px){
+  .act1-grid{grid-template-columns:1fr}
+  .q-strip{grid-template-columns:1fr}
+  .cri-compare{grid-template-columns:1fr}
+  .help-panel.open{grid-template-columns:1fr}
+  #wrap{padding:1rem}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="tb-left">
+    <div class="tb-title"><em>Why Bayes?</em> — Parameter Estimation Reconsidered</div>
+    <div class="tb-sub">Same data · more answers · cumulative knowledge</div>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center">
+    <button class="tbtn" onclick="toggleTheme()">◑ Light / Dark</button>
+    <button class="tbtn" onclick="location.href='../index.html'">← Overview</button>
+  </div>
+</div>
+
+<div id="wrap">
+
+  <div class="scenario-strip">
+    <span class="stag">Scenario</span>
+    <span>
+      <b>CBT Study:</b> n&nbsp;=&nbsp;40 · Outcome: BDI reduction (points) · Therapy vs. Control
+      &nbsp;·&nbsp; β̂&nbsp;=&nbsp;4.80, SE&nbsp;=&nbsp;2.10
+    </span>
+  </div>
+
+  <!-- ═══ ACT 1 ═══════════════════════════════════════════════════════ -->
+  <section class="act">
+    <div class="act-hdr">
+      <span class="act-num c3">Act 1</span>
+      <span class="act-title">Same Data —&nbsp;<em style="color:var(--a3)">different questions possible</em></span>
+      <button class="htoggle" id="h1btn" onclick="toggleHelp(1)">? Help ▸</button>
+    </div>
+
+    <div class="help-panel" id="help1">
+      <div class="hcard">
+        <div class="hcard-h">What am I seeing?</div>
+        <div class="hcard-body">The <strong>posterior distribution of β</strong> — the plausibility of all effect sizes given prior knowledge and data. The blue area to the right of the threshold shows how much probability mass lies in that region.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">What should I do?</div>
+        <div class="hcard-body"><strong>Drag the threshold with the mouse</strong> and ask yourself: above which β value is the effect clinically meaningful? E.g. 2.2 or 5.0 BDI points — the threshold is freely adjustable.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">How do I interpret this?</div>
+        <div class="hcard-body">The percentage = P(β &gt; threshold | data, prior) — a <strong>direct probability statement about the parameter</strong>. Trying multiple thresholds is no problem: the posterior does not change, only the query does.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">Why can't frequentism do this?</div>
+        <div class="hcard-body">The 95% CI is <strong>not</strong> a probability statement about β. P(β &gt; 3) cannot be read off directly. Testing the same dataset for β &gt; 3 <em>and</em> β &gt; 2.2 constitutes <strong>multiple testing</strong> with an inflated error rate. Bayesian: no problem — the posterior is fixed.</div>
+      </div>
+    </div>
+
+    <div class="act1-grid">
+
+      <!-- LEFT: FREQUENTIST -->
+      <div class="a1-panel">
+        <div class="panel-lbl freq">Frequentist</div>
+        <div class="freq-box">
+          <div><span class="fk">β̂ =</span> <span class="fv">4.80</span> &nbsp; <span class="fk">SE =</span> <span class="fv">2.10</span></div>
+          <div><span class="fk">95% CI: </span><span class="fv">[0.68, 8.92]</span></div>
+          <div><span class="fk">t(38) =</span> <span class="fv">2.29</span> &nbsp; <span class="fk">p =</span> <span class="fv">.023</span></div>
+          <hr class="fsep">
+          <div class="f-limit">
+            <span class="f-cross">✗</span>
+            <span class="f-q">P(β &gt; 3) = ?</span>
+            <span class="f-note">no direct answer</span>
+          </div>
+          <div class="f-limit">
+            <span class="f-cross">✗</span>
+            <span class="f-q">P(β &gt; 0) = ?</span>
+            <span class="f-note">no direct answer</span>
+          </div>
+          <div class="f-limit">
+            <span class="f-cross">✗</span>
+            <span class="f-q">P(2 &lt; β &lt; 7) = ?</span>
+            <span class="f-note">no direct answer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: POSTERIOR CANVAS -->
+      <div class="a1-panel">
+        <div class="panel-lbl bayes">
+          Bayes — Posterior Distribution
+          <span style="font-size:.7rem;opacity:.55;font-weight:400"> &nbsp;(drag threshold with mouse)</span>
+        </div>
+        <div class="canvas-wrap" id="a1wrap">
+          <canvas id="a1c" width="700" height="280"></canvas>
+          <div class="prob-overlay">
+            <div class="prob-big" id="probBig">—</div>
+            <div class="prob-sub" id="probSub">P(β &gt; <span id="tDisp">3.0</span>)</div>
+          </div>
+        </div>
+        <div class="drag-hint">← drag threshold →</div>
+      </div>
+    </div><!-- /act1-grid -->
+
+    <!-- QUESTIONS -->
+    <div class="q-strip">
+      <div class="q-cell">
+        <div class="q-question">Is the effect clinically meaningful<br>(≥ <span class="q-thresh-val" id="qThreshText">3.0</span> BDI points)?</div>
+        <div class="q-freq"><span>✗</span><span>Frequentist: not directly — p&nbsp;=&nbsp;.023 only says: "significant"</span></div>
+        <div class="q-bayes"><span>✓</span><span id="qa1">P(β &gt; 3.0) = <b>—</b></span></div>
+      </div>
+      <div class="q-cell">
+        <div class="q-question">What is the probability the effect<br>is positive at all?</div>
+        <div class="q-freq"><span>✗</span><span>p &lt; .05 does not answer this</span></div>
+        <div class="q-bayes"><span>✓</span><span id="qa2">P(β &gt; 0) = <b>—</b></span></div>
+      </div>
+      <div class="q-cell">
+        <div class="q-question">Is the effect in the practically<br>relevant range [2, 7]?</div>
+        <div class="q-freq"><span>✗</span><span>CI spans more than this range</span></div>
+        <div class="q-bayes"><span>✓</span><span id="qa3">P(2 &lt; β &lt; 7) = <b>—</b></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ACT 2 ═══════════════════════════════════════════════════════ -->
+  <section class="act">
+    <div class="act-hdr">
+      <span class="act-num c2">Act 2</span>
+      <span class="act-title">Prior as&nbsp;<em style="color:var(--a2)">Cumulative Knowledge</em></span>
+      <button class="htoggle" id="h2btn" onclick="toggleHelp(2)">? Help ▸</button>
+    </div>
+
+    <div class="help-panel" id="help2">
+      <div class="hcard">
+        <div class="hcard-h">What am I seeing?</div>
+        <div class="hcard-body">Three curves: <strong style="color:var(--a3)">Prior</strong> (green, dashed — knowledge before the data), <strong style="color:var(--a5)">Likelihood</strong> (orange, dotted — what the data alone say) and <strong style="color:var(--a2)">Posterior</strong> (blue, filled — combined result). Below: a width comparison of 95% intervals.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">What should I do?</div>
+        <div class="hcard-body">Switch between <strong>non-informative</strong> and <strong>informative prior</strong>. The likelihood (data) stays identical — only the prior changes, and therefore the posterior.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">How do I interpret this?</div>
+        <div class="hcard-body">With an informative prior (10 prior studies: μ = 5, σ = 0.6) the posterior narrows considerably. <strong>Same data, more precise posterior</strong> — prior knowledge formally reduces uncertainty.</div>
+      </div>
+      <div class="hcard">
+        <div class="hcard-h">Why is this useful?</div>
+        <div class="hcard-body">Frequentism structurally ignores prior knowledge. Bayes formalises cumulative learning: <strong>today's posterior is tomorrow's prior.</strong> Scientific progress as an accumulated state of knowledge.</div>
+      </div>
+    </div>
+
+    <div class="prior-sel" id="priorSel">
+      <button class="pbtn sel" onclick="setPrior('flat',this)">
+        <span class="pb-name">Non-informative Prior</span>
+        <span class="pb-meta">Tabula rasa — all effects equally plausible</span>
+      </button>
+      <button class="pbtn" onclick="setPrior('informed',this)">
+        <span class="pb-name">Informative Prior</span>
+        <span class="pb-meta">10 prior studies: μ = 5, σ = 0.6 — cumulative knowledge</span>
+      </button>
+      <button class="pbtn" onclick="setPrior('custom',this)">
+        <span class="pb-name">Custom Prior</span>
+        <span class="pb-meta">set μ and σ yourself</span>
+      </button>
+    </div>
+
+    <div class="slider-row" id="customRow" style="display:none">
+      <label>Prior μ:</label>
+      <input type="range" id="slMu" min="-5" max="15" step="0.5" value="0" oninput="updateCustom()">
+      <span class="sv" id="svMu">0.0</span>
+      <label style="margin-left:.5rem">Prior σ:</label>
+      <input type="range" id="slSig" min="0.3" max="10" step="0.1" value="5" oninput="updateCustom()">
+      <span class="sv" id="svSig">5.0</span>
+    </div>
+
+    <div class="a2-wrap">
+      <canvas id="a2c" width="1000" height="320"></canvas>
+    </div>
+    <div class="scale-note">
+      Note: <strong>Likelihood (orange) is constant across all priors.</strong>
+      <span style="margin-left:.3rem">The y-axis scales to the tallest curve — so it appears smaller when the prior or posterior is narrower and therefore taller.</span>
+    </div>
+
+    <div class="cri-compare">
+      <div class="cri-cell">
+        <div class="cri-lbl" style="color:var(--a1)">Frequentist — 95% CI</div>
+        <div class="cri-track"><div class="cri-fill" id="bFreq" style="background:var(--a1);width:100%"></div></div>
+        <div class="cri-nums" style="color:var(--a1)">[0.68, 8.92]</div>
+        <div class="cri-w">Width: 8.24 points</div>
+      </div>
+      <div class="cri-cell">
+        <div class="cri-lbl" style="color:var(--a2)">Bayes — non-informative prior</div>
+        <div class="cri-track"><div class="cri-fill" id="bFlat" style="background:var(--a2);width:100%"></div></div>
+        <div class="cri-nums" style="color:var(--a2)">[0.68, 8.92]</div>
+        <div class="cri-w">Width: 8.24 points</div>
+      </div>
+      <div class="cri-cell">
+        <div class="cri-lbl" id="criLbl" style="color:var(--a3)">Bayes — informative prior (10 studies)</div>
+        <div class="cri-track"><div class="cri-fill" id="bInf" style="background:var(--a3);width:27%"></div></div>
+        <div class="cri-nums" id="criNums" style="color:var(--a3)">[3.86, 6.12]</div>
+        <div class="cri-w" id="criW">Width: 2.26 points &nbsp;<b style="color:var(--a3)">↓ 73% narrower</b></div>
+      </div>
+    </div>
+
+    <div class="msg">
+      <span class="msg-arrow">→</span>
+      <span>
+        <strong>Frequentism has no formal mechanism for prior knowledge.</strong>
+        With an informative prior — derived here from 10 prior studies — the posterior
+        becomes substantially more precise: same data, narrower interval.
+        That is cumulative learning in science.
+      </span>
+    </div>
+  </section>
+
+</div><!-- /wrap -->
+
+<script>
+// ── THEME ──────────────────────────────────────────────────────
+function toggleTheme(){
+  const d = document.documentElement;
+  d.setAttribute('data-theme', d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  drawA1(); drawA2();
+}
+function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ── MATH ──────────────────────────────────────────────────────
+function npdf(x, mu, s){ return Math.exp(-0.5*((x-mu)/s)**2) / (s*Math.sqrt(2*Math.PI)); }
+function ncdf(x, mu, s){ return 0.5*(1 + erf((x-mu)/(s*Math.SQRT2))); }
+function erf(x){
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sgn = x<0?-1:1; x = Math.abs(x);
+  const t = 1/(1+p*x);
+  return sgn*(1 - (((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t)*Math.exp(-x*x));
+}
+function postParams(prMu, prSig){
+  const lMu=4.80, lSig=2.10;
+  if(prSig > 60) return {mu:lMu, sig:lSig};
+  const pv = 1/(1/prSig**2 + 1/lSig**2);
+  const pm = pv*(prMu/prSig**2 + lMu/lSig**2);
+  return {mu:pm, sig:Math.sqrt(pv)};
+}
+function priorForMode(){
+  if(A2.mode==='flat')     return {mu:0, sig:100};
+  if(A2.mode==='informed') return {mu:5, sig:0.6};
+  return {mu:A2.cMu, sig:A2.cSig};
+}
+
+// ── ACT 1 STATE ────────────────────────────────────────────────
+const A1 = { thresh: 3.0 };
+
+function drawA1(){
+  const canvas = document.getElementById('a1c');
+  const wrap   = document.getElementById('a1wrap');
+  const W = wrap.clientWidth || 700, H = 280;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const mu=4.80, sig=2.10;
+  const xMin=-2, xMax=13;
+  const pL=52, pR=20, pT=28, pB=38;
+  const pw=W-pL-pR, ph=H-pT-pB;
+
+  const xc = x => pL + (x-xMin)/(xMax-xMin)*pw;
+  const yc = (y,mx) => pT + (1-y/mx)*ph;
+  const peak = npdf(mu,mu,sig)*1.18;
+
+  ctx.fillStyle = cv('--paper');
+  ctx.fillRect(0,0,W,H);
+
+  // x-grid
+  ctx.strokeStyle = cv('--grid'); ctx.lineWidth=1;
+  for(let x=0; x<=12; x+=2){
+    ctx.beginPath(); ctx.moveTo(xc(x),pT); ctx.lineTo(xc(x),pT+ph); ctx.stroke();
+  }
+
+  // shaded area right of threshold
+  const T = A1.thresh;
+  ctx.beginPath();
+  const step = (xMax-T)/200;
+  ctx.moveTo(xc(T), yc(0,peak));
+  for(let i=0;i<=200;i++){
+    const x=T+i*step;
+    ctx.lineTo(xc(x), yc(npdf(x,mu,sig),peak));
+  }
+  ctx.lineTo(xc(xMax), yc(0,peak));
+  ctx.closePath();
+  ctx.fillStyle = cv('--a2')+'88';
+  ctx.fill();
+
+  // main curve
+  ctx.beginPath();
+  for(let i=0;i<=300;i++){
+    const x=xMin+(xMax-xMin)*i/300;
+    i===0 ? ctx.moveTo(xc(x),yc(npdf(x,mu,sig),peak))
+           : ctx.lineTo(xc(x),yc(npdf(x,mu,sig),peak));
+  }
+  ctx.strokeStyle=cv('--a2'); ctx.lineWidth=2.5; ctx.stroke();
+
+  // threshold line
+  const tx=xc(T);
+  ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(tx,pT); ctx.lineTo(tx,pT+ph);
+  ctx.strokeStyle=cv('--a3'); ctx.lineWidth=2; ctx.stroke();
+  ctx.setLineDash([]);
+
+  // threshold label
+  ctx.fillStyle=cv('--a3');
+  ctx.font=`500 13px 'DM Mono',monospace`;
+  ctx.textAlign='center';
+  ctx.fillText('β = '+T.toFixed(1), tx, pT-8);
+
+  // x-axis
+  ctx.strokeStyle=cv('--border'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pL,pT+ph); ctx.lineTo(pL+pw,pT+ph); ctx.stroke();
+
+  ctx.fillStyle=cv('--ink2');
+  ctx.font=`400 12px 'DM Mono',monospace`;
+  ctx.textAlign='center';
+  for(let x=0; x<=12; x+=2){
+    const cx=xc(x);
+    ctx.beginPath(); ctx.moveTo(cx,pT+ph); ctx.lineTo(cx,pT+ph+5);
+    ctx.strokeStyle=cv('--border'); ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(x, cx, pT+ph+17);
+  }
+  ctx.fillText('β  (BDI points)', pL+pw/2, H-3);
+
+  // update overlays
+  const prob = (1-ncdf(T,mu,sig))*100;
+  document.getElementById('probBig').textContent = prob.toFixed(1)+'%';
+  document.getElementById('tDisp').textContent = T.toFixed(1);
+  document.getElementById('qThreshText').textContent = T.toFixed(1);
+  document.getElementById('qa1').innerHTML =
+    'P(β &gt; '+T.toFixed(1)+') = <b>'+prob.toFixed(1)+'%</b>';
+}
+
+function initA1Drag(){
+  const canvas = document.getElementById('a1c');
+  let drag=false;
+
+  function xFrom(e){
+    const r = canvas.getBoundingClientRect();
+    const px = (e.clientX - r.left)*(canvas.width/r.width);
+    const xMin=-2, xMax=13, pL=52, pR=20;
+    const pw = canvas.width - pL - pR;
+    return xMin + (px-pL)/pw*(xMax-xMin);
+  }
+  function set(e){ A1.thresh = Math.max(-1, Math.min(11, xFrom(e))); drawA1(); }
+
+  canvas.addEventListener('mousedown',  e=>{ drag=true; set(e); });
+  canvas.addEventListener('mousemove',  e=>{ if(drag) set(e); });
+  canvas.addEventListener('mouseup',    ()=>drag=false);
+  canvas.addEventListener('mouseleave', ()=>drag=false);
+  canvas.addEventListener('touchstart', e=>{ drag=true;  set(e.touches[0]); e.preventDefault(); },{passive:false});
+  canvas.addEventListener('touchmove',  e=>{ if(drag) set(e.touches[0]); e.preventDefault(); },{passive:false});
+  canvas.addEventListener('touchend',   ()=>drag=false);
+}
+
+function fillQ2Q3(){
+  const mu=4.80, sig=2.10;
+  const p0 = ((1-ncdf(0,mu,sig))*100).toFixed(1);
+  const p27 = ((ncdf(7,mu,sig)-ncdf(2,mu,sig))*100).toFixed(1);
+  document.getElementById('qa2').innerHTML = 'P(β &gt; 0) = <b>'+p0+'%</b>';
+  document.getElementById('qa3').innerHTML = 'P(2 &lt; β &lt; 7) = <b>'+p27+'%</b>';
+}
+
+// ── ACT 2 STATE ────────────────────────────────────────────────
+const A2 = { mode:'flat', cMu:0, cSig:5 };
+
+function setPrior(mode, btn){
+  A2.mode = mode;
+  document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('customRow').style.display = mode==='custom' ? 'flex' : 'none';
+  drawA2(); updateCRI();
+}
+
+function updateCustom(){
+  A2.cMu  = parseFloat(document.getElementById('slMu').value);
+  A2.cSig = parseFloat(document.getElementById('slSig').value);
+  document.getElementById('svMu').textContent  = A2.cMu.toFixed(1);
+  document.getElementById('svSig').textContent = A2.cSig.toFixed(1);
+  drawA2(); updateCRI();
+}
+
+function drawA2(){
+  const canvas = document.getElementById('a2c');
+  const W = canvas.parentElement.clientWidth || 1000, H = 320;
+  canvas.width=W; canvas.height=H;
+  const ctx = canvas.getContext('2d');
+
+  const pr = priorForMode();
+  const lMu=4.80, lSig=2.10;
+  const po = postParams(pr.mu, pr.sig);
+
+  const xMin=-6, xMax=18;
+  const pL=52, pR=20, pT=32, pB=38;
+  const pw=W-pL-pR, ph=H-pT-pB;
+
+  const xc = x => pL+(x-xMin)/(xMax-xMin)*pw;
+  const yc = (y,mx) => pT+(1-y/mx)*ph;
+
+  const poMax = npdf(po.mu, po.mu, po.sig);
+  const lMax  = npdf(lMu,  lMu,  lSig);
+  const prMax = pr.sig>60 ? 0 : npdf(pr.mu, pr.mu, pr.sig);
+  const gMax  = Math.max(poMax, lMax, prMax) * 1.18;
+
+  ctx.fillStyle=cv('--paper'); ctx.fillRect(0,0,W,H);
+
+  // x-grid
+  ctx.strokeStyle=cv('--grid'); ctx.lineWidth=1;
+  for(let x=-4; x<=16; x+=2){
+    ctx.beginPath(); ctx.moveTo(xc(x),pT); ctx.lineTo(xc(x),pT+ph); ctx.stroke();
+  }
+
+  function curve(mu, sig, color, dash, lw, fill){
+    if(sig>60) return;
+    const pts=[];
+    for(let i=0;i<=400;i++){
+      pts.push({
+        x: xc(xMin+(xMax-xMin)*i/400),
+        y: yc(npdf(xMin+(xMax-xMin)*i/400, mu, sig), gMax)
+      });
+    }
+    if(fill){
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, yc(0,gMax));
+      pts.forEach(p=>ctx.lineTo(p.x,p.y));
+      ctx.lineTo(pts[400].x, yc(0,gMax));
+      ctx.closePath();
+      ctx.fillStyle=color+'30'; ctx.fill();
+    }
+    ctx.beginPath();
+    pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle=color; ctx.lineWidth=lw;
+    ctx.setLineDash(dash); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // flat prior: horizontal dash
+  if(pr.sig>60){
+    const fy = yc(gMax*0.04, gMax);
+    ctx.beginPath(); ctx.moveTo(pL,fy); ctx.lineTo(pL+pw,fy);
+    ctx.strokeStyle=cv('--a3'); ctx.lineWidth=2; ctx.setLineDash([7,5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=cv('--a3'); ctx.textAlign='left';
+    ctx.font=`400 12px 'DM Mono',monospace`;
+    ctx.fillText('Prior ≈ uniform', pL+10, fy-8);
+  } else {
+    curve(pr.mu, pr.sig, cv('--a3'), [7,5], 2, false);
+  }
+
+  // likelihood
+  curve(lMu, lSig, cv('--a5'), [3,3], 2, false);
+
+  // posterior (filled)
+  curve(po.mu, po.sig, cv('--a2'), [], 2.5, true);
+
+  // x-axis
+  ctx.strokeStyle=cv('--border'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pL,pT+ph); ctx.lineTo(pL+pw,pT+ph); ctx.stroke();
+
+  ctx.fillStyle=cv('--ink2');
+  ctx.font=`400 12px 'DM Mono',monospace`;
+  ctx.textAlign='center';
+  for(let x=-4; x<=16; x+=2){
+    const cx=xc(x);
+    ctx.beginPath(); ctx.moveTo(cx,pT+ph); ctx.lineTo(cx,pT+ph+5);
+    ctx.strokeStyle=cv('--border'); ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(x, cx, pT+ph+18);
+  }
+  ctx.fillStyle=cv('--ink2');
+  ctx.fillText('β  (BDI points)', pL+pw/2, H-3);
+
+  // posterior annotation
+  const pmx = xc(po.mu);
+  const pmy = yc(npdf(po.mu,po.mu,po.sig),gMax) - 14;
+  ctx.fillStyle=cv('--a2');
+  ctx.font=`500 13px 'DM Mono',monospace`;
+  ctx.textAlign='center';
+  ctx.fillText('μ = '+po.mu.toFixed(2)+',  σ = '+po.sig.toFixed(2),
+    pmx, Math.max(pT+10, pmy));
+
+  // legend (on canvas)
+  const items=[
+    {col:cv('--a3'), dash:[7,5], lw:2,   label:'Prior'},
+    {col:cv('--a5'), dash:[3,3], lw:2,   label:'Likelihood (constant)'},
+    {col:cv('--a2'), dash:[],    lw:2.5, label:'Posterior'},
+  ];
+  let ly = pT+10;
+  items.forEach(it=>{
+    ctx.beginPath(); ctx.moveTo(W-170,ly); ctx.lineTo(W-142,ly);
+    ctx.strokeStyle=it.col; ctx.lineWidth=it.lw;
+    ctx.setLineDash(it.dash); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=it.col; ctx.textAlign='left';
+    ctx.font=`400 12px 'DM Mono',monospace`;
+    ctx.fillText(it.label, W-136, ly+4);
+    ly+=20;
+  });
+}
+
+function updateCRI(){
+  const pr = priorForMode();
+  const po = postParams(pr.mu, pr.sig);
+  const z  = 1.96;
+  const lo = po.mu - z*po.sig;
+  const hi = po.mu + z*po.sig;
+  const w  = hi-lo;
+  const refW = 8.24;
+  const pct = Math.round((1-w/refW)*100);
+
+  let lbl = 'Bayes — non-informative prior';
+  if(A2.mode==='informed') lbl = 'Bayes — informative prior (10 studies)';
+  if(A2.mode==='custom')   lbl = 'Bayes — custom prior';
+
+  document.getElementById('criLbl').textContent  = lbl;
+  document.getElementById('criNums').textContent = '['+lo.toFixed(2)+', '+hi.toFixed(2)+']';
+  const wLabel = w.toFixed(2)+' points'+(pct>5?'  ↓ '+pct+'% narrower':'');
+  document.getElementById('criW').innerHTML =
+    'Width: '+wLabel.replace('↓','<b style="color:var(--a3)">↓')+(pct>5?'</b>':'');
+  document.getElementById('bInf').style.width = Math.min(100, Math.max(3, w/refW*100))+'%';
+}
+
+// ── HELP TOGGLE ───────────────────────────────────────────────
+function toggleHelp(n){
+  const panel = document.getElementById('help'+n);
+  const btn   = document.getElementById('h'+n+'btn');
+  const open  = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '✕ Help ▾' : '? Help ▸';
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load', ()=>{
+  drawA1();
+  initA1Drag();
+  fillQ2Q3();
+  drawA2();
+  updateCRI();
+});
+window.addEventListener('resize', ()=>{ drawA1(); drawA2(); });
+</script>
+</body>
+</html>
