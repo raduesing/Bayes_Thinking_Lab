@@ -1974,9 +1974,19 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push(`  within  = ${withinDef},`);
     lines.push(`  between = ${betweenDef},`);
     lines.push(`  n       = n,`);
-    lines.push(`  mu      = list(`);
-    lines.push(muParts.join(',\n'));
-    lines.push(`  ),`);
+    if(!hasB){
+      // only within: mu must be a plain vector, not a named list
+      const bk=cellKey([]);
+      const muVals=wNames.map(lv=>{
+        const mKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
+        return (ST.means[mKey]??0).toFixed(2);
+      });
+      lines.push(`  mu      = c(${muVals.join(', ')}),`);
+    } else {
+      lines.push(`  mu      = list(`);
+      lines.push(muParts.join(',\n'));
+      lines.push(`  ),`);
+    }
     lines.push(`  sd      = ${sdPart},${sdComment}`);
     lines.push(rParam+',');
     lines.push('  empirical = FALSE,');
@@ -2345,10 +2355,20 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       });
       return `#     ${hasB?bc.join('_'):'Y'} = c(${vals.join(', ')})`;
     });
-    L.push(`#   d <- faux::sim_design(within = ${withinDef}, between = ${betweenDef},`);
-    L.push(`#     n = ${n}, mu = list(`);
-    muParts.forEach(p=>L.push(p+(p!==muParts[muParts.length-1]?',':'')));
-    L.push('#   ), empirical = FALSE, plot = FALSE)');
+    if(!hasB){
+      const bk2=cellKey([]);
+      const muVals2=wNames.map(lv=>{
+        const mKey=[bk2,lv].filter(s=>s&&s!=='all').join('_')||'all';
+        return (ST.means[mKey]??0).toFixed(2);
+      });
+      L.push(`#   d <- faux::sim_design(within = ${withinDef}, between = ${betweenDef},`);
+      L.push(`#     n = ${n}, mu = c(${muVals2.join(', ')}), empirical = FALSE, plot = FALSE)`);
+    } else {
+      L.push(`#   d <- faux::sim_design(within = ${withinDef}, between = ${betweenDef},`);
+      L.push(`#     n = ${n}, mu = list(`);
+      muParts.forEach(p=>L.push(p+(p!==muParts[muParts.length-1]?',':'')));
+      L.push('#   ), empirical = FALSE, plot = FALSE)');
+    }
 
     if(clActive){
       L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
