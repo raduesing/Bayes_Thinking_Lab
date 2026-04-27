@@ -979,8 +979,8 @@ const DISTS = {
     info:{
       was:'The <strong>cumulative probit model</strong> assumes that behind an ordinal response (e.g. 1–5 stars) lies a continuous latent variable Y* ~ Normal(η, 1). Category k is observed when τ_{k−1} &lt; Y* ≤ τ_k. The parameter η shifts the latent distribution; the thresholds τ define the boundaries.',
       einsatz:'<strong>Ordinal Likert scales, ratings, pain scores.</strong> Any situation where distances between categories are not equal — "strongly agree" to "agree" is not necessarily the same distance as "neutral" to "agree". Probit vs. logit: Probit has slightly lighter tails (Normal vs. Logistic).',
-      parameter:'<strong>η</strong> — latent linear predictor (in a regression model: Xβ). <strong>τ_k</strong> — thresholds that divide the latent scale into K intervals; here equally spaced: τ_k = τ₁ + (k−1)·Δ. <strong>K</strong> — number of ordinal categories.',
-      brms:'<code>brm(y ~ x, data=d, family=cumulative("probit"))</code><br>Thresholds are estimated automatically. For metric predictors: positive β → higher categories more likely.',
+      parameter:'<strong>η (latent predictor):</strong> Shifts the entire latent normal distribution left or right — without changing its shape. When η = 0, the distribution is centred between the thresholds. <em>Slider to the right:</em> The latent distribution moves right, more probability mass falls into higher categories → upper bars grow, lower bars shrink. In a regression model η = Xβ, the linear influence of the predictors.<br><br><strong>τ₁ (1st threshold):</strong> Determines where the first boundary sits on the latent scale — i.e., from which value of Y* one lands in category 2 or higher. If τ₁ is moved left, the entire threshold series shifts left: category 1 becomes less likely, all higher categories more likely. <em>Together with η:</em> What matters is the distance η − τ_k; shifting both η and all τ by the same amount leaves the probabilities unchanged.<br><br><strong>Δ (threshold spacing):</strong> Controls how wide each category is on the latent scale — all equally wide under the equal-spacing assumption. <em>Small Δ:</em> Narrow categories, many transitions close together → middle categories shrink, extreme categories dominate. <em>Large Δ:</em> Wide categories, probability concentrates more in the middle.<br><br><strong>K (number of categories):</strong> Sets the number of ordinal levels (e.g. 5 for a five-point Likert scale). More categories means more thresholds (K−1 in total).',
+      brms:'<div class="brms-role"><strong>As likelihood</strong> — for ordinal response scales:<br><code>brm(y ~ x, data = d, family = cumulative("probit"))</code><br>→ Thresholds are estimated automatically (one per category transition).<br>→ Positive β: higher categories become more likely.</div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> for coefficients<br><code>prior(normal(0, 1.5), class = Intercept)</code> for thresholds<br>→ Thresholds correspond to the intercepts of the model.</div>',
       technik:'P(Y=k) = Φ(τ_k − η) − Φ(τ_{k−1} − η), with τ_0 = −∞, τ_K = +∞. E[Y] = Σ k·P(Y=k). Latent Normal distribution with variance 1 (standardised).'
     }
   },
@@ -999,8 +999,8 @@ const DISTS = {
     info:{
       was:'The <strong>cumulative logit model</strong> (proportional odds model) works like probit but with a logistic distribution for Y*. The key difference: heavier tails than probit, and coefficients β are directly interpretable as <em>log-odds ratios</em>.',
       einsatz:'<strong>Gold standard for ordinal regression in the social sciences.</strong> Same use cases as probit, but more commonly chosen due to the natural OR interpretation. "One unit more in X multiplies the odds of responding in a higher category by exp(β)."',
-      parameter:'<strong>η</strong> — latent predictor. <strong>τ_k</strong> — thresholds (here equally spaced: τ_k = τ₁ + (k−1)·Δ). <strong>K</strong> — number of categories. <strong>Proportional-odds assumption:</strong> The effect of predictors is constant across all thresholds.',
-      brms:'<code>brm(y ~ x, data=d, family=cumulative("logit"))</code><br>Default: <code>cumulative()</code> without argument uses logit link. Coefficients are log-odds ratios. Note: brms reverses sign convention compared to some other packages.',
+      parameter:'<strong>η (latent predictor):</strong> Shifts the latent logistic distribution along the scale without changing its shape. <em>Slider to the right:</em> The distribution moves right, more mass falls into higher categories → upper bars grow, lower bars shrink. In a regression model η = Xβ. Logit coefficients are interpretable as log-odds ratios: one unit increase in η multiplies the cumulative odds for "≥ k" by exp(η).<br><br><strong>τ₁ (1st threshold):</strong> Sets the position of the first boundary on the latent scale. Smaller τ₁ → the entire threshold series shifts left → category 1 becomes less likely. What ultimately matters is the distance η − τ_k: equal shifts of η and all τ cancel out and leave probabilities unchanged.<br><br><strong>Δ (threshold spacing):</strong> Controls the width of categories on the latent scale. <em>Small Δ:</em> Narrow categories, thresholds close together → middle categories shrink, extreme categories dominate. <em>Large Δ:</em> Wide categories, probability concentrates in the middle. In practice, the τ spacings are estimated from data and need not be equal — equal spacing here serves as illustration.<br><br><strong>K (number of categories):</strong> Number of ordinal levels. K−1 thresholds are required. <strong>Proportional-odds assumption:</strong> The effect of η is identical across all thresholds — a strong but testable assumption.',
+      brms:'<div class="brms-role"><strong>As likelihood</strong> — for ordinal response scales (default):<br><code>brm(y ~ x, data = d, family = cumulative("logit"))</code><br>→ <code>cumulative()</code> without argument uses logit link automatically.<br>→ Coefficients are log-odds ratios: exp(β) = odds ratio for higher categories.<br>→ Note: brms reverses sign convention compared to some other packages.</div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> for coefficients<br><code>prior(normal(0, 1.5), class = Intercept)</code> for thresholds<br>→ Check proportional-odds assumption: <code>brm(..., family = cumulative(link="logit", threshold="flexible"))</code></div>',
       technik:'P(Y=k) = F(τ_k − η) − F(τ_{k−1} − η), F = logistic. Var(Logistic) = π²/3 ≈ 3.29, so logit coefficients are ≈ π/√3 ≈ 1.81× larger than probit coefficients for the same latent scale.'
     }
   },
@@ -1695,8 +1695,8 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeStyle=DARK?'#8a8070':'#5a4f42'; ctx.lineWidth=1.2;
     ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
     ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
-    ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText('τ'+(i+1), px, latTop+10);
+    ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('τ'+(i+1), px, latTop+13);
   });
   ctx.restore();
 
@@ -1706,17 +1706,17 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeStyle=cv('--a2'); ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
     ctx.restore();
-    ctx.fillStyle=cv('--a2'); ctx.font='bold 10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText('η', px, latTop+10);
+    ctx.fillStyle=cv('--a2'); ctx.font='bold 14px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('η', px, latTop+14);
   }
 
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='left';
-  ctx.fillText('Latent variable Y*', m.l, latBot+10);
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='left';
+  ctx.fillText('Latent variable Y*', m.l, latBot+14);
 
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   for(let i=0;i<=5;i++){
     const x=xlo+i*(xhi-xlo)/5;
-    ctx.fillText(x.toFixed(1), toLatX(x), latBot-3);
+    ctx.fillText(x.toFixed(1), toLatX(x), latBot-4);
   }
 
   const barW=Math.min(Wp/(K+1)*0.72, 60);
@@ -1741,16 +1741,17 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.fillRect(bx,py,barW,bh);
     ctx.strokeRect(bx,py,barW,bh);
     ctx.fillStyle=DARK?'#ece6d8':'#18130e';
-    ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
     const pct=(p*100).toFixed(1);
-    if(bh>14) ctx.fillText(pct+'%', px, py+11);
+    if(bh>18) ctx.fillText(pct+'%', px, py+13);
     ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
-    ctx.fillText('k='+(k+1), px, pmfBot+12);
+    ctx.font='13px DM Mono,monospace';
+    ctx.fillText('k='+(k+1), px, pmfBot+15);
   });
 
   ctx.save(); ctx.translate(m.l-40, (pmfTop+pmfBot)/2);
   ctx.rotate(-Math.PI/2);
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   ctx.fillText('P(Y = k)', 0, 0);
   ctx.restore();
 
@@ -1767,15 +1768,15 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     if(px<m.l||px>m.l+Wp)return;
     ctx.strokeStyle=color;
     ctx.beginPath(); ctx.moveTo(px,pmfTop); ctx.lineTo(px,pmfBot); ctx.stroke();
-    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl, px, pmfTop+10);
+    ctx.fillStyle=color; ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, pmfTop+13);
   });
   ctx.restore();
 
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='right';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='right';
   for(let i=0;i<=4;i++){
     const yv=latMax*i/4;
-    ctx.fillText(yv.toFixed(2), m.l-4, toLatY(yv)+3);
+    ctx.fillText(yv.toFixed(2), m.l-4, toLatY(yv)+4);
   }
 
   updateStats(EY, medianK, modeK, VarY);

@@ -979,8 +979,8 @@ const DISTS = {
     info:{
       was:'Das <strong>kumulative Probit-Modell</strong> nimmt an, dass hinter einer ordinalen Antwort (z.B. 1–5 Sterne) eine kontinuierliche latente Variable Y* ~ Normal(η, 1) steht. Beobachtet wird Kategorie k, wenn τ_{k−1} &lt; Y* ≤ τ_k. Der Parameter η verschiebt die latente Verteilung, die Schwellenwerte τ legen die Grenzen fest.',
       einsatz:'<strong>Ordinale Likert-Skalen, Ratings, Schmerz-Scores.</strong> Immer dann, wenn die Abstände zwischen Kategorien nicht gleichwertig sind — "stimme völlig zu" zu "stimme zu" ist nicht zwingend gleich groß wie "neutral" zu "stimme zu". Probit vs. Logit: Probit hat leicht schmalere Ränder (Normal statt Logistisch).',
-      parameter:'<strong>η</strong> — latenter linearer Prädiktor (in einem Regressionsmodell: Xβ). <strong>τ_k</strong> — Schwellenwerte, die die latente Skala in K Intervalle zerlegen; hier gleichmäßig gesetzt: τ_k = τ₁ + (k−1)·Δ. <strong>K</strong> — Anzahl ordinaler Kategorien.',
-      brms:'<code>brm(y ~ x, data=d, family=cumulative("probit"))</code><br>Schwellenwerte werden automatisch geschätzt. Für metrische Prädiktoren: positives β → höhere Kategorien wahrscheinlicher.',
+      parameter:'<strong>η (latenter Prädiktor):</strong> Verschiebt die gesamte latente Normalverteilung nach links oder rechts — ohne die Form zu verändern. Wenn η = 0, liegt die Verteilung zentriert zwischen den Schwellenwerten. <em>Slider nach rechts:</em> Die latente Verteilung wandert nach rechts, mehr Wahrscheinlichkeitsmasse fällt in höhere Kategorien → die oberen Balken werden größer, die unteren kleiner. In einem Regressionsmodell ist η = Xβ, also der lineare Einfluss der Prädiktoren.<br><br><strong>τ₁ (1. Schwellenwert):</strong> Bestimmt, wo die erste Grenze auf der latenten Skala liegt — also ab welchem Wert Y* man in Kategorie 2 oder höher landet. Wird τ₁ kleiner (nach links), rutscht die gesamte Schwellenreihe nach links: Kategorie 1 wird seltener, alle höheren Kategorien häufiger. <em>Zusammen mit η:</em> Was zählt, ist der Abstand η − τ_k; wenn beide gleichzeitig verschoben werden, ändern sich die Wahrscheinlichkeiten nicht.<br><br><strong>Δ (Schwellenwert-Abstand):</strong> Steuert, wie breit die einzelnen Kategorien auf der latenten Skala sind — alle gleich breit, da gleichmäßige Abstände angenommen werden. <em>Kleines Δ:</em> Schmale Kategorien, viele Übergänge nah beieinander → die mittleren Kategorien werden kleiner, die Ränder größer. <em>Großes Δ:</em> Breite Kategorien, Wahrscheinlichkeit konzentriert sich stärker in der Mitte.<br><br><strong>K (Anzahl Kategorien):</strong> Bestimmt die Anzahl ordinaler Stufen (z.B. 5 für eine fünfstufige Likert-Skala). Mehr Kategorien bedeuten mehr Schwellenwerte (K−1 insgesamt).',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für ordinale Antwortskalen:<br><code>brm(y ~ x, data = d, family = cumulative("probit"))</code><br>→ Schwellenwerte werden automatisch geschätzt (eine pro Kategorienübergang).<br>→ Positives β: höhere Kategorien werden wahrscheinlicher.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> für Koeffizienten<br><code>prior(normal(0, 1.5), class = Intercept)</code> für Schwellenwerte<br>→ Schwellenwerte entsprechen den Intercepts des Modells.</div>',
       technik:'P(Y=k) = Φ(τ_k − η) − Φ(τ_{k−1} − η), mit τ_0 = −∞, τ_K = +∞. E[Y] = Σ k·P(Y=k). Latente Normalverteilung mit Varianz 1 (Standardisierung).'
     }
   },
@@ -999,8 +999,8 @@ const DISTS = {
     info:{
       was:'Das <strong>kumulative Logit-Modell</strong> (Proportional-Odds-Modell) funktioniert wie Probit, aber mit einer logistischen Verteilung für Y*. Der Hauptunterschied: schwerere Ränder als Probit, und die Koeffizienten β sind direkt als <em>Log-Odds-Ratios</em> interpretierbar.',
       einsatz:'<strong>Goldstandard für ordinale Regression in den Sozialwissenschaften.</strong> Gleiche Einsatzgebiete wie Probit, aber häufiger gewählt wegen der natürlichen OR-Interpretation. "Eine Einheit mehr in X erhöht die Odds, in einer höheren Kategorie zu antworten, um den Faktor exp(β)."',
-      parameter:'<strong>η</strong> — latenter Prädiktor. <strong>τ_k</strong> — Schwellenwerte (hier gleichmäßig: τ_k = τ₁ + (k−1)·Δ). <strong>K</strong> — Anzahl Kategorien. <strong>Proportional-Odds-Annahme:</strong> Der Effekt von Prädiktoren ist konstant über alle Schwellenwerte.',
-      brms:'<code>brm(y ~ x, data=d, family=cumulative("logit"))</code><br>Standard: <code>cumulative()</code> ohne Argument nutzt Logit-Link. Koeffizienten sind Log-Odds-Ratios. Achtung: brms kehrt Vorzeichen-Konvention gegenüber manchen anderen Paketen um.',
+      parameter:'<strong>η (latenter Prädiktor):</strong> Verschiebt die latente logistische Verteilung auf der Skala — ohne die Form zu ändern. <em>Slider nach rechts:</em> Die Verteilung wandert nach rechts, mehr Masse fällt in höhere Kategorien → obere Balken wachsen, untere schrumpfen. Im Regressionsmodell ist η = Xβ. Logit-Koeffizienten sind als Log-Odds-Ratios interpretierbar: eine Einheit mehr in η multipliziert die kumulativen Odds für „≥ k" um exp(η).<br><br><strong>τ₁ (1. Schwellenwert):</strong> Legt die Position der ersten Grenze auf der latenten Skala fest. Kleineres τ₁ → gesamte Schwellenreihe verschiebt sich nach links → Kategorie 1 wird seltener. Was letztlich zählt, ist der Abstand η − τ_k: gleiche Verschiebungen von η und allen τ heben sich gegenseitig auf.<br><br><strong>Δ (Schwellenwert-Abstand):</strong> Steuert die Breite der Kategorien auf der latenten Skala. <em>Kleines Δ:</em> Enge Kategorien, viele Schwellenwerte nah beieinander → mittlere Kategorien werden kleiner, Randkategorien dominieren. <em>Großes Δ:</em> Breite Kategorien, Wahrscheinlichkeit ballt sich in der Mitte. In der Praxis werden die τ-Abstände aus den Daten geschätzt und sind nicht notwendigerweise gleich — die Gleichabständigkeit hier dient der Illustration.<br><br><strong>K (Anzahl Kategorien):</strong> Anzahl ordinaler Stufen. K−1 Schwellenwerte werden benötigt. <strong>Proportional-Odds-Annahme:</strong> Der Effekt von η ist über alle Schwellenwerte hinweg identisch — eine starke, aber testbare Annahme.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für ordinale Antwortskalen (Standard):<br><code>brm(y ~ x, data = d, family = cumulative("logit"))</code><br>→ <code>cumulative()</code> ohne Argument nutzt Logit-Link automatisch.<br>→ Koeffizienten sind Log-Odds-Ratios: exp(β) = Odds-Ratio für höhere Kategorien.<br>→ Achtung: brms kehrt Vorzeichen-Konvention gegenüber manchen anderen Paketen um.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> für Koeffizienten<br><code>prior(normal(0, 1.5), class = Intercept)</code> für Schwellenwerte<br>→ Proportional-Odds-Annahme prüfen: <code>brm(..., family = cumulative(link="logit", threshold="flexible"))</code></div>',
       technik:'P(Y=k) = F(τ_k − η) − F(τ_{k−1} − η), F = logistisch. Var(Logistisch) = π²/3 ≈ 3.29, daher sind Logit-Koeffizienten ≈ π/√3 ≈ 1.81× größer als Probit-Koeffizienten bei gleicher latenter Skala.'
     }
   },
@@ -1708,8 +1708,8 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeStyle=DARK?'#8a8070':'#5a4f42'; ctx.lineWidth=1.2;
     ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
     ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
-    ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText('τ'+(i+1), px, latTop+10);
+    ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('τ'+(i+1), px, latTop+13);
   });
   ctx.restore();
 
@@ -1720,19 +1720,19 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeStyle=cv('--a2'); ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
     ctx.restore();
-    ctx.fillStyle=cv('--a2'); ctx.font='bold 10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText('η', px, latTop+10);
+    ctx.fillStyle=cv('--a2'); ctx.font='bold 14px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('η', px, latTop+14);
   }
 
   // X-axis label for latent panel
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='left';
-  ctx.fillText('Latente Variable Y*', m.l, latBot+10);
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='left';
+  ctx.fillText('Latente Variable Y*', m.l, latBot+14);
 
   // Latent panel x-ticks
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   for(let i=0;i<=5;i++){
     const x=xlo+i*(xhi-xlo)/5;
-    ctx.fillText(x.toFixed(1), toLatX(x), latBot-3);
+    ctx.fillText(x.toFixed(1), toLatX(x), latBot-4);
   }
 
   // ── PMF PANEL ──
@@ -1760,18 +1760,19 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     ctx.strokeRect(bx,py,barW,bh);
     // Probability label on bar
     ctx.fillStyle=DARK?'#ece6d8':'#18130e';
-    ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
     const pct=(p*100).toFixed(1);
-    if(bh>14) ctx.fillText(pct+'%', px, py+11);
+    if(bh>18) ctx.fillText(pct+'%', px, py+13);
     // Category label below
     ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
-    ctx.fillText('k='+(k+1), px, pmfBot+12);
+    ctx.font='13px DM Mono,monospace';
+    ctx.fillText('k='+(k+1), px, pmfBot+15);
   });
 
   // PMF y-axis label
   ctx.save(); ctx.translate(m.l-40, (pmfTop+pmfBot)/2);
   ctx.rotate(-Math.PI/2);
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
   ctx.fillText('P(Y = k)', 0, 0);
   ctx.restore();
 
@@ -1789,16 +1790,16 @@ function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     if(px<m.l||px>m.l+Wp)return;
     ctx.strokeStyle=color;
     ctx.beginPath(); ctx.moveTo(px,pmfTop); ctx.lineTo(px,pmfBot); ctx.stroke();
-    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
-    ctx.fillText(lbl, px, pmfTop+10);
+    ctx.fillStyle=color; ctx.font='12px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, pmfTop+13);
   });
   ctx.restore();
 
   // Left axis: latent panel y-ticks
-  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='right';
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='13px DM Mono,monospace'; ctx.textAlign='right';
   for(let i=0;i<=4;i++){
     const yv=latMax*i/4;
-    ctx.fillText(yv.toFixed(2), m.l-4, toLatY(yv)+3);
+    ctx.fillText(yv.toFixed(2), m.l-4, toLatY(yv)+4);
   }
 
   updateStats(EY, medianK, modeK, VarY);
