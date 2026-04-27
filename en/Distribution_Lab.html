@@ -206,7 +206,7 @@ canvas#dist-canvas{display:block;width:100%}
 
 <div class="intro-strip">
   <strong>Distribution Lab</strong> — Explore probability distributions interactively.
-  &nbsp;·&nbsp; <em>19 distributions</em> · Adjust parameters · Show moments · brms roles &amp; parametrisation · Lockable x-axis · Distribution relationships
+  &nbsp;·&nbsp; <em>21 distributions</em> · Adjust parameters · Show moments · brms roles &amp; parametrisation · Lockable x-axis · Ordinal models
 </div>
 
 <div id="cat-tabs"></div>
@@ -474,6 +474,8 @@ function erf(x){
 }
 function Phi(x){ return 0.5*(1+erf(x/Math.SQRT2)); }
 function phi(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function logisticCDF(x){ return 1/(1+Math.exp(-x)); }
+function logisticPDF(x){ const e=Math.exp(-x); return e/(1+e)/(1+e); }
 function normalPDF(x,mu,sig){ if(sig<=0)return 0; return phi((x-mu)/sig)/sig; }
 function gammaPDF(x,alpha,rate){ // rate = 1/scale
   if(x<=0||alpha<=0||rate<=0)return 0;
@@ -536,6 +538,7 @@ const CATS = [
   {label:'Continuous\npositive', dists:['lognormal','shifted_lognormal','gamma','exponential','exgaussian','inv_gaussian','chi_sq','f_dist']},
   {label:'Bounded [0,1]', dists:['beta','bernoulli','zi_beta','zoib']},
   {label:'Count data', dists:['poisson','negbin','binomial','beta_binomial']},
+  {label:'Ordinal', dists:['cumprobit','cumlogit']},
 ];
 
 const DISTS = {
@@ -962,6 +965,46 @@ const DISTS = {
     }
   },
 
+  cumprobit:{
+    name:'Cum. Probit', group:4, ordinal:true,
+    notation:'Y ~ OrderedProbit(η, τ₁, Δ, K)',
+    params:[
+      {id:'k',    label:'K (categories)',             min:3,   max:7,   step:1,   val:5,    fmt:v=>String(Math.round(v))},
+      {id:'eta',  label:'η (latent predictor)',       min:-3,  max:3,   step:0.1, val:0,    fmt:v=>v.toFixed(1)},
+      {id:'tau1', label:'τ₁ (1st threshold)',         min:-3,  max:1,   step:0.1, val:-1.5, fmt:v=>v.toFixed(1)},
+      {id:'delta',label:'Δ (threshold spacing)',      min:0.3, max:2.0, step:0.1, val:1.0,  fmt:v=>v.toFixed(1)},
+    ],
+    cdf: Phi,
+    latentPDF:(x,eta)=>normalPDF(x,eta,1),
+    info:{
+      was:'The <strong>cumulative probit model</strong> assumes that behind an ordinal response (e.g. 1–5 stars) lies a continuous latent variable Y* ~ Normal(η, 1). Category k is observed when τ_{k−1} &lt; Y* ≤ τ_k. The parameter η shifts the latent distribution; the thresholds τ define the boundaries.',
+      einsatz:'<strong>Ordinal Likert scales, ratings, pain scores.</strong> Any situation where distances between categories are not equal — "strongly agree" to "agree" is not necessarily the same distance as "neutral" to "agree". Probit vs. logit: Probit has slightly lighter tails (Normal vs. Logistic).',
+      parameter:'<strong>η</strong> — latent linear predictor (in a regression model: Xβ). <strong>τ_k</strong> — thresholds that divide the latent scale into K intervals; here equally spaced: τ_k = τ₁ + (k−1)·Δ. <strong>K</strong> — number of ordinal categories.',
+      brms:'<code>brm(y ~ x, data=d, family=cumulative("probit"))</code><br>Thresholds are estimated automatically. For metric predictors: positive β → higher categories more likely.',
+      technik:'P(Y=k) = Φ(τ_k − η) − Φ(τ_{k−1} − η), with τ_0 = −∞, τ_K = +∞. E[Y] = Σ k·P(Y=k). Latent Normal distribution with variance 1 (standardised).'
+    }
+  },
+
+  cumlogit:{
+    name:'Cum. Logit', group:4, ordinal:true,
+    notation:'Y ~ OrderedLogit(η, τ₁, Δ, K)',
+    params:[
+      {id:'k',    label:'K (categories)',             min:3,   max:7,   step:1,   val:5,    fmt:v=>String(Math.round(v))},
+      {id:'eta',  label:'η (latent predictor)',       min:-3,  max:3,   step:0.1, val:0,    fmt:v=>v.toFixed(1)},
+      {id:'tau1', label:'τ₁ (1st threshold)',         min:-3,  max:1,   step:0.1, val:-1.5, fmt:v=>v.toFixed(1)},
+      {id:'delta',label:'Δ (threshold spacing)',      min:0.3, max:2.0, step:0.1, val:1.0,  fmt:v=>v.toFixed(1)},
+    ],
+    cdf: logisticCDF,
+    latentPDF:(x,eta)=>logisticPDF(x-eta),
+    info:{
+      was:'The <strong>cumulative logit model</strong> (proportional odds model) works like probit but with a logistic distribution for Y*. The key difference: heavier tails than probit, and coefficients β are directly interpretable as <em>log-odds ratios</em>.',
+      einsatz:'<strong>Gold standard for ordinal regression in the social sciences.</strong> Same use cases as probit, but more commonly chosen due to the natural OR interpretation. "One unit more in X multiplies the odds of responding in a higher category by exp(β)."',
+      parameter:'<strong>η</strong> — latent predictor. <strong>τ_k</strong> — thresholds (here equally spaced: τ_k = τ₁ + (k−1)·Δ). <strong>K</strong> — number of categories. <strong>Proportional-odds assumption:</strong> The effect of predictors is constant across all thresholds.',
+      brms:'<code>brm(y ~ x, data=d, family=cumulative("logit"))</code><br>Default: <code>cumulative()</code> without argument uses logit link. Coefficients are log-odds ratios. Note: brms reverses sign convention compared to some other packages.',
+      technik:'P(Y=k) = F(τ_k − η) − F(τ_{k−1} − η), F = logistic. Var(Logistic) = π²/3 ≈ 3.29, so logit coefficients are ≈ π/√3 ≈ 1.81× larger than probit coefficients for the same latent scale.'
+    }
+  },
+
 };
 
 // ── UI Setup ───────────────────────────────────────────────────
@@ -1161,7 +1204,7 @@ function toggleKarte(){
 function toggleXFix(){
   const d=DISTS[DIST_KEY];
   // X-Fix nur für kontinuierliche, nicht-gemischte Verteilungen sinnvoll
-  if(d.discrete||d.mixed){ return; }
+  if(d.discrete||d.mixed||d.ordinal){ return; }
   X_FIXED=!X_FIXED;
   const btn=document.getElementById('btn-xfix');
   if(X_FIXED){
@@ -1211,6 +1254,8 @@ function renderDist(){
     drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
   } else if(d.mixed){
     drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
+  } else if(d.ordinal){
+    drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
   } else {
     drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
   }
@@ -1560,6 +1605,180 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   ctx.restore();
 
   updateStats(mean, median, isNaN(mode)?undefined:mode, variance);
+}
+
+// ── Ordinal (cumulative probit / logit) ────────────────────────
+function drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
+  const K=Math.round(cp.k);
+  const eta=cp.eta, tau1=cp.tau1, delta=cp.delta;
+
+  const thresholds=[];
+  for(let i=0;i<K-1;i++) thresholds.push(tau1+i*delta);
+
+  const probs=[];
+  for(let k=0;k<K;k++){
+    const lo=k===0   ? -Infinity : thresholds[k-1];
+    const hi=k===K-1 ? +Infinity : thresholds[k];
+    const clo=lo===-Infinity?0:d.cdf(lo-eta);
+    const chi=hi=== Infinity?1:d.cdf(hi-eta);
+    probs.push(Math.max(0, chi-clo));
+  }
+
+  let EY=0, EY2=0;
+  for(let k=0;k<K;k++){ EY+=(k+1)*probs[k]; EY2+=(k+1)*(k+1)*probs[k]; }
+  const VarY=EY2-EY*EY;
+  let cumP=0, medianK=1;
+  for(let k=0;k<K;k++){ cumP+=probs[k]; if(cumP>=0.5){medianK=k+1;break;} }
+  let modeK=1, modeP=probs[0];
+  for(let k=1;k<K;k++) if(probs[k]>modeP){modeP=probs[k];modeK=k+1;}
+
+  const lastTau=thresholds[thresholds.length-1];
+  const xlo=Math.min(tau1-2.2, eta-3.8);
+  const xhi=Math.max(lastTau+2.2, eta+3.8);
+
+  const Wp=W-m.l-m.r;
+  const sepH=14;
+  const latH=Math.round((H-m.t-m.b-sepH)*0.55);
+  const pmfH=H-m.t-m.b-sepH-latH;
+  const latTop=m.t, latBot=m.t+latH;
+  const pmfTop=latBot+sepH, pmfBot=pmfTop+pmfH;
+
+  const catColors=[cv('--a1'),cv('--a5'),cv('--a2'),cv('--a6'),cv('--a3'),cv('--a4'),cv('--ink2')];
+
+  ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle=DARK?'#2a3040':'#c5bba8'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(m.l,latBot+sepH/2); ctx.lineTo(W-m.r,latBot+sepH/2); ctx.stroke();
+
+  const N=400;
+  const latDx=(xhi-xlo)/N;
+  const latYs=[];
+  for(let i=0;i<=N;i++) latYs.push(d.latentPDF(xlo+i*latDx, eta));
+  const latMax=Math.max(...latYs.filter(isFinite))*1.12||1;
+  const toLatX=v=>m.l+(v-xlo)/(xhi-xlo)*Wp;
+  const toLatY=v=>latBot-(v/latMax)*latH;
+
+  ctx.strokeStyle=DARK?'#1e242e':'#ddd5c6'; ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){
+    const x=xlo+i*(xhi-xlo)/5;
+    ctx.beginPath(); ctx.moveTo(toLatX(x),latTop); ctx.lineTo(toLatX(x),latBot); ctx.stroke();
+  }
+
+  const tauFull=[-Infinity,...thresholds,Infinity];
+  for(let k=0;k<K;k++){
+    const lo=tauFull[k], hi=tauFull[k+1];
+    const pxLo=lo===-Infinity?m.l:toLatX(lo);
+    const pxHi=hi=== Infinity?m.l+Wp:toLatX(hi);
+    const col=catColors[k%catColors.length];
+    ctx.fillStyle=col+(DARK?'44':'33');
+    ctx.beginPath(); ctx.moveTo(pxLo,toLatY(0));
+    for(let i=0;i<=N;i++){
+      const xv=xlo+i*latDx;
+      if(xv<lo||xv>hi)continue;
+      ctx.lineTo(toLatX(xv),toLatY(d.latentPDF(xv,eta)));
+    }
+    ctx.lineTo(pxHi,toLatY(0)); ctx.closePath(); ctx.fill();
+  }
+
+  ctx.strokeStyle=DARK?'#ece6d8':'#18130e'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<=N;i++){
+    const x=xlo+i*latDx, y=d.latentPDF(x,eta);
+    if(!isFinite(y))continue;
+    i===0?ctx.moveTo(toLatX(x),toLatY(y)):ctx.lineTo(toLatX(x),toLatY(y));
+  }
+  ctx.stroke();
+
+  ctx.save(); ctx.setLineDash([4,3]);
+  thresholds.forEach((tau,i)=>{
+    const px=toLatX(tau);
+    ctx.strokeStyle=DARK?'#8a8070':'#5a4f42'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
+    ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
+    ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('τ'+(i+1), px, latTop+10);
+  });
+  ctx.restore();
+
+  {
+    const px=toLatX(eta);
+    ctx.save(); ctx.setLineDash([6,3]);
+    ctx.strokeStyle=cv('--a2'); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(px,latTop); ctx.lineTo(px,latBot); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle=cv('--a2'); ctx.font='bold 10px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('η', px, latTop+10);
+  }
+
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='left';
+  ctx.fillText('Latent variable Y*', m.l, latBot+10);
+
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
+  for(let i=0;i<=5;i++){
+    const x=xlo+i*(xhi-xlo)/5;
+    ctx.fillText(x.toFixed(1), toLatX(x), latBot-3);
+  }
+
+  const barW=Math.min(Wp/(K+1)*0.72, 60);
+  const barSpacing=Wp/(K);
+  const toPmfX=k=>m.l+(k+0.5)*barSpacing;
+  const toPmfY=v=>pmfBot-(v/Math.max(...probs,0.01))*pmfH*0.88;
+
+  ctx.strokeStyle=DARK?'#1e242e':'#ddd5c6'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pmfBot-i*(pmfH*0.88)/4;
+    ctx.beginPath(); ctx.moveTo(m.l,y); ctx.lineTo(m.l+Wp,y); ctx.stroke();
+  }
+
+  probs.forEach((p,k)=>{
+    const px=toPmfX(k);
+    const py=toPmfY(p);
+    const col=catColors[k%catColors.length];
+    ctx.fillStyle=col+(DARK?'bb':'99');
+    ctx.strokeStyle=col;
+    ctx.lineWidth=1.5;
+    const bx=px-barW/2, bh=pmfBot-py;
+    ctx.fillRect(bx,py,barW,bh);
+    ctx.strokeRect(bx,py,barW,bh);
+    ctx.fillStyle=DARK?'#ece6d8':'#18130e';
+    ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+    const pct=(p*100).toFixed(1);
+    if(bh>14) ctx.fillText(pct+'%', px, py+11);
+    ctx.fillStyle=DARK?'#8a8070':'#5a4f42';
+    ctx.fillText('k='+(k+1), px, pmfBot+12);
+  });
+
+  ctx.save(); ctx.translate(m.l-40, (pmfTop+pmfBot)/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='9px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.fillText('P(Y = k)', 0, 0);
+  ctx.restore();
+
+  ctx.save(); ctx.setLineDash([5,4]); ctx.lineWidth=1.5;
+  const pmfMoments=[
+    {val:EY,      show:showMean,   color:cv('--a2'), lbl:'E[Y]'},
+    {val:medianK, show:showMedian, color:cv('--a3'), lbl:'Md'},
+    {val:modeK,   show:showMode,   color:cv('--a5'), lbl:'Mo'},
+  ];
+  pmfMoments.forEach(({val,show,color,lbl})=>{
+    if(!show)return;
+    const kIdx=val-1;
+    const px=toPmfX(kIdx);
+    if(px<m.l||px>m.l+Wp)return;
+    ctx.strokeStyle=color;
+    ctx.beginPath(); ctx.moveTo(px,pmfTop); ctx.lineTo(px,pmfBot); ctx.stroke();
+    ctx.fillStyle=color; ctx.font='10px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText(lbl, px, pmfTop+10);
+  });
+  ctx.restore();
+
+  ctx.fillStyle=DARK?'#8a8070':'#5a4f42'; ctx.font='10px DM Mono,monospace'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const yv=latMax*i/4;
+    ctx.fillText(yv.toFixed(2), m.l-4, toLatY(yv)+3);
+  }
+
+  updateStats(EY, medianK, modeK, VarY);
 }
 
 // ── Init ──────────────────────────────────────────────────────
