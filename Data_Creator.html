@@ -1445,7 +1445,8 @@ function generateAndRender(){
   document.getElementById('csvWideBtn').disabled=false;
   if(hasW){document.getElementById('csvLongBtn').style.display='';document.getElementById('csvLongBtn').disabled=false;}
   updatePlotSelectors();
-  showToast(`✓ ${data.length} Zeilen generiert`);
+  document.getElementById('seedVal').value = seed + 1;
+  showToast(`✓ ${data.length} Zeilen generiert (seed: ${seed})`);
 }
 
 function samplePoint(eta,lik,extra,sd){
@@ -2134,15 +2135,32 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   } else if(hasB){
     // Between only: rbind of rnorm per group
     lines.push('# ── Between-Design (eine Gruppe pro Block) ─────────────');
+    const useEtaColB = clActive && !isIdentityLink(lik);
     const bRows=hasB?bCells:[[]];
+    if(!isIdentityLink(lik)){
+      bRows.forEach(bc=>{
+        const bk=cellKey(bc);
+        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0);
+        if(defLine) lines.push(defLine);
+      });
+      lines.push('');
+    }
     bRows.forEach(bc=>{
       const bk=cellKey(bc);
       const mu=(ST.means[bk]??0).toFixed(2);
       const sd=(ST.sds[bk]??1).toFixed(2);
       const varName='dat_'+bc.join('_');
+      const etaVar='eta_'+bc.join('_');
       lines.push(`${varName} <- data.frame(`);
       ST.between.forEach((f,i)=>lines.push(`  ${bNamesR[i]} = "${bc[i]}",`));
-      lines.push(`  Y = ${rSamplePoint('n', lik, mu, sd, extra)}`);
+      if(useEtaColB){
+        if(lik==='lognormal'){ lines.push(`  .eta = rep(${etaVar}, n),`); lines.push(`  .sigma = rep(${sd}, n)`); }
+        else { lines.push(`  .eta = rep(${etaVar}, n)`); }
+      } else if(!isIdentityLink(lik)){
+        lines.push(`  Y = ${rSamplePointFromEtaVar('n', etaVar, lik, extra, sd)}`);
+      } else {
+        lines.push(`  Y = ${rSamplePoint('n', lik, mu, sd, extra)}`);
+      }
       lines.push(')');
     });
     lines.push('');
@@ -2154,8 +2172,18 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push('# ── Einfaches Design ────────────────────────────────────');
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
+    const useEtaColNF = clActive && !isIdentityLink(lik);
+    const etaDefNF=rEtaDef('eta',lik,ST.means['all']??0);
+    if(etaDefNF){ lines.push(etaDefNF); lines.push(''); }
     lines.push(`dat <- data.frame(`);
-    lines.push(`  Y = ${rSamplePoint('n', lik, mu, sd, extra)}`);
+    if(useEtaColNF){
+      if(lik==='lognormal'){ lines.push(`  .eta = rep(eta, n),`); lines.push(`  .sigma = rep(${sd}, n)`); }
+      else { lines.push(`  .eta = rep(eta, n)`); }
+    } else if(!isIdentityLink(lik)){
+      lines.push(`  Y = ${rSamplePointFromEtaVar('n', 'eta', lik, extra, sd)}`);
+    } else {
+      lines.push(`  Y = ${rSamplePoint('n', lik, mu, sd, extra)}`);
+    }
     lines.push(')');
   }
 
@@ -2178,16 +2206,30 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
     }
     lines.push(`dat$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat), replace = TRUE))`);
+    const useEtaColCl = !isIdentityLink(lik);
     if(hasSlopesNoW){
       const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
       lines.push(`dat <- dat |>`);
       lines.push(`  mutate(`);
       lines.push(`    .slope_code = match(${sfNameR}, c(${sfLevels})) - 1L,`);
-      lines.push(`    Y = Y + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code`);
-      lines.push(`  ) |> select(-.slope_code)`);
+      if(useEtaColCl){
+        lines.push(`    .eta = .eta + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code,`);
+        lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
+        lines.push(`  ) |> select(-c(.slope_code, .eta${lik==='lognormal'?', .sigma':''}))`);
+      } else {
+        lines.push(`    Y = Y + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code`);
+        lines.push(`  ) |> select(-.slope_code)`);
+      }
     } else {
       lines.push(`dat <- dat |>`);
-      lines.push(`  mutate(Y = Y + u0[as.character(${clNameR})])`);
+      if(useEtaColCl){
+        lines.push(`  mutate(`);
+        lines.push(`    .eta = .eta + u0[as.character(${clNameR})],`);
+        lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
+        lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+      } else {
+        lines.push(`  mutate(Y = Y + u0[as.character(${clNameR})])`);
+      }
     }
   }
 
@@ -2427,12 +2469,30 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     if(hasB) ST.between.forEach((f,fi)=>L.push(`#   d_long$${bNamesR[fi]} <- factor(d_long$${bNamesR[fi]})`));
     L.push('#   return(d_long)');
   } else if(hasB){
+    const pwUseEtaCol = clActive && !isIdentityLink(lik);
     const bRows=bCells;
+    if(!isIdentityLink(lik)){
+      bRows.forEach(bc=>{
+        const bk=cellKey(bc);
+        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0);
+        if(defLine) L.push(`#   ${defLine}`);
+      });
+      L.push('#');
+    }
     bRows.forEach(bc=>{
       const bk=cellKey(bc);
       const mu=(ST.means[bk]??0).toFixed(2);
       const sd=(ST.sds[bk]??1).toFixed(2);
-      L.push(`#   d_${bc.join('_')} <- data.frame(${ST.between.map((f,i)=>`${bNamesR[i]}="${bc[i]}"`).join(', ')}, Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
+      const bParts=ST.between.map((f,i)=>`${bNamesR[i]}="${bc[i]}"`).join(', ');
+      const etaVar='eta_'+bc.join('_');
+      if(pwUseEtaCol){
+        if(lik==='lognormal') L.push(`#   d_${bc.join('_')} <- data.frame(${bParts}, .eta = rep(${etaVar}, n), .sigma = rep(${sd}, n))`);
+        else L.push(`#   d_${bc.join('_')} <- data.frame(${bParts}, .eta = rep(${etaVar}, n))`);
+      } else if(!isIdentityLink(lik)){
+        L.push(`#   d_${bc.join('_')} <- data.frame(${bParts}, Y = ${rSamplePointFromEtaVar('n',etaVar,lik,extra,sd)})`);
+      } else {
+        L.push(`#   d_${bc.join('_')} <- data.frame(${bParts}, Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
+      }
     });
     L.push(`#   d <- rbind(${bCells.map(bc=>'d_'+bc.join('_')).join(', ')})`);
     ST.between.forEach((f,i)=>L.push(`#   d$${bNamesR[i]} <- factor(d$${bNamesR[i]})`));
@@ -2440,14 +2500,27 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
       L.push(`#   u0_pw <- setNames(rnorm(k_pw, 0, tau0_pw), paste0("${clNameR}", 1:k_pw))`);
       L.push(`#   d$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k_pw), nrow(d), replace = TRUE))`);
-      L.push(`#   d <- d |> mutate(Y = Y + u0_pw[as.character(${clNameR})])`);
+      if(pwUseEtaCol){
+        L.push(`#   d <- d |> mutate(`);
+        L.push(`#     .eta = .eta + u0_pw[as.character(${clNameR})],`);
+        L.push(`#     Y = ${rYFromEtaCol(lik, extra)}`);
+        L.push(`#   ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+      } else {
+        L.push(`#   d <- d |> mutate(Y = Y + u0_pw[as.character(${clNameR})])`);
+      }
     }
     pwCovLines('d').forEach(ln=>L.push(ln));
     L.push('#   return(d)');
   } else {
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
-    L.push(`#   d <- data.frame(Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
+    if(!isIdentityLink(lik)){
+      const defLine=rEtaDef('eta',lik,ST.means['all']??0);
+      if(defLine){ L.push(`#   ${defLine}`); L.push('#'); }
+      L.push(`#   d <- data.frame(Y = ${rSamplePointFromEtaVar('n','eta',lik,extra,sd)})`);
+    } else {
+      L.push(`#   d <- data.frame(Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
+    }
     pwCovLines('d').forEach(ln=>L.push(ln));
     L.push('#   return(d)');
   }
@@ -2662,6 +2735,81 @@ function rSamplePoint(nVar,lik,mu,sd,extra){
     case 'poisson':     return `rpois(${nVar}, exp(${mu}))`;
     case 'negbinomial': return `rnbinom(${nVar}, mu = exp(${mu}), size = ${extra.phi||2})`;
     default: return `rnorm(${nVar}, ${mu}, ${sd})`;
+  }
+}
+
+// Returns true for families where the link is identity (no inv-link transform needed).
+function isIdentityLink(lik){
+  return lik==='gaussian'||lik==='student';
+}
+
+// R expression (mutate context) that draws Y from the .eta column after cluster RE were added.
+// lognormal uses a .sigma column (stored per-row so multi-group SDs are handled correctly).
+function rYFromEtaCol(lik, extra){
+  const phi=extra.phi||2, ntrials=extra.ntrials||10;
+  switch(lik){
+    case 'lognormal':   return 'rlnorm(n(), meanlog = .eta, sdlog = .sigma)';
+    case 'gamma':       return `rgamma(n(), shape = ${phi}, rate = ${phi} / exp(.eta))`;
+    case 'bernoulli':   return 'rbinom(n(), 1, plogis(.eta))';
+    case 'beta':        return `{ p <- plogis(.eta); rbeta(n(), p * ${phi}, (1 - p) * ${phi}) }`;
+    case 'binomial':    return `rbinom(n(), ${ntrials}, plogis(.eta))`;
+    case 'poisson':     return 'rpois(n(), exp(.eta))';
+    case 'negbinomial': return `rnbinom(n(), mu = exp(.eta), size = ${phi})`;
+    default: return 'rnorm(n(), mean = .eta, sd = 1)';
+  }
+}
+
+// Convert η (model scale) to response-scale value for display in R code comments.
+function etaToResponse(lik, mu){
+  const v=+mu;
+  switch(lik){
+    case 'poisson': case 'negbinomial': case 'gamma': case 'lognormal': return Math.exp(v);
+    case 'bernoulli': case 'binomial': case 'beta': return 1/(1+Math.exp(-v));
+    default: return v;
+  }
+}
+
+// Format a response-scale value using the fewest decimal places that still round-trips cleanly.
+// Ensures user-entered round numbers (e.g. 10) appear as "10", not "9.9742".
+function fmtResp(resp){
+  for(let d=0;d<=6;d++){
+    const s=resp.toFixed(d);
+    if(Math.abs(parseFloat(s)-resp)<1e-6*Math.max(1,Math.abs(resp))) return parseFloat(s).toString();
+  }
+  return parseFloat(resp.toFixed(6)).toString();
+}
+
+// Generate R assignment line "etaVar <- linkFn(resp)   # comment" for non-identity links.
+// mu must be the raw float from ST.means (not pre-rounded) to preserve user-entered precision.
+// Returns null for identity-link families (no hidden transformation to show).
+function rEtaDef(etaVarName, lik, mu){
+  if(isIdentityLink(lik)) return null;
+  const respStr=fmtResp(etaToResponse(lik,mu));
+  let linkExpr, comment;
+  if(lik==='poisson'||lik==='negbinomial'||lik==='gamma'){
+    linkExpr=`log(${respStr})`; comment=`# E[Y] = ${respStr}; log-link`;
+  } else if(lik==='lognormal'){
+    linkExpr=`log(${respStr})`; comment=`# median = ${respStr}; log-link`;
+  } else {
+    linkExpr=`qlogis(${respStr})`; comment=`# E[Y] = ${respStr}; logit-link`;
+  }
+  return `${etaVarName} <- ${linkExpr}   ${comment}`;
+}
+
+// Like rSamplePoint but uses a named R variable for η instead of a numeric literal.
+function rSamplePointFromEtaVar(nVar, etaVar, lik, extra, sd){
+  const phi=extra.phi||2, ntrials=extra.ntrials||10, nu=extra.nu||4;
+  switch(lik){
+    case 'gaussian':    return `rnorm(${nVar}, mean = ${etaVar}, sd = ${sd})`;
+    case 'student':     return `${etaVar} + ${sd} * rt(${nVar}, df = ${nu})`;
+    case 'lognormal':   return `rlnorm(${nVar}, meanlog = ${etaVar}, sdlog = ${sd})`;
+    case 'gamma':       return `rgamma(${nVar}, shape = ${phi}, rate = ${phi} / exp(${etaVar}))`;
+    case 'bernoulli':   return `rbinom(${nVar}, 1, plogis(${etaVar}))`;
+    case 'beta':        return `rbeta(${nVar}, plogis(${etaVar})*${phi}, (1-plogis(${etaVar}))*${phi})`;
+    case 'binomial':    return `rbinom(${nVar}, ${ntrials}, plogis(${etaVar}))`;
+    case 'poisson':     return `rpois(${nVar}, exp(${etaVar}))`;
+    case 'negbinomial': return `rnbinom(${nVar}, mu = exp(${etaVar}), size = ${phi})`;
+    default: return `rnorm(${nVar}, ${etaVar}, ${sd})`;
   }
 }
 
