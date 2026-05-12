@@ -59,6 +59,7 @@ body{
 .tbtn:hover{border-color:var(--a2);color:var(--a2)}
 .tbtn.hint{border-color:var(--a3);color:var(--a3)}
 .tbtn.hint:hover{background:var(--a3);color:var(--bg)}
+.tbtn.locked{border-color:var(--a3);color:var(--a3)}
 
 /* ── LAYOUT ─────────────────────────────────────────────── */
 #app{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - var(--topbar-h))}
@@ -396,7 +397,10 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
           <input type="number" id="xhi" value="4"  step="0.5" onchange="drawPlot()">
         </div>
       </div>
-      <button class="tbtn" onclick="autoRange()" style="width:100%">↔ Auto-Bereich</button>
+      <div style="display:flex;gap:.35rem">
+        <button class="tbtn" onclick="autoRange()" style="flex:1">↔ Auto-Bereich</button>
+        <button class="tbtn" id="btn-xlock" onclick="toggleXLock()" title="X-Achse fixieren (kein Auto-Reset)">🔒</button>
+      </div>
     </div>
 
     <!-- Context examples -->
@@ -449,7 +453,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
       <div class="solver-grid">
         <div>
           <div class="solver-lbl" id="ci-lo-lbl">Untere Grenze</div>
-          <input type="number" id="ci-lo" value="-2" step="0.1">
+          <input type="number" id="ci-lo" value="-2" step="0.1" oninput="onCILoChange()">
         </div>
         <div>
           <div class="solver-lbl" id="ci-hi-lbl">Obere Grenze</div>
@@ -849,6 +853,7 @@ let GLM_ACTIVE = false;
 let GLM_LINK = 'logit';
 let GLM_PARAM = 'intercept'; // 'intercept' | 'slope'
 let glmHelpOpen = false;
+let XAXIS_LOCKED = false;
 
 // ── Init ───────────────────────────────────────────────────
 function init() {
@@ -937,8 +942,11 @@ function updateSolverHint() {
   const isLN    = CUR.id === 'lognormal';
   const loEl    = document.getElementById('ci-lo');
   if (isPos) {
-    if (loEl) { loEl.value = 0; loEl.disabled = true; loEl.style.opacity = '.35'; loEl.title = 'Untergrenze ist immer 0 (kein Shift erlaubt)'; }
-    hint.innerHTML = '<b style="color:var(--a5)">Positive Verteilung:</b> Die Untergrenze ist fest 0 — kein Shift möglich. Gib nur an, bis wohin die obere Grenze reichen soll.'
+    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.min = '0'; if (parseFloat(loEl.value)<0) loEl.value=0; loEl.title = 'Untergrenze ≥ 0 — Shift/Trunkierung'; }
+    hint.innerHTML = '<b style="color:var(--a5)">Positive Verteilung:</b> Untergrenze ≥ 0. '
+      + (CUR.id==='exponential'
+          ? 'Bei lb > 0 wird eine auf [lb, ∞) verschobene Exponential gezeigt (memoryless → identisch mit Shift).'
+          : 'Bei lb > 0 wird die Verteilung verschoben — lb ist der neue Faltungspunkt. E[x] = lb + E[Standard].')
       + (CUR.id === 'half_student' ? '<br><span style="opacity:.7">ν steuert die Schwere der Tails und muss separat im Slider eingestellt werden.</span>' : '');
   } else if (isLN) {
     if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.value = Math.max(0.01, parseFloat(loEl.value)||0.01); loEl.title = ''; }
@@ -977,6 +985,7 @@ function setParam(id, val) {
   const s = document.getElementById('slv-'+id);
   if (s) s.textContent = fmtN(val, id==='nu'?1:id==='alp'?1:id==='lambda'?3:2);
   autoRange();
+  reflectParamsToSolver();
 }
 
 // ── Auto range ─────────────────────────────────────────────
@@ -1000,17 +1009,20 @@ function autoRange() {
   lo = Math.max(lo, isFinite(supp[0]) ? supp[0] : lo);
   hi = Math.min(hi, isFinite(supp[1]) ? supp[1] : hi);
   const pad = (hi-lo)*0.06;
-  document.getElementById('xlo').value = Math.round((lo-pad)*100)/100;
-  document.getElementById('xhi').value = Math.round((hi+pad)*100)/100;
+  if (!XAXIS_LOCKED) {
+    document.getElementById('xlo').value = Math.round((lo-pad)*100)/100;
+    document.getElementById('xhi').value = Math.round((hi+pad)*100)/100;
+  }
   drawPlot();
 }
 
 function findQ(q) {
-  let a = isFinite(CUR.support(PARAMS)[0]) ? CUR.support(PARAMS)[0]-1e-6 : -1e7;
+  const lb = getPosLB();
+  let a = Math.max(isFinite(CUR.support(PARAMS)[0]) ? CUR.support(PARAMS)[0]-1e-6 : -1e7, lb-1e-6);
   let b = isFinite(CUR.support(PARAMS)[1]) ? CUR.support(PARAMS)[1]+1e-6 :  1e7;
   for (let i=0;i<100;i++) {
     const m=(a+b)/2;
-    const c=CUR.cdf(m,PARAMS)||0;
+    const c=effCDF(m,PARAMS)||0;
     if(c<q) a=m; else b=m;
     if(b-a<1e-7) break;
   }
@@ -1026,7 +1038,7 @@ function drawPlot() {
   const N = 500;
   const xs = Array.from({length:N}, (_,i) => lo + i*(hi-lo)/(N-1));
   const ys = xs.map(x => {
-    try { const v=CUR.pdf(x,PARAMS); return (isFinite(v)&&v>=0)?v:0; } catch(e){return 0;}
+    try { const v=effPDF(x,PARAMS); return (isFinite(v)&&v>=0)?v:0; } catch(e){return 0;}
   });
   const yMax = Math.max(...ys)*1.15||1;
 
@@ -1061,7 +1073,7 @@ function drawPlot() {
       const q025 = findQVal(0.025), q975 = findQVal(0.975);
       const xsCI = xs.filter(x => x>=q025 && x<=q975);
       if (xsCI.length > 1) {
-        const ciPts = xsCI.map((x,i)=>[x,CUR.pdf(x,PARAMS)]);
+        const ciPts = xsCI.map((x,i)=>[x,effPDF(x,PARAMS)]);
         const areaCI = d3.area().x(p=>xSc(p[0])).y0(Hp).y1(p=>ySc(p[1])).curve(d3.curveBasis);
         g.append('path').datum(ciPts).attr('fill',a2).attr('fill-opacity',.18).attr('d',areaCI);
         // CI boundary lines
@@ -1102,16 +1114,18 @@ function drawPlot() {
   g.append('path').datum(pts).attr('fill','none').attr('stroke',a2).attr('stroke-width',2.5).attr('d',line);
 
   // Mean line — stops at density peak, label just above it
-  const mn = CUR.mean(PARAMS);
+  const mn = effMean(PARAMS);
   if (typeof mn==='number' && isFinite(mn) && mn>=lo && mn<=hi) {
     let mnDensY = 0;
-    try { const v=CUR.pdf(mn,PARAMS); mnDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
+    try { const v=effPDF(mn,PARAMS); mnDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
     const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
     const mnLblY  = Math.max(mnTopPx-5, 28);
     g.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',mnTopPx).attr('y2',Hp)
      .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-    g.append('text').attr('x',xSc(mn)+4).attr('y',mnLblY)
-     .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text('E[x]');
+    const mnPx = xSc(mn), mnRight = mnPx > Wp*0.7;
+    g.append('text').attr('x', mnRight ? mnPx-4 : mnPx+4).attr('y',mnLblY)
+     .attr('text-anchor', mnRight ? 'end' : 'start')
+     .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(`E[x] = ${fmtN(mn,3)}`);
   }
 
   // Title + description
@@ -1157,15 +1171,85 @@ function drawPlot() {
 
 function findQVal(q) {
   const supp = CUR.support(PARAMS);
-  let a = isFinite(supp[0]) ? supp[0]-1e-6 : -1e7;
+  const lb = getPosLB();
+  let a = Math.max(isFinite(supp[0]) ? supp[0]-1e-6 : -1e7, lb-1e-6);
   let b = isFinite(supp[1]) ? supp[1]+1e-6 :  1e7;
   for (let i=0;i<120;i++) {
     const m=(a+b)/2;
-    const c=CUR.cdf(m,PARAMS)||0;
+    const c=effCDF(m,PARAMS)||0;
     if(c<q) a=m; else b=m;
     if(b-a<1e-8) break;
   }
   return (a+b)/2;
+}
+
+// ── Shift/Truncation helpers for positive distributions ────
+const POS_SHIFT_DISTS = ['exponential','half_normal','half_student','half_cauchy'];
+function getPosLB() {
+  if (!POS_SHIFT_DISTS.includes(CUR.id)) return 0;
+  return Math.max(0, parseFloat(document.getElementById('ci-lo').value)||0);
+}
+function effPDF(x, p) {
+  const lb = getPosLB();
+  if (lb === 0) return CUR.pdf(x, p);
+  if (CUR.id === 'exponential') return x < lb ? 0 : p.lambda * Math.exp(-p.lambda * (x - lb));
+  if (POS_SHIFT_DISTS.includes(CUR.id)) return x < lb ? 0 : CUR.pdf(x - lb, p);
+  return CUR.pdf(x, p);
+}
+function effCDF(x, p) {
+  const lb = getPosLB();
+  if (lb === 0) return CUR.cdf(x, p);
+  if (CUR.id === 'exponential') return x < lb ? 0 : 1 - Math.exp(-p.lambda * (x - lb));
+  if (POS_SHIFT_DISTS.includes(CUR.id)) return x < lb ? 0 : CUR.cdf(x - lb, p);
+  return CUR.cdf(x, p);
+}
+function effMean(p) {
+  const lb = getPosLB();
+  const base = CUR.mean(p);
+  if (lb === 0 || typeof base !== 'number' || !isFinite(base)) return base;
+  if (POS_SHIFT_DISTS.includes(CUR.id)) return base + lb;
+  return base;
+}
+
+// ── X-Achse fixieren ───────────────────────────────────────
+function toggleXLock() {
+  XAXIS_LOCKED = !XAXIS_LOCKED;
+  const btn = document.getElementById('btn-xlock');
+  if (btn) btn.classList.toggle('locked', XAXIS_LOCKED);
+  btn.title = XAXIS_LOCKED ? 'X-Achse fixiert — klicken zum Entsperren' : 'X-Achse fixieren (kein Auto-Reset)';
+}
+
+// ── CI-lo live-Redraw (positive Verteilungen) ──────────────
+function onCILoChange() {
+  if (!POS_SHIFT_DISTS.includes(CUR.id)) return;
+  const v = parseFloat(document.getElementById('ci-lo').value)||0;
+  if (v < 0) document.getElementById('ci-lo').value = 0;
+  autoRange();
+}
+
+// ── Slider → CI-Solver live update ────────────────────────
+function reflectParamsToSolver() {
+  const res = document.getElementById('solver-result');
+  if (!res || !res.classList.contains('show')) return;
+  const pct = parseFloat(document.getElementById('ci-pct').value)||95;
+  const q_lo = (1-pct/100)/2, q_hi = 1-q_lo;
+  try {
+    if (!CUR.cdf) return;
+    const hiVal = findQVal(q_hi);
+    const mn = effMean(PARAMS);
+    const mnStr = (typeof mn==='number'&&isFinite(mn)) ? `  E[x] = ${fmtN(mn,3)}` : '';
+    const isPosShift = POS_SHIFT_DISTS.includes(CUR.id);
+    if (isPosShift) {
+      const lb = getPosLB();
+      document.getElementById('ci-hi').value = fmtN(hiVal,3);
+      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(lb,2)}</b> (lb), <b>${fmtN(hiVal,3)}</b>]${mnStr}`;
+    } else {
+      const loVal = findQVal(q_lo);
+      document.getElementById('ci-lo').value = fmtN(loVal,3);
+      document.getElementById('ci-hi').value = fmtN(hiVal,3);
+      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(loVal,3)}</b>, <b>${fmtN(hiVal,3)}</b>]${mnStr}`;
+    }
+  } catch(e) {}
 }
 
 // ── CI Solver ──────────────────────────────────────────────
@@ -1267,16 +1351,29 @@ function solvCI() {
       res.innerHTML=`<b>Cauchy:</b> μ = <b>${fmtN(mu,4)}</b>, σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [${fmtN(mu+sigma*t_lo,3)}, ${fmtN(mu+sigma*t_hi,3)}]</span>`;
       setP('mu',mu); setP('sig',sigma);
     } else if (CUR.id==='exponential') {
-      const lambda=-Math.log(1-q_hi)/hi;
-      res.innerHTML=`<b>Exponential:</b> λ = <b>${fmtN(lambda,4)}</b> → E[x] = ${fmtN(1/lambda,3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(-Math.log(1-q_hi)/lambda,3)}] — Untergrenze ist immer 0</span>`;
+      const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
+      const lambda=-Math.log(1-q_hi)/(hi-lb);
+      if (!isFinite(lambda)||lambda<=0) { res.textContent='Fehler: hi > lb erforderlich.'; return; }
+      res.innerHTML=`<b>Exponential (lb=${fmtN(lb,2)}):</b> λ = <b>${fmtN(lambda,4)}</b> → E[x] = ${fmtN(lb+1/lambda,3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(lb-Math.log(1-q_hi)/lambda,3)}]</span>`;
       setP('lambda',lambda);
     } else if (CUR.id==='half_normal') {
-      const sigma=hi/plInvNorm((q_hi+1)/2);
-      res.innerHTML=`<b>Half-Normal:</b> σ = <b>${fmtN(sigma,4)}</b> → E[x] = ${fmtN(sigma*Math.sqrt(2/Math.PI),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(hi,3)}] — Untergrenze immer 0, kein Shift</span>`;
+      const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
+      const sigma=(hi-lb)/plInvNorm((q_hi+1)/2);
+      if (!isFinite(sigma)||sigma<=0) { res.textContent='Fehler: hi > lb erforderlich.'; return; }
+      res.innerHTML=`<b>Half-Normal (lb=${fmtN(lb,2)}):</b> σ = <b>${fmtN(sigma,4)}</b> → E[x] = ${fmtN(lb+sigma*Math.sqrt(2/Math.PI),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span>`;
+      setP('sig',sigma);
+    } else if (CUR.id==='half_student') {
+      const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
+      const nu=PARAMS.nu||3;
+      const sigma=(hi-lb)/jStat.studentt.inv((q_hi+1)/2,nu);
+      if (!isFinite(sigma)||sigma<=0) { res.textContent='Fehler: hi > lb erforderlich.'; return; }
+      res.innerHTML=`<b>Half-Student-t (ν=${fmtN(nu,1)}, lb=${fmtN(lb,2)}):</b><br>σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">ν muss separat über den Slider gewählt werden.</span>`;
       setP('sig',sigma);
     } else if (CUR.id==='half_cauchy') {
-      const sigma=hi/Math.tan(Math.PI*q_hi/2);
-      res.innerHTML=`<b>Half-Cauchy:</b> σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b> (fest), ${fmtN(hi,3)}] — Untergrenze immer 0, kein Shift</span>`;
+      const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
+      const sigma=(hi-lb)/Math.tan(Math.PI*q_hi/2);
+      if (!isFinite(sigma)||sigma<=0) { res.textContent='Fehler: hi > lb erforderlich.'; return; }
+      res.innerHTML=`<b>Half-Cauchy (lb=${fmtN(lb,2)}):</b> σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span>`;
       setP('sig',sigma);
     } else if (CUR.id==='lognormal') {
       if (lo<=0||hi<=0) { res.textContent='Fehler: Log-Normal ist auf x>0 — beide Grenzen >0 angeben (z.B. 50 bis 500).'; return; }
