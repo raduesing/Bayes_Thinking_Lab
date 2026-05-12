@@ -369,8 +369,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     <div class="hp-sect">Step by step</div>
     <ul class="hp-seq">
       <li><strong>Draw data points</strong> — click in the field. 8–15 points are enough.</li>
-      <li><strong>Fit the line yourself</strong> — adjust a and b with the sliders.
-          Watch the RSS: when does it get smaller?</li>
+      <li><strong>Fit the line yourself</strong> — drag directly on the line (height) or grab the ↕ handles left/right (rotation). Sliders for fine-tuning. Watch the RSS.</li>
       <li><strong>Reveal OLS</strong> — click "★ Show best OLS line". Your blue line
           remains visible: compare it directly with the optimal one.</li>
     </ul>
@@ -418,6 +417,11 @@ const DX = [0, 10], DY = [0, 10];
 let manA = 5, manB = 0;
 
 let olsA = null, olsB = null, olsSigma = null;
+
+// Direct line drag
+const HANDLE_X_L = 2, HANDLE_X_R = 8, HANDLE_R = 9;
+let dragHandle = null;   // null | 'L' | 'R' | 'body'
+let bodyDragX  = 0;
 
 // ── Canvas setup ───────────────────────────────────────────
 const canvas = document.getElementById('canvas');
@@ -563,6 +567,28 @@ function redraw(){
     }
   }
 
+  // Drag handles
+  if(mode!=='draw'){
+    const hpos=getHandlePos();
+    ctx.save();
+    [['L',hpos.L],['R',hpos.R]].forEach(([key,{cx:hx,cy:hy}])=>{
+      const clHy=Math.max(margin.t+HANDLE_R, Math.min(H-margin.b-HANDLE_R, hy));
+      const active=dragHandle===key;
+      ctx.beginPath(); ctx.arc(hx,clHy,HANDLE_R,0,Math.PI*2);
+      ctx.fillStyle=active
+        ?(DARK?'#4ab0d8':'#2a6e8a')
+        :(DARK?'rgba(74,176,216,.82)':'rgba(42,110,138,.78)');
+      ctx.fill();
+      ctx.strokeStyle=DARK?'rgba(236,230,216,.7)':'rgba(255,255,255,.85)';
+      ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle=DARK?'#ece6d8':'#fff';
+      ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('↕',hx,clHy+0.5);
+      ctx.textBaseline='alphabetic';
+    });
+    ctx.restore();
+  }
+
   // Points
   points.forEach(p=>{
     ctx.beginPath();
@@ -624,7 +650,7 @@ const NARRATIVES = {
   },
   manual: {
     phase: 'p2', label: 'Step 2 — Fit the line yourself',
-    text: 'Try to <b>find the best line yourself</b> — adjust intercept and slope with the sliders. The <b>red lines</b> show the residuals: deviations between your data points and the line. Goal: minimize RSS (sum of squared residuals). When does the line fit well?'
+    text: 'Try to <b>find the best line yourself</b> — <b>drag directly on the line</b> to shift it vertically, or grab the <b>↕ handles</b> (at x≈2 and x≈8) to rotate it. Sliders for fine-tuning. The <b>red lines</b> show the residuals — goal: minimize RSS.'
   },
   ols: {
     phase: 'p3', label: 'Step 3 — OLS vs. your line',
@@ -649,6 +675,8 @@ function setMode(m){
     olsShown = true;
     document.getElementById('show-bells').disabled = false;
   }
+  dragHandle = null;
+  canvas.style.cursor = m==='draw' ? (brush==='erase'?'not-allowed':'crosshair') : 'default';
   redraw();
 }
 
@@ -668,6 +696,49 @@ function toggleOLS(){
   redraw();
 }
 
+// ── Handle helpers ─────────────────────────────────────────
+function getHandlePos(){
+  return {
+    L:{cx:toCanX(HANDLE_X_L), cy:toCanY(manA+manB*HANDLE_X_L)},
+    R:{cx:toCanX(HANDLE_X_R), cy:toCanY(manA+manB*HANDLE_X_R)}
+  };
+}
+function hitTestHandle(cx,cy){
+  if(mode==='draw') return null;
+  const h=getHandlePos();
+  for(const k of ['L','R'])
+    if(Math.hypot(cx-h[k].cx, cy-h[k].cy)<=HANDLE_R+4) return k;
+  return null;
+}
+function nearLine(cx,cy){
+  if(mode==='draw') return false;
+  const x0=margin.l, x1=W-margin.r;
+  const y0=toCanY(manA+manB*toDataX(x0)), y1=toCanY(manA+manB*toDataX(x1));
+  const dx=x1-x0, dy=y1-y0, len2=dx*dx+dy*dy;
+  if(len2===0) return Math.hypot(cx-x0,cy-y0)<12;
+  const t=Math.max(0,Math.min(1,((cx-x0)*dx+(cy-y0)*dy)/len2));
+  return Math.hypot(cx-(x0+t*dx), cy-(y0+t*dy))<10;
+}
+function applyHandleDrag(handle,cy){
+  const y=Math.max(-1,Math.min(11,toDataY(cy)));
+  if(handle==='body'){
+    manA=y-manB*bodyDragX;
+  } else if(handle==='L'){
+    const yR=manA+manB*HANDLE_X_R;
+    manB=(yR-y)/(HANDLE_X_R-HANDLE_X_L);
+    manA=y-manB*HANDLE_X_L;
+  } else {
+    const yL=manA+manB*HANDLE_X_L;
+    manB=(y-yL)/(HANDLE_X_R-HANDLE_X_L);
+    manA=yL-manB*HANDLE_X_L;
+  }
+  const slA=document.getElementById('sl-a'), slB=document.getElementById('sl-b');
+  slA.value=Math.max(+slA.min,Math.min(+slA.max,manA));
+  slB.value=Math.max(+slB.min,Math.min(+slB.max,manB));
+  document.getElementById('v-a').textContent=manA.toFixed(2);
+  document.getElementById('v-b').textContent=manB.toFixed(2);
+}
+
 // ── Brush & interaction ────────────────────────────────────
 function setBrush(b){
   brush = b;
@@ -685,14 +756,45 @@ function getCanvasPos(e){
 
 let isPointerDown = false;
 canvas.addEventListener('mousedown', e => {
-  isPointerDown = true;
-  handlePointer(e);
+  const {cx,cy}=getCanvasPos(e);
+  const hit=hitTestHandle(cx,cy);
+  if(hit){ dragHandle=hit; canvas.style.cursor='ns-resize'; e.preventDefault(); return; }
+  if(mode!=='draw' && nearLine(cx,cy)){
+    dragHandle='body'; bodyDragX=toDataX(cx); canvas.style.cursor='grabbing'; e.preventDefault(); return;
+  }
+  isPointerDown=true; handlePointer(e);
 });
-canvas.addEventListener('mousemove', e => {
+document.addEventListener('mousemove', e => {
+  if(dragHandle){ const {cx,cy}=getCanvasPos(e); applyHandleDrag(dragHandle,cy); redraw(); return; }
+  const {cx,cy}=getCanvasPos(e);
+  if(mode!=='draw'){
+    const r=canvas.getBoundingClientRect();
+    if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){
+      if(hitTestHandle(cx,cy))      canvas.style.cursor='ns-resize';
+      else if(nearLine(cx,cy))      canvas.style.cursor='grab';
+      else                          canvas.style.cursor='default';
+    }
+  }
   if(isPointerDown && mode==='draw') handlePointer(e);
 });
-canvas.addEventListener('mouseup', () => { isPointerDown = false; });
-canvas.addEventListener('touchstart', e => { e.preventDefault(); handlePointer(e); }, {passive:false});
+document.addEventListener('mouseup', ()=>{
+  isPointerDown=false; dragHandle=null;
+  canvas.style.cursor=mode==='draw'?(brush==='erase'?'not-allowed':'crosshair'):'default';
+});
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const {cx,cy}=getCanvasPos(e);
+  const hit=hitTestHandle(cx,cy);
+  if(hit){ dragHandle=hit; return; }
+  if(mode!=='draw' && nearLine(cx,cy)){ dragHandle='body'; bodyDragX=toDataX(cx); return; }
+  handlePointer(e);
+},{passive:false});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if(dragHandle){ const {cx,cy}=getCanvasPos(e); applyHandleDrag(dragHandle,cy); redraw(); return; }
+  if(mode==='draw') handlePointer(e);
+},{passive:false});
+canvas.addEventListener('touchend', ()=>{ dragHandle=null; isPointerDown=false; });
 
 function handlePointer(e){
   if(mode !== 'draw') return;
