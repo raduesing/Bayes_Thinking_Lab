@@ -802,6 +802,48 @@ function prS(pr,dp=1){
 function famS(pr){ return {normal:'Normal',exponential:'Exp',gamma:'Gamma',half_normal:'HN',student_t:'t'}[pr?.fam]||pr?.fam||''; }
 
 // ═══════════════════════════════════════════════════════
+//  KRUSCHKE CURVE — filled distribution icon
+// ═══════════════════════════════════════════════════════
+function kruschkePath(pr,W,H){
+  if(!pr) pr={fam:'normal',p1:1};
+  const N=80,f=pr.fam||'normal';
+  const sig=Math.max(0.01,pr.sig??1);
+  const p1=Math.max(0.01,pr.p1??1),p2=Math.max(0.01,pr.p2??1);
+  const dens=[];
+  for(let i=0;i<=N;i++){
+    const t=i/N; let d=0;
+    if(f==='normal'||f==='student_t'){
+      const eff=Math.min(sig,5); const x=(t-0.5)*8;
+      d=Math.exp(-0.5*(x/eff)**2);
+    } else if(f==='exponential'){
+      d=t<0.015?0:Math.exp(-t*5.5*p1);
+    } else if(f==='half_normal'){
+      d=t<0.01?0:Math.exp(-0.5*(t*4.5/p1)**2);
+    } else if(f==='gamma'){
+      const a=Math.max(0.2,p1),rt=Math.max(0.05,p2);
+      const peak=Math.max(0.01,(a-1)/rt);
+      const xsc=t*(peak*3.5+2);
+      d=xsc>0?Math.pow(xsc,a-1)*Math.exp(-rt*xsc):0;
+    } else if(f==='beta'){
+      const a=Math.max(0.1,p1),b=Math.max(0.1,p2);
+      d=(t<=0||t>=1)?0:Math.pow(t,a-1)*Math.pow(1-t,b-1);
+    } else {
+      d=Math.exp(-0.5*((t-0.5)*7)**2);
+    }
+    dens.push(Math.max(0,d));
+  }
+  const mx=Math.max(...dens,0.001);
+  const pts=dens.map((d,i)=>{
+    const x=(i/N*W).toFixed(1);
+    const y=(H*(1-(d/mx)*0.9)).toFixed(1);
+    return `${x},${y}`;
+  });
+  const stroke=`M${pts[0]}L${pts.slice(1).join('L')}`;
+  const fill=`${stroke}L${W},${H}L0,${H}Z`;
+  return {stroke,fill};
+}
+
+// ═══════════════════════════════════════════════════════
 //  MINI CURVES — truly live-responsive
 // ═══════════════════════════════════════════════════════
 function miniCurve(pr){
@@ -1110,16 +1152,9 @@ function drawPlate(g,p){
 
 function drawEdge(g,a,b,edge){
   const c=C[edge.col]?C[edge.col]():C.ink2();
-  if(a.type==='plbl'){
-    // Vertical dashed arrow from prior label to param node
-    const x=a.x, y1=a.y+12, y2=b.y-R-6;
-    g.appendChild(se('line',{x1:x,y1,x2:x,y2,stroke:c,'stroke-width':'1.5',
-      'stroke-dasharray':'5,3',opacity:'0.7',
-      'marker-end':`url(#as-${edge.col||'ink2'})`}));
-    return;
-  }
-  const rA=a.type==='det'?8:a.type==='obs'?23:R;
-  const rB=b.type==='det'?8:b.type==='obs'?23:R;
+  if(a.type==='plbl') return; // prior info is now inside drawStoch
+  const rA=a.type==='det'?8:a.type==='obs'?23:32;
+  const rB=b.type==='det'?8:b.type==='obs'?23:22;
 
   // For α/β→det edges: arrow tip lands at the term's x-position in the formula
   let tx2=b.x, ty2=b.y;
@@ -1145,6 +1180,12 @@ function drawEdge(g,a,b,edge){
   g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.2':'1.8',
     fill:'none','stroke-dasharray':edge.dash?'5,2.5':'',
     'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
+  // Kruschke-style "~" label on sampling arrows
+  if(!edge.dash&&b.type==='obs'&&a.type!=='cov'){
+    const tx=((+x1+ +x2)/2+8).toFixed(1), ty=((+y1+ +y2)/2-4).toFixed(1);
+    g.appendChild(se('text',{x:tx,y:ty,'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12',opacity:'0.6'},'~'));
+  }
 }
 
 function drawNode(g,node){
@@ -1159,46 +1200,75 @@ function drawNode(g,node){
 }
 
 function drawPLbl(g,node){
-  const c=C[node.col]?C[node.col]():C.ink2();
-  const s=prS(node.prObj); const w=s.length*5.8+14;
-  // Rounded pill label
-  g.appendChild(se('rect',{x:-w/2,y:-10,width:w,height:20,rx:10,
-    fill:c,opacity:'0.12',stroke:c,'stroke-width':'1','stroke-opacity':'0.5'}));
-  g.appendChild(se('text',{x:'0',y:'0','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'9.5',opacity:'0.95',
-    'font-weight':'500'},`~ ${s}`));
+  // Prior info is now rendered inside drawStoch — plbl is invisible
 }
 
 function drawStoch(g,node){
   const c=C[node.col]?C[node.col]():C.ink2();
   const isAct=ACTIVE===node.id;
   const pr=getPr(node);
+  const f=pr?.fam||'normal';
+  const isUniform=f==='uniform';
+  const cW=70, cH=30;       // curve canvas width/height
+  const cL=-cW/2;           // left edge
+  const cTop=-14;           // curve top (relative to node center)
+  const cBase=cTop+cH;      // baseline y = +16
 
-  // Shadow
-  g.appendChild(se('circle',{cx:'2',cy:'3',r:R,fill:'rgba(0,0,0,0.12)'}));
-  // Background
-  g.appendChild(se('circle',{cx:'0',cy:'0',r:R,fill:C.paper(),stroke:c,'stroke-width':isAct?'3.5':'2.5'}));
+  // ── Active glow ──────────────────────────────────────
   if(isAct){
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:R+5,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
+    g.appendChild(se('rect',{x:String(cL-7),y:String(cTop-32),
+      width:String(cW+14),height:String(cH+62),rx:'7',
+      fill:'none',stroke:c,'stroke-width':'1.5',opacity:'0.22'}));
   }
 
-  // Parameter name — bigger, clearer
-  const fs=node.lbl.length>4?'11':node.lbl.length>2?'14':'18';
-  g.appendChild(se('text',{x:'0',y:'-6','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'600'},node.lbl));
-
-  // Mini distribution curve — live
-  if(pr){
-    g.appendChild(se('path',{d:miniCurve(pr),stroke:c,'stroke-width':'1.3',fill:'none',
-      transform:'translate(0,11)',opacity:'0.88'}));
-    if(DET!=='simple'){
-      g.appendChild(se('text',{x:'0',y:R-6,'text-anchor':'middle',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8',opacity:'0.7'},famS(pr)));
+  // ── Distribution shape ───────────────────────────────
+  if(isUniform){
+    g.appendChild(se('rect',{x:String(cL),y:String(cTop),
+      width:String(cW),height:String(cH),rx:'2',
+      fill:c,'fill-opacity':'0.2',stroke:c,'stroke-width':'2'}));
+    if(pr&&DET!=='simple'){
+      const lo=parseFloat(pr.p1??0).toFixed(0),hi=parseFloat(pr.p2??1).toFixed(0);
+      g.appendChild(se('text',{x:String(cL+5),y:String(cTop-3),'text-anchor':'start',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.82'},`L=${lo}`));
+      g.appendChild(se('text',{x:String(cW/2-5),y:String(cTop-3),'text-anchor':'end',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.82'},`H=${hi}`));
+    }
+  } else {
+    const {stroke,fill}=kruschkePath(pr,cW,cH);
+    const tx=`translate(${cL},${cTop})`;
+    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',
+      stroke:'none',transform:tx}));
+    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2',fill:'none',transform:tx}));
+    if(pr&&DET!=='simple'){
+      g.appendChild(se('text',{x:'0',y:String(cTop-20),'text-anchor':'middle',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.85'},prS(pr)));
     }
   }
+
+  // ── Baseline ─────────────────────────────────────────
+  g.appendChild(se('line',{x1:String(cL),y1:String(cBase),
+    x2:String(cW/2),y2:String(cBase),
+    stroke:c,'stroke-width':'1.5',opacity:'0.8'}));
+
+  // ── Parameter name (between hyperparams and curve top) ──
+  const fs=node.lbl.length>4?'11':node.lbl.length>2?'13':'17';
+  g.appendChild(se('text',{x:'0',y:String(cTop-8),'text-anchor':'middle',
+    'dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'700'},node.lbl));
+
+  // ── Family label below baseline (italic, Kruschke-style) ──
+  if(DET!=='simple'){
+    const famLbl={normal:'normal',student_t:'student-t',exponential:'exp',
+      half_normal:'half-normal',gamma:'gamma',beta:'beta',uniform:'uniform'}[f]||f;
+    g.appendChild(se('text',{x:'0',y:String(cBase+14),'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'9.5','font-style':'italic',
+      opacity:'0.9'},famLbl));
+  }
+
+  // ── Optional subscript ───────────────────────────────
   if(DET==='full'&&node.sub){
-    g.appendChild(se('text',{x:'0',y:R+16,'text-anchor':'middle',
-      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.6'},node.sub));
+    g.appendChild(se('text',{x:'0',y:String(cBase+27),'text-anchor':'middle',
+      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'9',opacity:'0.5'},node.sub));
   }
 }
 
