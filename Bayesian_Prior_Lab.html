@@ -1056,7 +1056,7 @@ function drawPlot() {
 
   const xSc = d3.scaleLinear().domain([lo,hi]).range([0,Wp]);
   const ySc = d3.scaleLinear().domain([0,yMax]).range([Hp,0]);
-  const grid = cv('--grid'), ink2 = cv('--ink2'), a2 = cv('--a2'), a3 = cv('--a3');
+  const grid = cv('--grid'), ink2 = cv('--ink2'), a1 = cv('--a1'), a2 = cv('--a2'), a3 = cv('--a3');
 
   g.append('g').call(d3.axisLeft(ySc).ticks(4).tickSize(-Wp))
    .call(gr=>{gr.select('.domain').remove();
@@ -1114,19 +1114,39 @@ function drawPlot() {
   g.append('path').datum(pts).attr('fill',`url(#${gradId})`).attr('d',area);
   g.append('path').datum(pts).attr('fill','none').attr('stroke',a2).attr('stroke-width',2.5).attr('d',line);
 
-  // Mean line — stops at density peak, label just above it
+  // Mean + Median lines
   const mn = effMean(PARAMS);
+  let md = CUR.id==='lkj' ? 0 : null;
+  try { if (md===null && CUR.cdf && typeof CUR.cdf(0,PARAMS)==='number') md=findQVal(0.5); } catch(e){}
+  const thresh = (hi-lo)*0.005;
+  const sameVal = (typeof mn==='number'&&isFinite(mn)&&md!==null&&isFinite(md)&&Math.abs(mn-md)<thresh);
+
   if (typeof mn==='number' && isFinite(mn) && mn>=lo && mn<=hi) {
-    let mnDensY = 0;
+    let mnDensY=0;
     try { const v=effPDF(mn,PARAMS); mnDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
-    const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
-    const mnLblY  = Math.max(mnTopPx-5, 28);
+    const mnTopPx=mnDensY>0?ySc(mnDensY):0;
+    const mnLblY=Math.max(mnTopPx-5,28);
     g.append('line').attr('x1',xSc(mn)).attr('x2',xSc(mn)).attr('y1',mnTopPx).attr('y2',Hp)
      .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-    const mnPx = xSc(mn), mnRight = mnPx > Wp*0.7;
-    g.append('text').attr('x', mnRight ? mnPx-4 : mnPx+4).attr('y',mnLblY)
-     .attr('text-anchor', mnRight ? 'end' : 'start')
-     .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(`E[x] = ${fmtN(mn,3)}`);
+    const mnPx=xSc(mn), mnRight=mnPx>Wp*0.7;
+    const mnLbl=sameVal?`E[x] = Med. = ${fmtN(mn,3)}`:`E[x] = ${fmtN(mn,3)}`;
+    g.append('text').attr('x',mnRight?mnPx-4:mnPx+4).attr('y',mnLblY)
+     .attr('text-anchor',mnRight?'end':'start')
+     .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(mnLbl);
+  }
+  if (!sameVal && md!==null && isFinite(md) && md>=lo && md<=hi) {
+    let mdDensY=0;
+    try { const v=effPDF(md,PARAMS); mdDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
+    const mdTopPx=mdDensY>0?ySc(mdDensY):0;
+    const mdPx=xSc(md), mdRight=mdPx>Wp*0.7;
+    const mnPx2=(typeof mn==='number'&&isFinite(mn))?xSc(mn):-9999;
+    const close=Math.abs(mdPx-mnPx2)<50;
+    const mdLblY=Math.max(mdTopPx-5,28)+(close?16:0);
+    g.append('line').attr('x1',mdPx).attr('x2',mdPx).attr('y1',mdTopPx).attr('y2',Hp)
+     .attr('stroke',a1).attr('stroke-width',1.5).attr('stroke-dasharray','2,4').attr('opacity',.85);
+    g.append('text').attr('x',mdRight?mdPx-4:mdPx+4).attr('y',mdLblY)
+     .attr('text-anchor',mdRight?'end':'start')
+     .attr('fill',a1).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(`Med. = ${fmtN(md,3)}`);
   }
 
   // Title + description
