@@ -792,29 +792,35 @@ function wls(pts, weights) {
   return {a: my - b*mx, b};
 }
 
-function glmFit(pts, invLink, linkDeriv, varFn, maxIter=8) {
-  let a = 0, b = 0;
+function glmFit(pts, invLink, linkDeriv, varFn, maxIter=25) {
+  if (pts.length === 0) return {a:0, b:0};
   const my = pts.reduce((s,p)=>s+p.y,0)/pts.length;
-  a = invLink === (η=>η) ? my : Math.log(Math.max(my, 1e-6));
+  const isLogit = Math.abs(invLink(0) - 0.5) < 0.01;
+  const myC = Math.max(1e-4, Math.min(1-1e-4, my));
+  let a = isLogit ? Math.log(myC/(1-myC)) : Math.log(Math.max(myC, 1e-6));
+  let b = 0;
 
   for (let iter = 0; iter < maxIter; iter++) {
     const wpts = [], ws = [];
     for (const pt of pts) {
-      const eta = a + b*pt.x;
+      const rawEta = a + b*pt.x;
+      const eta = isLogit ? Math.max(-12, Math.min(12, rawEta)) : rawEta;
       const mu  = invLink(eta);
       const dmu = linkDeriv(eta);
       const v   = varFn(mu);
       const w   = (dmu*dmu) / Math.max(v, 1e-10);
-      const z   = eta + (pt.y - mu) / dmu;
+      const dmuSafe = isLogit ? Math.max(dmu, 0.005) : Math.max(dmu, 1e-10);
+      const z   = eta + (pt.y - mu) / dmuSafe;
       wpts.push({x: pt.x, y: z});
-      ws.push(w);
+      ws.push(Math.max(w, 1e-14));
     }
     const res = wls(wpts, ws);
+    if (!isFinite(res.a) || !isFinite(res.b)) break;
     const diff = Math.abs(res.a-a)+Math.abs(res.b-b);
     a = res.a; b = res.b;
     if (diff < 1e-6) break;
   }
-  return {a, b};
+  return {a: isFinite(a) ? a : 0, b: isFinite(b) ? b : 0};
 }
 
 function fitGLM(pts) {
@@ -842,49 +848,57 @@ function fitGLM(pts) {
 // ═══════════════════════════════════════════════════════════════
 // ── 1-D IRLS: estimate intercept for a group given fixed slope b ──────
 function fitIntercept(pts, b, invLink, linkDeriv, varFn, startA) {
+  const isLogit = Math.abs(invLink(0) - 0.5) < 0.01;
   let a = startA;
-  for (let iter = 0; iter < 12; iter++) {
+  for (let iter = 0; iter < 20; iter++) {
     let sw = 0, sz = 0;
     for (const pt of pts) {
-      const eta = a + b * pt.x;
+      const rawEta = a + b * pt.x;
+      const eta = isLogit ? Math.max(-12, Math.min(12, rawEta)) : rawEta;
       const mu  = invLink(eta);
       const dmu = linkDeriv(eta);
       const v   = varFn(mu);
       const w   = Math.max((dmu * dmu) / Math.max(v, 1e-10), 1e-12);
-      const z   = eta + (pt.y - mu) / Math.max(dmu, 1e-10);
+      const dmuSafe = isLogit ? Math.max(dmu, 0.005) : Math.max(dmu, 1e-10);
+      const z   = eta + (pt.y - mu) / dmuSafe;
       sw += w; sz += w * (z - b * pt.x);
     }
     const na = sw > 1e-12 ? sz / sw : a;
+    if (!isFinite(na)) break;
     if (Math.abs(na - a) < 1e-7) { a = na; break; }
     a = na;
   }
-  return a;
+  return isFinite(a) ? a : startA;
 }
 
 // ── Shared-slope IRLS: estimate common slope across all groups ──────────
 // Groups have separate intercepts (fixed via current estimates), slope is common.
 // Iterates: given current {a_j}, update b; then update each a_j given b.
 function fitCommonSlope(grpPts, initAs, initB, invLink, linkDeriv, varFn) {
+  const isLogit = Math.abs(invLink(0) - 0.5) < 0.01;
   let b = initB;
   let as = [...initAs];
   const J = grpPts.length;
 
-  for (let outer = 0; outer < 10; outer++) {
+  for (let outer = 0; outer < 15; outer++) {
     // ── Update b given current {a_j} ──
     let sw = 0, sz = 0;
     for (let j = 0; j < J; j++) {
       for (const pt of grpPts[j]) {
-        const eta = as[j] + b * pt.x;
+        const rawEta = as[j] + b * pt.x;
+        const eta = isLogit ? Math.max(-12, Math.min(12, rawEta)) : rawEta;
         const mu  = invLink(eta);
         const dmu = linkDeriv(eta);
         const v   = varFn(mu);
         const w   = Math.max((dmu * dmu) / Math.max(v, 1e-10), 1e-12);
-        const z   = eta + (pt.y - mu) / Math.max(dmu, 1e-10);
+        const dmuSafe = isLogit ? Math.max(dmu, 0.005) : Math.max(dmu, 1e-10);
+        const z   = eta + (pt.y - mu) / dmuSafe;
         sw += w * pt.x * pt.x;
         sz += w * pt.x * (z - as[j]);
       }
     }
     const nb = sw > 1e-12 ? sz / sw : b;
+    if (!isFinite(nb)) break;
     const db = Math.abs(nb - b); b = nb;
 
     // ── Update each a_j given b ──
@@ -1098,8 +1112,8 @@ function buildMain(p, est) {
   const xMargin = (dataXmax - dataXmin) * 0.12 + 0.3;
   const xMin = dataXmin - xMargin, xMax = dataXmax + xMargin;
   const lineXs = [];
-  const step = (xMax - xMin) / 80;
-  for (let x = xMin; x <= xMax + step*0.1; x += step) lineXs.push(+x.toFixed(4));
+  const step = (xMax - xMin) / 150;
+  for (let x = xMin; x <= xMax + step*0.1; x += step) lineXs.push(x);
 
   const ds = [];
 
