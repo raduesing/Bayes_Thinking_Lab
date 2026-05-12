@@ -472,6 +472,7 @@ details.expl summary::-webkit-details-marker{display:none}
             <button class="mbtn" onclick="mcmcReset()">↺ Reset</button>
             <span class="mstat">Iter: <b id="mn">0</b></span>
             <span class="mstat">Akzeptanz: <b id="macc">—</b></span>
+            <span class="mstat" style="display:flex;align-items:center;gap:.3rem">Tempo:<input type="range" id="mcmc-speed" min="1" max="5" step="1" value="3" style="width:60px;vertical-align:middle" oninput="updMcmcSpeed()"><b id="mcmc-speed-lbl">15/s</b></span>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:.45rem">
@@ -1000,14 +1001,26 @@ function mcmcStop(){
   document.getElementById('mbtn-run').textContent='▶ Start';
   document.getElementById('mbtn-run').classList.remove('run');
 }
+function mcmcSpeedParams(){
+  const el=document.getElementById('mcmc-speed');
+  const s=el?+el.value:3;
+  const map=[[500,1],[150,1],[64,1],[16,1],[16,4]];
+  const [delay,batch]=map[Math.min(s-1,4)];
+  return {delay,batch};
+}
+function updMcmcSpeed(){
+  const {delay,batch}=mcmcSpeedParams();
+  const el=document.getElementById('mcmc-speed-lbl');
+  if(el)el.textContent=Math.round(batch*1000/delay)+'/s';
+}
 function scheduleMCMC(){
   if(!running)return;
-  rafId=setTimeout(mcmcFrame,64);
+  rafId=setTimeout(mcmcFrame,mcmcSpeedParams().delay);
 }
 function mcmcFrame(){
   if(!running)return;
-  // Only 1 step per tick so the walk is visible
-  mcmcStep();
+  const {batch}=mcmcSpeedParams();
+  for(let i=0;i<batch;i++) mcmcStep();
   drawMCMC();
   const tot=chain.length-1;
   document.getElementById('mn').textContent=tot;
@@ -1035,9 +1048,9 @@ function drawMCMC(){
   }
 
   // ── Axis ranges from current posterior ─────────────
-  const bc=post.mB, bs=Math.max(post.sB*5,.5);
-  const sc=post.mS, ss=Math.max(post.sdS*5,.3);
-  const bLo=bc-bs, bHi=bc+bs;
+  const bc=post.mB, bs=Math.max(post.sB*8, p.psb*1.5, .5);
+  const sc=post.mS, ss=Math.max(post.sdS*8, p.pss*0.8, .3);
+  const bLo=Math.min(bc-bs, p.pmb-p.psb), bHi=Math.max(bc+bs, p.pmb+p.psb);
   const sLo=Math.max(sc-ss,.05), sHi=sc+ss;
 
   const pad={l:62,r:20,t:22,b:58};
@@ -1055,23 +1068,27 @@ function drawMCMC(){
     grid2[is*nC+ib]=lp;
     if(isFinite(lp)){hxMax=Math.max(hxMax,lp);hxMin=Math.min(hxMin,lp)}
   }
-  const hRng=Math.max(hxMax-hxMin,.5);
+  const clipRng=20; // top 20 log-units → full color range
+  const hFloor=hxMax-clipRng;
   const img=ctx.createImageData(W2,H2);
   for(let py2=0;py2<H2;py2++)for(let px2=0;px2<W2;px2++){
     const ib=Math.min(Math.floor(px2/W2*nC),nC-1);
     const is=Math.min(Math.floor((1-py2/H2)*nC),nC-1);
     const lp=grid2[is*nC+ib];
-    const tv=isFinite(lp)?Math.max(0,Math.min(1,(lp-hxMin)/hRng)):0;
+    const tv=isFinite(lp)?Math.max(0,Math.min(1,(lp-hFloor)/clipRng)):0;
     const idx=4*(py2*W2+px2);
+    let r2,g2,b2;
     if(isDark){
-      img.data[idx]  =Math.round(8+tv*38);
-      img.data[idx+1]=Math.round(16+tv*90);
-      img.data[idx+2]=Math.round(36+tv*120);
+      // viridis: dark purple → blue → teal → yellow
+      if(tv<.33){const u=tv/.33;r2=Math.round(68-u*19);g2=Math.round(1+u*103);b2=Math.round(84+u*58);}
+      else if(tv<.67){const u=(tv-.33)/.34;r2=Math.round(49+u*4);g2=Math.round(104+u*79);b2=Math.round(142-u*21);}
+      else{const u=(tv-.67)/.33;r2=Math.round(53+u*200);g2=Math.round(183+u*48);b2=Math.round(121-u*84);}
     } else {
-      img.data[idx]  =Math.round(250-tv*100);
-      img.data[idx+1]=Math.round(245-tv*80);
-      img.data[idx+2]=Math.round(225-tv*60);
+      // light: cream → orange → dark red
+      if(tv<.5){const u=tv/.5;r2=Math.round(240-u*20);g2=Math.round(235-u*135);b2=Math.round(220-u*200);}
+      else{const u=(tv-.5)/.5;r2=Math.round(220+u*33);g2=Math.round(100-u*80);b2=20;}
     }
+    img.data[idx]=r2;img.data[idx+1]=g2;img.data[idx+2]=b2;
     img.data[idx+3]=255;
   }
   ctx.putImageData(img,pad.l,pad.t);
