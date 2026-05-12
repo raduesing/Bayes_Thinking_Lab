@@ -234,8 +234,8 @@ input.exp-input::placeholder{color:var(--border2);font-weight:400;font-size:.95r
 .sigma-explainer strong{color:var(--post)}
 .prior-verbal{padding:.75rem 1rem;background:var(--card);border:1px solid var(--prior);font-size:.84rem;line-height:1.65;color:var(--ink2);margin:.65rem 0}
 .prior-verbal strong{color:var(--ink)}
-.prior-extreme{display:none;padding:.75rem 1rem;background:var(--extreme-bg);border-left:3px solid var(--like);border:1px solid var(--extreme-border);font-size:.82rem;line-height:1.6;color:var(--ink);margin:.55rem 0}
-.prior-extreme strong{color:var(--like)}
+.prior-extreme{display:none;padding:.75rem 1rem;background:var(--bg2);border-left:3px solid var(--border2);border:1px solid var(--border);font-size:.82rem;line-height:1.6;color:var(--ink2);margin:.55rem 0}
+.prior-extreme strong{color:var(--ink)}
 .btn-row{display:flex;gap:.75rem;margin-top:1.6rem;flex-wrap:wrap}
 
 /* Misc */
@@ -527,7 +527,13 @@ function htmlIntro(){
   <div class="flow-item"><div class="flow-num">2</div><div class="flow-title">Prior</div><div class="flow-desc">Your belief before seeing data</div></div>
   <div class="flow-item"><div class="flow-num">3</div><div class="flow-title">Prediction</div><div class="flow-desc">What does your prior imply?</div></div>
   <div class="flow-item"><div class="flow-num">4</div><div class="flow-title">Data</div><div class="flow-desc">Tug-of-war: prior vs. study</div></div>
-  <div class="flow-item"><div class="flow-num">5</div><div class="flow-title">Reflection</div><div class="flow-desc">Assess calibration</div></div>
+  <div class="flow-item"><div class="flow-num">5</div><div class="flow-title">Reflection</div><div class="flow-desc">Understand updating</div></div>
+</div>
+<div style="padding:.85rem 1.1rem;background:var(--sigma-bg);border-left:3px solid var(--sigma-border);font-size:.84rem;line-height:1.65;color:var(--ink2);margin:1.4rem 0">
+  <strong style="color:var(--post)">What is this about?</strong><br>
+  This simulator demonstrates the <em>concept</em> of Bayesian thinking:
+  <strong>Prior knowledge + Data → Updated knowledge (Posterior)</strong> — the process of <em>updating</em>.
+  <span style="font-size:.79rem;color:var(--ink3);margin-top:.35rem;display:block">This is different from how priors are used in real statistical models (brms, Stan) — there, they are based on literature, knowledge of measurement scales, and regularization, not on personal impressions. The goal here is to <em>experience</em> how prior knowledge and data interact.</span>
 </div>
 <div class="sec-label mt2">Difficulty — determines how you specify your prior</div>
 <div class="diff-cards">
@@ -547,7 +553,7 @@ function htmlIntro(){
   <h3 style="margin-bottom:.6rem">What will you learn here?</h3>
   <p style="font-size:.84rem">A <strong>prior</strong> is your <em>previous</em> belief about an effect — before you see the data. The <strong>posterior</strong> is your updated belief afterwards: data expands, changes, and improves your state of knowledge. The posterior is the <em>precision-weighted</em> compromise of both — a narrow prior pulls hard, lots of data pull hard. The tug-of-war shows how evidence changes beliefs. All scenarios are based on real published studies.</p>
 </div>
-${S.history.length>0?`<div class="history-mini mt2"><div class="hm-title">Previous rounds</div>${S.history.map(h=>{const s=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s.emoji} ${s.title} — Score: <strong>${h.score}/100</strong></div>`}).join('')}</div>`:''}
+${S.history.length>0?`<div class="history-mini mt2"><div class="hm-title">Previous rounds</div>${S.history.map(h=>{const s=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s.emoji} ${s.title}</div>`}).join('')}</div>`:''}
 <details style="margin-top:1.4rem;border:1px solid var(--border);background:var(--card)">
   <summary style="padding:.75rem 1.1rem;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--ink2);list-style:none;display:flex;justify-content:space-between;align-items:center">
     <span>📚 All studies &amp; sources used</span><span style="font-size:.75rem;color:var(--ink3)">expand</span>
@@ -858,10 +864,10 @@ function updatePriorViz(){
     const ci80width=2*z80*sig;
     if(ci80width>s.extremeThresh){
       warn.style.display='block';
-      warn.innerHTML=`<strong>⚠ Very wide prior — a moment to reconsider:</strong><br>
-        Your 80%-CrI spans <strong>${fmt(ci80width,s.dataDec)} ${s.unit}</strong> — that is very wide.
-        ${s.extremeCtx}<br>
-        <span style="font-size:.77rem;color:var(--ink3);margin-top:.3rem;display:block">This is not a wrong answer — a wide prior reflects honest uncertainty. But it may be worth asking: is there prior knowledge that could narrow your estimate?</span>`;
+      warn.innerHTML=`<strong>Wide prior — what this means:</strong><br>
+        Your 80% credible interval spans <strong>${fmt(ci80width,s.dataDec)} ${s.unit}</strong>.
+        This shows that you are approaching this study without strong prior assumptions — a completely legitimate position.
+        <span style="font-size:.79rem;color:var(--ink3);margin-top:.3rem;display:block">The data will accordingly carry more weight in the tug-of-war. That is exactly what Bayesian updating is designed to do.</span>`;
     } else {
       warn.style.display='none';
     }
@@ -1175,21 +1181,17 @@ function calcScore(){
   const xbar=sc().studyXbar;
   const in80=inCI(xbar,S.priorMu,S.priorSig,.80);
   const in95=inCI(xbar,S.priorMu,S.priorSig,.95);
-  const calib=in80?50:in95?25:0;
-  const dist=Math.abs(S.priorMu-xbar);
-  const acc=Math.round(50*Math.max(0,1-dist/(2*S.priorSig)));
-  return{calib,acc,total:calib+acc,in80,in95}
+  return{in80,in95}
 }
 function htmlReflect(){
-  const s=sc();const{calib,acc,total,in80,in95}=calcScore();
+  const s=sc();const{in80,in95}=calcScore();
   const p=S.posterior;
-  const emoji=total>=80?'🎯':total>=55?'🧠':total>=30?'📖':'🌱';
-  if(!S.history.find(h=>h.scenarioId===S.scenarioId))S.history.push({scenarioId:S.scenarioId,score:total});
+  if(!S.history.find(h=>h.scenarioId===S.scenarioId))S.history.push({scenarioId:S.scenarioId});
   const used=S.history.map(h=>h.scenarioId);
   const avail=SCENARIOS.filter(sc2=>!used.includes(sc2.id));
   return`
 <h2>Reflection</h2>
-<p class="phase-sub">The study result — and how well was your prior calibrated?</p>
+<p class="phase-sub">The study result — and what did Bayesian updating accomplish?</p>
 <div class="study-result-box">
   <div class="sr-val">${fmt(s.studyXbar,s.dataDec)} ${s.unit}</div>
   <div class="sr-label">📄 Study result (x̄) · ${s.studyCite.split('(')[0].trim()}</div>
@@ -1223,31 +1225,19 @@ function htmlReflect(){
     <div class="rp-sub">σ_prior = ${fmt(S.priorSig,3)} → σ_post = ${fmt(p.sigma,3)}<br>Study reduced your uncertainty by ${((1-p.sigma/S.priorSig)*100).toFixed(0)}%</div>
   </div>
 </div>
-<div class="score-box">
-  <div class="score-emoji">${emoji}</div>
-  <div class="score-val">Calibration Score: <strong>${total}/100</strong></div>
-  <div class="score-breakdown">
-    <div class="sc-part"><strong>${calib}/50</strong> Calibration<br><span style="font-size:.7rem">Did x̄ fall in the prior 80%-CI?<br>80%-CI: 50pts · 95%-CI: 25pts · no: 0pts</span></div>
-    <div class="sc-part"><strong>${acc}/50</strong> Accuracy<br><span style="font-size:.7rem">Distance μ_prior to x̄,<br>normalized to ± 2σ_prior</span></div>
-  </div>
-</div>
 <div class="insight-box">${s.insight}</div>
-<div style="padding:.85rem 1.1rem;background:var(--bg2);border-left:3px solid var(--prior);font-size:.85rem;line-height:1.5;margin:.6rem 0">
-  <strong style="font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;color:var(--prior)">Assessment of your prior</strong>
+<div style="padding:.95rem 1.1rem;background:var(--bg2);border-left:3px solid var(--prior);font-size:.85rem;line-height:1.55;margin:.75rem 0">
+  <strong style="font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;color:var(--prior)">What does the updating say about your prior?</strong>
   ${genVerbalFeedback(s,S.priorMu,S.priorSig,s.studyXbar,p)}
 </div>
 <div class="deep-dive"><strong>More on the study result:</strong> ${s.studyDeepDive}</div>
 <div class="cite-box">Source: ${s.studyCite}</div>
-<div style="margin-top:.9rem;padding:.8rem 1rem;background:#FFF8EE;border:1px solid var(--gold);font-size:.8rem;line-height:1.6;color:var(--ink2)">
-  <strong style="color:var(--gold)">⚠ Important note on priors:</strong>
-  Priors that do not correspond to a null effect must always be <strong>transparent, plausible, and clearly justified</strong> — they represent what you actually <em>know</em>, not what you <em>wish</em>. A prior deliberately chosen to produce a desired result borders on scientific misconduct.
-</div>
 <div class="btn-row">
   ${avail.length>0?`<button class="btn btn-primary" onclick="nextSc()">Next study → (${avail.length} remaining)</button>`:''}
   <button class="btn btn-outline" onclick="replaySc()">Replay</button>
   <button class="btn btn-ghost" onclick="goto('intro')">Main menu</button>
 </div>
-${S.history.length>1?`<div class="history-mini mt2"><div class="hm-title">All rounds</div>${S.history.map(h=>{const s2=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s2.emoji} ${s2.title}: <strong>${h.score}/100</strong></div>`}).join('')}</div>`:''}`;
+${S.history.length>1?`<div class="history-mini mt2"><div class="hm-title">All rounds</div>${S.history.map(h=>{const s2=SCENARIOS.find(sc2=>sc2.id===h.scenarioId);return`<div class="hm-row">${s2.emoji} ${s2.title}</div>`}).join('')}</div>`:''}`;
 }
 function bindReflect(){setTimeout(()=>drawReflectChart(),80)}
 function drawReflectChart(){
