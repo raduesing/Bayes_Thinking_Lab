@@ -378,12 +378,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
     show what the model assumes about the spread.
 
     <div class="hp-sect">What do the statistics mean?</div>
-    <strong>RSS</strong> (Residual Sum of Squares) = Σ(y − ŷ)² — sum of squared deviations.
-    OLS minimizes this value exactly.<br><br>
-    <strong>R²</strong> — proportion of variance in y explained by x. R²=1: perfect prediction.
-    R²=0: the line explains nothing.<br><br>
-    <strong>σ</strong> — estimated spread of residuals. In a Bayesian model, σ corresponds to
-    the prior on the error distribution: <em>y ~ Normal(μ, σ)</em>.
+    <strong>RSS</strong> (Residual Sum of Squares) — the fit measure for any line.<br>
+    For each point: compute the deviation (y − ŷ), square it, sum everything: <em>RSS = Σ(y − ŷ)²</em>.<br>
+    Why square? (1) Positive and negative residuals would otherwise cancel out. (2) Large deviations are penalized more heavily than small ones — the line is especially pulled toward outliers. RSS = 0 would mean a perfect fit, never achieved with real data.<br><br>
+    <strong>OLS</strong> (Ordinary Least Squares) — the procedure that minimizes RSS. "Least Squares" is the goal: the sum of squares should be as small as possible. "Ordinary" distinguishes this standard method from weighted or robust variants.<br>
+    OLS has a closed-form solution — no iteration needed: <em>b = Cov(x,y) / Var(x)</em>, <em>a = ȳ − b·x̄</em>. This makes OLS fast, stable, and exactly computable. In Bayesian terms: OLS equals maximum likelihood under the assumption of normally distributed residuals.<br><br>
+    <strong>R²</strong> = 1 − RSS/TSS — proportion of variance in y explained by x. TSS is the total variance of y (without any model). R²=1: perfect prediction. R²=0: the line explains nothing.<br><br>
+    <strong>σ</strong> — estimated spread of residuals. In a Bayesian model: <em>y ~ Normal(μ, σ)</em>.
 
     <div class="hp-sect">Why this matters for Bayes</div>
     The linear model is the starting point for everything that follows. In the Bayesian context:
@@ -398,7 +399,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 'use strict';
 
 // ── Theme ──────────────────────────────────────────────────
-let DARK = true;
+let DARK = document.documentElement.getAttribute('data-theme') !== 'light';
 function toggleTheme(){
   DARK = !DARK;
   document.documentElement.setAttribute('data-theme', DARK?'dark':'light');
@@ -475,98 +476,137 @@ function redraw(){
   if(!W) return;
   ctx.clearRect(0,0,W,H);
 
-  const ink  = cv('--ink');
-  const ink2 = cv('--ink2');
-  const ink3 = cv('--ink3');
+  // Background
+  ctx.fillStyle = DARK ? '#0c0f14' : '#faf6ee';
+  ctx.fillRect(0,0,W,H);
+
   const grid = cv('--grid');
   const a2   = cv('--a2');
   const a3   = cv('--a3');
   const a5   = cv('--a5');
   const paper= cv('--paper');
 
-  // Grid
+  // Grid (every 2 units)
   ctx.strokeStyle = grid; ctx.lineWidth = 1;
-  for(let i=0;i<=10;i++){
-    const x = toCanX(i), y = toCanY(i);
-    ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, H-margin.b); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(W-margin.r, y); ctx.stroke();
+  for(let v=0;v<=10;v+=2){
+    const px = toCanX(v), py = toCanY(v);
+    ctx.beginPath(); ctx.moveTo(px, margin.t); ctx.lineTo(px, H-margin.b); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(margin.l, py); ctx.lineTo(W-margin.r, py); ctx.stroke();
   }
-
-  // Axes
-  ctx.strokeStyle = ink2; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, H-margin.b); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(margin.l, H-margin.b); ctx.lineTo(W-margin.r, H-margin.b); ctx.stroke();
 
   // Axis labels
-  ctx.fillStyle = ink2; ctx.font = `400 11px 'DM Mono',monospace`; ctx.textAlign = 'center';
-  for(let i=0;i<=10;i+=2){
-    ctx.fillText(i, toCanX(i), H-margin.b+14);
-    if(i>0){ ctx.textAlign='right'; ctx.fillText(i, margin.l-5, toCanY(i)+4); ctx.textAlign='center'; }
+  ctx.fillStyle = DARK ? '#2a3a55' : '#8a7f72';
+  ctx.font = '12px DM Mono, monospace'; ctx.textAlign = 'center';
+  for(let v=0;v<=10;v+=2){
+    ctx.fillText(v, toCanX(v), H-margin.b+15);
   }
-  ctx.fillStyle=ink3; ctx.font=`300 11px 'DM Mono',monospace`;
-  ctx.fillText('x', W-margin.r, H-margin.b+14);
-  ctx.textAlign='right'; ctx.fillText('y', margin.l-8, margin.t+4);
+  ctx.textAlign = 'right';
+  for(let v=0;v<=10;v+=2){
+    ctx.fillText(v, margin.l-5, toCanY(v)+3);
+  }
+  ctx.fillStyle = DARK ? '#1e2a40' : '#8a7f72';
+  ctx.textAlign = 'center';
+  ctx.fillText('x', W/2, H-4);
+  ctx.save(); ctx.translate(11, H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('y', 0, 0); ctx.restore();
 
   // Active line(s)
   const showResid = document.getElementById('show-resid').checked;
   const showBells = document.getElementById('show-bells').checked;
+  const useA = mode === 'ols' ? olsA : manA;
+  const useB = mode === 'ols' ? olsB : manB;
+  const hasLine = mode !== 'draw';
+  const showOlsComp = olsShown && mode !== 'ols';
 
   function drawLine(a, b, color, dash=[], width=2){
     ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash);
     ctx.beginPath();
-    const x0=DX[0], x1=DX[1];
-    ctx.moveTo(toCanX(x0), toCanY(a+b*x0));
-    ctx.lineTo(toCanX(x1), toCanY(a+b*x1));
+    ctx.moveTo(toCanX(DX[0]), toCanY(a+b*DX[0]));
+    ctx.lineTo(toCanX(DX[1]), toCanY(a+b*DX[1]));
     ctx.stroke(); ctx.restore();
   }
 
-  function drawResiduals(a, b, color){
-    if(!showResid) return;
-    ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.globalAlpha=.7;
-    points.forEach(p=>{
+  // Bedingte Verteilungen (drawn first, behind lines)
+  if(showBells && olsShown && olsA !== null && points.length > 1){
+    const sigma = olsSigma || 1;
+    const pxPerUnit = (H - margin.t - margin.b) / (DY[1] - DY[0]);
+    const bellWidthPx = 38;
+    [1.5, 3.5, 5.5, 7.5].forEach(dx => {
+      const cx   = toCanX(dx);
+      const yMu  = olsA + olsB * dx;
+      const cyMu = toCanY(yMu);
+      ctx.beginPath();
+      const steps = 60, range = 3 * sigma;
+      for(let i = 0; i <= steps; i++){
+        const yOff   = -range + i * 2*range/steps;
+        const density = Math.exp(-0.5*(yOff/sigma)**2);
+        const bx = cx + density * bellWidthPx;
+        const by = cyMu - yOff * pxPerUnit;
+        i === 0 ? ctx.moveTo(bx, by) : ctx.lineTo(bx, by);
+      }
+      for(let i = steps; i >= 0; i--){
+        const yOff = -range + i * 2*range/steps;
+        ctx.lineTo(cx, cyMu - yOff * pxPerUnit);
+      }
+      ctx.closePath();
+      ctx.fillStyle   = DARK ? 'rgba(74,176,216,.18)' : 'rgba(42,110,138,.14)';
+      ctx.fill();
+      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)';
+      ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx-4, cyMu); ctx.lineTo(cx+4, cyMu);
+      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.8)' : 'rgba(42,110,138,.7)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      [-1,1].forEach(sign => {
+        const pyS = cyMu - sign*sigma*pxPerUnit;
+        ctx.beginPath();
+        ctx.moveTo(cx, pyS); ctx.lineTo(cx + Math.exp(-0.5)*bellWidthPx, pyS);
+        ctx.strokeStyle = DARK ? 'rgba(74,176,216,.3)' : 'rgba(42,110,138,.25)';
+        ctx.lineWidth = 1; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
+      });
+    });
+    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.6)';
+    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText('N(ŷ, σ)', toCanX(1.5) + bellWidthPx + 4, toCanY(olsA + olsB*1.5) - 4);
+  }
+
+  // OLS comparison line (manual mode, when button toggled)
+  if(showOlsComp && olsA !== null){
+    drawLine(olsA, olsB, DARK ? 'rgba(128,203,82,.6)' : 'rgba(90,138,42,.55)', [6,4], 1.5);
+    ctx.fillStyle = DARK ? 'rgba(128,203,82,.7)' : 'rgba(90,138,42,.6)';
+    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText('OLS', toCanX(DX[1])+4, toCanY(olsA+olsB*DX[1]));
+  }
+
+  // Residuals to active line
+  if(showResid && hasLine && useA !== null){
+    const rCol = DARK ? 'rgba(232,97,74,.38)' : 'rgba(201,74,42,.32)';
+    points.forEach(p => {
       ctx.beginPath();
       ctx.moveTo(toCanX(p.x), toCanY(p.y));
-      ctx.lineTo(toCanX(p.x), toCanY(a+b*p.x));
-      ctx.stroke();
+      ctx.lineTo(toCanX(p.x), toCanY(useA+useB*p.x));
+      ctx.strokeStyle = rCol; ctx.lineWidth = 1;
+      ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
     });
-    ctx.restore();
   }
 
-  if(mode==='draw'){
-    // No line
-  } else if(mode==='manual'||mode==='ols'){
-    drawResiduals(manA, manB, a5);
-    drawLine(manA, manB, a2, [6,4], 2);
+  // Active line (OLS = green, manual = blue)
+  if(hasLine && useA !== null){
+    const lineColor = mode === 'ols' ? a3 : a2;
+    drawLine(useA, useB, lineColor, [], 2.5);
+    ctx.fillStyle = lineColor;
+    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`${mode==='ols'?'OLS: ':''} ŷ = ${useA.toFixed(2)} + ${useB.toFixed(2)}x`,
+                 toCanX(8.5) + 5, toCanY(useA + useB*8.5) - 6);
   }
 
-  if(olsShown && olsA!==null){
-    if(mode!=='draw') drawResiduals(olsA, olsB, a3);
-    drawLine(olsA, olsB, a3, [], 2.5);
-
-    // Conditional distributions
-    if(showBells && olsSigma>0){
-      ctx.save(); ctx.globalAlpha=.55;
-      [2,4,6,8].forEach(xv=>{
-        const mu = olsA + olsB*xv;
-        const sig = olsSigma;
-        const cx = toCanX(xv);
-        const scale = 40;
-        ctx.beginPath(); ctx.strokeStyle=a2; ctx.lineWidth=1.2;
-        for(let k=-30;k<=30;k++){
-          const dy = (k/30)*sig*3;
-          const yv = mu + dy;
-          const pd = Math.exp(-0.5*(dy/sig)**2)/(sig*Math.sqrt(2*Math.PI));
-          const px = cx + pd*scale;
-          const py = toCanY(yv);
-          k===-30 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
-        }
-        ctx.stroke();
-        ctx.beginPath(); ctx.strokeStyle=a2; ctx.lineWidth=.6; ctx.setLineDash([3,3]);
-        ctx.moveTo(cx, toCanY(mu-sig*3)); ctx.lineTo(cx, toCanY(mu+sig*3));
-        ctx.stroke(); ctx.setLineDash([]);
-      });
-      ctx.restore();
-    }
+  // In OLS mode: also draw manual line (dashed blue) for comparison
+  if(mode === 'ols' && manA !== null){
+    drawLine(manA, manB, DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)', [6,4], 1.8);
+    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.65)';
+    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
+    ctx.fillText(`yours: ŷ = ${manA.toFixed(2)} + ${manB.toFixed(2)}x`,
+                 toCanX(1) + 4, toCanY(manA + manB*1) - 6);
   }
 
   // Drag handles
@@ -592,12 +632,14 @@ function redraw(){
   }
 
   // Points
-  points.forEach(p=>{
-    ctx.beginPath();
-    ctx.arc(toCanX(p.x), toCanY(p.y), 5, 0, Math.PI*2);
-    ctx.fillStyle = a2; ctx.globalAlpha=.85;
-    ctx.fill(); ctx.globalAlpha=1;
-    ctx.strokeStyle=paper; ctx.lineWidth=1.5; ctx.stroke();
+  points.forEach(p => {
+    const cx = toCanX(p.x), cy = toCanY(p.y);
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
+    ctx.fillStyle = DARK ? '#ece6d8' : '#18130e';
+    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
+    ctx.strokeStyle = DARK ? 'rgba(74,176,216,.6)' : 'rgba(42,110,138,.5)';
+    ctx.lineWidth = 1.5; ctx.stroke();
   });
 
   // Update panel
