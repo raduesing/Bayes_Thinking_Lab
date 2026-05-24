@@ -187,7 +187,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
   padding:.4rem .7rem; border-radius:0 4px 4px 0; margin-bottom:.5rem; line-height:1.6;
 }
 .gl-formula {
-  font-family:'DM Mono',monospace; font-size:.8rem; background:var(--grid);
+  font-family:'Cambria Math','STIX Two Math','DM Mono',monospace; font-size:.8rem; background:var(--grid);
   padding:.35rem .7rem; border-radius:4px; margin-bottom:.5rem; overflow-x:auto;
   color:var(--a4);
 }
@@ -310,19 +310,19 @@ const TERMS = [
 /* ── A ── */
 { id:'ate', cats:['causal'], az:'A', name:'ATE', longname:'Average Treatment Effect',
   def:'Der ATE ist der durchschnittliche kausale Effekt einer Behandlung, berechnet über alle Einheiten der Zielpopulation. Er ist formal definiert als E[Y(1) − Y(0)], also der Erwartungswert der Differenz der potenziellen Ergebnisse mit und ohne Behandlung. Das fundamentale Problem: Für jede Person kann nur eines der beiden potenziellen Ergebnisse tatsächlich beobachtet werden — das andere ist das unbeobachtbare, kontrafaktische Gegenstück. Randomisierung, G-Computation oder IPW sind Strategien, den ATE dennoch verlässlich zu schätzen.',
-  formula:'ATE = E[Y(1) − Y(0)]',
+  formula:'ATE = E[δᵢ] = E[Y(1)ᵢ − Y(0)ᵢ];   Yᵢ = Dᵢ·Y(1)ᵢ + (1−Dᵢ)·Y(0)ᵢ  (Switching Equation)',
   intuition:'Stellen Sie sich vor, Sie könnten dieselbe Person gleichzeitig behandeln und nicht behandeln — der ATE wäre die mittlere Differenz über alle Personen. Da das unmöglich ist, versuchen wir, vergleichbare Gruppen zu konstruieren, die sich nur in der Behandlung unterscheiden. Der ATE ist die richtige Zielgröße, wenn man wissen will, wie wirksam eine Intervention für die gesamte Bevölkerung wäre — unabhängig davon, wer sie letztlich erhält. Wenn die Wirksamkeit für verschiedene Teilgruppen stark variiert, können ATT oder LATE informativer sein.',
   related:[{id:'att',label:'ATT'},{id:'atu',label:'ATU/ATC'},{id:'late',label:'LATE'},{id:'po',label:'Potenzielle Ergebnisse'},{id:'dag',label:'DAG'}]
 },
 { id:'att', cats:['causal'], az:'A', name:'ATT', longname:'Average Treatment Effect on the Treated',
   def:'Der ATT misst den durchschnittlichen kausalen Effekt einer Behandlung, eingeschränkt auf jene Personen, die die Behandlung tatsächlich erhalten haben: E[Y(1) − Y(0) | T = 1]. Er unterscheidet sich vom ATE, wenn sich behandelte und unbehandelte Personen in ihrer Reaktion auf die Behandlung systematisch unterscheiden — was bei nicht-randomisierten Studien häufig der Fall ist. Der ATT ist die natürliche Zielgröße für Programmevaluierungen: Er beantwortet die Frage "Hat das Programm denjenigen geholfen, die es in Anspruch genommen haben?" — nicht: "Würde es der gesamten Bevölkerung helfen?"',
-  formula:'ATT = E[Y(1) − Y(0) | T = 1]',
+  formula:'ATT = E[Y(1)|D=1] − E[Y(0)|D=1];   E[Y(0)|D=1] = unbeobachtbares Kontrafaktum',
   intuition:'Nehmen wir eine freiwillige Umschulungsmaßnahme für Arbeitslose: Die Teilnehmer haben sich selbst ausgewählt — vielleicht sind sie motivierter oder haben andere Merkmale als Nicht-Teilnehmer. Der ATT misst den Effekt speziell für diese Gruppe. ATE und ATT stimmen nur dann überein, wenn Behandlungs- und Kontrollgruppe dieselbe durchschnittliche potenzielle Reaktion hätten — was bei Selbstselektion meist nicht der Fall ist. Methoden wie IPW schätzen häufig den ATT, wenn die Gewichtung auf die Verteilung der Behandelten standardisiert wird.',
   related:[{id:'ate',label:'ATE'},{id:'atu',label:'ATU/ATC'},{id:'late',label:'LATE'},{id:'po',label:'Potenzielle Ergebnisse'}]
 },
 { id:'atu', cats:['causal'], az:'A', name:'ATU / ATC', longname:'Average Treatment Effect on the Untreated / on the Controls',
   def:'Der ATU (auch ATC: Average Treatment Effect on the Controls) misst den durchschnittlichen kausalen Effekt einer Behandlung für Personen, die die Behandlung tatsächlich nicht erhalten haben: E[Y(1) − Y(0) | T = 0]. Er beantwortet die Frage: "Wie würde die Intervention bei denjenigen wirken, die bisher nicht behandelt wurden — zum Beispiel, wenn ein Programm auf eine neue Zielgruppe ausgeweitet werden soll?" ATE, ATT und ATU sind verwandte, aber konzeptuell verschiedene Größen: Der ATE ist das gewichtete Mittel aus ATT und ATU, wobei die Gewichte den Anteilen der Behandelten und Unbehandelten in der Population entsprechen.',
-  formula:'ATU = E[Y(1) − Y(0) | T = 0]',
+  formula:'ATU = E[Y(1)|D=0] − E[Y(0)|D=0];   ATE = π·ATT + (1−π)·ATU  (π = P(D=1))',
   intuition:'ATU ist besonders relevant für Policy-Fragen der Art: "Sollten wir dieses Programm auf weitere Personen ausweiten?" Wenn sich Behandelte und Unbehandelte systematisch unterscheiden, können ATT und ATU stark voneinander abweichen: Eine Psychotherapie könnte für diejenigen, die sie bisher in Anspruch genommen haben (ATT), sehr wirksam sein — während sie für andere Personengruppen, die das Angebot bisher nicht genutzt haben (ATU), kaum Wirkung hätte. ATT, ATU und ATE zusammen machen die Heterogenität des Treatment-Effekts über die Population sichtbar.',
   related:[{id:'ate',label:'ATE'},{id:'att',label:'ATT'},{id:'late',label:'LATE'},{id:'po',label:'Potenzielle Ergebnisse'}]
 },
@@ -410,7 +410,7 @@ const TERMS = [
 /* ── G ── */
 { id:'gcomp', cats:['causal'], az:'G', name:'G-Computation', longname:'G-Formel / Standardisierung',
   def:'G-Computation schätzt kausale Effekte in drei Schritten: (1) Ein Outcome-Modell E[Y | T, X] wird an den Daten gefittet. (2) Für alle Beobachtungen werden kontrafaktische Outcomes vorhergesagt — einmal unter T = 1 und einmal unter T = 0. (3) Die Differenz der gemittelten Vorhersagen ergibt den ATE. Durch die Mittelung über die Kovariaten-Verteilung erhält man einen marginalisierten, populationsbezogenen Schätzer. G-Computation ist im BTL im Causal Estimands Tool implementiert.',
-  formula:'E[Y(t)] = Σₓ E[Y | T=t, X=x] · P(X=x)',
+  formula:'E[Y(t)] = Eₓ[E[Y|D=t, X]];   ATE = Eₓ[E[Y|D=1,X]] − Eₓ[E[Y|D=0,X]]',
   intuition:'Der entscheidende Schritt ist das kontrafaktische Vorhersagen: Wir nehmen jeden beobachteten Fall und fragen das Modell zweimal — einmal als wäre er behandelt worden, einmal als wäre er unbehandelt geblieben. Die Differenz dieser beiden Vorhersagen ergibt für jeden Fall den individuellen Effekt; der Durchschnitt darüber ist der ATE. G-Computation setzt ein korrekt spezifiziertes Outcome-Modell voraus, ist aber robuster gegen extreme Propensity Scores als IPW.',
   related:[{id:'ate',label:'ATE'},{id:'ipw',label:'IPW'},{id:'dag',label:'DAG'},{id:'propensity-score',label:'Propensity Score'}]
 },
@@ -452,13 +452,14 @@ const TERMS = [
 },
 { id:'ipw', cats:['causal'], az:'I', name:'IPW', longname:'Inverse Probability Weighting',
   def:'Inverse Probability Weighting gewichtet jede Beobachtung mit dem Kehrwert ihrer Wahrscheinlichkeit, das erhaltene Treatment zu bekommen: w = 1 / P(T=t | X). Die Gewichte stammen aus dem Propensity Score P(T=1 | X). Nach dem Regewichten entsteht eine "Pseudo-Population", in der Treatment-Zuweisung unabhängig von den Kovariaten X ist — Konfundierung wird damit eliminiert. IPW ist sensibel gegenüber extremen Gewichten (nahe 0 oder 1), die durch Stabilisierung oder Trimming kontrolliert werden sollten.',
-  formula:'ŵᵢ = 1 / P(T=tᵢ | Xᵢ)',
+  formula:'ATE_IPW = (1/N)·Σᵢ [Dᵢ·Yᵢ/p̂(Xᵢ) − (1−Dᵢ)·Yᵢ/(1−p̂(Xᵢ))];   p̂(X) = P̂(D=1|X)',
   intuition:'Stellen Sie sich vor, ältere Patienten erhalten häufiger das Medikament. In einem direkten Vergleich wäre unklar, ob ein Effekt vom Medikament oder vom Alter kommt. IPW korrigiert das: Jüngere Patienten, die das Medikament bekamen (obwohl das selten ist), erhalten ein hohes Gewicht — so als ob sie für die "seltene" Behandlung ihrer Gruppe repräsentativer wären. Danach sind beide Gruppen auf dem Papier gleichalt.',
   related:[{id:'propensity-score',label:'Propensity Score'},{id:'ate',label:'ATE'},{id:'gcomp',label:'G-Computation'},{id:'dag',label:'DAG'}]
 },
 { id:'iv', cats:['causal'], az:'I', name:'IV', longname:'Instrumentalvariable',
-  def:'Eine Instrumentalvariable Z ist eine Variable, die (1) mit dem Treatment T korreliert (Relevanz), (2) das Outcome Y ausschließlich über T beeinflusst (Ausschlussrestriktion) und (3) unabhängig von ungemessenen Konfundern ist (Exogenität). IV-Schätzer identifizieren den LATE — den kausalen Effekt für sogenannte "Complier", also Einheiten, deren Treatment-Status sich aufgrund von Z ändert. Klassisches Beispiel: Entfernung zum nächsten College als IV für Bildung, die Löhne nur über die Entscheidung beeinflusst, ein College zu besuchen.',
-  intuition:'IV ist die statistische Lösung für ein klassisches Problem: Man möchte den Effekt von X auf Y schätzen, aber X ist endogen (durch ungemessene Variablen mit Y verknüpft). Das Instrument Z "zieht" an X, ohne Y direkt zu berühren — wie ein Hebel, der nur über X wirkt. Die Kunst liegt darin, ein glaubwürdiges Instrument zu finden: Ein schwaches Instrument (geringe Korrelation mit T) führt zu sehr ungenauen und verzerrten Schätzungen.',
+  def:'Eine Instrumentalvariable Z ist eine Variable, die (1) mit dem Treatment D korreliert (Relevanz/First Stage), (2) das Outcome Y ausschließlich über D beeinflusst (Ausschlussrestriktion) und (3) unabhängig von ungemessenen Konfundern ist (Exogenität). IV-Schätzer identifizieren den LATE — den kausalen Effekt für sogenannte "Complier", also Einheiten, deren Treatment-Status sich aufgrund von Z ändert. Klassisches Beispiel: Entfernung zum nächsten College als IV für Bildung, die Löhne nur über die Entscheidung beeinflusst, ein College zu besuchen.',
+  formula:'β_IV = Cov(Y,Z) / Cov(D,Z) = (E[Y|Z=1]−E[Y|Z=0]) / (E[D|Z=1]−E[D|Z=0])  (Wald-Schätzer)',
+  intuition:'IV ist die statistische Lösung für ein klassisches Problem: Man möchte den Effekt von D auf Y schätzen, aber D ist endogen (durch ungemessene Variablen mit Y verknüpft). Das Instrument Z "zieht" an D, ohne Y direkt zu berühren — wie ein Hebel, der nur über D wirkt. Die Kunst liegt darin, ein glaubwürdiges Instrument zu finden: Ein schwaches Instrument (geringe First-Stage-F-Statistik, Faustregel F > 10) führt zu stark verzerrten Schätzungen.',
   related:[{id:'late',label:'LATE'},{id:'dag',label:'DAG'},{id:'ate',label:'ATE'},{id:'confounder',label:'Konfundierung'}]
 },
 { id:'ignorability', cats:['causal'], az:'I', name:'Ignorierbarkeit (Unkonfundiertheit)', longname:'Strong Ignorability — Bedingte Unabhängigkeit der Behandlungszuweisung',
@@ -492,7 +493,7 @@ const TERMS = [
 /* ── L ── */
 { id:'late', cats:['causal'], az:'L', name:'LATE', longname:'Local Average Treatment Effect',
   def:'Der LATE ist der kausale Effekt einer Behandlung, eingeschränkt auf die Teilpopulation der "Complier" — Personen, deren Behandlungsstatus sich ändert, wenn das Instrument Z von 0 auf 1 wechselt. Im Gegensatz zum ATE (Gesamtpopulation) und ATT (tatsächlich Behandelte) ist der LATE nur für eine latente, nicht direkt beobachtbare Untergruppe definiert. Der LATE wird durch zwei wichtige Designs identifiziert: (1) Instrumentalvariablen-Schätzung (IV), bei der das Instrument nur die Complier-Gruppe bewegt — nicht die Always-Takers, Never-Takers oder Defier; und (2) Regression Discontinuity Designs (RDD), bei denen Einheiten knapp oberhalb eines Schwellenwerts das Treatment erhalten — diese Grenzfälle entsprechen den Compliern, und der Effekt ist ein LATE genau am Cutoff. Formal: LATE = E[Y(1) − Y(0) | Complier].',
-  formula:'LATE = E[Y(1)−Y(0) | Complier]',
+  formula:'LATE = E[Y(1)−Y(0) | Complier] = (E[Y|Z=1]−E[Y|Z=0]) / (E[D|Z=1]−E[D|Z=0]) = Reduced Form / First Stage',
   intuition:'Stellen Sie sich eine Lotterie vor, die zufällig Bildungsgutscheine verteilt (Instrument Z). Manche nehmen Bildungsangebote sowieso wahr (Always-Taker), andere nie (Never-Taker). Der LATE misst den kausalen Effekt nur für diejenigen, die sich durch den Gutschein tatsächlich für mehr Bildung entschieden hätten — die Complier. Im RDD-Kontext sind die Complier die Einheiten direkt an der Cutoff-Grenze: Ein Student, der eine Aufnahmeprüfung mit genau dem Mindestpunktzahl besteht, ist mit einem vergleichbar, der knapp darunter liegt — der beobachtete Sprung im Outcome an dieser Grenze ist der LATE für diese lokale Gruppe.',
   related:[{id:'ate',label:'ATE'},{id:'att',label:'ATT'},{id:'atu',label:'ATU/ATC'},{id:'iv',label:'IV'},{id:'rdd',label:'RDD'},{id:'po',label:'Potenzielle Ergebnisse'}]
 },
@@ -862,7 +863,8 @@ const TERMS = [
 
 /* ── R (cont.) ── */
 { id:'rdd', cats:['causal'], az:'R', name:'RDD', longname:'Regression Discontinuity Design',
-  def:'Das Regression Discontinuity Design (RDD) ist ein Quasi-Experiment, bei dem die Treatmentzuweisung vollständig oder probabilistisch durch das Über- oder Unterschreiten eines Schwellenwerts (Cutoff) einer kontinuierlichen Laufvariable (Running Variable) bestimmt wird. Im Sharp RDD erhalten alle Einheiten mit einem Score ≥ c das Treatment, alle mit Score < c nicht — die Zuweisung ist deterministisch, und der kausale Effekt an der Grenze lässt sich direkt aus dem Sprung in der Outcome-Variable schätzen. Im Fuzzy RDD erhöht das Überschreiten des Cutoffs die Behandlungswahrscheinlichkeit, ohne sie auf 0 oder 1 zu fixieren — der Cutoff fungiert als Instrument (IV), und der geschätzte Effekt ist ein LATE für Einheiten nahe der Grenze. Die zentrale Identifikationsannahme ist Kontinuität: Alle anderen Einflussgrößen verändern sich am Cutoff stetig — nur das Treatment springt.',
+  def:'Das Regression Discontinuity Design (RDD) ist ein Quasi-Experiment, bei dem die Treatmentzuweisung vollständig oder probabilistisch durch das Über- oder Unterschreiten eines Schwellenwerts (Cutoff c) einer kontinuierlichen Laufvariable (Running Variable X) bestimmt wird. Im Sharp RDD erhalten alle Einheiten mit Score X ≥ c das Treatment, alle mit Score < c nicht — die Zuweisung ist deterministisch, und der kausale Effekt an der Grenze lässt sich direkt aus dem Sprung in der Outcome-Variable schätzen. Im Fuzzy RDD erhöht das Überschreiten des Cutoffs die Behandlungswahrscheinlichkeit, ohne sie auf 0 oder 1 zu fixieren — der Cutoff fungiert als Instrument (IV), und der geschätzte Effekt ist ein LATE für Einheiten nahe der Grenze. Die zentrale Identifikationsannahme ist Kontinuität: Alle anderen Einflussgrößen verändern sich am Cutoff stetig — nur das Treatment springt.',
+  formula:'τ_RDD = lim_{x↓c} E[Y|X=x] − lim_{x↑c} E[Y|X=x]   (Sharp, LATE am Cutoff);   Fuzzy: τ = ITT / (First Stage)',
   intuition:'Die kausale Logik des RDD ist elegant: Einheiten knapp oberhalb und knapp unterhalb des Cutoffs sind in Erwartung identisch — außer im Treatment-Status. Ein Student, der eine Aufnahmeprüfung mit 60 Punkten (Mindest-Cutoff) besteht, ist kaum verschieden von einem mit 59 Punkten; der Unterschied im späteren Outcome ist daher kausal auf das Treatment zurückzuführen. RDD schätzt immer einen lokalen Effekt an der Cutoff-Grenze — der LATE für diese spezifische Randgruppe muss nicht auf die gesamte Population verallgemeinerbar sein. Im BTL gibt es ein eigenes RDD-Lehr-Tool (Diagnostik/RDD.html) mit interaktiven Szenarien für Sharp und Fuzzy RDD.',
   related:[{id:'late',label:'LATE'},{id:'iv',label:'IV'},{id:'ate',label:'ATE'},{id:'dag',label:'DAG'},{id:'confounder',label:'Konfundierung'}]
 },
@@ -904,7 +906,7 @@ const TERMS = [
 /* ── D (Ergänzung) ── */
 { id:'did', cats:['causal'], az:'D', name:'Difference-in-Differences', longname:'DiD / Differenz-der-Differenzen',
   def:'Difference-in-Differences (DiD) ist ein Quasi-Experiment-Design, das Veränderungen über die Zeit in einer Treatmentgruppe mit Veränderungen in einer Kontrollgruppe vergleicht: DiD = (Ȳ_T,post − Ȳ_T,pre) − (Ȳ_C,post − Ȳ_C,pre). Die zentrale Annahme ist die Parallel-Trends-Annahme: Ohne Treatment hätten sich Treatment- und Kontrollgruppe parallel entwickelt. DiD kontrolliert automatisch für zeitstabile Gruppenunterschiede (z.B. unterschiedliche Ausgangsniveaus) und für gemeinsame Zeittrends, die beide Gruppen gleichermaßen betreffen.',
-  formula:'DiD = (Ȳ_T,post − Ȳ_T,pre) − (Ȳ_C,post − Ȳ_C,pre)',
+  formula:'DiD = (Ȳ_{T,post}−Ȳ_{T,pre}) − (Ȳ_{C,post}−Ȳ_{C,pre});   OLS: Y = α + βD + γPost + δ(D×Post)  [δ = DiD]',
   intuition:'Klassisches Beispiel: Eine Stadt führt ein Mindestlohngesetz ein (Treatment), eine Nachbarstadt nicht (Kontrolle). Wenn die Beschäftigung in der Treatmentstadt um 3% sinkt, in der Kontrollstadt aber auch um 2% (konjunktureller Rückgang), ist der DiD-Schätzer −1% — der Mindestlohn hat die Beschäftigung um 1 Prozentpunkt gesenkt. DiD eliminiert sowohl gruppenspezifische Zeitkonstanten als auch gemeinsame Zeittrends. Die Parallel-Trends-Annahme ist jedoch nicht testbar für die Post-Periode und sollte durch Pre-Trend-Tests plausibilisiert werden.',
   related:[{id:'ate',label:'ATE'},{id:'iv',label:'IV'},{id:'rdd',label:'RDD'},{id:'confounder',label:'Konfundierung'}]
 },
