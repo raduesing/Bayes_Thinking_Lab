@@ -2,932 +2,2177 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){['btn-theme','btn-th','btn-th-nav','themeBtn'].forEach(function(id){var b=document.getElementById(id);if(b)b.textContent='🌙 Dark';});});})()</script>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Interactive linear model: visually explore OLS regression, residuals and model assumptions.">
-<meta name="keywords" content="linear model, OLS, regression, residuals, statistics, interactive">
-<meta property="og:title" content="Linear Model — Bayes Thinking Lab">
-<meta property="og:description" content="Interactive linear model: visually explore OLS regression, residuals and model assumptions.">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('btn-theme');if(b)b.textContent='🌙 Dark';});})()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="OLS &amp; Multiple Regression interactive: explore Least Squares, coefficients, model fit, and Added Variable Plot visually.">
+<meta name="keywords" content="OLS, regression, least squares, coefficients, R-squared, residuals, multiple regression, Bayes Thinking Lab">
+<meta property="og:title" content="OLS &amp; Multiple Regression — Bayes Thinking Lab">
+<meta property="og:description" content="OLS &amp; Multiple Regression interactive: Least Squares, coefficients, model fit, and Added Variable Plot.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.bayes-thinking-lab.uni-osnabrueck.de/en/LM_interactive.html">
 <meta property="og:site_name" content="Bayes Thinking Lab">
 <link rel="canonical" href="https://www.bayes-thinking-lab.uni-osnabrueck.de/en/LM_interactive.html">
-<title>Linear Model — Bayes Thinking Lab</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<title>OLS &amp; Multiple Regression — Bayes Thinking Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ── Design Tokens (BTL-Farbpalette) ──────────────────────── */
 :root{
-  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
   --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
-  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--accept:#5a8a2a;--reject:#c94a2a;
-  --shadow:rgba(0,0,0,.07);--topbar-h:58px;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--accent:var(--a2);
+  --accept:#5a8a2a;--reject:#c94a2a;--shadow:rgba(0,0,0,.07);
+  --topbar-h:58px;
 }
 [data-theme="dark"]{
-  --bg:#0d1018;--paper:#141820;--ink:#ece6d8;--ink2:#8a8070;
+  --bg:#0d1018;--paper:#141820;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
   --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
-  --grid:#20262f;--panel:#1a2030;--border:#2c3445;--accept:#80cb52;--reject:#e8614a;
-  --shadow:rgba(0,0,0,.4);
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;
+  --accept:#80cb52;--reject:#e8614a;--shadow:rgba(0,0,0,.4);
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{font-size:18px}
-body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
-     min-height:100vh;transition:background .25s,color .25s}
 
-/* ── TOPBAR ── */
-#topbar{position:sticky;top:0;z-index:200;background:var(--paper);
-        border-bottom:1.5px solid var(--border);padding:.45rem 1.4rem;
-        display:flex;align-items:center;justify-content:space-between;gap:1rem}
+/* ── Reset & Base ──────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Fraunces',Georgia,serif;
+  background:var(--bg);color:var(--ink);
+  font-size:1rem;line-height:1.65;
+  min-height:100vh;
+}
+a{color:var(--a2);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Dach / Hut-Notation ───────────────────────────────────── */
+.gk{position:relative;display:inline-block;font-family:'Fraunces',serif}
+.gk-hat::before{
+  content:'^';position:absolute;top:-.2em;
+  left:0;right:0;text-align:center;
+  font-size:.72em;line-height:1;pointer-events:none;
+}
+.gk-bar::before{
+  content:'–';position:absolute;top:-.1em;
+  left:0;right:0;text-align:center;
+  font-size:.65em;line-height:1;pointer-events:none;
+}
+
+/* ── Topbar (BTL-Stil: sticky, zweispaltig) ──────────────── */
+#topbar{
+  position:sticky;top:0;z-index:200;
+  background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.45rem 1.4rem;
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+}
 .topbar-l{display:flex;flex-direction:column;align-items:flex-start;gap:.05rem}
-.tb-title{font-size:1.05rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.tb-title{
+  font-family:'Fraunces',serif;font-size:1.05rem;font-weight:300;
+  letter-spacing:-.02em;line-height:1.2;color:var(--ink);
+}
 .tb-title em{font-style:italic;color:var(--a2)}
-.tb-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-        margin-top:.16rem;letter-spacing:.04em}
-.tb-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-         opacity:.5;margin-top:.06rem}
+.tb-sub{
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+  margin-top:.16rem;letter-spacing:.04em;
+}
 .topbar-btns{display:flex;gap:.35rem;align-items:center}
-.tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
-      border:1.5px solid var(--border);background:transparent;cursor:pointer;
-      color:var(--ink2);transition:all .15s;white-space:nowrap;letter-spacing:.03em}
+.tbtn{
+  font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;
+  color:var(--ink2);transition:all .15s;white-space:nowrap;letter-spacing:.03em;
+}
 .tbtn:hover{border-color:var(--a2);color:var(--a2)}
 .tbtn.nav{border-color:var(--a2);color:var(--a2)}
 .tbtn.nav:hover{background:var(--a2);color:var(--paper)}
 .tbtn.hint{border-color:var(--a1);color:var(--a1)}
 .tbtn.hint:hover{background:var(--a1);color:white}
 
-/* ── LAYOUT ── */
-#wrap{max-width:1100px;margin:0 auto;padding:.8rem 1.4rem 1.5rem}
-
-/* ── NARRATIVE CARDS ── */
-.narr{background:var(--paper);border:1.5px solid var(--border);
-      box-shadow:2px 2px 0 var(--shadow);
-      padding:.7rem 1rem;margin-bottom:.6rem;font-family:'DM Mono',monospace;
-      font-size:.75rem;color:var(--ink2);line-height:1.8}
-.narr b{color:var(--ink)}.narr em{color:var(--a2);font-style:normal}
-.narr code{background:var(--panel);border:1px solid var(--border);
-           color:var(--a2);padding:.02rem .3rem}
-.narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
-.narr-phase{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
-            text-transform:uppercase;padding:.12rem .4rem;border:1px solid;
-            white-space:nowrap}
-.narr-phase.p1{border-color:var(--a2);color:var(--a2)}
-.narr-phase.p2{border-color:var(--a5);color:var(--a5)}
-.narr-phase.p3{border-color:var(--a3);color:var(--a3)}
-
-/* ── STAGE ── */
-.stage-card{border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow);margin-bottom:.6rem}
-.stage-grid{display:grid;grid-template-columns:1fr 240px;gap:1px;background:var(--grid)}
-#canvas-wrap{background:var(--paper);position:relative;cursor:crosshair}
-#canvas{display:block;width:100%}
-
-/* ── PANEL ── */
-#panel{background:var(--paper);padding:.8rem;display:flex;flex-direction:column;gap:.6rem}
-.p-title{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
-         text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--grid);
-         padding-bottom:.22rem;margin-bottom:.1rem}
-.p-row{display:flex;justify-content:space-between;align-items:baseline;
-       font-family:'DM Mono',monospace;font-size:.75rem;gap:.3rem}
-.p-lbl{color:var(--ink2)}.p-val{font-weight:500;color:var(--ink)}
-.p-val.good{color:var(--accept)}.p-val.bad{color:var(--reject)}
-.p-val.neutral{color:var(--a2)}
-
-/* rss bar */
-.rss-bar-bg{height:7px;background:var(--grid);margin-top:.3rem;position:relative}
-.rss-bar-fill{height:100%;transition:width .3s;position:absolute;top:0;left:0}
-.rss-label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-           display:flex;justify-content:space-between;margin-bottom:.2rem}
-
-/* ── CONTROLS ── */
-#controls{background:var(--paper);border:1.5px solid var(--border);
-          box-shadow:2px 2px 0 var(--shadow);margin-bottom:.6rem;
-          padding:.55rem .9rem;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
-.cbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.28rem .75rem;
-      border:1.5px solid var(--border);background:transparent;cursor:pointer;
-      color:var(--ink2);transition:all .15s;white-space:nowrap}
-.cbtn:hover{border-color:var(--a2);color:var(--a2)}
-.cbtn.active{background:var(--a2);color:var(--paper);border-color:var(--a2)}
-.cbtn.danger{border-color:var(--a1);color:var(--a1)}
-.cbtn.danger:hover{background:var(--a1);color:white}
-.cbtn.go{border-color:var(--a3);color:var(--a3)}
-.cbtn.go:hover{background:var(--a3);color:var(--paper)}
-.csep{width:1px;height:20px;background:var(--grid)}
-.ctrl-group{display:flex;align-items:center;gap:.35rem}
-.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
-input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);
-                  outline:none;cursor:pointer;border-radius:2px;width:80px}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
-  background:var(--a2);border-radius:50%;cursor:pointer}
-.ctrl-val{font-family:'DM Mono',monospace;font-size:.75rem;font-weight:500;
-          color:var(--a2);min-width:2.2rem;text-align:right}
-
-/* ── LEARN CARDS ── */
-#learn{margin:.75rem 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:.85rem;background:transparent}
-.lcard{background:var(--paper);border:1.5px solid var(--border);
-       box-shadow:2px 2px 0 var(--shadow);padding:.85rem 1rem}
-.lcard-h{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
-         text-transform:uppercase;margin-bottom:.4rem;padding-bottom:.18rem;
-         border-bottom:1px solid var(--grid);color:var(--a2)}
-.lcard-h.cg{color:var(--a3)}.lcard-h.co{color:var(--a5)}.lcard-h.cr{color:var(--a1)}
-.lcard-body{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.78}
-.lcard-body b{color:var(--ink)}
-
-/* mode toggle */
-.mode-tabs{display:flex;gap:1px;background:var(--grid);margin-bottom:.6rem;
-           border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow)}
-.mtab{flex:1;font-family:'DM Mono',monospace;font-size:.75rem;padding:.42rem .6rem;
-      background:var(--paper);cursor:pointer;text-align:center;border:none;
-      color:var(--ink2);transition:all .13s}
-.mtab:hover{background:var(--panel);color:var(--ink)}
-.mtab.sel{background:var(--panel);color:var(--a2);
-          box-shadow:inset 0 -2.5px 0 var(--a2)}
-
-/* toast */
-#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a2);color:white;
-       font-family:'DM Mono',monospace;font-size:.75rem;padding:.4rem .85rem;
-       z-index:999;opacity:0;transform:translateY(8px);
-       transition:opacity .3s,transform .3s;pointer-events:none}
-#toast.show{opacity:1;transform:translateY(0)}
-
-/* ── FLOATING HELP PANEL ── */
-#help-panel{
-  display:none;position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);
-  width:300px;z-index:600;background:var(--paper);border:1.5px solid var(--border);
-  box-shadow:4px 4px 0 rgba(0,0,0,.18);
+/* ── Story Banner ──────────────────────────────────────────── */
+#story{
+  background:var(--panel);border-bottom:1px solid var(--border);
+  padding:.65rem 1.4rem;
+  display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1.4rem;
 }
-#help-panel.open{display:block}
-.hp-head{display:flex;justify-content:space-between;align-items:center;
-         padding:.5rem .85rem;border-bottom:1px solid var(--grid)}
-.hp-title{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.1em;
-          text-transform:uppercase;font-weight:500;color:var(--a1)}
-.hp-close{font-family:'DM Mono',monospace;font-size:.85rem;background:transparent;
-          border:none;cursor:pointer;color:var(--ink2);line-height:1;padding:0 .1rem}
-.hp-close:hover{color:var(--ink)}
-.hp-body{padding:.8rem .85rem;font-family:'DM Mono',monospace;font-size:.67rem;
-         line-height:1.8;color:var(--ink2);max-height:75vh;overflow-y:auto}
-.hp-sect{font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);
-         margin-top:.85rem;margin-bottom:.28rem;border-bottom:1px solid var(--grid);
-         padding-bottom:.18rem}
-.hp-sect:first-child{margin-top:0}
-.hp-body strong{color:var(--ink)}
-.hp-body em{color:var(--a2);font-style:normal}
-.hp-seq{padding-left:.05rem}
-.hp-seq li{list-style:none;padding:.08rem 0}
-.hp-seq li::before{color:var(--a2);margin-right:.4rem;font-weight:600;font-size:1.05rem}
-.hp-seq li:nth-child(1)::before{content:'①'}
-.hp-seq li:nth-child(2)::before{content:'②'}
-.hp-seq li:nth-child(3)::before{content:'③'}
-.hp-seq li:nth-child(4)::before{content:'④'}
-.hp-next{margin-top:.75rem;padding:.4rem .55rem;border-left:3px solid var(--a2);
-         background:var(--panel);font-size:.65rem;color:var(--ink2)}
+.story-label{
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--ink3);
+}
+.story-vars{
+  display:flex;flex-wrap:wrap;gap:.5rem;
+  font-family:'DM Mono',monospace;font-size:.76rem;
+}
+.sv{
+  padding:.12rem .5rem;border:1px solid var(--border);
+  background:var(--bg);color:var(--ink2);
+}
+.sv em{font-style:normal;color:var(--accent)}
+#seed-info{
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);
+  margin-left:auto;
+}
+
+/* ── Module Tabs ───────────────────────────────────────────── */
+#mod-tabs{
+  display:flex;border-bottom:1px solid var(--border);
+  background:var(--paper);position:sticky;top:var(--topbar-h);z-index:100;
+  overflow-x:auto;
+}
+.mod-tab{
+  background:none;border:none;border-bottom:2px solid transparent;
+  font-family:'DM Mono',monospace;font-size:.78rem;
+  color:var(--ink3);padding:.7rem 1.2rem;
+  cursor:pointer;white-space:nowrap;
+  transition:color .15s,border-color .15s;
+  display:flex;align-items:center;gap:.4rem;
+}
+.mod-tab:hover{color:var(--ink)}
+.mod-tab.active{color:var(--a2);border-bottom-color:var(--a2)}
+.tab-num{font-size:1.5rem;line-height:1;vertical-align:-.1em}
+
+/* ── Module Panels ─────────────────────────────────────────── */
+.mod-panel{display:none;padding:1.4rem 1.4rem 2rem}
+.mod-panel.active{display:block}
+.mod-h{
+  font-size:1.25rem;font-weight:600;color:var(--ink);
+  letter-spacing:-.01em;margin-bottom:.3rem;
+}
+.mod-h em{font-style:italic;color:var(--a2)}
+.mod-sub{
+  font-family:'DM Mono',monospace;font-size:.76rem;
+  color:var(--ink3);margin-bottom:1.2rem;
+  min-height:1.55rem;
+}
+
+/* ── Canvas Containers ─────────────────────────────────────── */
+.cv-wrap{
+  background:var(--paper);border:1px solid var(--border);
+  display:inline-block;position:relative;
+}
+.cv-wrap canvas{display:block}
+.cv-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem}
+.cv-label{
+  font-family:'DM Mono',monospace;font-size:.68rem;
+  color:var(--ink3);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.08em;
+}
+
+/* ── Two-Column Layout (Module 4) ──────────────────────────── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1rem}
+@media(max-width:720px){.two-col{grid-template-columns:1fr}}
+
+/* ── Controls ──────────────────────────────────────────────── */
+.ctrl-block{
+  background:var(--panel);border:1px solid var(--border);
+  padding:.85rem 1rem;margin-bottom:.85rem;
+}
+.ctrl-row{
+  display:flex;align-items:center;gap:.7rem;
+  margin-bottom:.55rem;flex-wrap:wrap;
+}
+.ctrl-row:last-child{margin-bottom:0}
+.ctrl-label{
+  font-family:'DM Mono',monospace;font-size:.75rem;
+  color:var(--ink2);min-width:130px;
+}
+.ctrl-val{
+  font-family:'DM Mono',monospace;font-size:.78rem;
+  color:var(--a2);min-width:52px;
+}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  height:4px;background:var(--border);outline:none;
+  flex:1;min-width:120px;max-width:260px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;
+  background:var(--a2);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;background:var(--a2);border:none;cursor:pointer;
+}
+.btn{
+  background:none;border:1px solid var(--border);
+  color:var(--ink2);font-family:'DM Mono',monospace;font-size:.75rem;
+  padding:.3rem .75rem;cursor:pointer;
+  transition:border-color .15s,color .15s,background .15s;
+}
+.btn:hover{border-color:var(--a2);color:var(--a2)}
+.btn.primary{border-color:var(--a2);color:var(--a2)}
+.btn.primary:hover{background:color-mix(in srgb,var(--a2) 12%,transparent)}
+.btn.accent1{border-color:var(--a1);color:var(--a1)}
+.btn.accent1:hover{background:color-mix(in srgb,var(--a1) 10%,transparent)}
+.btn-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.85rem}
+
+/* ── Scenario Buttons (Module 4) ───────────────────────────── */
+.scen-btns{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.85rem}
+.scen-btn{
+  font-family:'DM Mono',monospace;font-size:.73rem;
+  padding:.28rem .7rem;cursor:pointer;
+  border:1px solid var(--border);color:var(--ink3);background:none;
+  transition:all .15s;
+}
+.scen-btn:hover,.scen-btn.active{
+  border-color:var(--a2);color:var(--a2);
+  background:color-mix(in srgb,var(--a2) 8%,transparent);
+}
+
+/* ── Erkläer Box ───────────────────────────────────────────── */
+.erklaer{
+  background:var(--panel);border-left:3px solid var(--accent);
+  padding:.8rem 1rem;margin-bottom:.85rem;max-width:1000px;
+  font-family:'DM Mono',monospace;font-size:.80rem;
+  color:var(--ink2);line-height:1.95;
+}
+.erklaer strong{color:var(--ink)}
+
+/* ── Coefficient Grid ──────────────────────────────────────── */
+.coef-grid{display:grid;gap:.35rem;margin-bottom:.85rem}
+.coef-grid.g2{grid-template-columns:repeat(2,1fr)}
+.coef-grid.g3{grid-template-columns:repeat(3,1fr)}
+.coef-cell{
+  background:var(--panel);border:1px solid var(--border);
+  padding:.6rem .85rem;
+}
+.coef-cell-lbl{
+  font-family:'DM Mono',monospace;font-size:.66rem;
+  color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;
+  margin-bottom:.15rem;
+}
+.coef-cell-val{
+  font-family:'DM Mono',monospace;font-size:1.05rem;
+  color:var(--a2);font-weight:500;
+}
+.coef-cell-val.changed{color:var(--a5)}
+
+/* ── RSS Meter ─────────────────────────────────────────────── */
+.rss-wrap{display:flex;align-items:center;gap:.7rem;margin-bottom:.85rem}
+.rss-label{font-family:'DM Mono',monospace;font-size:.73rem;color:var(--ink2);min-width:40px}
+.rss-bar-bg{flex:1;height:16px;background:var(--border);position:relative;max-width:340px}
+.rss-bar-fill{height:100%;background:var(--a1);transition:width .12s;max-width:100%}
+.rss-val{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--a1);min-width:70px}
+
+/* ── Variance Decomposition Bar ────────────────────────────── */
+.var-bar-wrap{margin-bottom:.85rem}
+.var-bar-label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-bottom:.3rem}
+.var-bar{height:28px;display:flex;border:1px solid var(--border);overflow:hidden}
+.var-seg{
+  height:100%;display:flex;align-items:center;justify-content:center;
+  font-family:'DM Mono',monospace;font-size:.65rem;
+  transition:width .2s;overflow:hidden;white-space:nowrap;padding:0 .3rem;
+}
+.var-seg.ssr{background:color-mix(in srgb,var(--a3) 35%,transparent);color:var(--a3)}
+.var-seg.sse{background:color-mix(in srgb,var(--a1) 22%,transparent);color:var(--a1)}
+
+/* ── Anscombe Grid ─────────────────────────────────────────── */
+.ansc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin-bottom:.85rem}
+@media(max-width:720px){.ansc-grid{grid-template-columns:repeat(2,1fr)}}
+.ansc-item .cv-wrap{display:block;width:100%}
+.ansc-item .cv-wrap canvas{max-width:100%;height:auto}
+.ansc-title{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink3);margin-bottom:.25rem}
+
+/* ── Accordion ─────────────────────────────────────────────── */
+.acc-wrap{margin-bottom:.85rem;max-width:1000px}
+.acc-item{border:1px solid var(--border);margin-bottom:.4rem}
+.acc-trigger{
+  width:100%;text-align:left;background:var(--panel);border:none;
+  font-family:'DM Mono',monospace;font-size:.78rem;
+  color:var(--ink2);padding:.65rem 1rem;cursor:pointer;
+  display:flex;align-items:center;gap:.6rem;transition:color .15s;
+}
+.acc-trigger:hover{color:var(--ink)}
+.acc-trigger.open{color:var(--a2)}
+.acc-arrow{font-size:.7rem;color:var(--ink3);transition:transform .2s;flex-shrink:0;margin-left:auto}
+.acc-trigger.open .acc-arrow{transform:rotate(90deg)}
+.acc-body{display:none;padding:.8rem 1rem;border-top:1px solid var(--border)}
+.acc-body.open{display:block}
+
+/* ── AVP Step Display ──────────────────────────────────────── */
+.avp-steps{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.7rem}
+.avp-step-btn{
+  font-family:'DM Mono',monospace;font-size:.71rem;
+  padding:.25rem .6rem;border:1px solid var(--border);
+  color:var(--ink3);background:none;cursor:pointer;transition:all .15s;
+}
+.avp-step-btn.active{
+  border-color:var(--a2);color:var(--a2);
+  background:color-mix(in srgb,var(--a2) 10%,transparent);
+}
+
+/* ── Model Comparison Table ────────────────────────────────── */
+.model-table{
+  width:100%;border-collapse:collapse;
+  font-family:'DM Mono',monospace;font-size:.76rem;margin-bottom:.85rem;
+}
+.model-table th{
+  background:var(--panel);border:1px solid var(--border);
+  padding:.4rem .7rem;color:var(--ink3);font-weight:400;text-align:left;
+}
+.model-table td{border:1px solid var(--border);padding:.4rem .7rem;color:var(--ink2)}
+.model-table td.val{color:var(--a2)}
+.model-table td.changed{color:var(--a5)}
+.model-table td.dim{color:var(--ink3)}
+.model-table tr:nth-child(even) td{background:color-mix(in srgb,var(--panel) 50%,transparent)}
+
+/* ── Lernkarten ────────────────────────────────────────────── */
+#lernkarten{padding:1.4rem 1.4rem 2.5rem;border-top:1px solid var(--border);background:var(--bg)}
+.lk-head{
+  font-family:'DM Mono',monospace;font-size:.68rem;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--ink3);margin-bottom:1rem;
+}
+.lcard-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem}
+.lcard{background:var(--panel);border:1px solid var(--border);padding:1rem 1.1rem}
+.lcard:last-child{grid-column:1/-1}
+.lcard-h{
+  font-family:'DM Mono',monospace;font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--a2);margin-bottom:.55rem;
+}
+.lcard-body{font-size:.875rem;color:var(--ink2);line-height:1.7}
+.lcard-body strong{color:var(--ink)}
+.lcard-body code{font-family:'DM Mono',monospace;font-size:.82em;color:var(--a2)}
+
+/* ── Help Modal ────────────────────────────────────────────── */
+.ml-modal{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.58);align-items:flex-start;
+  justify-content:center;padding-top:60px;overflow-y:auto;
+}
+.ml-modal.open{display:flex}
+.ml-modal-box{
+  background:var(--paper);border:1px solid var(--border);
+  padding:2rem 2.4rem;max-width:620px;width:90%;
+  margin-bottom:2rem;font-family:'DM Mono',monospace;position:relative;
+}
+.ml-modal-close{
+  position:absolute;top:.75rem;right:.75rem;
+  background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink2);line-height:1;
+}
+.ml-modal-close:hover{color:var(--ink)}
+.ml-modal-eyebrow{
+  font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--a1);margin-bottom:1rem;
+}
+.ml-modal-body h3{font-family:'Fraunces',serif;font-size:1rem;color:var(--ink);margin:1.2rem 0 .4rem}
+.ml-modal-body p,.ml-modal-body li{font-size:.8rem;color:var(--ink2);line-height:1.9}
+.ml-modal-body ul{padding-left:1.2rem;margin:.3rem 0 .6rem}
+.ml-modal-body code{font-family:'DM Mono',monospace;font-size:.9em;color:var(--a2)}
+.ml-modal-body a{color:var(--a2)}
+.details-box{border:1px solid var(--border);margin:.6rem 0}
+.details-box summary{
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3);
+  padding:.5rem .8rem;cursor:pointer;list-style:none;
+}
+.details-box summary::-webkit-details-marker{display:none}
+.details-box[open] summary{color:var(--a2);border-bottom:1px solid var(--border)}
+.details-box .details-inner{padding:.7rem .8rem}
+
+/* ── Info-Box ───────────────────────────────────────────────── */
+.info-box{
+  background:color-mix(in srgb,var(--a2) 5%,var(--panel));
+  border:1px solid var(--border);border-left:3px solid var(--a2);
+  padding:.85rem 1rem;
+  font-family:'DM Mono',monospace;font-size:.77rem;color:var(--ink2);line-height:1.9;
+}
+.info-box-h{
+  font-size:.64rem;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--a2);margin-bottom:.6rem;
+  padding-bottom:.38rem;border-bottom:1px solid var(--border);
+}
+.info-box p{margin-bottom:.5rem}
+.info-box p:last-child{margin-bottom:0}
+.info-box strong{color:var(--ink)}
+.info-box em{font-style:italic;color:var(--a2)}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border)}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media(max-width:600px){
+  .lcard-grid{grid-template-columns:1fr}
 </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
+<!-- ══ TOPBAR ══════════════════════════════════════════════════════ -->
 <div id="topbar">
   <div class="topbar-l">
-    <div class="tb-title">Linear Model <em>interactive</em></div>
-    <div class="tb-sub">Regression · Residuals · OLS · Conditional Distributions</div>
-    <div class="tb-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+    <div class="tb-title">OLS &amp; Multiple <em>Regression</em></div>
+    <div class="tb-sub">OLS · Coefficients · Model Fit · Multiple Regression</div>
   </div>
   <div class="topbar-btns">
     <button class="tbtn nav" onclick="window.open('../index.html','_self')">← Overview</button>
-    <button class="tbtn hint" onclick="toggleHelp()">ℹ Help</button>
+    <button class="tbtn hint" onclick="openModal('help-modal')">? Help</button>
+    <button class="tbtn" id="btn-neue-daten" onclick="neueDaten()">↻ New Data</button>
     <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
 
-<div id="wrap">
-
-  <!-- MODE TABS -->
-  <div class="mode-tabs">
-    <button class="mtab sel" id="tab-draw"  onclick="setMode('draw')">
-      ✏ Draw data points
-    </button>
-    <button class="mtab" id="tab-manual" onclick="setMode('manual')">
-      ⟵⟶ Adjust line manually
-    </button>
-    <button class="mtab" id="tab-ols"    onclick="setMode('ols')">
-      ★ Show OLS line
-    </button>
+<!-- ══ STORY BANNER ════════════════════════════════════════════════ -->
+<div id="story">
+  <span class="story-label">Example</span>
+  <div class="story-vars">
+    <span class="sv">N = 30 Students</span>
+    <span class="sv">X₁ = <em>Study time</em> (h/week)</span>
+    <span class="sv">X₂ = <em>Sleep hours</em> (h/night)</span>
+    <span class="sv">Y = <em>Exam score</em> (0–100 pts)</span>
   </div>
+  <span id="seed-info">Seed: —</span>
+</div>
 
-  <!-- NARRATIVE -->
-  <div class="narr" id="narr-box">
-    <div class="narr-h">
-      <span class="narr-phase p1" id="narr-phase">Step 1</span>
-    </div>
-    <div id="narr-text">
-      <b>Draw data points</b> — click in the field below to place points.
-      Imagine you are measuring the relationship between two variables:
-      e.g. study hours (x) and test score (y). Place 8–15 points.
-    </div>
-  </div>
+<!-- ══ MODULE TABS ═════════════════════════════════════════════════ -->
+<div id="mod-tabs">
+  <button class="mod-tab active" data-mod="1" onclick="showMod(1)">
+    <span class="tab-num">①</span> Least Squares
+  </button>
+  <button class="mod-tab" data-mod="2" onclick="showMod(2)">
+    <span class="tab-num">②</span> Coefficients
+  </button>
+  <button class="mod-tab" data-mod="3" onclick="showMod(3)">
+    <span class="tab-num">③</span> Model Fit
+  </button>
+  <button class="mod-tab" data-mod="4" onclick="showMod(4)">
+    <span class="tab-num">④</span> Multiple Regression
+  </button>
+</div>
 
-  <!-- CANVAS + PANEL -->
-  <div class="stage-card">
-  <div class="stage-grid">
-    <div id="canvas-wrap">
-      <canvas id="canvas" height="560"></canvas>
+<!-- ══ MODULE 1 ════════════════════════════════════════════════════ -->
+<div id="mod1" class="mod-panel active">
+  <div class="mod-h">The <em>Least-Squares</em> Principle</div>
+  <div class="mod-sub">Why does OLS minimize squared deviations — and what does this mean?</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <div style="position:relative">
+      <div class="cv-label">Study time (h/week) → Exam score</div>
+      <div class="cv-wrap">
+        <canvas id="cv-scatter" width="880" height="640"></canvas>
+      </div>
+      <div id="tooltip-sc" style="display:none;position:absolute;font-family:'DM Mono',monospace;
+        font-size:.7rem;background:var(--paper);border:1px solid var(--border);
+        padding:.28rem .55rem;pointer-events:none;color:var(--ink2);line-height:1.6;
+        white-space:nowrap"></div>
     </div>
-    <div id="panel">
-      <div>
-        <div class="p-title">Data points</div>
-        <div class="p-row"><span class="p-lbl">Count</span><span class="p-val" id="p-n">0</span></div>
-        <div class="p-row"><span class="p-lbl">x-range</span><span class="p-val" id="p-xr">—</span></div>
-        <div class="p-row"><span class="p-lbl">y-range</span><span class="p-val" id="p-yr">—</span></div>
+
+    <div style="display:flex;flex:1;min-width:300px;gap:.85rem;align-items:flex-start">
+      <div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:.75rem">
+        <div class="coef-grid g2">
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">b₀</div>
+            <div class="coef-cell-val" id="v-b0">—</div>
+          </div>
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">b₁</div>
+            <div class="coef-cell-val" id="v-b1">—</div>
+          </div>
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">R²</div>
+            <div class="coef-cell-val" id="v-r2">—</div>
+          </div>
+          <div class="coef-cell" title="Residual Sum of Squares">
+            <div class="coef-cell-lbl">RSS</div>
+            <div class="coef-cell-val" id="v-rss">—</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);margin-bottom:.45rem">RSS comparison (smaller = better)</div>
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem">
+            <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a5);width:66px;flex-shrink:0">Your line</div>
+            <div style="flex:1;height:13px;background:var(--border);overflow:hidden">
+              <div id="rss-hand-fill" style="height:100%;background:var(--a5);width:80%;transition:width .12s"></div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a5);width:40px;text-align:right" id="rss-hand-pct">—</div>
+          </div>
+          <div id="rss-ols-row" style="display:flex;align-items:center;gap:.5rem;opacity:.3;transition:opacity .25s">
+            <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a3);width:66px;flex-shrink:0">OLS (min)</div>
+            <div style="flex:1;height:13px;background:var(--border);overflow:hidden">
+              <div id="rss-ols-fill" style="height:100%;background:var(--a3);width:0%;transition:width .2s"></div>
+            </div>
+            <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a3);width:40px;text-align:right" id="rss-ols-pct">—</div>
+          </div>
+        </div>
+        <div class="erklaer" style="margin-bottom:0">
+          <strong>Model:</strong><br>
+          <span class="gk gk-hat">Y</span> = <span id="f-b0" style="color:var(--a2)">—</span>
+          + <span id="f-b1" style="color:var(--a2)">—</span> · X₁
+        </div>
+        <div class="btn-row" style="margin-bottom:.3rem;flex-wrap:wrap">
+          <button class="btn accent1" id="btn-hand" onclick="toggleHand()">✏ Manual: On</button>
+          <button class="btn" id="btn-show-ols" onclick="toggleShowOLS()">◎ Show OLS</button>
+        </div>
+        <button class="btn" id="btn-resid" onclick="toggleResiduals()" style="width:100%">● Residuals: Off</button>
       </div>
 
-      <div id="panel-line" style="display:none">
-        <div class="p-title">Your line</div>
-        <div class="p-row"><span class="p-lbl">Intercept (a)</span><span class="p-val neutral" id="p-a">—</span></div>
-        <div class="p-row"><span class="p-lbl">Slope (b)</span><span class="p-val neutral" id="p-b">—</span></div>
-        <div class="p-row"><span class="p-lbl">Formula</span><span class="p-val" id="p-formula" style="font-size:.75rem">—</span></div>
+      <div class="info-box" style="flex:1">
+        <div class="info-box-h">Tutorial — The Least-Squares Principle</div>
+        <p><strong>What you see</strong><br>
+        30 simulated students: Study time X₁ (h/week) → Exam score Y (points). The <em>orange line</em> is your estimation — draggable via two round anchors at the left and right edges. Enable <em>● Residuals</em>: green bars = positive residuals (point lies above the line), red bars = negative residuals (point lies below). A <strong>residual</strong> eᵢ = yᵢ − ŷᵢ is the deviation of the observed from the predicted value.</p>
+        <p><strong>What to do</strong><br>
+        Drag the anchors until your RSS (orange bar, absolute value) is as small as possible. Then click <em>◎ Show OLS</em> — the teal OLS line appears. The second bar shows its RSS. Comparison: How close did you get to the minimum?</p>
+        <p><strong>What is RSS? (Residual Sum of Squares)</strong><br>
+        RSS = Σeᵢ² = Σ(yᵢ − ŷᵢ)². OLS finds analytically the exact b₀ and b₁ for which RSS is globally minimal — uniquely and provably. No trial and error: b₁ = Cov(X,Y)/Var(X), b₀ = ȳ − b₁·x̄.</p>
+        <p><strong>Why squares, not absolute values?</strong><br>
+        (1) For every OLS line Σeᵢ = 0 — positive and negative residuals trivially cancel out. (2) Squaring penalizes large residuals disproportionately: a residual of 10 costs 100, not 10. (3) The square provides a differentiable function → closed, unique solution.</p>
+        <p><strong>Gauss-Markov:</strong> Under the 5 OLS assumptions (→ Module <span class="tab-num">③</span>) OLS is the <em>BLUE</em> — Best Linear Unbiased Estimator. No other linear unbiased estimator has smaller variance.</p>
       </div>
+    </div>
+  </div>
 
-      <div id="panel-rss" style="display:none">
-        <div class="p-title">Model fit</div>
-        <div class="p-row"><span class="p-lbl">Your RSS</span><span class="p-val" id="p-rss-user" style="color:var(--a5)">—</span></div>
-        <div class="p-row"><span class="p-lbl">OLS RSS</span><span class="p-val good" id="p-rss-ols">—</span></div>
-        <div class="p-row"><span class="p-lbl">Your R²</span><span class="p-val" id="p-r2-user">—</span></div>
-        <div class="p-row"><span class="p-lbl">OLS R²</span><span class="p-val good" id="p-r2-ols">—</span></div>
-        <div style="margin-top:.5rem">
-          <div class="rss-label">
-            <span style="color:var(--a5)">Your RSS</span>
-            <span style="color:var(--a3)">OLS RSS</span>
+  <div class="erklaer" style="margin-top:.9rem">
+    <strong>What is a Residual?</strong>
+    eᵢ = yᵢ − <span class="gk gk-hat" style="display:inline-block">y</span>ᵢ
+    is the deviation of the <em>observed</em> value from the <em>predicted</em>.
+    <strong>Why square?</strong> First, positive and negative residuals are treated equally
+    (|+3| = |−3|). Second, large residuals are penalized disproportionately:
+    a residual of 10 counts 100, not 10. OLS finds the unique b₀, b₁ for which:
+    Σeᵢ = 0 <em>and</em> Σeᵢ² is minimal — this solution is unique.
+  </div>
+
+  <div class="acc-wrap" style="margin-top:.9rem">
+    <div class="acc-item">
+      <button class="acc-trigger"
+        onclick="toggleAcc(this);if(this.classList.contains('open'))drawAnscombe()">
+        📐 Anscombe's Quartet — Why Residual Diagnostics Are Essential
+        <span class="acc-arrow">▶</span>
+      </button>
+      <div class="acc-body">
+        <div class="ansc-grid">
+          <div class="ansc-item">
+            <div class="ansc-title">I — linear</div>
+            <div class="cv-wrap"><canvas id="cv-ansc1" width="320" height="252"></canvas></div>
           </div>
-          <div class="rss-bar-bg">
-            <div class="rss-bar-fill" id="rss-bar-user" style="background:var(--a5)"></div>
+          <div class="ansc-item">
+            <div class="ansc-title">II — quadratic</div>
+            <div class="cv-wrap"><canvas id="cv-ansc2" width="320" height="252"></canvas></div>
           </div>
-          <div class="rss-bar-bg" style="margin-top:2px">
-            <div class="rss-bar-fill" id="rss-bar-ols" style="background:var(--a3)"></div>
+          <div class="ansc-item">
+            <div class="ansc-title">III — outlier</div>
+            <div class="cv-wrap"><canvas id="cv-ansc3" width="320" height="252"></canvas></div>
           </div>
+          <div class="ansc-item">
+            <div class="ansc-title">IV — leverage point</div>
+            <div class="cv-wrap"><canvas id="cv-ansc4" width="320" height="252"></canvas></div>
+          </div>
+        </div>
+        <div class="erklaer" style="margin-bottom:0">
+          <strong>All four datasets</strong> have (nearly) identical statistics:
+          b₁ ≈ 0.50, b₀ ≈ 3.0, r ≈ .816, R² ≈ .667. Yet scatterplot and
+          residual plot show fundamentally different patterns. <strong>Conclusion:</strong>
+          Coefficients and R² alone are not enough — residual diagnostics are mandatory.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- mod1 -->
+
+<!-- ══ MODULE 2 ════════════════════════════════════════════════════ -->
+<div id="mod2" class="mod-panel">
+  <div class="mod-h">Understanding <em>b₀</em>, <em>b₁</em> and β</div>
+  <div class="mod-sub">Slope, intercept and standardized coefficient — visually and formally</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <div>
+      <div class="cv-label">Regression line with coefficient visualization</div>
+      <div class="cv-wrap">
+        <canvas id="cv-coef" width="880" height="640"></canvas>
+      </div>
+    </div>
+
+    <div style="display:flex;flex:1;min-width:300px;gap:.85rem;align-items:flex-start">
+      <div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:.75rem">
+        <div class="coef-grid g3">
+          <div class="coef-cell" title="Expected Y value when X = 0">
+            <div class="coef-cell-lbl">b₀</div>
+            <div class="coef-cell-val" id="m2-b0">—</div>
+          </div>
+          <div class="coef-cell" title="Change in Y per +1 unit X">
+            <div class="coef-cell-lbl">b₁</div>
+            <div class="coef-cell-val" id="m2-b1">—</div>
+          </div>
+          <div class="coef-cell" title="Standardized coefficient — in SD units">
+            <div class="coef-cell-lbl">β</div>
+            <div class="coef-cell-val" id="m2-beta">—</div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-bottom:0;flex-wrap:wrap">
+          <button class="btn" id="btn-slope" onclick="toggleSlope()">△ Slope</button>
+          <button class="btn" id="btn-mean-cr" onclick="toggleMeanCr()">✛ Mean</button>
+        </div>
+        <div class="erklaer" style="margin-bottom:0">
+          <strong>b₁:</strong> Per +1 h study time the expected score increases by
+          <span id="m2-b1-val" style="color:var(--a2)">—</span> points.<br>
+          <strong>β = r =</strong> <span id="m2-beta-val" style="color:var(--a2)">—</span>
+          — bivariate: β = r always.<br>
+          <strong>b₀:</strong> Expected score at 0 h study time (extrapolated,
+          often not meaningful in context).
         </div>
       </div>
 
-      <div id="panel-ols" style="display:none">
-        <div class="p-title">OLS estimates</div>
-        <div class="p-row"><span class="p-lbl">Intercept (a)</span><span class="p-val good" id="p-ols-a">—</span></div>
-        <div class="p-row"><span class="p-lbl">Slope (b)</span><span class="p-val good" id="p-ols-b">—</span></div>
-        <div class="p-row"><span class="p-lbl">σ (spread)</span><span class="p-val neutral" id="p-ols-s">—</span></div>
-      </div>
-
-      <div>
-        <div class="p-title">Display</div>
-        <label style="display:flex;gap:.35rem;align-items:center;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);cursor:pointer;margin-bottom:.3rem">
-          <input type="checkbox" id="show-resid" checked onchange="redraw()" style="accent-color:var(--a5)"> Show residuals
-        </label>
-        <label style="display:flex;gap:.35rem;align-items:center;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);cursor:pointer;margin-bottom:.3rem">
-          <input type="checkbox" id="show-bells" onchange="redraw()" style="accent-color:var(--a2)"> Conditional distributions (OLS only)
-        </label>
-      </div>
-    </div>
-  </div>
-  </div><!-- /stage-card -->
-
-  <!-- CONTROLS -->
-  <div id="controls">
-    <button class="cbtn active" id="btn-draw" onclick="setBrush('draw')">✏ Draw</button>
-    <button class="cbtn" id="btn-erase" onclick="setBrush('erase')">✕ Erase</button>
-    <button class="cbtn danger" onclick="clearPoints()">↺ Clear all</button>
-    <div class="csep"></div>
-
-    <div id="ctrl-manual" style="display:none;gap:.5rem;align-items:center;flex-wrap:wrap">
-      <div class="ctrl-group">
-        <span class="ctrl-lbl">Intercept a</span>
-        <input type="range" id="sl-a" min="-3" max="13" step="0.02" value="5"
-               oninput="updSlider();redraw()">
-        <span class="ctrl-val" id="v-a">0.00</span>
-      </div>
-      <div class="ctrl-group">
-        <span class="ctrl-lbl">Slope b</span>
-        <input type="range" id="sl-b" min="-5" max="5" step="0.02" value="0"
-               oninput="updSlider();redraw()">
-        <span class="ctrl-val" id="v-b">0.50</span>
+      <div class="info-box" style="flex:1">
+        <div class="info-box-h">Tutorial — Understanding b₀, b₁ and β</div>
+        <p><strong>What you see</strong><br>
+        The OLS line through all 30 data points. Enable <em>△ Slope</em> for the slope triangle and <em>✛ Mean</em> for the centroid (x̄, ȳ) on the canvas.</p>
+        <p><strong>b₁ = <span id="m2-info-b1">—</span> — Slope (unstandardized)</strong><br>
+        Per +1 h study time, the <em>expected</em> score increases by <span id="m2-info-b1b">—</span> points. Unit: points/hour. Interpretation: descriptive, <em>not a causal effect</em>. b₁ is scale-dependent.<br>
+        The slope triangle in the canvas shows concretely: <strong>+3 h study time → +<span id="m2-slope-tri">—</span> points</strong> (= 3 · b₁).</p>
+        <p><strong>β = <span id="m2-info-beta">—</span> — standardized coefficient</strong><br>
+        Per +1 SD in X₁, Y increases by β SD. Bivariate: β = r (Pearson correlation) always. β allows comparison of predictors on different scales <em>within</em> one study.<br>
+        <em>Important:</em> β does not directly indicate importance — with correlated predictors β can deviate strongly from the partial effect (→ Module <span class="tab-num">④</span>).</p>
+        <p><strong>b₀ = <span id="m2-info-b0">—</span> — Intercept</strong><br>
+        Expected score at X₁ = 0 h study time. Since 0 h lies outside the observed range, this is an <em>extrapolation</em> — usually not meaningfully interpretable in context.</p>
+        <p><strong>Centroid (x̄ = <span id="m2-info-mx">—</span> h | ȳ = <span id="m2-info-my">—</span> pts)</strong><br>
+        The OLS line <em>always</em> passes through (x̄, ȳ) — mathematically necessary, since b₀ = ȳ − b₁·x̄.</p>
       </div>
     </div>
-
-    <button class="cbtn go" id="btn-show-ols" onclick="toggleOLS()" style="margin-left:auto">
-      ★ Show best OLS line
-    </button>
   </div>
 
-</div><!-- /wrap -->
+  <div class="erklaer" style="margin-top:.9rem">
+    <strong>Calculation formulas:</strong><br>
+    b₁ = Σ(xᵢ − <span class="gk gk-bar">x</span>)(yᵢ − <span class="gk gk-bar">y</span>) /
+    Σ(xᵢ − <span class="gk gk-bar">x</span>)² = Cov(X,Y) / Var(X)<br>
+    b₀ = <span class="gk gk-bar">y</span> − b₁ ·
+    <span class="gk gk-bar">x</span>
+    &nbsp;·&nbsp;
+    β = b₁ · (SD<sub>X</sub> / SD<sub>Y</sub>) = r &nbsp;(bivariate)
+  </div>
 
-<!-- LEARN CARDS -->
-<div id="learn">
-  <div class="lcard">
-    <div class="lcard-h cg">What is a regression line?</div>
-    <div class="lcard-body">
-      A regression line describes the <b>linear relationship</b> between two variables.
-      It answers: if x increases by 1 — how much does y change on average?<br><br>
-      The line has two parameters: the <b>intercept a</b> (where does the line cross the y-axis when x=0?)
-      and the <b>slope b</b> (how steep is the line?). Formula: <b>ŷ = a + b · x</b><br><br>
-      <b>Why is it useful?</b> Because it allows computing a <em>predicted value ŷ</em> for any x —
-      even for values not in the data. It also summarizes the relationship in two interpretable numbers:
-      Is there a relationship at all (b ≠ 0)? And how strong is it?<br><br>
-      <b>Why the "best" line?</b> There are infinitely many possible lines — the OLS line is the one
-      that is closest on average to all data points.
-      Try to find it yourself: any other line will have a higher RSS value.
+  <div class="acc-wrap" style="margin-top:.9rem">
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        📊 b₁ vs. β — Which coefficient should I report?
+        <span class="acc-arrow">▶</span>
+      </button>
+      <div class="acc-body">
+        <div style="font-family:'DM Mono',monospace;font-size:.8rem;color:var(--ink2);line-height:1.95">
+          <strong style="color:var(--ink)">b₁ (unstandardized)</strong> is reported when
+          the unit is substantively meaningful: "+1 h study time → +<span id="m2-b1-acc">—</span> points".<br><br>
+          <strong style="color:var(--ink)">β (standardized)</strong> allows comparison of
+          predictors on different scales <em>within</em> one study.
+          Caution: β varies with SD(X) and SD(Y) — comparisons between studies are
+          <em>not</em> valid.<br><br>
+          In bivariate OLS: β = r = <span id="m2-beta-acc">—</span> always.
+          In the multiple model (Module <span class="tab-num">④</span>) β ≠ r.
+        </div>
+      </div>
     </div>
   </div>
-  <div class="lcard">
-    <div class="lcard-h cr">What are residuals?</div>
-    <div class="lcard-body">
-      No data point lies exactly on the line — the <b>deviation</b> between the
-      predicted value (point on the line) and the actual value is called a <b>residual</b>.<br><br>
-      Residuals are "what the model does not explain". A good line has
-      small residuals — it lies as close as possible to all points.<br><br>
-      Residuals are visualized as the red vertical lines.
-    </div>
-  </div>
-  <div class="lcard">
-    <div class="lcard-h co">RSS — how do we measure fit?</div>
-    <div class="lcard-body">
-      To combine all residuals into a single measure of fit, they are
-      <b>squared and summed</b>: <b>RSS = Σ(y − ŷ)²</b><br><br>
-      Why square? So that positive and negative residuals do not cancel out.
-      Large deviations are penalized more heavily than small ones.<br><br>
-      The OLS line is precisely <b>the line that minimizes RSS</b> —
-      that is the meaning of "Ordinary Least Squares".
-    </div>
-  </div>
-  <div class="lcard">
-    <div class="lcard-h cg">Conditional normal distributions — why this matters</div>
-    <div class="lcard-body">
-      The linear model assumes: the y-values <b>around each x-value</b> are
-      normally distributed — with mean on the regression line and constant spread σ.<br><br>
-      <b>Not</b> the overall distribution of y needs to be normal — only the spread
-      <em>around the line</em>. This is a common misconception.<br><br>
-      Toggle "Conditional distributions" — you will see small bell curves at
-      different x positions, all centered on the line.
-    </div>
-  </div>
+
 </div>
 
-<div id="toast"></div>
+<!-- ══ MODULE 3 ════════════════════════════════════════════════════ -->
+<div id="mod3" class="mod-panel">
+  <div class="mod-h">Model Fit &amp; <em>Variance Decomposition</em></div>
+  <div class="mod-sub">SST = SSR + RSS, R², adjusted R² and the assumptions of the OLS model</div>
 
-<!-- FLOATING HELP PANEL -->
-<div id="help-panel">
-  <div class="hp-head">
-    <span class="hp-title">ℹ Linear Model — Help</span>
-    <button class="hp-close" onclick="toggleHelp()">×</button>
+  <div class="cv-row" style="align-items:flex-start">
+    <div>
+      <div class="cv-label" id="m3-cv-label">Total variance (TSS) — Deviations from mean ȳ</div>
+      <div class="cv-wrap">
+        <canvas id="cv-var" width="880" height="640"></canvas>
+      </div>
+    </div>
+
+    <div style="display:flex;flex:1;min-width:300px;gap:.85rem;align-items:flex-start">
+      <div style="width:240px;flex-shrink:0;display:flex;flex-direction:column;gap:.75rem">
+        <div class="btn-row" style="margin-bottom:0">
+          <button class="btn primary" id="btn-m3-sst" onclick="setVarMode('SST')">TSS</button>
+          <button class="btn" id="btn-m3-sse" onclick="setVarMode('SSE')">SSR + RSS</button>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);margin-bottom:.3rem">
+            TSS = SSR + RSS
+          </div>
+          <div class="var-bar">
+            <div class="var-seg ssr" id="m3-ssr-seg" style="width:50%">SSR</div>
+            <div class="var-seg sse" id="m3-sse-seg" style="width:50%">RSS</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;
+            font-family:'DM Mono',monospace;font-size:.62rem;margin-top:.25rem">
+            <span style="color:var(--a3)" id="m3-ssr-lbl">SSR = —</span>
+            <span style="color:var(--a1)" id="m3-sse-lbl">SSE = —</span>
+          </div>
+        </div>
+        <div class="coef-grid g2">
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">R²</div>
+            <div class="coef-cell-val" id="m3-r2">—</div>
+          </div>
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">adj. R²</div>
+            <div class="coef-cell-val" id="m3-adjr2">—</div>
+          </div>
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">f²</div>
+            <div class="coef-cell-val" id="m3-f2">—</div>
+          </div>
+          <div class="coef-cell">
+            <div class="coef-cell-lbl">r (Pearson)</div>
+            <div class="coef-cell-val" id="m3-r">—</div>
+          </div>
+        </div>
+        <div class="erklaer" style="margin-bottom:0">
+          <strong>R²</strong> = SSR/TSS = <span id="m3-r2-pct">—</span>% of total variance
+          in Y is explained by X₁.<br>
+          <strong>f²</strong> = R²/(1−R²) = SSR/RSS: &nbsp;small ≥ .02 · medium ≥ .15 · large ≥ .35
+        </div>
+      </div>
+
+      <div class="info-box" style="flex:1">
+        <div class="info-box-h">Tutorial — Variance Decomposition &amp; Model Fit</div>
+        <p><strong>What you see</strong><br>
+        <em>TSS mode:</em> Distances of all points from ȳ (blue). <em>SSR + RSS mode:</em> green bars = explained variance, red bars = residuals. The bar shows the SSR : RSS ratio.</p>
+        <p><strong>TSS = <span id="m3-info-sst">—</span> — Total Sum of Squares</strong><br>
+        TSS = Σ(yᵢ − ȳ)². Total variance in Y — does <em>not</em> depend on the model.</p>
+        <p><strong>SSR = <span id="m3-info-ssr">—</span> (<span id="m3-info-ssr-pct">—</span>% of TSS)</strong><br>
+        SSR = Σ(ŷᵢ − ȳ)². Variance explained by X₁. OLS <em>maximizes</em> SSR.</p>
+        <p><strong>RSS = <span id="m3-info-sse">—</span> (<span id="m3-info-sse-pct">—</span>% of TSS)</strong><br>
+        RSS = Σeᵢ² — unexplained variance. TSS = SSR + RSS is mathematically exact.</p>
+        <p><strong>R² and f² (Cohen's effect size)</strong><br>
+        R² = SSR/TSS: proportion of explained variance. <em>Note:</em> R² always increases with each additional predictor! Adjusted R² corrects with a penalty term per predictor.<br>
+        f² = R²/(1−R²) = <span id="m3-info-f2">—</span> → <span id="m3-info-f2-lbl">—</span> effect. Cohen (1988): .02 small · .15 medium · .35 large.</p>
+      </div>
+    </div>
   </div>
-  <div class="hp-body">
-    <div class="hp-sect">What will I learn?</div>
-    What does it mean to fit a line through data points — and why is exactly
-    <em>one</em> line the "best"? This tool answers that in three steps:
-    <ul class="hp-seq" style="margin-top:.4rem">
-      <li>What is a <strong>regression line</strong> — and how do you read a and b?</li>
-      <li>What are <strong>residuals</strong> — and why do we square them (RSS)?</li>
-      <li>How does <strong>OLS</strong> minimize RSS — and what does that mean geometrically?</li>
-      <li>What are <strong>conditional normal distributions</strong> along the line?</li>
-    </ul>
 
-    <div class="hp-sect">Step by step</div>
-    <ul class="hp-seq">
-      <li><strong>Draw data points</strong> — click in the field. 8–15 points are enough.</li>
-      <li><strong>Fit the line yourself</strong> — drag directly on the line (height) or grab the ↕ handles left/right (rotation). Sliders for fine-tuning. Watch the RSS.</li>
-      <li><strong>Reveal OLS</strong> — click "★ Show best OLS line". Your blue line
-          remains visible: compare it directly with the optimal one.</li>
-    </ul>
-    Tip: enable <em>Conditional distributions</em> in the OLS step — the small bell curves
-    show what the model assumes about the spread.
+  <div class="acc-wrap" style="margin-top:.9rem">
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        📋 OLS Assumptions — when is the model valid?
+        <span class="acc-arrow">▶</span>
+      </button>
+      <div class="acc-body">
+        <div style="display:flex;flex-direction:column;gap:.6rem">
+          <div style="display:flex;gap:.75rem;align-items:flex-start">
+            <span class="tab-num" style="color:var(--a2);flex-shrink:0">①</span>
+            <div style="font-family:'DM Mono',monospace;font-size:.79rem;color:var(--ink2);line-height:1.85">
+              <strong style="color:var(--ink)">Linearity:</strong>
+              The relationship between X and Y is linear. Violation: residual-vs-fitted plot
+              shows a systematic pattern. Remedy: transformation or polynomial terms.
+            </div>
+          </div>
+          <div style="display:flex;gap:.75rem;align-items:flex-start">
+            <span class="tab-num" style="color:var(--a2);flex-shrink:0">②</span>
+            <div style="font-family:'DM Mono',monospace;font-size:.79rem;color:var(--ink2);line-height:1.85">
+              <strong style="color:var(--ink)">Independence:</strong>
+              Observations are independent (no autocorrelation, no clustering).
+              Violated in longitudinal or nested data → mixed models required.
+            </div>
+          </div>
+          <div style="display:flex;gap:.75rem;align-items:flex-start">
+            <span class="tab-num" style="color:var(--a2);flex-shrink:0">③</span>
+            <div style="font-family:'DM Mono',monospace;font-size:.79rem;color:var(--ink2);line-height:1.85">
+              <strong style="color:var(--ink)">Homoscedasticity:</strong>
+              Variance of residuals is constant across all X values — no fan shape.
+              Violation: heteroscedasticity-robust standard errors (HC3) or WLS.
+            </div>
+          </div>
+          <div style="display:flex;gap:.75rem;align-items:flex-start">
+            <span class="tab-num" style="color:var(--a2);flex-shrink:0">④</span>
+            <div style="font-family:'DM Mono',monospace;font-size:.79rem;color:var(--ink2);line-height:1.85">
+              <strong style="color:var(--ink)">Normality of residuals:</strong>
+              Only required for <em>inference</em> — not for OLS estimation itself
+              (Gauss-Markov theorem!). At n ≥ 30 the central limit theorem applies.
+            </div>
+          </div>
+          <div style="display:flex;gap:.75rem;align-items:flex-start">
+            <span class="tab-num" style="color:var(--a2);flex-shrink:0">⑤</span>
+            <div style="font-family:'DM Mono',monospace;font-size:.79rem;color:var(--ink2);line-height:1.85">
+              <strong style="color:var(--ink)">No perfect multicollinearity</strong>
+              (multiple regression): If two predictors are perfectly correlated,
+              (<strong>X</strong>ᵀ<strong>X</strong>) is not invertible.
+              High collinearity inflates standard errors → VIF &gt; 10 critical.
+              See Module <span class="tab-num">④</span>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <div class="hp-sect">What do the statistics mean?</div>
-    <strong>RSS</strong> (Residual Sum of Squares) — the fit measure for any line.<br>
-    For each point: compute the deviation (y − ŷ), square it, sum everything: <em>RSS = Σ(y − ŷ)²</em>.<br>
-    Why square? (1) Positive and negative residuals would otherwise cancel out. (2) Large deviations are penalized more heavily than small ones — the line is especially pulled toward outliers. RSS = 0 would mean a perfect fit, never achieved with real data.<br><br>
-    <strong>OLS</strong> (Ordinary Least Squares) — the procedure that minimizes RSS. "Least Squares" is the goal: the sum of squares should be as small as possible. "Ordinary" distinguishes this standard method from weighted or robust variants.<br>
-    OLS has a closed-form solution — no iteration needed: <em>b = Cov(x,y) / Var(x)</em>, <em>a = ȳ − b·x̄</em>. This makes OLS fast, stable, and exactly computable. In Bayesian terms: OLS equals maximum likelihood under the assumption of normally distributed residuals.<br><br>
-    <strong>R²</strong> = 1 − RSS/TSS — proportion of variance in y explained by x. TSS is the total variance of y (without any model). R²=1: perfect prediction. R²=0: the line explains nothing.<br><br>
-    <strong>σ</strong> — estimated spread of residuals. In a Bayesian model: <em>y ~ Normal(μ, σ)</em>.
+</div>
 
-    <div class="hp-sect">Why this matters for Bayes</div>
-    The linear model is the starting point for everything that follows. In the Bayesian context:
-    OLS is equivalent to maximum likelihood under a normal distribution. Once priors are added,
-    this becomes Bayesian regression — with the same residual concept.
-    <div class="hp-next">Next → <strong>Maximum Likelihood</strong>: why OLS and MLE
-    yield the same result under normality</div>
+<!-- ══ MODULE 4 ════════════════════════════════════════════════════ -->
+<div id="mod4" class="mod-panel">
+  <div class="mod-h">Multiple Regression &amp; <em>Added Variable Plot</em></div>
+  <div class="mod-sub">What does "controlling for X₂" mean? Understanding partial slopes visually.</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <div>
+      <div class="cv-label" id="m4-cv-label">Step <span class="tab-num">①</span> — Bivariate Model: Y ~ X₁</div>
+      <div class="cv-wrap">
+        <canvas id="cv-avp" width="880" height="640"></canvas>
+      </div>
+    </div>
+
+    <div style="display:flex;flex:1;min-width:300px;gap:.85rem;align-items:flex-start">
+      <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:.75rem">
+
+        <div style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3)">Step</div>
+        <div class="btn-row" style="flex-wrap:wrap;gap:.4rem;margin-bottom:0">
+          <button class="btn avp-step-btn active" data-step="0" onclick="setAvpStep(0)"><span class="tab-num">①</span> Bivariate</button>
+          <button class="btn avp-step-btn" data-step="1" onclick="setAvpStep(1)"><span class="tab-num">②</span> e(Y|X₂)</button>
+          <button class="btn avp-step-btn" data-step="2" onclick="setAvpStep(2)"><span class="tab-num">③</span> e(X₁|X₂)</button>
+          <button class="btn avp-step-btn" data-step="3" onclick="setAvpStep(3)"><span class="tab-num">④</span> AVP</button>
+          <button class="btn avp-step-btn" data-step="4" onclick="setAvpStep(4)"><span class="tab-num">⑤</span> 3D Surface</button>
+        </div>
+
+        <div style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);margin-top:.2rem">Correlation X₁↔X₂</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:0">
+          <button class="scen-btn" id="scen-r0" onclick="setR12(0)">r = .00</button>
+          <button class="scen-btn active" id="scen-r2" onclick="setR12(0.20)">r = .20</button>
+          <button class="scen-btn" id="scen-r5" onclick="setR12(0.50)">r = .50</button>
+          <button class="scen-btn" id="scen-r8" onclick="setR12(0.80)">r = .80</button>
+        </div>
+
+        <div style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);margin-top:.2rem">Coefficient comparison</div>
+        <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.77rem">
+          <thead>
+            <tr>
+              <th style="text-align:left;color:var(--ink3);padding:.25rem .3rem;border-bottom:1px solid var(--border);font-weight:400">Model</th>
+              <th style="text-align:right;color:var(--ink3);padding:.25rem .3rem;border-bottom:1px solid var(--border);font-weight:400">b₁</th>
+              <th style="text-align:right;color:var(--ink3);padding:.25rem .3rem;border-bottom:1px solid var(--border);font-weight:400">β₁</th>
+              <th style="text-align:right;color:var(--ink3);padding:.25rem .3rem;border-bottom:1px solid var(--border);font-weight:400">R²</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:.25rem .3rem;color:var(--ink2)">Bivariate</td>
+              <td id="m4-biv-b1" style="text-align:right;padding:.25rem .3rem;color:var(--ink)">—</td>
+              <td id="m4-biv-beta" style="text-align:right;padding:.25rem .3rem;color:var(--ink)">—</td>
+              <td id="m4-biv-r2" style="text-align:right;padding:.25rem .3rem;color:var(--ink)">—</td>
+            </tr>
+            <tr>
+              <td style="padding:.25rem .3rem;color:var(--ink2)">Partial</td>
+              <td id="m4-par-b1" style="text-align:right;padding:.25rem .3rem;color:var(--a2);font-weight:600">—</td>
+              <td id="m4-par-beta" style="text-align:right;padding:.25rem .3rem;color:var(--a2);font-weight:600">—</td>
+              <td id="m4-par-r2" style="text-align:right;padding:.25rem .3rem;color:var(--a2);font-weight:600">—</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="coef-grid g2">
+          <div class="coef-cell" title="Slope of AVP regression line = partial b₁">
+            <div class="coef-cell-lbl">AVP-Slope</div>
+            <div class="coef-cell-val" id="m4-avp-slope">—</div>
+          </div>
+          <div class="coef-cell" title="Bivariate b₁ minus partial b₁">
+            <div class="coef-cell-lbl">Δb₁</div>
+            <div class="coef-cell-val" id="m4-diff-b1">—</div>
+          </div>
+        </div>
+
+        <div class="erklaer" id="m4-erkl" style="margin-bottom:0;min-height:5rem">
+          Step ① shows the <strong>bivariate</strong> regression of Y on X₁ — as in Module ①.
+          The bivariate b₁ still contains the <em>influence of X₂</em> when X₁ and X₂ are correlated.
+        </div>
+
+      </div>
+
+      <div class="info-box" style="flex:1">
+        <div class="info-box-h">Tutorial — Multiple Regression &amp; AVP</div>
+        <p><strong>From line to plane</strong><br>
+        Bivariate (Y ~ X₁) the solution is a <em>line</em> in 2D space. With two predictors (Y ~ X₁ + X₂) it becomes a <em>regression surface (plane)</em> in 3D space. b₁ is the slope in the X₁ direction, b₂ in the X₂ direction — each <em>holding the other predictor fixed</em>.</p>
+        <p><strong>Why multiple regression?</strong><br>
+        X₁ (study time) and X₂ (sleep) correlate with r₁₂ = <strong><span id="m4-info-r12">—</span></strong>. The bivariate model does not measure the pure X₁ effect — b₁ also contains the influence of X₂. The multiple model holds X₂ statistically constant.</p>
+        <p><strong>Reading the coefficients (table left)</strong><br>
+        <em>Bivariate b₁:</em> slope from Y ~ X₁ alone — contains confounding by X₂.<br>
+        <em>Partial b₁:</em> slope from Y ~ X₁ + X₂ — adjusted for X₂.<br>
+        <em>Δb₁:</em> the difference quantifies the confounding. At r₁₂ = 0, Δb₁ = 0.</p>
+
+        <div id="m4-info-step" style="border-top:1px solid var(--border);margin-top:.55rem;padding-top:.55rem">
+          <p><strong>Step ① — Bivariate starting point</strong><br>
+          What you see: The bivariate OLS line Y&#160;~&#160;X₁ (study time → exam score) — identical to Module ①.<br>
+          Tip: Note the bivariate b₁ (table left), then change r₁₂ and compare.</p>
+        </div>
+
+        <p style="border-top:1px solid var(--border);margin-top:.55rem;padding-top:.55rem">
+        <strong>Confounding comparison</strong><br>
+        bivariate b₁ = <span id="m4-info-biv" style="color:var(--ink)">—</span> · partial b₁ = <em><span id="m4-info-par">—</span></em> · Δb₁ = <span id="m4-info-diff">—</span><br>
+        The larger r₁₂, the more the bivariate deviates from the partial b₁.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="erklaer" style="margin-top:.9rem">
+    <strong>AVP Principle:</strong> An Added Variable Plot (<em>partial regression plot</em>) makes the
+    <em>partial</em> effect of X₁ on Y visible — adjusted for X₂. To do this, X₂ is partialled out of both
+    Y (<em>e(Y|X₂)</em>) and X₁ (<em>e(X₁|X₂)</em>). The slope of the
+    regression line through the residual vectors <strong>equals exactly</strong> the partial
+    coefficient b₁ from the multiple model.
+  </div>
+
+</div>
+
+<!-- ══ LEARNING CARDS ════════════════════════════════════════════════ -->
+<section id="lernkarten">
+  <div class="lk-head">Learning Cards — OLS &amp; Multiple Regression</div>
+  <div class="lcard-grid">
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">①</span> OLS Criterion</div>
+      <div class="lcard-body">
+        OLS minimizes the <strong>sum of squared residuals</strong>:
+        <code>min Σ(yᵢ − ŷᵢ)²</code>.
+        Squaring serves two purposes: signs are neutralized,
+        and large residuals are penalized disproportionately more than small ones.
+        The solution is unique and always yields <code>Σeᵢ = 0</code>.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">②</span> Coefficient b₁</div>
+      <div class="lcard-body">
+        <strong>Interpretation:</strong> "Per +1 unit X, the expected
+        value of Y increases by b₁ units — all other predictors held constant
+        (<em>ceteris paribus</em>)."
+        In the bivariate case: <code>b₁ = Σ(xᵢ−x̄)(yᵢ−ȳ) / Σ(xᵢ−x̄)²</code>.
+        The numerator is the covariance, the denominator the variance of X.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">③</span> Intercept b₀</div>
+      <div class="lcard-body">
+        b₀ is the expected Y value <strong>when all predictors equal zero</strong>.
+        This is often not meaningful in context (e.g., 0 study hours, 0 sleep).
+        b₀ is needed for <em>prediction</em> but should usually
+        not be interpreted substantively. Always: <code>ȳ = b₀ + b₁·x̄</code>.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">④</span> R² and adj. R²</div>
+      <div class="lcard-body">
+        <code>R² = SSR/SST ∈ [0, 1]</code> — proportion of explained variance.
+        R² increases with every added predictor, even useless ones.
+        Adjusted R² corrects for this:
+        <code>adj.R² = 1 − (1−R²)·(n−1)/(n−k−1)</code>.
+        adj.R² decreases when a new predictor explains less than expected by chance.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">⑤</span> Partial Slope</div>
+      <div class="lcard-body">
+        b₁ in the multiple model is <strong>not</strong> the same as in the bivariate model —
+        it is the slope in the <em>Added Variable Plot</em> (AVP):
+        regression of <code>e(Y|X₂)</code> on <code>e(X₁|X₂)</code>.
+        This value equals the <em>partial slope</em>: effect of X₁ on Y,
+        after the shared portion of X₂ has been removed from both.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h"><span class="tab-num">⑥</span> Standardization β</div>
+      <div class="lcard-body">
+        <code>β = b · (SD_X / SD_Y)</code> — the standardized regression coefficient.
+        β indicates how many <strong>standard deviations</strong> Y increases
+        when X increases by one SD. Allows comparison of predictors
+        with different scales, but only <em>within</em> one sample.
+        Between studies, β values are <strong>not</strong> directly comparable due to different SDs.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══ HELP MODAL ════════════════════════════════════════════════════ -->
+<div id="help-modal" class="ml-modal" onclick="if(event.target===this)closeModal('help-modal')">
+  <div class="ml-modal-box">
+    <button class="ml-modal-close" onclick="closeModal('help-modal')">✕</button>
+    <div class="ml-modal-eyebrow">? Help — OLS &amp; Multiple Regression</div>
+    <div class="ml-modal-body">
+
+      <h3>What is OLS?</h3>
+      <p><em>Ordinary Least Squares</em> (OLS) is the standard method for estimating
+      linear regression models. It finds those coefficients b₀ and b₁ that minimize the
+      <strong>sum of squared residuals</strong>:
+      <code>min Σ(yᵢ − ŷᵢ)²</code>.
+      The solution follows from the <em>normal equations</em>:</p>
+      <ul>
+        <li><code>b₁ = Σ(xᵢ−x̄)(yᵢ−ȳ) / Σ(xᵢ−x̄)²</code></li>
+        <li><code>b₀ = ȳ − b₁·x̄</code></li>
+      </ul>
+
+      <details class="details-box">
+        <summary>▸ Matrix notation (for the curious)</summary>
+        <div class="details-inner" style="font-size:.78rem;color:var(--ink2);line-height:1.9">
+          In the multiple case with design matrix
+          <strong>X</strong> (n×(k+1), first column ones) and vector <strong>y</strong>:<br>
+          <code><strong>b</strong> = (<strong>X</strong>ᵀ<strong>X</strong>)⁻¹ <strong>X</strong>ᵀ<strong>y</strong></code><br>
+          Prerequisite: (<strong>X</strong>ᵀ<strong>X</strong>) is invertible → no perfect multicollinearity.
+        </div>
+      </details>
+
+      <h3>Coefficient interpretation</h3>
+      <p><strong>b₁</strong> (unstandardized): "Per +1 unit X, Ŷ increases by b₁ units,
+      when all other predictors are held constant."
+      The "ceteris paribus" is crucial — in the multiple model b₁ is a
+      <em>partial</em> effect, not a marginal raw effect.</p>
+      <p><strong>β</strong> (standardized): Comparison of predictors on different scales.
+      Caution: β is sample-specific and must not be compared between studies.</p>
+
+      <h3>R² and model fit</h3>
+      <p><code>R² = SSR/SST = 1 − RSS/SST</code>. In the bivariate case <code>R² = r²</code>.
+      R² increases with every predictor, even random variables (<em>Freedman's Paradox</em>).
+      Adjusted R² corrects for the number of predictors k:</p>
+      <p><code>adj.R² = 1 − (1−R²)·(n−1)/(n−k−1)</code></p>
+
+      <h3>Effect size f²</h3>
+      <p><code>f² = R²/(1−R²)</code> — effect size for multiple regression.
+      Conventions (Cohen 1988): small ≥ .02, medium ≥ .15, large ≥ .35.
+      Better than conventions: <em>SESOI</em> — define the smallest effect of substantive
+      interest before the study.</p>
+
+      <h3>When does OLS fail?</h3>
+      <ul>
+        <li><strong>Non-linearity</strong> — residual-vs-fitted plot shows a pattern</li>
+        <li><strong>Heteroscedasticity</strong> — fan shape in residual plot</li>
+        <li><strong>Outliers/leverage</strong> — individual points determine the line (→ Anscombe)</li>
+        <li><strong>Multicollinearity</strong> — high r(X₁,X₂) inflates standard errors; VIF &gt; 10 critical</li>
+        <li><strong>Measurement error</strong> — attenuation of b₁ (coefficients biased toward zero)</li>
+      </ul>
+
+      <h3>Related Tools in Bayes Thinking Lab</h3>
+      <ul>
+        <li><a href="../MLE_tool.html">Maximum Likelihood</a> — OLS corresponds to MLE under normality</li>
+        <li><a href="../GLM_transition.html">GLM</a> — Generalized Linear Model beyond OLS</li>
+        <li><a href="../Causal_Estimands.html">Causal Inference</a> — OLS estimates association, not causality</li>
+        <li><a href="../Brms_model_builder.html">Bayesian Regression</a> — Priors + MCMC with brms</li>
+      </ul>
+
+    </div>
   </div>
 </div>
 
 <script>
 'use strict';
-
-// ── Theme ──────────────────────────────────────────────────
-let DARK = document.documentElement.getAttribute('data-theme') !== 'light';
-function toggleTheme(){
-  DARK = !DARK;
-  document.documentElement.setAttribute('data-theme', DARK?'dark':'light');
-  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
-  localStorage.setItem('btl-theme',DARK?'dark':'light');
-  redraw();
-}
-function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
-
-// ── State ──────────────────────────────────────────────────
-let points = [];
-let brush  = 'draw';
-let mode   = 'draw';
-let olsShown = false;
-
-const DX = [0, 10], DY = [0, 10];
-
-let manA = 5, manB = 0;
-
-let olsA = null, olsB = null, olsSigma = null;
-
-// Direct line drag
-const HANDLE_X_L = 2, HANDLE_X_R = 8, HANDLE_R = 9;
-let dragHandle = null;   // null | 'L' | 'R' | 'body'
-let bodyDragX  = 0;
-
-// ── Canvas setup ───────────────────────────────────────────
-const canvas = document.getElementById('canvas');
-const ctx    = canvas.getContext('2d');
-let W, H, margin;
-
-function resize(){
-  const wrap = document.getElementById('canvas-wrap');
-  W = wrap.clientWidth;
-  canvas.width  = W;
-  canvas.height = 440;
-  H = 440;
-  margin = { l: 48, r: 18, t: 18, b: 38 };
-  redraw();
-}
-
-function toCanX(dx){ return margin.l + (dx - DX[0])/(DX[1]-DX[0]) * (W - margin.l - margin.r); }
-function toCanY(dy){ return H - margin.b - (dy - DY[0])/(DY[1]-DY[0]) * (H - margin.t - margin.b); }
-function toDataX(cx){ return DX[0] + (cx - margin.l)/(W - margin.l - margin.r) * (DX[1]-DX[0]); }
-function toDataY(cy){ return DY[0] + (H - margin.b - cy)/(H - margin.t - margin.b) * (DY[1]-DY[0]); }
-
-// ── OLS ────────────────────────────────────────────────────
-function computeOLS(){
-  if(points.length < 2) return;
-  const n  = points.length;
-  const mx = points.reduce((s,p)=>s+p.x,0)/n;
-  const my = points.reduce((s,p)=>s+p.y,0)/n;
-  const ss = points.reduce((s,p)=>s+(p.x-mx)**2,0);
-  const sp = points.reduce((s,p)=>s+(p.x-mx)*(p.y-my),0);
-  olsB = sp/ss;
-  olsA = my - olsB*mx;
-  const resid = points.map(p=>(p.y - (olsA + olsB*p.x))**2);
-  olsSigma = Math.sqrt(resid.reduce((a,v)=>a+v,0)/n);
-}
-
-function rss(a, b){
-  return points.reduce((s,p)=>s+(p.y-(a+b*p.x))**2, 0);
-}
-function r2(a, b){
-  if(points.length<2)return 0;
-  const my = points.reduce((s,p)=>s+p.y,0)/points.length;
-  const sst = points.reduce((s,p)=>s+(p.y-my)**2,0);
-  if(sst===0)return 1;
-  return 1 - rss(a,b)/sst;
-}
-
-// ── Draw ───────────────────────────────────────────────────
-function redraw(){
-  if(!W) return;
-  ctx.clearRect(0,0,W,H);
-
-  // Background
-  ctx.fillStyle = DARK ? '#0c0f14' : '#faf6ee';
-  ctx.fillRect(0,0,W,H);
-
-  const grid = cv('--grid');
-  const a2   = cv('--a2');
-  const a3   = cv('--a3');
-  const a5   = cv('--a5');
-  const paper= cv('--paper');
-
-  // Grid (every 2 units)
-  ctx.strokeStyle = grid; ctx.lineWidth = 1;
-  for(let v=0;v<=10;v+=2){
-    const px = toCanX(v), py = toCanY(v);
-    ctx.beginPath(); ctx.moveTo(px, margin.t); ctx.lineTo(px, H-margin.b); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(margin.l, py); ctx.lineTo(W-margin.r, py); ctx.stroke();
-  }
-
-  // Axis labels
-  ctx.fillStyle = DARK ? '#2a3a55' : '#8a7f72';
-  ctx.font = '12px DM Mono, monospace'; ctx.textAlign = 'center';
-  for(let v=0;v<=10;v+=2){
-    ctx.fillText(v, toCanX(v), H-margin.b+15);
-  }
-  ctx.textAlign = 'right';
-  for(let v=0;v<=10;v+=2){
-    ctx.fillText(v, margin.l-5, toCanY(v)+3);
-  }
-  ctx.fillStyle = DARK ? '#1e2a40' : '#8a7f72';
-  ctx.textAlign = 'center';
-  ctx.fillText('x', W/2, H-4);
-  ctx.save(); ctx.translate(11, H/2); ctx.rotate(-Math.PI/2);
-  ctx.fillText('y', 0, 0); ctx.restore();
-
-  // Active line(s)
-  const showResid = document.getElementById('show-resid').checked;
-  const showBells = document.getElementById('show-bells').checked;
-  const useA = mode === 'ols' ? olsA : manA;
-  const useB = mode === 'ols' ? olsB : manB;
-  const hasLine = mode !== 'draw';
-  const showOlsComp = olsShown && mode !== 'ols';
-
-  function drawLine(a, b, color, dash=[], width=2){
-    ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash);
-    ctx.beginPath();
-    ctx.moveTo(toCanX(DX[0]), toCanY(a+b*DX[0]));
-    ctx.lineTo(toCanX(DX[1]), toCanY(a+b*DX[1]));
-    ctx.stroke(); ctx.restore();
-  }
-
-  // Bedingte Verteilungen (drawn first, behind lines)
-  if(showBells && olsShown && olsA !== null && points.length > 1){
-    const sigma = olsSigma || 1;
-    const pxPerUnit = (H - margin.t - margin.b) / (DY[1] - DY[0]);
-    const bellWidthPx = 38;
-    [1.5, 3.5, 5.5, 7.5].forEach(dx => {
-      const cx   = toCanX(dx);
-      const yMu  = olsA + olsB * dx;
-      const cyMu = toCanY(yMu);
-      ctx.beginPath();
-      const steps = 60, range = 3 * sigma;
-      for(let i = 0; i <= steps; i++){
-        const yOff   = -range + i * 2*range/steps;
-        const density = Math.exp(-0.5*(yOff/sigma)**2);
-        const bx = cx + density * bellWidthPx;
-        const by = cyMu - yOff * pxPerUnit;
-        i === 0 ? ctx.moveTo(bx, by) : ctx.lineTo(bx, by);
-      }
-      for(let i = steps; i >= 0; i--){
-        const yOff = -range + i * 2*range/steps;
-        ctx.lineTo(cx, cyMu - yOff * pxPerUnit);
-      }
-      ctx.closePath();
-      ctx.fillStyle   = DARK ? 'rgba(74,176,216,.18)' : 'rgba(42,110,138,.14)';
-      ctx.fill();
-      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)';
-      ctx.lineWidth = 1.2; ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx-4, cyMu); ctx.lineTo(cx+4, cyMu);
-      ctx.strokeStyle = DARK ? 'rgba(74,176,216,.8)' : 'rgba(42,110,138,.7)';
-      ctx.lineWidth = 1.5; ctx.stroke();
-      [-1,1].forEach(sign => {
-        const pyS = cyMu - sign*sigma*pxPerUnit;
-        ctx.beginPath();
-        ctx.moveTo(cx, pyS); ctx.lineTo(cx + Math.exp(-0.5)*bellWidthPx, pyS);
-        ctx.strokeStyle = DARK ? 'rgba(74,176,216,.3)' : 'rgba(42,110,138,.25)';
-        ctx.lineWidth = 1; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]);
-      });
-    });
-    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.6)';
-    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
-    ctx.fillText('N(ŷ, σ)', toCanX(1.5) + bellWidthPx + 4, toCanY(olsA + olsB*1.5) - 4);
-  }
-
-  // OLS comparison line (manual mode, when button toggled)
-  if(showOlsComp && olsA !== null){
-    drawLine(olsA, olsB, DARK ? 'rgba(128,203,82,.6)' : 'rgba(90,138,42,.55)', [6,4], 1.5);
-    ctx.fillStyle = DARK ? 'rgba(128,203,82,.7)' : 'rgba(90,138,42,.6)';
-    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
-    ctx.fillText('OLS', toCanX(DX[1])+4, toCanY(olsA+olsB*DX[1]));
-  }
-
-  // Residuals to active line
-  if(showResid && hasLine && useA !== null){
-    const rCol = DARK ? 'rgba(232,97,74,.38)' : 'rgba(201,74,42,.32)';
-    points.forEach(p => {
-      ctx.beginPath();
-      ctx.moveTo(toCanX(p.x), toCanY(p.y));
-      ctx.lineTo(toCanX(p.x), toCanY(useA+useB*p.x));
-      ctx.strokeStyle = rCol; ctx.lineWidth = 1;
-      ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
-    });
-  }
-
-  // Active line (OLS = green, manual = blue)
-  if(hasLine && useA !== null){
-    const lineColor = mode === 'ols' ? a3 : a2;
-    drawLine(useA, useB, lineColor, [], 2.5);
-    ctx.fillStyle = lineColor;
-    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
-    ctx.fillText(`${mode==='ols'?'OLS: ':''} ŷ = ${useA.toFixed(2)} + ${useB.toFixed(2)}x`,
-                 toCanX(8.5) + 5, toCanY(useA + useB*8.5) - 6);
-  }
-
-  // In OLS mode: also draw manual line (dashed blue) for comparison
-  if(mode === 'ols' && manA !== null){
-    drawLine(manA, manB, DARK ? 'rgba(74,176,216,.65)' : 'rgba(42,110,138,.55)', [6,4], 1.8);
-    ctx.fillStyle = DARK ? 'rgba(74,176,216,.7)' : 'rgba(42,110,138,.65)';
-    ctx.font = '11px DM Mono,monospace'; ctx.textAlign = 'left';
-    ctx.fillText(`yours: ŷ = ${manA.toFixed(2)} + ${manB.toFixed(2)}x`,
-                 toCanX(1) + 4, toCanY(manA + manB*1) - 6);
-  }
-
-  // Drag handles
-  if(mode!=='draw'){
-    const hpos=getHandlePos();
-    ctx.save();
-    [['L',hpos.L],['R',hpos.R]].forEach(([key,{cx:hx,cy:hy}])=>{
-      const clHy=Math.max(margin.t+HANDLE_R, Math.min(H-margin.b-HANDLE_R, hy));
-      const active=dragHandle===key;
-      ctx.beginPath(); ctx.arc(hx,clHy,HANDLE_R,0,Math.PI*2);
-      ctx.fillStyle=active
-        ?(DARK?'#4ab0d8':'#2a6e8a')
-        :(DARK?'rgba(74,176,216,.82)':'rgba(42,110,138,.78)');
-      ctx.fill();
-      ctx.strokeStyle=DARK?'rgba(236,230,216,.7)':'rgba(255,255,255,.85)';
-      ctx.lineWidth=1.5; ctx.stroke();
-      ctx.fillStyle=DARK?'#ece6d8':'#fff';
-      ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('↕',hx,clHy+0.5);
-      ctx.textBaseline='alphabetic';
-    });
-    ctx.restore();
-  }
-
-  // Points
-  points.forEach(p => {
-    const cx = toCanX(p.x), cy = toCanY(p.y);
-    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
-    ctx.fillStyle = DARK ? '#ece6d8' : '#18130e';
-    ctx.fill();
-    ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI*2);
-    ctx.strokeStyle = DARK ? 'rgba(74,176,216,.6)' : 'rgba(42,110,138,.5)';
-    ctx.lineWidth = 1.5; ctx.stroke();
-  });
-
-  // Update panel
-  const n = points.length;
-  document.getElementById('p-n').textContent = n;
-  if(n>0){
-    const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
-    document.getElementById('p-xr').textContent =
-      `${Math.min(...xs).toFixed(1)} – ${Math.max(...xs).toFixed(1)}`;
-    document.getElementById('p-yr').textContent =
-      `${Math.min(...ys).toFixed(1)} – ${Math.max(...ys).toFixed(1)}`;
-  } else {
-    document.getElementById('p-xr').textContent = '—';
-    document.getElementById('p-yr').textContent = '—';
-  }
-  document.getElementById('panel-line').style.display = (mode!=='draw'&&n>=1) ? '' : 'none';
-  document.getElementById('panel-rss').style.display  = (mode==='manual'&&n>=2) ? '' : 'none';
-  document.getElementById('panel-ols').style.display  = (mode==='ols'&&olsA!==null) ? '' : 'none';
-
-  if(mode==='manual'||mode==='ols'){
-    document.getElementById('p-a').textContent = manA.toFixed(2);
-    document.getElementById('p-b').textContent = manB.toFixed(2);
-    document.getElementById('p-formula').textContent =
-      `ŷ = ${manA.toFixed(2)} + ${manB.toFixed(2)}·x`;
-    if(n >= 2){
-      const rssU = rss(manA, manB);
-      computeOLS();
-      const rssO = olsA !== null ? rss(olsA, olsB) : rssU;
-      const r2U  = r2(manA, manB);
-      const r2O  = olsA !== null ? r2(olsA, olsB) : r2U;
-      document.getElementById('p-rss-user').textContent = rssU.toFixed(2);
-      document.getElementById('p-rss-ols').textContent  = olsA!==null ? rssO.toFixed(2) : '—';
-      document.getElementById('p-r2-user').textContent  = r2U.toFixed(3);
-      document.getElementById('p-r2-ols').textContent   = olsA!==null ? r2O.toFixed(3) : '—';
-      const maxRss = Math.max(rssU, rssO, 0.01);
-      document.getElementById('rss-bar-user').style.width = (rssU/maxRss*100) + '%';
-      document.getElementById('rss-bar-ols').style.width  = (rssO/maxRss*100) + '%';
-    }
-  }
-  if(mode === 'ols' && olsA !== null){
-    document.getElementById('p-ols-a').textContent = olsA.toFixed(3);
-    document.getElementById('p-ols-b').textContent = olsB.toFixed(3);
-    document.getElementById('p-ols-s').textContent = olsSigma.toFixed(3);
-  }
-}
-
-// ── Mode switching ─────────────────────────────────────────
-const NARRATIVES = {
-  draw: {
-    phase: 'p1', label: 'Step 1 — Draw data',
-    text: '<b>Click in the field</b> to place data points. Imagine you are measuring the relationship between two variables — e.g. study time and test score. Place 8–15 points. Use ✕ Erase to remove individual points.'
-  },
-  manual: {
-    phase: 'p2', label: 'Step 2 — Fit the line yourself',
-    text: 'Try to <b>find the best line yourself</b> — <b>drag directly on the line</b> to shift it vertically, or grab the <b>↕ handles</b> (at x≈2 and x≈8) to rotate it. Sliders for fine-tuning. The <b>red lines</b> show the residuals — goal: minimize RSS.'
-  },
-  ols: {
-    phase: 'p3', label: 'Step 3 — OLS vs. your line',
-    text: 'The <b>green OLS line</b> minimizes RSS — no other a and b produce a smaller value. Your dashed <b>blue line</b> remains visible: use the sliders to match the green one — feel how intercept and slope interact. The <b>conditional normal distributions</b> show: the LM assumes that y-values scatter around the line normally with constant spread σ — not the overall y-distribution needs to be normal.'
-  }
-};
-
-function setMode(m){
-  mode = m;
-  ['draw','manual','ols'].forEach(id =>
-    document.getElementById('tab-'+id).classList.toggle('sel', id===m));
-  document.getElementById('ctrl-manual').style.display = (m==='manual'||m==='ols') ? 'flex' : 'none';
-  document.getElementById('btn-draw').style.display    = m==='draw' ? '' : 'none';
-  document.getElementById('btn-erase').style.display   = m==='draw' ? '' : 'none';
-  const n = NARRATIVES[m];
-  document.getElementById('narr-phase').textContent = n.label;
-  document.getElementById('narr-phase').className   = 'narr-phase ' + n.phase;
-  document.getElementById('narr-text').innerHTML    = n.text;
-  if(m !== 'draw' && points.length >= 2) computeOLS();
-  if(m === 'ols'){
-    if(points.length >= 2) computeOLS();
-    olsShown = true;
-    document.getElementById('show-bells').disabled = false;
-  }
-  dragHandle = null;
-  canvas.style.cursor = m==='draw' ? (brush==='erase'?'not-allowed':'crosshair') : 'default';
-  redraw();
-}
-
-function toggleOLS(){
-  if(points.length < 2){ toast('Please draw at least 2 points first.'); return; }
-  if(olsShown){
-    olsShown = false;
-    document.getElementById('btn-show-ols').textContent = '★ Show best OLS line';
-    document.getElementById('btn-show-ols').classList.remove('active');
-    document.getElementById('show-bells').checked = false;
-  } else {
-    olsShown = true;
-    computeOLS();
-    document.getElementById('btn-show-ols').textContent = '✕ Hide OLS line';
-    document.getElementById('btn-show-ols').classList.add('active');
-  }
-  redraw();
-}
-
-// ── Handle helpers ─────────────────────────────────────────
-function getHandlePos(){
-  return {
-    L:{cx:toCanX(HANDLE_X_L), cy:toCanY(manA+manB*HANDLE_X_L)},
-    R:{cx:toCanX(HANDLE_X_R), cy:toCanY(manA+manB*HANDLE_X_R)}
+/* ── Seeded RNG (mulberry32) ──────────────────────────────────────── */
+function mulberry32(seed){
+  return function(){
+    seed|=0; seed=seed+0x6D2B79F5|0;
+    let t=Math.imul(seed^seed>>>15,1|seed);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return((t^t>>>14)>>>0)/4294967296;
   };
 }
-function hitTestHandle(cx,cy){
-  if(mode==='draw') return null;
-  const h=getHandlePos();
-  for(const k of ['L','R'])
-    if(Math.hypot(cx-h[k].cx, cy-h[k].cy)<=HANDLE_R+4) return k;
-  return null;
+
+/* ── Box-Muller Normal distribution ──────────────────────────────── */
+function randn(rng){
+  let u,v;
+  do{u=rng();}while(u===0);
+  v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
 }
-function nearLine(cx,cy){
-  if(mode==='draw') return false;
-  const x0=margin.l, x1=W-margin.r;
-  const y0=toCanY(manA+manB*toDataX(x0)), y1=toCanY(manA+manB*toDataX(x1));
-  const dx=x1-x0, dy=y1-y0, len2=dx*dx+dy*dy;
-  if(len2===0) return Math.hypot(cx-x0,cy-y0)<12;
-  const t=Math.max(0,Math.min(1,((cx-x0)*dx+(cy-y0)*dy)/len2));
-  return Math.hypot(cx-(x0+t*dx), cy-(y0+t*dy))<10;
-}
-function applyHandleDrag(handle,cy){
-  const y=Math.max(-1,Math.min(11,toDataY(cy)));
-  if(handle==='body'){
-    manA=y-manB*bodyDragX;
-  } else if(handle==='L'){
-    const yR=manA+manB*HANDLE_X_R;
-    manB=(yR-y)/(HANDLE_X_R-HANDLE_X_L);
-    manA=y-manB*HANDLE_X_L;
-  } else {
-    const yL=manA+manB*HANDLE_X_L;
-    manB=(y-yL)/(HANDLE_X_R-HANDLE_X_L);
-    manA=yL-manB*HANDLE_X_L;
+
+/* ── Data generator (Cholesky, 3 variables) ───────────────────────── */
+function genData(seed, r_x1y=0.60, r_x2y=0.45, r_x1x2=0.20, n=30){
+  const rng=mulberry32(seed);
+  const mx1=10, sdx1=3.2;
+  const mx2=6.5, sdx2=1.0;
+  const my=65,  sdy=12;
+  const L=[[0,0,0],[0,0,0],[0,0,0]];
+  L[0][0]=1;
+  L[1][0]=r_x1x2;
+  L[1][1]=Math.sqrt(Math.max(0,1-L[1][0]**2));
+  L[2][0]=r_x1y;
+  L[2][1]=(r_x2y-L[2][0]*L[1][0])/(L[1][1]||1e-9);
+  L[2][2]=Math.sqrt(Math.max(0,1-L[2][0]**2-L[2][1]**2));
+  const x1=[],x2=[],y=[];
+  for(let i=0;i<n;i++){
+    const z0=randn(rng),z1=randn(rng),z2=randn(rng);
+    const u0=L[0][0]*z0;
+    const u1=L[1][0]*z0+L[1][1]*z1;
+    const u2=L[2][0]*z0+L[2][1]*z1+L[2][2]*z2;
+    x1.push(Math.max(1,Math.min(22, mx1+sdx1*u0)));
+    x2.push(Math.max(3.5,Math.min(9, mx2+sdx2*u1)));
+    y.push(Math.max(0,Math.min(100, my+sdy*u2)));
   }
-  const slA=document.getElementById('sl-a'), slB=document.getElementById('sl-b');
-  slA.value=Math.max(+slA.min,Math.min(+slA.max,manA));
-  slB.value=Math.max(+slB.min,Math.min(+slB.max,manB));
-  document.getElementById('v-a').textContent=manA.toFixed(2);
-  document.getElementById('v-b').textContent=manB.toFixed(2);
+  return{x1,x2,y,n};
 }
 
-// ── Brush & interaction ────────────────────────────────────
-function setBrush(b){
-  brush = b;
-  document.getElementById('btn-draw').classList.toggle('active', b==='draw');
-  document.getElementById('btn-erase').classList.toggle('active', b==='erase');
-  canvas.style.cursor = b==='draw' ? 'crosshair' : 'not-allowed';
+/* ── OLS Bivariate ─────────────────────────────────────────────────── */
+function olsBivariate(x,y){
+  const n=x.length;
+  const mx=x.reduce((a,b)=>a+b)/n;
+  const my=y.reduce((a,b)=>a+b)/n;
+  const sxx=x.reduce((s,xi)=>s+(xi-mx)**2,0);
+  const sxy=x.reduce((s,xi,i)=>s+(xi-mx)*(y[i]-my),0);
+  const b1=sxy/sxx;
+  const b0=my-b1*mx;
+  const yhat=x.map(xi=>b0+b1*xi);
+  const resid=y.map((yi,i)=>yi-yhat[i]);
+  const sse=resid.reduce((s,e)=>s+e**2,0);
+  const sst=y.reduce((s,yi)=>s+(yi-my)**2,0);
+  const ssr=sst-sse;
+  const r2=1-sse/sst;
+  const sdx=Math.sqrt(sxx/(n-1));
+  const sdy=Math.sqrt(sst/(n-1));
+  const beta1=b1*sdx/sdy;
+  return{b0,b1,beta1,yhat,resid,sse,sst,ssr,r2,rss:sse,mx,my,sdx,sdy};
 }
 
-function getCanvasPos(e){
-  const rect = canvas.getBoundingClientRect();
-  const ex = e.touches ? e.touches[0].clientX : e.clientX;
-  const ey = e.touches ? e.touches[0].clientY : e.clientY;
-  return { cx: ex - rect.left, cy: ey - rect.top };
-}
-
-let isPointerDown = false;
-canvas.addEventListener('mousedown', e => {
-  const {cx,cy}=getCanvasPos(e);
-  const hit=hitTestHandle(cx,cy);
-  if(hit){ dragHandle=hit; canvas.style.cursor='ns-resize'; e.preventDefault(); return; }
-  if(mode!=='draw' && nearLine(cx,cy)){
-    dragHandle='body'; bodyDragX=toDataX(cx); canvas.style.cursor='grabbing'; e.preventDefault(); return;
-  }
-  isPointerDown=true; handlePointer(e);
-});
-document.addEventListener('mousemove', e => {
-  if(dragHandle){ const {cx,cy}=getCanvasPos(e); applyHandleDrag(dragHandle,cy); redraw(); return; }
-  const {cx,cy}=getCanvasPos(e);
-  if(mode!=='draw'){
-    const r=canvas.getBoundingClientRect();
-    if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){
-      if(hitTestHandle(cx,cy))      canvas.style.cursor='ns-resize';
-      else if(nearLine(cx,cy))      canvas.style.cursor='grab';
-      else                          canvas.style.cursor='default';
+/* ── OLS Multiple (Y ~ X1 + X2, Gauss elimination 3×3) ─────────────── */
+function olsMultiple(x1,x2,y){
+  const n=x1.length;
+  const Sx1=x1.reduce((a,b)=>a+b,0),Sx2=x2.reduce((a,b)=>a+b,0);
+  const Sy=y.reduce((a,b)=>a+b,0);
+  const Sx1x1=x1.reduce((s,v)=>s+v*v,0);
+  const Sx2x2=x2.reduce((s,v)=>s+v*v,0);
+  const Sx1x2=x1.reduce((s,v,i)=>s+v*x2[i],0);
+  const Sx1y=x1.reduce((s,v,i)=>s+v*y[i],0);
+  const Sx2y=x2.reduce((s,v,i)=>s+v*y[i],0);
+  const A=[
+    [n,   Sx1,   Sx2,   Sy],
+    [Sx1, Sx1x1, Sx1x2, Sx1y],
+    [Sx2, Sx1x2, Sx2x2, Sx2y]
+  ];
+  for(let i=0;i<3;i++){
+    const piv=A[i][i];
+    for(let j=i+1;j<3;j++){
+      const f=A[j][i]/piv;
+      for(let k=i;k<=3;k++) A[j][k]-=f*A[i][k];
     }
   }
-  if(isPointerDown && mode==='draw') handlePointer(e);
-});
-document.addEventListener('mouseup', ()=>{
-  isPointerDown=false; dragHandle=null;
-  canvas.style.cursor=mode==='draw'?(brush==='erase'?'not-allowed':'crosshair'):'default';
-});
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  const {cx,cy}=getCanvasPos(e);
-  const hit=hitTestHandle(cx,cy);
-  if(hit){ dragHandle=hit; return; }
-  if(mode!=='draw' && nearLine(cx,cy)){ dragHandle='body'; bodyDragX=toDataX(cx); return; }
-  handlePointer(e);
-},{passive:false});
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  if(dragHandle){ const {cx,cy}=getCanvasPos(e); applyHandleDrag(dragHandle,cy); redraw(); return; }
-  if(mode==='draw') handlePointer(e);
-},{passive:false});
-canvas.addEventListener('touchend', ()=>{ dragHandle=null; isPointerDown=false; });
-
-function handlePointer(e){
-  if(mode !== 'draw') return;
-  const {cx, cy} = getCanvasPos(e);
-  const dx = toDataX(cx), dy = toDataY(cy);
-  if(dx < DX[0] || dx > DX[1] || dy < DY[0] || dy > DY[1]) return;
-
-  if(brush === 'draw'){
-    const tooClose = points.some(p => Math.hypot(p.x-dx, p.y-dy) < 0.4);
-    if(!tooClose) points.push({x:dx, y:dy});
-  } else {
-    const THRESH = 0.6;
-    const idx = points.reduce((best, p, i) => {
-      const d = Math.hypot(p.x-dx, p.y-dy);
-      return d < best.d ? {i, d} : best;
-    }, {i:-1, d:THRESH});
-    if(idx.i >= 0) points.splice(idx.i, 1);
+  const b=new Array(3);
+  for(let i=2;i>=0;i--){
+    b[i]=A[i][3];
+    for(let j=i+1;j<3;j++) b[i]-=A[i][j]*b[j];
+    b[i]/=A[i][i];
   }
-  redraw();
+  const[b0,b1,b2]=b;
+  const yhat=x1.map((_,i)=>b0+b1*x1[i]+b2*x2[i]);
+  const resid=y.map((yi,i)=>yi-yhat[i]);
+  const sse=resid.reduce((s,e)=>s+e**2,0);
+  const my=Sy/n;
+  const sst=y.reduce((s,yi)=>s+(yi-my)**2,0);
+  const ssr=sst-sse;
+  const r2=1-sse/sst;
+  const adjR2=1-(1-r2)*(n-1)/(n-3);
+  const sdX1=Math.sqrt(x1.reduce((s,v)=>s+(v-Sx1/n)**2,0)/(n-1));
+  const sdX2=Math.sqrt(x2.reduce((s,v)=>s+(v-Sx2/n)**2,0)/(n-1));
+  const sdY=Math.sqrt(sst/(n-1));
+  const beta1=b1*sdX1/sdY, beta2=b2*sdX2/sdY;
+  return{b0,b1,b2,beta1,beta2,yhat,resid,sse,sst,ssr,r2,adjR2,my,sdY};
 }
 
-function clearPoints(){
-  points = [];
-  olsA = olsB = olsSigma = null;
-  olsShown = false;
-  redraw();
+/* ── Added Variable Plot helpers ──────────────────────────────────── */
+function residualize(v,u){
+  const{b0,b1}=olsBivariate(u,v);
+  return v.map((vi,i)=>vi-(b0+b1*u[i]));
+}
+function avpComponents(x1,x2,y){
+  const eYX2=residualize(y,x2);
+  const eX1X2=residualize(x1,x2);
+  const fit=olsBivariate(eX1X2,eYX2);
+  return{eYX2,eX1X2,fit};
 }
 
-// ── Slider update ──────────────────────────────────────────
-function updSlider(){
-  manA = +document.getElementById('sl-a').value;
-  manB = +document.getElementById('sl-b').value;
-  document.getElementById('v-a').textContent = manA.toFixed(2);
-  document.getElementById('v-b').textContent = manB.toFixed(2);
+/* ── Anscombe's Quartet (Hardcoded) ───────────────────────────────── */
+const ANSCOMBE={
+  x1:[10,8,13,9,11,14,6,4,12,7,5],
+  y1:[8.04,6.95,7.58,8.81,8.33,9.96,7.24,4.26,10.84,4.82,5.68],
+  x2:[10,8,13,9,11,14,6,4,12,7,5],
+  y2:[9.14,8.14,8.74,8.77,9.26,8.10,6.13,3.10,9.13,7.26,4.74],
+  x3:[10,8,13,9,11,14,6,4,12,7,5],
+  y3:[7.46,6.77,12.74,7.11,7.81,8.84,6.08,5.39,8.15,6.42,5.73],
+  x4:[8,8,8,8,8,8,8,19,8,8,8],
+  y4:[6.58,5.76,7.71,8.84,8.47,7.04,5.25,12.5,5.56,7.91,6.89]
+};
+
+/* ── Global state ─────────────────────────────────────────────────── */
+const ST={
+  seed:42,
+  data:null,
+  fitBiv:null,
+  fitMult:null,
+  avp:null,
+  activeModule:1,
+  handLine:{active:false,yA:null,yB:null},
+  showResiduals:false,
+  showOLS:false,
+  showBeta:false,m2showSlope:false,m2showMean:false,
+  m3mode:'SST',showBenchmark:false,
+  r12:0.20,
+  avpStep:0,
+  rot3d:{az:-0.55,el:0.38,dragging:false,lastX:0,lastY:0},
+};
+
+/* ── Init & data ──────────────────────────────────────────────────── */
+function initData(){
+  ST.data=genData(ST.seed,0.60,0.45,ST.r12);
+  ST.fitBiv=olsBivariate(ST.data.x1,ST.data.y);
+  ST.fitMult=olsMultiple(ST.data.x1,ST.data.x2,ST.data.y);
+  ST.avp=avpComponents(ST.data.x1,ST.data.x2,ST.data.y);
+  document.getElementById('seed-info').textContent='Seed: '+ST.seed;
+  const my=ST.fitBiv.my;
+  ST.handLine.yA=my;ST.handLine.yB=my;ST.handLine.active=true;
+  ST.showOLS=false;
+  const btnH=document.getElementById('btn-hand');
+  if(btnH){btnH.classList.add('accent1');btnH.textContent='✏ Manual: On';}
+  const btnO=document.getElementById('btn-show-ols');
+  if(btnO)btnO.classList.remove('primary');
 }
 
-// ── Floating Help Panel ────────────────────────────────────
-let helpOpen = false;
-function toggleHelp(){
-  helpOpen = !helpOpen;
-  document.getElementById('help-panel').classList.toggle('open', helpOpen);
-}
-document.addEventListener('click', e => {
-  if(helpOpen && !e.target.closest('#help-panel') && !e.target.closest('button[onclick="toggleHelp()"]'))
-    { helpOpen = false; document.getElementById('help-panel').classList.remove('open'); }
-});
-
-// ── Toast ──────────────────────────────────────────────────
-function toast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+function neueDaten(){
+  ST.seed=Math.floor(Math.random()*99999)+1;
+  initData();
+  draw();
 }
 
-// ── Init ──────────────────────────────────────────────────
-window.addEventListener('resize', resize);
-document.addEventListener('DOMContentLoaded', () => {
-  resize();
-  setBrush('draw');
-  points = [
-    {x:1.2, y:2.1},{x:2.0, y:2.8},{x:2.8, y:3.5},{x:3.5, y:4.2},
-    {x:4.2, y:4.0},{x:5.0, y:5.3},{x:5.8, y:5.8},{x:6.5, y:6.4},
-    {x:7.2, y:6.9},{x:8.0, y:7.8},{x:8.8, y:8.1}
+/* ── Module tabs ──────────────────────────────────────────────────── */
+function showMod(n){
+  document.querySelectorAll('.mod-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mod-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('mod'+n).classList.add('active');
+  document.querySelector(`.mod-tab[data-mod="${n}"]`).classList.add('active');
+  ST.activeModule=n;
+  draw();
+}
+
+/* ── Draw dispatcher ──────────────────────────────────────────────── */
+function draw(){
+  if(ST.activeModule===1) drawMod1();
+  else if(ST.activeModule===2) drawMod2();
+  else if(ST.activeModule===3) drawMod3();
+  else if(ST.activeModule===4) drawMod4();
+}
+
+/* ── Canvas utilities ─────────────────────────────────────────────── */
+function cssVar(v){
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+}
+function makeScale(dMin,dMax,pxMin,pxMax){
+  return d=>pxMin+(d-dMin)/(dMax-dMin)*(pxMax-pxMin);
+}
+function drawAxes(ctx,pad,W,H,xLabel,yLabel,xTicks,yTicks,xScale,yScale,fontSize=13){
+  const ink=cssVar('--ink2'),ink3=cssVar('--ink3'),grid=cssVar('--grid');
+  ctx.font=`${fontSize}px DM Mono,monospace`;
+  ctx.textBaseline='middle';
+  ctx.strokeStyle=grid;ctx.lineWidth=.6;
+  xTicks.forEach(v=>{const px=xScale(v);ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke()});
+  yTicks.forEach(v=>{const py=yScale(v);ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke()});
+  ctx.fillStyle=ink3;ctx.textAlign='center';
+  xTicks.forEach(v=>{ctx.fillText(v,xScale(v),H-pad.b+15)});
+  ctx.textAlign='right';
+  yTicks.forEach(v=>{ctx.fillText(v,pad.l-6,yScale(v))});
+  ctx.fillStyle=ink;ctx.font=`bold ${fontSize+1}px DM Mono,monospace`;
+  ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(xLabel,pad.l+(W-pad.l-pad.r)/2,H-2);
+  ctx.save();ctx.translate(14,pad.t+(H-pad.t-pad.b)/2);ctx.rotate(-Math.PI/2);
+  ctx.textBaseline='top';ctx.fillText(yLabel,0,0);ctx.restore();
+}
+
+/* ── Module 1: scale helper ───────────────────────────────────────── */
+function scatterScales(W,H){
+  const pad={l:55,r:18,t:22,b:52};
+  const sx=makeScale(1,22,pad.l,W-pad.r);
+  const sy=makeScale(0,100,H-pad.b,pad.t);
+  const sx_inv=makeScale(pad.l,W-pad.r,1,22);
+  const sy_inv=makeScale(H-pad.b,pad.t,0,100);
+  return{pad,sx,sy,sx_inv,sy_inv};
+}
+
+/* ── Module 1: main draw function ────────────────────────────────── */
+function drawMod1(){
+  const cv=document.getElementById('cv-scatter');
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  if(!ST.data)return;
+
+  const{pad,sx,sy}=scatterScales(W,H);
+  const a1=cssVar('--a1'),a2=cssVar('--a2'),a3=cssVar('--a3'),a5=cssVar('--a5');
+  const paper=cssVar('--paper');
+
+  drawAxes(ctx,pad,W,H,'Study time (h/week)','Exam score',
+    [2,4,6,8,10,12,14,16,18,20,22],[0,20,40,60,80,100],sx,sy,13);
+
+  let b0c,b1c,isHand=false;
+  if(ST.handLine.active&&ST.handLine.yA!==null){
+    b1c=(ST.handLine.yB-ST.handLine.yA)/(19-3);
+    b0c=ST.handLine.yA-b1c*3;
+    isHand=true;
+  }else{b0c=ST.fitBiv.b0;b1c=ST.fitBiv.b1;}
+
+  if(ST.showResiduals){
+    ST.data.x1.forEach((xi,i)=>{
+      const yi=ST.data.y[i],yhi=b0c+b1c*xi;
+      ctx.beginPath();
+      ctx.moveTo(sx(xi),sy(yi));ctx.lineTo(sx(xi),sy(yhi));
+      ctx.strokeStyle=yi>yhi?a3:a1;
+      ctx.globalAlpha=.42;ctx.lineWidth=1.5;
+      ctx.stroke();ctx.globalAlpha=1;
+    });
+  }
+
+  if(!isHand||ST.showOLS){
+    const{b0:b0o,b1:b1o}=ST.fitBiv;
+    ctx.beginPath();
+    ctx.moveTo(sx(1),sy(b0o+b1o*1));ctx.lineTo(sx(22),sy(b0o+b1o*22));
+    ctx.strokeStyle=a2;ctx.lineWidth=2;ctx.globalAlpha=isHand?.85:1;
+    ctx.setLineDash([]);ctx.stroke();ctx.globalAlpha=1;
+    if(isHand){
+      ctx.font='11px DM Mono,monospace';ctx.fillStyle=a2;
+      ctx.textAlign='right';ctx.textBaseline='top';
+      ctx.fillText('OLS',W-pad.r-3,pad.t+4);
+    }
+  }
+
+  if(isHand){
+    ctx.beginPath();
+    ctx.moveTo(sx(1),sy(b0c+b1c*1));ctx.lineTo(sx(22),sy(b0c+b1c*22));
+    ctx.strokeStyle=a5;ctx.lineWidth=2.5;ctx.setLineDash([7,3]);
+    ctx.stroke();ctx.setLineDash([]);
+    [[sx(3),sy(ST.handLine.yA)],[sx(19),sy(ST.handLine.yB)]].forEach(([ax,ay])=>{
+      ctx.beginPath();ctx.arc(ax,ay,10,0,Math.PI*2);
+      ctx.fillStyle=a5;ctx.globalAlpha=.22;ctx.fill();ctx.globalAlpha=1;
+      ctx.strokeStyle=a5;ctx.lineWidth=2;ctx.stroke();
+    });
+  }
+
+  ST.data.x1.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(ST.data.y[i]),5,0,Math.PI*2);
+    ctx.fillStyle=paper;ctx.fill();
+    ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.stroke();
+  });
+
+  updateMod1Display(b0c,b1c,isHand);
+
+  const anscBody=document.querySelector('#mod1 .acc-body');
+  if(anscBody&&anscBody.classList.contains('open'))drawAnscombe();
+}
+
+/* ── Module 1: coefficient panel update ──────────────────────────── */
+function updateMod1Display(b0,b1,isHand){
+  const fmt=v=>v.toFixed(2);
+  const{x1,y}=ST.data;
+  const handRss=x1.reduce((s,xi,i)=>{const e=y[i]-(b0+b1*xi);return s+e*e;},0);
+  const olsRss=ST.fitBiv.sse;
+  const sst=ST.fitBiv.sst;
+
+  document.getElementById('v-b0').textContent=fmt(b0);
+  document.getElementById('v-b1').textContent=fmt(b1);
+  document.getElementById('v-r2').textContent=fmt(Math.max(0,1-handRss/sst));
+  document.getElementById('v-rss').textContent=Math.round(handRss);
+  document.getElementById('f-b0').textContent=fmt(b0);
+  document.getElementById('f-b1').textContent=(b1>=0?'+':'')+fmt(b1);
+
+  const handPct=Math.min(100,handRss/sst*100);
+  const olsPct=Math.min(100,olsRss/sst*100);
+  const hf=document.getElementById('rss-hand-fill');
+  if(hf)hf.style.width=handPct+'%';
+  const hp=document.getElementById('rss-hand-pct');
+  if(hp)hp.textContent=Math.round(handRss);
+  const olsRow=document.getElementById('rss-ols-row');
+  if(olsRow)olsRow.style.opacity=ST.showOLS?'1':'0.3';
+  const of=document.getElementById('rss-ols-fill');
+  if(of)of.style.width=ST.showOLS?olsPct+'%':'0%';
+  const op=document.getElementById('rss-ols-pct');
+  if(op)op.textContent=ST.showOLS?Math.round(olsRss):'—';
+
+  ['v-b0','v-b1'].forEach(id=>{
+    document.getElementById(id).classList.toggle('changed',isHand);
+  });
+}
+
+/* ── Module 1: Anscombe's Quartet ────────────────────────────────── */
+function drawAnscombe(){
+  const A=ANSCOMBE;
+  [1,2,3,4].forEach(k=>{
+    const cv=document.getElementById('cv-ansc'+k);
+    if(!cv)return;
+    const ctx=cv.getContext('2d');
+    const W=cv.width,H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    const xd=A['x'+k],yd=A['y'+k];
+    const xmin=Math.min(...xd)-1,xmax=Math.max(...xd)+1;
+    const ymin=Math.min(...yd)-1,ymax=Math.max(...yd)+1;
+    const pad={l:26,r:8,t:10,b:24};
+    const sx=makeScale(xmin,xmax,pad.l,W-pad.r);
+    const sy=makeScale(ymin,ymax,H-pad.b,pad.t);
+    const ink=cssVar('--ink'),ink3=cssVar('--ink3');
+    const a2=cssVar('--a2'),paper=cssVar('--paper'),grid=cssVar('--grid');
+
+    ctx.strokeStyle=grid;ctx.lineWidth=.5;
+    [5,10,15,20].filter(v=>v>xmin&&v<xmax).forEach(v=>{
+      ctx.beginPath();ctx.moveTo(sx(v),pad.t);ctx.lineTo(sx(v),H-pad.b);ctx.stroke();
+    });
+    [4,6,8,10,12].filter(v=>v>ymin&&v<ymax).forEach(v=>{
+      ctx.beginPath();ctx.moveTo(pad.l,sy(v));ctx.lineTo(W-pad.r,sy(v));ctx.stroke();
+    });
+    ctx.strokeStyle=ink3;ctx.lineWidth=.8;
+    ctx.beginPath();ctx.moveTo(pad.l,pad.t);ctx.lineTo(pad.l,H-pad.b);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(pad.l,H-pad.b);ctx.lineTo(W-pad.r,H-pad.b);ctx.stroke();
+
+    const fit=olsBivariate(xd,yd);
+    ctx.beginPath();
+    ctx.moveTo(sx(xmin),sy(fit.b0+fit.b1*xmin));
+    ctx.lineTo(sx(xmax),sy(fit.b0+fit.b1*xmax));
+    ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.stroke();
+
+    xd.forEach((xi,i)=>{
+      ctx.beginPath();ctx.arc(sx(xi),sy(yd[i]),3.5,0,Math.PI*2);
+      ctx.fillStyle=paper;ctx.fill();
+      ctx.strokeStyle=ink;ctx.lineWidth=1.2;ctx.stroke();
+    });
+    ctx.fillStyle=a2;ctx.font='10px DM Mono,monospace';
+    ctx.textAlign='right';ctx.textBaseline='bottom';
+    ctx.fillText('R²='+fit.r2.toFixed(2),W-pad.r-2,H-pad.b-2);
+  });
+}
+
+/* ── Module 1: Fit-by-Hand controls ──────────────────────────────── */
+function toggleHand(){
+  ST.handLine.active=!ST.handLine.active;
+  const btn=document.getElementById('btn-hand');
+  if(ST.handLine.active){
+    if(ST.handLine.yA===null){
+      const my=ST.fitBiv.my;
+      ST.handLine.yA=my;ST.handLine.yB=my;
+    }
+    btn.classList.add('accent1');btn.textContent='✏ Manual: On';
+  }else{
+    btn.classList.remove('accent1');btn.textContent='✏ Adjust manually';
+  }
+  drawMod1();
+}
+
+function toggleShowOLS(){
+  ST.showOLS=!ST.showOLS;
+  const btn=document.getElementById('btn-show-ols');
+  if(btn)btn.classList.toggle('primary',ST.showOLS);
+  drawMod1();
+}
+
+function toggleResiduals(){
+  ST.showResiduals=!ST.showResiduals;
+  document.getElementById('btn-resid').textContent=
+    '● Residuals: '+(ST.showResiduals?'On':'Off');
+  drawMod1();
+}
+
+/* ── Canvas events: drag anchors + point tooltip ─────────────────── */
+let _drag=null;
+function initCanvasEvents(){
+  const cv=document.getElementById('cv-scatter');
+  if(!cv)return;
+  const tip=document.getElementById('tooltip-sc');
+
+  function getScales(){return scatterScales(cv.width,cv.height);}
+  function anchorPx(){
+    const{sx,sy}=getScales();
+    return{ax:sx(3),ay:sy(ST.handLine.yA||0),bx:sx(19),by:sy(ST.handLine.yB||0)};
+  }
+  function dist(x1,y1,x2,y2){return Math.sqrt((x1-x2)**2+(y1-y2)**2);}
+
+  cv.addEventListener('mousedown',e=>{
+    if(!ST.handLine.active)return;
+    const r=cv.getBoundingClientRect();
+    const mx=e.clientX-r.left,my=e.clientY-r.top;
+    const{ax,ay,bx,by}=anchorPx();
+    if(dist(mx,my,ax,ay)<14){_drag='A';e.preventDefault();}
+    else if(dist(mx,my,bx,by)<14){_drag='B';e.preventDefault();}
+  });
+
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    const mx=e.clientX-r.left,my=e.clientY-r.top;
+    const{sx,sy,sy_inv}=getScales();
+
+    if(_drag){
+      const yv=Math.max(0,Math.min(100,sy_inv(my)));
+      if(_drag==='A')ST.handLine.yA=yv;else ST.handLine.yB=yv;
+      drawMod1();return;
+    }
+
+    if(ST.handLine.active&&ST.handLine.yA!==null){
+      const{ax,ay,bx,by}=anchorPx();
+      if(dist(mx,my,ax,ay)<14||dist(mx,my,bx,by)<14){
+        cv.style.cursor='ns-resize';tip.style.display='none';return;
+      }
+    }
+
+    if(!ST.data){tip.style.display='none';cv.style.cursor='crosshair';return;}
+    let found=false;
+    ST.data.x1.forEach((xi,i)=>{
+      if(found)return;
+      if(dist(mx,my,sx(xi),sy(ST.data.y[i]))<8){
+        let b0c,b1c;
+        if(ST.handLine.active&&ST.handLine.yA!==null){
+          b1c=(ST.handLine.yB-ST.handLine.yA)/(19-3);
+          b0c=ST.handLine.yA-b1c*3;
+        }else{b0c=ST.fitBiv.b0;b1c=ST.fitBiv.b1;}
+        const yhi=b0c+b1c*xi,ei=ST.data.y[i]-yhi;
+        tip.innerHTML='yᵢ = '+ST.data.y[i].toFixed(1)+'<br>ŷᵢ = '+yhi.toFixed(1)+'<br>eᵢ = '+ei.toFixed(1);
+        tip.style.display='block';
+        tip.style.left=(sx(xi)+10)+'px';
+        tip.style.top=(sy(ST.data.y[i])-10)+'px';
+        cv.style.cursor='default';found=true;
+      }
+    });
+    if(!found){tip.style.display='none';cv.style.cursor=ST.handLine.active?'default':'crosshair';}
+  });
+
+  window.addEventListener('mouseup',()=>{_drag=null;});
+  cv.addEventListener('mouseleave',()=>{tip.style.display='none';_drag=null;});
+}
+
+/* ── Module 2: Coefficients canvas ───────────────────────────────── */
+function drawMod2(){
+  const cv=document.getElementById('cv-coef');
+  if(!cv||!ST.fitBiv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+
+  const pad={l:55,r:18,t:22,b:52};
+  const sx=makeScale(1,22,pad.l,W-pad.r);
+  const sy=makeScale(0,100,H-pad.b,pad.t);
+  const a1=cssVar('--a1'),a2=cssVar('--a2'),a3=cssVar('--a3'),a5=cssVar('--a5');
+  const ink2=cssVar('--ink2'),ink3=cssVar('--ink3'),paper=cssVar('--paper');
+
+  drawAxes(ctx,pad,W,H,'Study time (h/week)','Exam score',
+    [2,4,6,8,10,12,14,16,18,20,22],[0,20,40,60,80,100],sx,sy,13);
+
+  const{b0,b1,mx,my}=ST.fitBiv;
+
+  if(ST.m2showMean){
+    ctx.strokeStyle=a5;ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(sx(mx),pad.t);ctx.lineTo(sx(mx),H-pad.b);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(pad.l,sy(my));ctx.lineTo(W-pad.r,sy(my));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(sx(mx),sy(my),5.5,0,Math.PI*2);
+    ctx.fillStyle=a5;ctx.fill();
+    ctx.fillStyle=a5;ctx.font='10px DM Mono,monospace';
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('x̄='+mx.toFixed(1),sx(mx),pad.t-1);
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText('ȳ='+my.toFixed(1),pad.l-4,sy(my));
+  }
+
+  ctx.beginPath();ctx.moveTo(sx(1),sy(b0+b1*1));ctx.lineTo(sx(22),sy(b0+b1*22));
+  ctx.strokeStyle=a2;ctx.lineWidth=2;ctx.setLineDash([]);ctx.stroke();
+
+  if(ST.m2showSlope){
+    const dx=3;
+    const xL=Math.max(2,Math.min(mx,17));
+    const xR=xL+dx;
+    const yL=b0+b1*xL,yR=b0+b1*xR;
+    const pxL=sx(xL),pyL=sy(yL),pxR=sx(xR),pyR=sy(yR);
+    ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(pxL,pyL);ctx.lineTo(pxR,pyL);
+    ctx.strokeStyle=a5;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(pxR,pyL);ctx.lineTo(pxR,pyR);
+    ctx.strokeStyle=b1>=0?a3:a1;ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(pxL,pyL,3,0,Math.PI*2);ctx.fillStyle=a5;ctx.fill();
+    ctx.beginPath();ctx.arc(pxR,pyR,3,0,Math.PI*2);ctx.fillStyle=b1>=0?a3:a1;ctx.fill();
+    ctx.font='10px DM Mono,monospace';
+    ctx.fillStyle=a5;ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText('+'+dx+' h',pxL+(pxR-pxL)/2,pyL+3);
+    const dy_lbl=(b1>=0?'+':'')+(dx*b1).toFixed(1)+' pts';
+    ctx.fillStyle=b1>=0?a3:a1;ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(dy_lbl,pxR+5,(pyL+pyR)/2);
+  }
+
+  ST.data.x1.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(ST.data.y[i]),4.5,0,Math.PI*2);
+    ctx.fillStyle=paper;ctx.fill();
+    ctx.strokeStyle=a2;ctx.lineWidth=1.3;ctx.stroke();
+  });
+
+  updateMod2Display();
+}
+
+function updateMod2Display(){
+  if(!ST.fitBiv)return;
+  const{b0,b1,beta1,mx,my}=ST.fitBiv;
+  const fmt=v=>v.toFixed(2);
+  document.getElementById('m2-b0').textContent=fmt(b0);
+  document.getElementById('m2-b1').textContent=fmt(b1);
+  document.getElementById('m2-beta').textContent=fmt(beta1);
+  ['m2-b1-val','m2-b1-acc'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent=fmt(b1);
+  });
+  ['m2-beta-val','m2-beta-acc'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent=fmt(beta1);
+  });
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setTxt('m2-info-b1',fmt(b1));
+  setTxt('m2-info-b1b',fmt(b1));
+  setTxt('m2-info-beta',fmt(beta1));
+  setTxt('m2-info-b0',fmt(b0));
+  setTxt('m2-info-mx',fmt(mx));
+  setTxt('m2-info-my',fmt(my));
+  setTxt('m2-slope-tri',(3*b1).toFixed(2));
+}
+
+function toggleSlope(){
+  ST.m2showSlope=!ST.m2showSlope;
+  document.getElementById('btn-slope').classList.toggle('primary',ST.m2showSlope);
+  drawMod2();
+}
+function toggleMeanCr(){
+  ST.m2showMean=!ST.m2showMean;
+  document.getElementById('btn-mean-cr').classList.toggle('primary',ST.m2showMean);
+  drawMod2();
+}
+
+/* ── Module 3: Variance decomposition ────────────────────────────── */
+function drawMod3(){
+  const cv=document.getElementById('cv-var');
+  if(!cv||!ST.fitBiv)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+
+  const pad={l:55,r:18,t:22,b:52};
+  const sx=makeScale(1,22,pad.l,W-pad.r);
+  const sy=makeScale(0,100,H-pad.b,pad.t);
+  const a1=cssVar('--a1'),a2=cssVar('--a2'),a3=cssVar('--a3');
+  const ink2=cssVar('--ink2'),ink3=cssVar('--ink3'),paper=cssVar('--paper');
+
+  drawAxes(ctx,pad,W,H,'Study time (h/week)','Exam score',
+    [2,4,6,8,10,12,14,16,18,20,22],[0,20,40,60,80,100],sx,sy,13);
+
+  const{b0,b1,my,yhat}=ST.fitBiv;
+
+  if(ST.m3mode==='SST'){
+    ctx.beginPath();ctx.moveTo(pad.l,sy(my));ctx.lineTo(W-pad.r,sy(my));
+    ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.setLineDash([5,3]);ctx.stroke();ctx.setLineDash([]);
+    ST.data.x1.forEach((xi,i)=>{
+      ctx.beginPath();ctx.moveTo(sx(xi),sy(ST.data.y[i]));ctx.lineTo(sx(xi),sy(my));
+      ctx.strokeStyle=ink2;ctx.globalAlpha=.45;ctx.lineWidth=1.5;ctx.stroke();ctx.globalAlpha=1;
+    });
+    ctx.fillStyle=a2;ctx.font='10px DM Mono,monospace';
+    ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText('ȳ = '+my.toFixed(1),W-pad.r-58,sy(my)-3);
+  }else{
+    ST.data.x1.forEach((xi,i)=>{
+      const yi=ST.data.y[i],yhi=yhat[i];
+      ctx.beginPath();ctx.moveTo(sx(xi),sy(yi));ctx.lineTo(sx(xi),sy(yhi));
+      ctx.strokeStyle=yi>yhi?a3:a1;ctx.globalAlpha=.42;ctx.lineWidth=1.5;
+      ctx.stroke();ctx.globalAlpha=1;
+    });
+    ctx.beginPath();ctx.moveTo(pad.l,sy(my));ctx.lineTo(W-pad.r,sy(my));
+    ctx.strokeStyle=ink3;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.globalAlpha=.35;
+    ctx.stroke();ctx.globalAlpha=1;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(sx(1),sy(b0+b1*1));ctx.lineTo(sx(22),sy(b0+b1*22));
+    ctx.strokeStyle=a2;ctx.lineWidth=2;ctx.stroke();
+  }
+
+  ST.data.x1.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(ST.data.y[i]),5,0,Math.PI*2);
+    ctx.fillStyle=paper;ctx.fill();ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.stroke();
+  });
+
+  updateMod3Display();
+}
+
+function updateMod3Display(){
+  if(!ST.fitBiv||!ST.data)return;
+  const{r2,sse,ssr,sst,b1}=ST.fitBiv;
+  const n=ST.data.n;
+  const adjR2=1-(1-r2)*(n-1)/(n-2);
+  const f2=r2/(1-r2);
+  const r=Math.sign(b1)*Math.sqrt(r2);
+  const fmt3=v=>v.toFixed(3);
+  document.getElementById('m3-r2').textContent=fmt3(r2);
+  document.getElementById('m3-adjr2').textContent=fmt3(adjR2);
+  document.getElementById('m3-f2').textContent=fmt3(f2);
+  document.getElementById('m3-r').textContent=fmt3(r);
+  document.getElementById('m3-r2-pct').textContent=(r2*100).toFixed(1);
+  const ssrPct=ssr/sst*100,ssePct=sse/sst*100;
+  document.getElementById('m3-ssr-seg').style.width=ssrPct+'%';
+  document.getElementById('m3-sse-seg').style.width=ssePct+'%';
+  document.getElementById('m3-ssr-lbl').textContent='SSR = '+Math.round(ssr);
+  document.getElementById('m3-sse-lbl').textContent='RSS = '+Math.round(sse);
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setTxt('m3-info-sst',Math.round(sst));
+  setTxt('m3-info-ssr',Math.round(ssr));
+  setTxt('m3-info-ssr-pct',ssrPct.toFixed(1));
+  setTxt('m3-info-sse',Math.round(sse));
+  setTxt('m3-info-sse-pct',ssePct.toFixed(1));
+  setTxt('m3-info-f2',fmt3(f2));
+  const f2lbl=f2>=.35?'large':f2>=.15?'medium':f2>=.02?'small':'very small';
+  setTxt('m3-info-f2-lbl',f2lbl);
+}
+
+function setVarMode(mode){
+  ST.m3mode=mode;
+  document.getElementById('btn-m3-sst').classList.toggle('primary',mode==='SST');
+  document.getElementById('btn-m3-sse').classList.toggle('primary',mode==='SSE');
+  const lbl=document.getElementById('m3-cv-label');
+  if(lbl)lbl.textContent=mode==='SST'?
+    'Total variance (TSS) — Deviations from mean ȳ':
+    'Variance decomposition: SSR (explained, green) + RSS (residuals, red)';
+  drawMod3();
+}
+
+/* ── Module 4: AVP helper functions ──────────────────────────────── */
+function niceTicksFromRange(dmin,dmax,approxCount){
+  if(Math.abs(dmax-dmin)<1e-10)return[parseFloat(dmin.toFixed(6))];
+  const range=dmax-dmin;
+  const roughStep=range/(approxCount||5);
+  const mag=Math.pow(10,Math.floor(Math.log10(Math.abs(roughStep))));
+  const norm=roughStep/mag;
+  let step;
+  if(norm<1.5)step=mag;
+  else if(norm<3.5)step=2*mag;
+  else if(norm<7.5)step=5*mag;
+  else step=10*mag;
+  const start=Math.ceil((dmin-step*1e-10)/step)*step;
+  const ticks=[];
+  for(let v=start;v<=dmax+step*1e-10;v+=step){
+    const t=parseFloat(v.toFixed(10));
+    if(t>=dmin-step*0.02&&t<=dmax+step*0.02)ticks.push(t);
+    if(ticks.length>20)break;
+  }
+  return ticks;
+}
+
+function makeAdaptiveScales(xArr,yArr,W,H){
+  const pad={l:55,r:18,t:22,b:52};
+  const xmin=Math.min(...xArr),xmax=Math.max(...xArr);
+  const ymin=Math.min(...yArr),ymax=Math.max(...yArr);
+  const xR=xmax-xmin||1, yR=ymax-ymin||1;
+  const dx0=xmin-xR*0.10, dx1=xmax+xR*0.10;
+  const dy0=ymin-yR*0.10, dy1=ymax+yR*0.10;
+  const sx=makeScale(dx0,dx1,pad.l,W-pad.r);
+  const sy=makeScale(dy0,dy1,H-pad.b,pad.t);
+  const xTicks=niceTicksFromRange(dx0,dx1,6);
+  const yTicks=niceTicksFromRange(dy0,dy1,6);
+  return{pad,sx,sy,xTicks,yTicks,dx0,dx1,dy0,dy1};
+}
+
+/* ── Module 4: draw functions ────────────────────────────────────── */
+function drawMod4(){
+  const cv=document.getElementById('cv-avp');
+  if(!cv||!ST.data)return;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  if(ST.avpStep===0)     drawAvpStep0(ctx,W,H);
+  else if(ST.avpStep===1)drawAvpStep1(ctx,W,H);
+  else if(ST.avpStep===2)drawAvpStep2(ctx,W,H);
+  else if(ST.avpStep===3)drawAvpStep3(ctx,W,H);
+  else if(ST.avpStep===4)drawAvpStep4(ctx,W,H);
+  updateMod4Display();
+}
+
+function drawAvpStep0(ctx,W,H){
+  const pad={l:55,r:18,t:22,b:52};
+  const sx=makeScale(1,22,pad.l,W-pad.r);
+  const sy=makeScale(0,100,H-pad.b,pad.t);
+  drawAxes(ctx,pad,W,H,'X₁ (Study time h/week)','Y (Exam score)',
+    [2,4,6,8,10,12,14,16,18,20],[0,10,20,30,40,50,60,70,80,90,100],sx,sy,13);
+  const{b0,b1}=ST.fitBiv;
+  const a2=cssVar('--a2'),paper=cssVar('--paper');
+  ctx.strokeStyle=a2;ctx.lineWidth=2.5;ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(sx(1),sy(b0+b1*1));ctx.lineTo(sx(22),sy(b0+b1*22));ctx.stroke();
+  ST.data.x1.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(ST.data.y[i]),5,0,2*Math.PI);
+    ctx.fillStyle=paper;ctx.fill();
+    ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=a2;
+  ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.fillText('biv. b₁ = '+ST.fitBiv.b1.toFixed(3),W-pad.r-4,pad.t+4);
+}
+
+function drawAvpStep1(ctx,W,H){
+  const{x2,y}=ST.data;
+  const sc=makeAdaptiveScales(x2,y,W,H);
+  const{pad,sx,sy,xTicks,yTicks,dx0,dx1}=sc;
+  drawAxes(ctx,pad,W,H,'X₂ (Sleep h/night)','Y (Exam score)',xTicks,yTicks,sx,sy,13);
+  const bYX2=olsBivariate(x2,y);
+  const a5=cssVar('--a5'),a3=cssVar('--a3'),a1=cssVar('--a1'),paper=cssVar('--paper');
+  ctx.strokeStyle=a5;ctx.lineWidth=2;ctx.setLineDash([5,3]);
+  ctx.beginPath();
+  ctx.moveTo(sx(dx0),sy(bYX2.b0+bYX2.b1*dx0));
+  ctx.lineTo(sx(dx1),sy(bYX2.b0+bYX2.b1*dx1));
+  ctx.stroke();ctx.setLineDash([]);
+  const eYX2=ST.avp.eYX2;
+  eYX2.forEach((e,i)=>{
+    const yhat=bYX2.b0+bYX2.b1*x2[i];
+    ctx.strokeStyle=e>=0?a3:a1;ctx.lineWidth=1.5;ctx.globalAlpha=.75;
+    ctx.beginPath();ctx.moveTo(sx(x2[i]),sy(yhat));ctx.lineTo(sx(x2[i]),sy(y[i]));ctx.stroke();
+  });
+  ctx.globalAlpha=1;
+  x2.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(y[i]),5,0,2*Math.PI);
+    ctx.fillStyle=paper;ctx.fill();ctx.strokeStyle=a5;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=a5;
+  ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('Residuals = e(Y|X₂)',pad.l+8,pad.t+4);
+}
+
+function drawAvpStep2(ctx,W,H){
+  const{x1,x2}=ST.data;
+  const sc=makeAdaptiveScales(x2,x1,W,H);
+  const{pad,sx,sy,xTicks,yTicks,dx0,dx1}=sc;
+  drawAxes(ctx,pad,W,H,'X₂ (Sleep h/night)','X₁ (Study time h/week)',xTicks,yTicks,sx,sy,13);
+  const bX1X2=olsBivariate(x2,x1);
+  const a5=cssVar('--a5'),a3=cssVar('--a3'),a1=cssVar('--a1'),paper=cssVar('--paper');
+  ctx.strokeStyle=a5;ctx.lineWidth=2;ctx.setLineDash([5,3]);
+  ctx.beginPath();
+  ctx.moveTo(sx(dx0),sy(bX1X2.b0+bX1X2.b1*dx0));
+  ctx.lineTo(sx(dx1),sy(bX1X2.b0+bX1X2.b1*dx1));
+  ctx.stroke();ctx.setLineDash([]);
+  const eX1X2=ST.avp.eX1X2;
+  eX1X2.forEach((e,i)=>{
+    const x1hat=bX1X2.b0+bX1X2.b1*x2[i];
+    ctx.strokeStyle=e>=0?a3:a1;ctx.lineWidth=1.5;ctx.globalAlpha=.75;
+    ctx.beginPath();ctx.moveTo(sx(x2[i]),sy(x1hat));ctx.lineTo(sx(x2[i]),sy(x1[i]));ctx.stroke();
+  });
+  ctx.globalAlpha=1;
+  x2.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(x1[i]),5,0,2*Math.PI);
+    ctx.fillStyle=paper;ctx.fill();ctx.strokeStyle=a5;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=a5;
+  ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText('Residuals = e(X₁|X₂)',pad.l+8,pad.t+4);
+}
+
+function drawAvpStep3(ctx,W,H){
+  const{eX1X2,eYX2,fit}=ST.avp;
+  const sc=makeAdaptiveScales(eX1X2,eYX2,W,H);
+  const{pad,sx,sy,xTicks,yTicks,dx0,dx1}=sc;
+  drawAxes(ctx,pad,W,H,'e(X₁|X₂) — X₁ adjusted for X₂','e(Y|X₂) — Y adjusted for X₂',xTicks,yTicks,sx,sy,12);
+  const ink3=cssVar('--ink3');
+  ctx.strokeStyle=ink3;ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.globalAlpha=.5;
+  ctx.beginPath();ctx.moveTo(pad.l,sy(0));ctx.lineTo(W-pad.r,sy(0));ctx.stroke();
+  ctx.beginPath();ctx.moveTo(sx(0),pad.t);ctx.lineTo(sx(0),H-pad.b);ctx.stroke();
+  ctx.setLineDash([]);ctx.globalAlpha=1;
+  const a2=cssVar('--a2'),paper=cssVar('--paper');
+  ctx.strokeStyle=a2;ctx.lineWidth=2.5;
+  ctx.beginPath();
+  ctx.moveTo(sx(dx0),sy(fit.b0+fit.b1*dx0));
+  ctx.lineTo(sx(dx1),sy(fit.b0+fit.b1*dx1));
+  ctx.stroke();
+  eX1X2.forEach((xi,i)=>{
+    ctx.beginPath();ctx.arc(sx(xi),sy(eYX2[i]),5,0,2*Math.PI);
+    ctx.fillStyle=paper;ctx.fill();ctx.strokeStyle=a2;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=a2;
+  ctx.textAlign='right';ctx.textBaseline='top';
+  ctx.fillText('Slope = '+fit.b1.toFixed(3)+' = b₁(mult)',W-pad.r-4,pad.t+4);
+}
+
+/* ── Module 4: 3D regression surface ────────────────────────────── */
+function drawAvpStep4(ctx,W,H){
+  if(!ST.fitMult||!ST.data)return;
+  const{b0,b1,b2,r2}=ST.fitMult;
+  const{x1,x2,y}=ST.data;
+
+  const ext=(arr,p)=>{const mn=Math.min(...arr),mx=Math.max(...arr),r=mx-mn;return[mn-r*p,mx+r*p];};
+  const[X1lo,X1hi]=ext(x1,0.08), [X2lo,X2hi]=ext(x2,0.08);
+  const yhats=x1.map((v,i)=>b0+b1*v+b2*x2[i]);
+  const[Ylo,Yhi]=ext([...y,...yhats],0.12);
+  const n1=v=>(v-X1lo)/(X1hi-X1lo)-0.5;
+  const n2=v=>(v-X2lo)/(X2hi-X2lo)-0.5;
+  const n3=v=>(v-Ylo)/(Yhi-Ylo)-0.5;
+
+  const{az,el}=ST.rot3d;
+  const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);
+  const cx=W*0.5, cy=H*0.51, sc=Math.min(W,H)*0.63;
+
+  function proj(wx,wy,wz){
+    const rx=ca*wx+sa*wz, rz=-sa*wx+ca*wz;
+    const ry2=ce*wy-se*rz, rz2=se*wy+ce*rz;
+    return{px:cx+rx*sc, py:cy-ry2*sc, depth:rz2};
+  }
+
+  const ink=cssVar('--ink'),ink2=cssVar('--ink2'),ink3=cssVar('--ink3'),paper=cssVar('--paper');
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const pfill =isDark?'rgba(74,176,216,0.20)':'rgba(28,115,148,0.16)';
+  const pstroke=isDark?'rgba(74,176,216,0.52)':'rgba(28,115,148,0.44)';
+  const floorBg=isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.05)';
+
+  const fc=[
+    proj(-0.5,-0.5,-0.5),proj( 0.5,-0.5,-0.5),
+    proj( 0.5,-0.5, 0.5),proj(-0.5,-0.5, 0.5)
   ];
-  points = points.map(p => ({x: p.x, y: Math.max(0.2, Math.min(9.8, p.y + (Math.random()-0.5)*1.2))}));
-  computeOLS();
-  manA = 5; manB = 0;
-  document.getElementById('sl-a').value = 5;
-  document.getElementById('sl-b').value = 0;
-  updSlider();
-  redraw();
-  toast('Tip: Start with Step 1 — draw your own points!');
+  ctx.beginPath();
+  fc.forEach((p,i)=>i?ctx.lineTo(p.px,p.py):ctx.moveTo(p.px,p.py));
+  ctx.closePath();
+  ctx.fillStyle=floorBg; ctx.fill();
+  ctx.strokeStyle=ink3; ctx.lineWidth=1.1; ctx.globalAlpha=0.55; ctx.stroke();
+  ctx.globalAlpha=1;
+
+  ctx.setLineDash([2,4]); ctx.strokeStyle=ink3; ctx.lineWidth=0.5; ctx.globalAlpha=0.30;
+  for(let k=1;k<=4;k++){
+    const t=k/5-0.5;
+    let a=proj(t,-0.5,-0.5),b=proj(t,-0.5,0.5);
+    ctx.beginPath();ctx.moveTo(a.px,a.py);ctx.lineTo(b.px,b.py);ctx.stroke();
+    a=proj(-0.5,-0.5,t);b=proj(0.5,-0.5,t);
+    ctx.beginPath();ctx.moveTo(a.px,a.py);ctx.lineTo(b.px,b.py);ctx.stroke();
+  }
+  ctx.setLineDash([]);ctx.globalAlpha=1;
+
+  const NX=14,NW=14;
+  const quads=[];
+  for(let i=0;i<NX;i++){
+    for(let j=0;j<NW;j++){
+      const xA=X1lo+(i/NX)*(X1hi-X1lo),   xB=X1lo+((i+1)/NX)*(X1hi-X1lo);
+      const zA=X2lo+(j/NW)*(X2hi-X2lo),   zB=X2lo+((j+1)/NW)*(X2hi-X2lo);
+      const pA=proj(n1(xA),n3(b0+b1*xA+b2*zA),n2(zA));
+      const pB=proj(n1(xB),n3(b0+b1*xB+b2*zA),n2(zA));
+      const pC=proj(n1(xB),n3(b0+b1*xB+b2*zB),n2(zB));
+      const pD=proj(n1(xA),n3(b0+b1*xA+b2*zB),n2(zB));
+      quads.push({pA,pB,pC,pD,d:(pA.depth+pB.depth+pC.depth+pD.depth)/4});
+    }
+  }
+  quads.sort((a,b)=>b.d-a.d);
+  quads.forEach(({pA,pB,pC,pD})=>{
+    ctx.beginPath();
+    ctx.moveTo(pA.px,pA.py);ctx.lineTo(pB.px,pB.py);
+    ctx.lineTo(pC.px,pC.py);ctx.lineTo(pD.px,pD.py);
+    ctx.closePath();
+    ctx.fillStyle=pfill;ctx.fill();
+    ctx.strokeStyle=pstroke;ctx.lineWidth=0.65;ctx.stroke();
+  });
+
+  const pts=x1.map((xi,i)=>{
+    const wi=x2[i],yi=y[i],yhi=b0+b1*xi+b2*wi,res=yi-yhi;
+    return{pp:proj(n1(xi),n3(yi),n2(wi)),ph:proj(n1(xi),n3(yhi),n2(wi)),res};
+  });
+  pts.sort((a,b)=>b.pp.depth-a.pp.depth);
+  pts.forEach(({pp,ph,res})=>{
+    const gcol=res>=0?'rgba(76,175,80,0.78)':'rgba(229,57,53,0.78)';
+    const scol=res>=0?'#4caf50':'#e53935';
+    ctx.beginPath();ctx.moveTo(pp.px,pp.py);ctx.lineTo(ph.px,ph.py);
+    ctx.strokeStyle=gcol;ctx.lineWidth=1.4;ctx.setLineDash([2,2]);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(ph.px,ph.py,2.8,0,2*Math.PI);
+    ctx.fillStyle=gcol;ctx.fill();
+    ctx.beginPath();ctx.arc(pp.px,pp.py,5.5,0,2*Math.PI);
+    ctx.fillStyle=paper;ctx.fill();
+    ctx.strokeStyle=scol;ctx.lineWidth=2;ctx.stroke();
+  });
+
+  const orig=proj(-0.5,-0.5,-0.5);
+  const ax1e=proj( 0.52,-0.5,-0.5);
+  const ax2e=proj(-0.5,-0.5, 0.52);
+  const aye =proj(-0.5, 0.55,-0.5);
+  function drawArrow(a,b,color){
+    ctx.beginPath();ctx.moveTo(a.px,a.py);ctx.lineTo(b.px,b.py);
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+    const dx=b.px-a.px,dy=b.py-a.py,len=Math.sqrt(dx*dx+dy*dy);
+    if(len<1)return;
+    const ux=dx/len,uy=dy/len;
+    ctx.beginPath();
+    ctx.moveTo(b.px,b.py);
+    ctx.lineTo(b.px-9*ux+4*uy,b.py-9*uy-4*ux);
+    ctx.lineTo(b.px-9*ux-4*uy,b.py-9*uy+4*ux);
+    ctx.closePath();ctx.fillStyle=color;ctx.fill();
+  }
+  drawArrow(orig,ax1e,ink);
+  drawArrow(orig,ax2e,ink);
+  drawArrow(orig,aye,ink);
+
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=ink2;
+  ctx.textAlign='left'; ctx.fillText('X₁ (Study time)',ax1e.px+7,ax1e.py+1);
+  ctx.textAlign='right';ctx.fillText('X₂ (Sleep)',     ax2e.px-7,ax2e.py+2);
+  ctx.textAlign='center';ctx.fillText('Y (Exam score)', aye.px,   aye.py-13);
+
+  ctx.font='10px DM Mono,monospace';ctx.fillStyle=ink3;
+  [0,0.5,1].forEach(t=>{
+    const v=X1lo+t*(X1hi-X1lo);
+    const p=proj(t-0.5,-0.5,-0.5);
+    ctx.textAlign='center';ctx.fillText(v.toFixed(0),p.px,p.py+13);
+  });
+  [0,0.5,1].forEach(t=>{
+    const v=X2lo+t*(X2hi-X2lo);
+    const p=proj(-0.5,-0.5,t-0.5);
+    ctx.textAlign='right';ctx.fillText(v.toFixed(0),p.px-6,p.py+3);
+  });
+  [0,0.5,1].forEach(t=>{
+    const v=Ylo+t*(Yhi-Ylo);
+    const p=proj(-0.5,t-0.5,-0.5);
+    ctx.textAlign='right';ctx.fillText(v.toFixed(0),p.px-6,p.py+4);
+  });
+
+  const fc2=v=>(v>=0?'+':'')+v.toFixed(2);
+  ctx.font='bold 12px DM Mono,monospace';ctx.fillStyle=ink2;ctx.textAlign='left';
+  ctx.fillText('Ŷ = '+b0.toFixed(1)+' '+fc2(b1)+'·X₁ '+fc2(b2)+'·X₂    R² = '+r2.toFixed(3),10,18);
+
+  ctx.font='11px DM Mono,monospace';
+  ctx.fillStyle='#4caf50';ctx.textAlign='left';ctx.fillText('● Positive residual',10,H-36);
+  ctx.fillStyle='#e53935';ctx.fillText('● Negative residual',10,H-22);
+  ctx.fillStyle=ink3;ctx.textAlign='right';
+  ctx.font='10px DM Mono,monospace';
+  ctx.fillText('Drag: rotate  ·  Double-click: reset',W-10,H-8);
+}
+
+/* ── Module 4: display + controls ────────────────────────────────── */
+function updateMod4Display(){
+  if(!ST.fitBiv||!ST.fitMult||!ST.avp)return;
+  const fmt=v=>isFinite(v)?v.toFixed(3):'—';
+  const{b1:bivB1,beta1:bivBeta,r2:bivR2}=ST.fitBiv;
+  const{b1:parB1,beta1:parBeta,r2:parR2}=ST.fitMult;
+  const{b1:avpB1}=ST.avp.fit;
+  document.getElementById('m4-biv-b1').textContent=fmt(bivB1);
+  document.getElementById('m4-biv-beta').textContent=fmt(bivBeta);
+  document.getElementById('m4-biv-r2').textContent=fmt(bivR2);
+  document.getElementById('m4-par-b1').textContent=fmt(parB1);
+  document.getElementById('m4-par-beta').textContent=fmt(parBeta);
+  document.getElementById('m4-par-r2').textContent=fmt(parR2);
+  document.getElementById('m4-avp-slope').textContent=fmt(avpB1);
+  document.getElementById('m4-diff-b1').textContent=fmt(bivB1-parB1);
+  const setTxt=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  setTxt('m4-info-r12',ST.r12.toFixed(2));
+  setTxt('m4-info-biv',fmt(bivB1));
+  setTxt('m4-info-par',fmt(parB1));
+  setTxt('m4-info-diff',fmt(bivB1-parB1));
+}
+
+function setAvpStep(step){
+  ST.avpStep=step;
+  document.querySelectorAll('.avp-step-btn').forEach(b=>{
+    b.classList.toggle('active',+b.dataset.step===step);
+  });
+  const labels=[
+    'Step <span class="tab-num">①</span> — Bivariate Model: Y ~ X₁',
+    'Step <span class="tab-num">②</span> — Remove X₂ from Y: e(Y|X₂)',
+    'Step <span class="tab-num">③</span> — Remove X₂ from X₁: e(X₁|X₂)',
+    'Step <span class="tab-num">④</span> — Added Variable Plot: e(X₁|X₂) vs e(Y|X₂)',
+    'Step <span class="tab-num">⑤</span> — Regression Surface: Y ~ X₁ + X₂'
+  ];
+  const erkls=[
+    'Step <span class="tab-num">①</span> shows the <strong>bivariate</strong> regression of Y on X₁ — as in Module <span class="tab-num">①</span>. The bivariate b₁ still contains the <em>influence of X₂</em> when X₁ and X₂ are correlated.',
+    'In Step <span class="tab-num">②</span>, X₂ is partialled out of Y. The colored residuals <em>e(Y|X₂)</em> are the Y signal that does <em>not</em> go back to X₂.',
+    'In Step <span class="tab-num">③</span>, X₂ is also partialled out of X₁. <em>e(X₁|X₂)</em> is the X₁ portion that is <em>independent</em> of X₂.',
+    'The <strong>Added Variable Plot</strong>: e(X₁|X₂) plotted against e(Y|X₂). The slope is exactly the <em>partial</em> b₁ from Y&#160;~&#160;X₁&#160;+&#160;X₂.',
+    'The <strong>3D regression surface</strong>: instead of a line in 2D, the multiple model describes a <em>plane</em> in three-dimensional X₁–X₂–Y space.'
+  ];
+  const stepGuide=[
+    `<p><strong>Step <span class="tab-num">①</span> — Bivariate starting point</strong><br>
+    The bivariate OLS line Y&#160;~&#160;X₁ — identical to Module <span class="tab-num">①</span>.<br>
+    Problem: When r₁₂&#160;≠&#160;0, b₁ contains the influence of X₂ as a confound.<br>
+    Tip: Note the bivariate b₁ (table left), then change r₁₂ and compare.</p>`,
+
+    `<p><strong>Step <span class="tab-num">②</span> — Adjust Y for X₂: e(Y|X₂)</strong><br>
+    Y was regressed on X₂ (dashed helper line). The points are the residuals — what X₂ <em>cannot</em> explain in Y.<br>
+    Y-axis = "Exam score adjusted for sleep influence".</p>`,
+
+    `<p><strong>Step <span class="tab-num">③</span> — Adjust X₁ for X₂: e(X₁|X₂)</strong><br>
+    X₁ (study time) was also regressed on X₂. The points show X₁ adjusted for X₂.<br>
+    With large r₁₂, this variance becomes noticeably smaller.</p>`,
+
+    `<p><strong>Step <span class="tab-num">④</span> — Added Variable Plot (AVP)</strong><br>
+    e(Y|X₂) plotted against e(X₁|X₂) — adjusted relationship without X₂ influence.<br>
+    Slope = partial b₁ = b₁ from Y&#160;~&#160;X₁&#160;+&#160;X₂ (→ table left, row "Partial").</p>`,
+
+    `<p><strong>Step <span class="tab-num">⑤</span> — Regression surface</strong><br>
+    X₁ and X₂ form the floor of the 3D space. Y is the vertical axis. The multiple model Y&#160;=&#160;b₀&#160;+&#160;b₁·X₁&#160;+&#160;b₂·X₂ is a <strong>plane</strong> (blue surface).</p>
+    <p>· Slope in X₁ direction = b₁ · Slope in X₂ direction = b₂<br>
+    · Green points: above the surface (positive residuals) · Red: below</p>
+    <p>Drag to rotate — double-click to reset.</p>`
+  ];
+  const lbl=document.getElementById('m4-cv-label');
+  if(lbl)lbl.innerHTML=labels[step];
+  const erkl=document.getElementById('m4-erkl');
+  if(erkl)erkl.innerHTML=erkls[step];
+  const guide=document.getElementById('m4-info-step');
+  if(guide)guide.innerHTML=stepGuide[step];
+  const cvAvp=document.getElementById('cv-avp');
+  if(cvAvp)cvAvp.style.cursor=step===4?'grab':'default';
+  drawMod4();
+}
+
+function setR12(r){
+  ST.r12=r;
+  ST.data=genData(ST.seed,0.60,0.45,r);
+  ST.fitBiv=olsBivariate(ST.data.x1,ST.data.y);
+  ST.fitMult=olsMultiple(ST.data.x1,ST.data.x2,ST.data.y);
+  ST.avp=avpComponents(ST.data.x1,ST.data.x2,ST.data.y);
+  [['scen-r0',0],['scen-r2',0.20],['scen-r5',0.50],['scen-r8',0.80]].forEach(([id,v])=>{
+    const btn=document.getElementById(id);
+    if(btn)btn.classList.toggle('active',Math.abs(v-r)<0.01);
+  });
+  draw();
+}
+
+/* ── BTL Theme Toggle (btl-theme) ─────────────────────────────────── */
+function toggleTheme(){
+  const h=document.documentElement;
+  const isDark=h.getAttribute('data-theme')==='dark';
+  const nt=isDark?'light':'dark';
+  h.setAttribute('data-theme',nt);
+  document.getElementById('btn-theme').textContent=nt==='dark'?'☀ Light':'🌙 Dark';
+  localStorage.setItem('btl-theme',nt);
+  draw();
+}
+
+/* ── Modals ───────────────────────────────────────────────────────── */
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')document.querySelectorAll('.ml-modal.open').forEach(m=>m.classList.remove('open'));
 });
+
+/* ── Accordion ────────────────────────────────────────────────────── */
+function toggleAcc(trigger){
+  trigger.classList.toggle('open');
+  const body=trigger.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+/* ── Module 4: 3D drag rotation ──────────────────────────────────── */
+function initMod4Drag(){
+  const cv=document.getElementById('cv-avp');
+  if(!cv)return;
+
+  function startDrag(clientX,clientY){
+    if(ST.avpStep!==4)return false;
+    ST.rot3d.dragging=true;
+    ST.rot3d.lastX=clientX; ST.rot3d.lastY=clientY;
+    cv.style.cursor='grabbing';
+    return true;
+  }
+  function moveDrag(clientX,clientY){
+    if(!ST.rot3d.dragging)return;
+    const dx=clientX-ST.rot3d.lastX, dy=clientY-ST.rot3d.lastY;
+    ST.rot3d.az-=dx*0.007;
+    ST.rot3d.el=Math.max(-1.45,Math.min(1.45,ST.rot3d.el+dy*0.007));
+    ST.rot3d.lastX=clientX; ST.rot3d.lastY=clientY;
+    if(ST.avpStep===4)drawMod4();
+  }
+  function endDrag(){
+    if(!ST.rot3d.dragging)return;
+    ST.rot3d.dragging=false;
+    cv.style.cursor=ST.avpStep===4?'grab':'default';
+  }
+
+  cv.addEventListener('mousedown',e=>{if(startDrag(e.clientX,e.clientY))e.preventDefault();});
+  window.addEventListener('mousemove',e=>moveDrag(e.clientX,e.clientY));
+  window.addEventListener('mouseup',endDrag);
+
+  cv.addEventListener('touchstart',e=>{
+    if(e.touches.length===1&&startDrag(e.touches[0].clientX,e.touches[0].clientY))e.preventDefault();
+  },{passive:false});
+  window.addEventListener('touchmove',e=>{
+    if(ST.rot3d.dragging&&e.touches.length===1){
+      moveDrag(e.touches[0].clientX,e.touches[0].clientY);
+      e.preventDefault();
+    }
+  },{passive:false});
+  window.addEventListener('touchend',endDrag);
+
+  cv.addEventListener('dblclick',()=>{
+    if(ST.avpStep!==4)return;
+    ST.rot3d.az=-0.55; ST.rot3d.el=0.38;
+    drawMod4();
+  });
+}
+
+/* ── Start ────────────────────────────────────────────────────────── */
+initData();
+initCanvasEvents();
+initMod4Drag();
+draw();
 </script>
 </body>
 </html>
