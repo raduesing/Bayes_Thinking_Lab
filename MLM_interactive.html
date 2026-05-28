@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('btn-theme');if(b)b.textContent='🌙 Dunkel';});})()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Multilevel Modelle interaktiv: Complete vs. No vs. Partial Pooling, Shrinkage, ICC, Random Intercepts und Slopes — Gaussian LMM visuell erklärt.">
+<meta name="keywords" content="Multilevel, LMM, Mixed Models, Random Effects, Shrinkage, ICC, Partial Pooling, Hierarchisch, Bayes Thinking Lab">
+<meta property="og:title" content="Multilevel Modelle — Bayes Thinking Lab">
+<meta property="og:description" content="LMM interaktiv: Complete/No/Partial Pooling, Shrinkage, ICC, Random Intercepts & Slopes, Simpson-Paradoxon.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.bayes-thinking-lab.uni-osnabrueck.de/MLM_interactive.html">
+<meta property="og:site_name" content="Bayes Thinking Lab">
+<link rel="canonical" href="https://www.bayes-thinking-lab.uni-osnabrueck.de/MLM_interactive.html">
+<title>Multilevel Modelle — Bayes Thinking Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Design Tokens ──────────────────────────────────────────────── */
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--accent:var(--a2);
+  --accept:#5a8a2a;--reject:#c94a2a;--shadow:rgba(0,0,0,.07);
+  --topbar-h:58px;
+}
+[data-theme="dark"]{
+  --bg:#0d1018;--paper:#141820;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#20262f;--panel:#1a2030;--border:#2c3445;
+  --accept:#80cb52;--reject:#e8614a;--shadow:rgba(0,0,0,.4);
+}
+
+/* ── Reset & Base ───────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);font-size:1rem;line-height:1.65;min-height:100vh}
+a{color:var(--a2);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Topbar ─────────────────────────────────────────────────────── */
+#topbar{position:sticky;top:0;z-index:200;background:var(--paper);border-bottom:1.5px solid var(--border);padding:.45rem 1.4rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.topbar-l{display:flex;flex-direction:column;align-items:flex-start;gap:.05rem}
+.tb-title{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:300;letter-spacing:-.02em;line-height:1.2;color:var(--ink)}
+.tb-title em{font-style:italic;color:var(--a2)}
+.tb-sub{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.16rem;letter-spacing:.04em}
+.topbar-btns{display:flex;gap:.35rem;align-items:center}
+.tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;white-space:nowrap;letter-spacing:.03em}
+.tbtn:hover{border-color:var(--a2);color:var(--a2)}
+.tbtn.nav{border-color:var(--a2);color:var(--a2)}
+.tbtn.nav:hover{background:var(--a2);color:var(--paper)}
+.tbtn.hint{border-color:var(--a1);color:var(--a1)}
+.tbtn.hint:hover{background:var(--a1);color:white}
+
+/* ── Story Banner ───────────────────────────────────────────────── */
+#story{background:var(--panel);border-bottom:1px solid var(--border);padding:.65rem 1.4rem;display:flex;align-items:center;flex-wrap:wrap;gap:.6rem 1.4rem}
+.story-label{font-family:'DM Mono',monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ink3)}
+.story-vars{display:flex;flex-wrap:wrap;gap:.5rem;font-family:'DM Mono',monospace;font-size:.76rem}
+.sv{padding:.12rem .5rem;border:1px solid var(--border);background:var(--bg);color:var(--ink2)}
+.sv em{font-style:normal;color:var(--accent)}
+#seed-info{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-left:auto}
+
+/* ── Module Tabs ────────────────────────────────────────────────── */
+#mod-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--paper);position:sticky;top:var(--topbar-h);z-index:100;overflow-x:auto}
+.mod-tab{background:none;border:none;border-bottom:2px solid transparent;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink3);padding:.7rem 1.2rem;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:.4rem}
+.mod-tab:hover{color:var(--ink)}
+.mod-tab.active{color:var(--a2);border-bottom-color:var(--a2)}
+.tab-num{font-size:1.05rem;line-height:1;vertical-align:-.1em}
+
+/* ── Module Panels ──────────────────────────────────────────────── */
+.mod-panel{display:none;padding:1.4rem 1.4rem 2rem}
+.mod-panel.active{display:block}
+.mod-h{font-size:1.25rem;font-weight:600;color:var(--ink);letter-spacing:-.01em;margin-bottom:.3rem}
+.mod-h em{font-style:italic;color:var(--a2)}
+.mod-sub{font-family:'DM Mono',monospace;font-size:.76rem;color:var(--ink3);margin-bottom:1.2rem;min-height:1.55rem}
+
+/* ── Canvas Containers ──────────────────────────────────────────── */
+.cv-wrap{background:var(--paper);border:1px solid var(--border);display:inline-block;position:relative}
+.cv-wrap canvas{display:block}
+.cv-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem}
+.cv-label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.08em}
+
+/* ── Controls ───────────────────────────────────────────────────── */
+.ctrl-block{background:var(--panel);border:1px solid var(--border);padding:.85rem 1rem;margin-bottom:.85rem}
+.ctrl-row{display:flex;align-items:center;gap:.7rem;margin-bottom:.55rem;flex-wrap:wrap}
+.ctrl-row:last-child{margin-bottom:0}
+.ctrl-label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);min-width:136px}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--a2);min-width:48px}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;background:var(--border);outline:none;flex:1;min-width:100px;max-width:220px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--a2);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--a2);border:none;cursor:pointer}
+.btn{background:none;border:1px solid var(--border);color:var(--ink2);font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem .75rem;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.btn:hover{border-color:var(--a2);color:var(--a2)}
+.btn.primary{border-color:var(--a2);color:var(--a2)}
+.btn.primary:hover{background:color-mix(in srgb,var(--a2) 12%,transparent)}
+.btn.accent1{border-color:var(--a1);color:var(--a1)}
+.btn.accent1:hover{background:color-mix(in srgb,var(--a1) 10%,transparent)}
+.btn-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.85rem}
+
+/* ── Pooling Buttons ────────────────────────────────────────────── */
+.pool-btns{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.75rem}
+.pool-btn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.28rem .65rem;border:1.5px solid var(--border);background:none;cursor:pointer;color:var(--ink3);transition:all .15s;letter-spacing:.02em}
+.pool-btn:hover{border-color:var(--ink2);color:var(--ink2)}
+.pool-btn.pool-cp.active{border-color:var(--a1);color:var(--paper);background:var(--a1)}
+.pool-btn.pool-np.active{border-color:var(--a3);color:var(--paper);background:var(--a3)}
+.pool-btn.pool-pp.active{border-color:var(--a2);color:var(--paper);background:var(--a2)}
+.pool-btn.pool-all.active{border-color:var(--a5);color:var(--paper);background:var(--a5)}
+
+/* ── ICC Bar ────────────────────────────────────────────────────── */
+.icc-wrap{margin-bottom:.85rem}
+.icc-bar-label{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-bottom:.3rem}
+.icc-bar{height:22px;display:flex;border:1px solid var(--border);overflow:hidden}
+.icc-seg-btw{background:color-mix(in srgb,var(--a2) 55%,transparent);transition:width .3s;display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden}
+.icc-seg-wit{background:color-mix(in srgb,var(--grid) 70%,transparent);flex:1}
+.icc-bar-txt{font-family:'DM Mono',monospace;font-size:.62rem;padding:0 .3rem;white-space:nowrap}
+.icc-bar-vals{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:.63rem;color:var(--ink3);margin-top:.18rem}
+
+/* ── Coefficient / Stat Grid ────────────────────────────────────── */
+.coef-grid{display:grid;gap:.35rem;margin-bottom:.85rem}
+.coef-grid.g2{grid-template-columns:repeat(2,1fr)}
+.coef-grid.g3{grid-template-columns:repeat(3,1fr)}
+.coef-cell{background:var(--panel);border:1px solid var(--border);padding:.6rem .85rem}
+.coef-cell-lbl{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.15rem}
+.coef-cell-val{font-family:'DM Mono',monospace;font-size:1.05rem;color:var(--a2);font-weight:500}
+.coef-cell-val.accent1{color:var(--a1)}
+.coef-cell-val.accent3{color:var(--a3)}
+
+/* ── Formula Card ───────────────────────────────────────────────── */
+.formula-card{background:color-mix(in srgb,var(--a2) 5%,var(--panel));border:1px solid var(--border);border-left:3px solid var(--a2);padding:.8rem 1rem;margin-bottom:.85rem;font-family:'DM Mono',monospace;font-size:.77rem;color:var(--ink2);line-height:2.1}
+.formula-card .fc-level{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--a2);margin-bottom:.2rem;border-bottom:1px solid var(--border);padding-bottom:.2rem}
+.formula-card .fc-line{margin-bottom:.18rem}
+.fxd{color:var(--a1);font-weight:600}
+.rnd{color:var(--a2);font-weight:600}
+.eps{color:var(--ink3)}
+
+/* ── Scenario Buttons ───────────────────────────────────────────── */
+.scen-btns{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.9rem}
+.scen-btn{font-family:'DM Mono',monospace;font-size:.72rem;padding:.25rem .65rem;cursor:pointer;border:1px solid var(--border);color:var(--ink3);background:none;transition:all .15s}
+.scen-btn:hover,.scen-btn.active{border-color:var(--a2);color:var(--a2);background:color-mix(in srgb,var(--a2) 8%,transparent)}
+.scen-btn.warn{border-color:var(--a5);color:var(--a5)}
+.scen-btn.warn:hover,.scen-btn.warn.active{background:color-mix(in srgb,var(--a5) 8%,transparent)}
+
+/* ── Erkläer / Info Box ─────────────────────────────────────────── */
+.erklaer{background:var(--panel);border-left:3px solid var(--accent);padding:.8rem 1rem;margin-bottom:.85rem;max-width:1000px;font-family:'DM Mono',monospace;font-size:.80rem;color:var(--ink2);line-height:1.95}
+.erklaer strong{color:var(--ink)}
+.info-box{background:color-mix(in srgb,var(--a2) 5%,var(--panel));border:1px solid var(--border);border-left:3px solid var(--a2);padding:.85rem 1rem;font-family:'DM Mono',monospace;font-size:.77rem;color:var(--ink2);line-height:1.9}
+.info-box-h{font-size:.64rem;text-transform:uppercase;letter-spacing:.1em;color:var(--a2);margin-bottom:.6rem;padding-bottom:.38rem;border-bottom:1px solid var(--border)}
+.info-box p{margin-bottom:.5rem}
+.info-box p:last-child{margin-bottom:0}
+.info-box strong{color:var(--ink)}
+.info-box em{font-style:italic;color:var(--a2)}
+.info-box code{font-family:'DM Mono',monospace;font-size:.88em;color:var(--a2)}
+
+/* ── Accordion ──────────────────────────────────────────────────── */
+.acc-wrap{margin-bottom:.85rem;max-width:1000px}
+.acc-item{border:1px solid var(--border);margin-bottom:.4rem}
+.acc-trigger{width:100%;text-align:left;background:var(--panel);border:none;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);padding:.65rem 1rem;cursor:pointer;display:flex;align-items:center;gap:.6rem;transition:color .15s}
+.acc-trigger:hover{color:var(--ink)}
+.acc-trigger.open{color:var(--a2)}
+.acc-arrow{font-size:.7rem;color:var(--ink3);transition:transform .2s;flex-shrink:0;margin-left:auto}
+.acc-trigger.open .acc-arrow{transform:rotate(90deg)}
+.acc-body{display:none;padding:.8rem 1rem;border-top:1px solid var(--border)}
+.acc-body.open{display:block}
+
+/* ── Lernkarten ─────────────────────────────────────────────────── */
+#lernkarten{padding:1.4rem 1.4rem 2.5rem;border-top:1px solid var(--border);background:var(--bg)}
+.lk-head{font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink3);margin-bottom:1rem}
+.lcard-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem}
+.lcard{background:var(--panel);border:1px solid var(--border);padding:1rem 1.1rem}
+.lcard:last-child{grid-column:1/-1}
+.lcard-h{font-family:'DM Mono',monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--a2);margin-bottom:.55rem}
+.lcard-body{font-size:.875rem;color:var(--ink2);line-height:1.7}
+.lcard-body strong{color:var(--ink)}
+.lcard-body code{font-family:'DM Mono',monospace;font-size:.82em;color:var(--a2)}
+
+/* ── Help Modal ─────────────────────────────────────────────────── */
+.ml-modal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.58);align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
+.ml-modal.open{display:flex}
+.ml-modal-box{background:var(--paper);border:1px solid var(--border);padding:2rem 2.4rem;max-width:640px;width:90%;margin-bottom:2rem;font-family:'DM Mono',monospace;position:relative}
+.ml-modal-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink2);line-height:1}
+.ml-modal-close:hover{color:var(--ink)}
+.ml-modal-eyebrow{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a1);margin-bottom:1rem}
+.ml-modal-body h3{font-family:'Fraunces',serif;font-size:1rem;color:var(--ink);margin:1.2rem 0 .4rem}
+.ml-modal-body p,.ml-modal-body li{font-size:.8rem;color:var(--ink2);line-height:1.9}
+.ml-modal-body ul{padding-left:1.2rem;margin:.3rem 0 .6rem}
+.ml-modal-body code{font-family:'DM Mono',monospace;font-size:.9em;color:var(--a2);background:var(--panel);padding:.05rem .25rem}
+.ml-modal-body a{color:var(--a2)}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border)}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media(max-width:600px){.lcard-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ══ TOPBAR ══════════════════════════════════════════════════════ -->
+<div id="topbar">
+  <div class="topbar-l">
+    <div class="tb-title">Multilevel &amp; <em>Mixed Models</em></div>
+    <div class="tb-sub">LMM · Complete / No / Partial Pooling · Shrinkage · ICC · Random Slopes</div>
+  </div>
+  <div class="topbar-btns">
+    <button class="tbtn nav" onclick="window.open('index_de.html','_self')">← Übersicht</button>
+    <button class="tbtn hint" onclick="openModal('help-modal')">? Hilfe</button>
+    <button class="tbtn" id="btn-neue-daten" onclick="neueDaten()">↻ Neue Daten</button>
+    <button class="tbtn" id="btn-theme" onclick="toggleTheme()">☀ Hell</button>
+  </div>
+</div>
+
+<!-- ══ STORY BANNER ══════════════════════════════════════════════════ -->
+<div id="story">
+  <span class="story-label">Kontext:</span>
+  <div class="story-vars">
+    <span class="sv">J = <em>5 Klassen</em></span>
+    <span class="sv">n_j = <em>10 Schüler/Klasse</em></span>
+    <span class="sv">X = <em>Lernzeit (h/Woche)</em></span>
+    <span class="sv">Y = <em>Klausurnote (0–100)</em></span>
+    <span class="sv">Modell: <em>Random Intercepts LMM</em></span>
+  </div>
+  <span id="seed-info">Seed: —</span>
+</div>
+
+<!-- ══ MODULE TABS ═══════════════════════════════════════════════════ -->
+<div id="mod-tabs" role="tablist">
+  <button class="mod-tab active" id="tab-1" onclick="showMod(1)" role="tab">
+    <span class="tab-num">①</span> Pooling-Vergleich
+  </button>
+  <button class="mod-tab" id="tab-2" onclick="showMod(2)" role="tab">
+    <span class="tab-num">②</span> Shrinkage &amp; ICC
+  </button>
+  <button class="mod-tab" id="tab-3" onclick="showMod(3)" role="tab">
+    <span class="tab-num">③</span> Random Slopes
+  </button>
+  <button class="mod-tab" id="tab-4" onclick="showMod(4)" role="tab">
+    <span class="tab-num">④</span> Simpson-Paradoxon
+  </button>
+</div>
+
+<!-- ══ MODULE 1: POOLING-VERGLEICH ══════════════════════════════════ -->
+<div id="mod-1" class="mod-panel active" role="tabpanel">
+  <div class="mod-h">Warum Multilevel? — <em>Complete, No &amp; Partial Pooling</em></div>
+  <div class="mod-sub" id="mod1-sub">Wähle einen Pooling-Modus oder zeige alle drei gleichzeitig an.</div>
+
+  <!-- Szenario-Voreinstellungen -->
+  <div class="scen-btns" id="scen-btns">
+    <button class="scen-btn active" id="scen-standard" onclick="setScenario('standard')">Standard</button>
+    <button class="scen-btn" id="scen-hohe-icc" onclick="setScenario('hohe-icc')">Hohe ICC</button>
+    <button class="scen-btn" id="scen-kleine-gruppen" onclick="setScenario('kleine-gruppen')">Kleine Gruppen</button>
+    <button class="scen-btn warn" id="scen-simpson" onclick="setScenario('simpson')">Simpson-Paradox ▸</button>
+  </div>
+
+  <!-- Canvas -->
+  <div class="cv-row">
+    <div>
+      <div class="cv-label">Daten &amp; Regressionsgeraden</div>
+      <div class="cv-wrap"><canvas id="cv1" width="580" height="400"></canvas></div>
+    </div>
+    <div style="flex:1;min-width:270px;max-width:400px">
+      <!-- Pooling-Auswahl -->
+      <div class="cv-label">Pooling-Modus</div>
+      <div class="pool-btns">
+        <button class="pool-btn pool-cp active" id="pool-cp" onclick="togglePool('cp')">Complete Pooling</button>
+        <button class="pool-btn pool-np active" id="pool-np" onclick="togglePool('np')">No Pooling</button>
+        <button class="pool-btn pool-pp active" id="pool-pp" onclick="togglePool('pp')">Partial Pooling</button>
+      </div>
+
+      <!-- ICC-Balken -->
+      <div class="icc-wrap">
+        <div class="icc-bar-label">Varianzzerlegung (ICC)</div>
+        <div class="icc-bar">
+          <div class="icc-seg-btw" id="icc-seg-btw" style="width:30%">
+            <span class="icc-bar-txt" id="icc-btw-txt">Zwischen: 30%</span>
+          </div>
+          <div class="icc-seg-wit">
+            <span class="icc-bar-txt" id="icc-wit-txt" style="color:var(--ink3)">Innerhalb: 70%</span>
+          </div>
+        </div>
+        <div class="icc-bar-vals">
+          <span>ICC = <span id="icc-val">0.30</span></span>
+          <span>τ₀ = <span id="tau0-val">—</span> · σ = <span id="sig-val">—</span></span>
+        </div>
+      </div>
+
+      <!-- Koeffizienten -->
+      <div class="coef-grid g2">
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">γ₀₀ (Grand Intercept)</div>
+          <div class="coef-cell-val" id="c-g00">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">γ₁₀ (Fixed Slope)</div>
+          <div class="coef-cell-val" id="c-g10">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">τ₀² (Between)</div>
+          <div class="coef-cell-val accent1" id="c-tau0sq">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">σ² (Within)</div>
+          <div class="coef-cell-val accent3" id="c-sigsq">—</div>
+        </div>
+      </div>
+
+      <!-- Formel-Karte -->
+      <div class="formula-card" id="mod1-formula">
+        <div class="fc-level">Modell-Formel (Random Intercepts)</div>
+        <div class="fc-line">Y<sub>ij</sub> = <span class="fxd">γ₀₀</span> + <span class="fxd">γ₁₀</span>·X<sub>ij</sub> + <span class="rnd">u<sub>0j</sub></span> + <span class="eps">ε<sub>ij</sub></span></div>
+        <div class="fc-line" style="font-size:.68rem;color:var(--ink3)"><span class="rnd">u<sub>0j</sub></span> ~ N(0,τ₀²) &nbsp;·&nbsp; <span class="eps">ε<sub>ij</sub></span> ~ N(0,σ²)</div>
+      </div>
+
+      <!-- Erklärungs-Box -->
+      <div class="erklaer" id="mod1-erklaer">
+        <strong>Complete Pooling</strong> — Eine globale Gerade durch alle N=50 Datenpunkte; Gruppenstruktur wird ignoriert.<br>
+        <strong>No Pooling</strong> — Jede Klasse bekommt ihre eigene OLS-Gerade; Schätzungen können bei kleinen Gruppen instabil sein.<br>
+        <strong>Partial Pooling</strong> — Die Gruppen-Intercepts werden zur Grand Mean hin <em>geschrumpft</em> (Shrinkage). Je kleiner n_j oder je kleiner τ₀², desto stärker die Schrumpfung.
+      </div>
+    </div>
+  </div>
+
+  <!-- Akkordeon: Konzept-Details -->
+  <div class="acc-wrap">
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <span>📐 Was ist Partial Pooling genau?</span>
+        <span class="acc-arrow">▶</span>
+      </button>
+      <div class="acc-body">
+        <div class="info-box">
+          <div class="info-box-h">Empirical Bayes Shrinkage</div>
+          <p>Der Partial-Pooling-Intercept der Gruppe <em>j</em> ist ein gewichtetes Mittel aus dem <strong>No-Pooling-Schätzwert</strong> (gruppenspezifisch) und dem <strong>Grand Mean</strong> (Complete Pooling):</p>
+          <p style="text-align:center;font-size:.85rem;padding:.4rem 0"><strong>α̂_j = λ_j · â_j<sup>NP</sup> + (1–λ_j) · γ̂₀₀</strong></p>
+          <p>Der Gewichtungsfaktor λ_j heißt <em>Shrinkage-Faktor</em>:</p>
+          <p style="text-align:center;font-size:.85rem;padding:.4rem 0"><strong>λ_j = τ₀² / (τ₀² + σ²/n_j)</strong></p>
+          <p>λ → 1 (kein Shrinkage) wenn: große Gruppen (n_j↑) oder starke Zwischen-Varianz (τ₀²↑).<br>
+          λ → 0 (starkes Shrinkage) wenn: kleine Gruppen oder dominante Within-Varianz.</p>
+        </div>
+      </div>
+    </div>
+    <div class="acc-item">
+      <button class="acc-trigger" onclick="toggleAcc(this)">
+        <span>📊 Wann ist welches Modell angemessen?</span>
+        <span class="acc-arrow">▶</span>
+      </button>
+      <div class="acc-body">
+        <div class="info-box">
+          <div class="info-box-h">Entscheidungsregel</div>
+          <p><strong>Complete Pooling</strong>: Wenn ICC ≈ 0 oder Gruppen nur zufällig ausgewählt und ohne inhaltliche Bedeutung sind. Achtung: Standard-Fehler werden unterschätzt.</p>
+          <p><strong>No Pooling</strong>: Wenn Gruppen inhaltlich interessant sind und n_j groß genug für stabile Schätzungen. Problem: kein Informationsaustausch zwischen Gruppen.</p>
+          <p><strong>Partial Pooling / LMM</strong>: Goldstandard bei ICC > 0 und hierarchischen Daten. Nutzt Gruppenstruktur ohne sie zu ignorieren. Korrekte Standardfehler.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODULE 2: SHRINKAGE & ICC ══════════════════════════════════════ -->
+<div id="mod-2" class="mod-panel" role="tabpanel">
+  <div class="mod-h">Shrinkage &amp; <em>ICC</em></div>
+  <div class="mod-sub">Wie stark werden Gruppenintercepts zur Grand Mean gezogen? Der Shrinkage-Faktor λ kontrolliert dies.</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <!-- Caterpillar Plot -->
+    <div>
+      <div class="cv-label">Caterpillar-Plot — Gruppen-Intercepts (95% CI)</div>
+      <div class="cv-wrap"><canvas id="cv2cat" width="520" height="320"></canvas></div>
+      <div class="cv-label" style="margin-top:.7rem">Shrinkage-Vergleich (No Pooling vs. Partial Pooling)</div>
+      <div class="cv-wrap"><canvas id="cv2shr" width="520" height="240"></canvas></div>
+    </div>
+
+    <!-- Controls + Info -->
+    <div style="flex:1;min-width:260px;max-width:380px">
+      <!-- Slider: τ₀ -->
+      <div class="ctrl-block">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Zwischen-SD τ₀</span>
+          <input type="range" id="sl-tau0" min="1" max="20" step="0.5" value="8" oninput="updTau0(this.value)">
+          <span class="ctrl-val" id="val-tau0">8.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Innerhalb-SD σ</span>
+          <input type="range" id="sl-sig" min="2" max="20" step="0.5" value="8" oninput="updSig(this.value)">
+          <span class="ctrl-val" id="val-sig">8.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Gruppen-Größe n_j</span>
+          <input type="range" id="sl-nj" min="3" max="30" step="1" value="10" oninput="updNj(this.value)">
+          <span class="ctrl-val" id="val-nj">10</span>
+        </div>
+      </div>
+
+      <!-- ICC Anzeige -->
+      <div class="icc-wrap">
+        <div class="icc-bar-label">ICC = τ₀² / (τ₀² + σ²)</div>
+        <div class="icc-bar">
+          <div class="icc-seg-btw" id="icc2-seg-btw" style="width:50%">
+            <span class="icc-bar-txt" id="icc2-btw-txt">Zwischen: 50%</span>
+          </div>
+          <div class="icc-seg-wit">
+            <span class="icc-bar-txt" style="color:var(--ink3)" id="icc2-wit-txt">Innerhalb: 50%</span>
+          </div>
+        </div>
+        <div class="icc-bar-vals">
+          <span>ICC = <span id="icc2-val">0.50</span></span>
+          <span>λ = <span id="lambda-val">0.50</span></span>
+        </div>
+      </div>
+
+      <!-- Koeffizienten -->
+      <div class="coef-grid g2" style="margin-bottom:.85rem">
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">ICC</div>
+          <div class="coef-cell-val" id="c2-icc">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">λ (Shrinkage-Faktor)</div>
+          <div class="coef-cell-val" id="c2-lambda">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">Max. Shrinkage</div>
+          <div class="coef-cell-val accent1" id="c2-maxshr">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">Ø |NP – PP|</div>
+          <div class="coef-cell-val accent3" id="c2-meandiff">—</div>
+        </div>
+      </div>
+
+      <!-- Formel -->
+      <div class="formula-card">
+        <div class="fc-level">Shrinkage-Formel</div>
+        <div class="fc-line">λ_j = <span class="rnd">τ₀²</span> / (<span class="rnd">τ₀²</span> + <span class="eps">σ²</span>/n_j)</div>
+        <div class="fc-line">α̂_j<sup>PP</sup> = λ_j · α̂_j<sup>NP</sup> + (1–λ_j) · <span class="fxd">γ̂₀₀</span></div>
+      </div>
+
+      <!-- Erklärungs-Box -->
+      <div class="erklaer">
+        <strong>Interpretation:</strong><br>
+        ICC = 0 → Kein Gruppeneffekt. Partial Pooling = Complete Pooling.<br>
+        ICC = 1 → Alle Varianz ist zwischen Gruppen. Kein Within-Fehler.<br>
+        λ nahe 0 → Starkes Shrinkage (kleine n_j oder kleine τ₀²).<br>
+        λ nahe 1 → Gruppenintercepts bleiben fast unverändert.
+      </div>
+
+      <!-- Akkordeon -->
+      <div class="acc-wrap">
+        <div class="acc-item">
+          <button class="acc-trigger" onclick="toggleAcc(this)">
+            <span>💡 ICC in der Praxis</span><span class="acc-arrow">▶</span>
+          </button>
+          <div class="acc-body">
+            <div class="info-box">
+              <p><strong>ICC &lt; 0.05</strong>: Gruppenstruktur vernachlässigbar. OLS meist ausreichend.</p>
+              <p><strong>ICC 0.05–0.20</strong>: Moderate Cluster-Effekte. LMM empfohlen.</p>
+              <p><strong>ICC &gt; 0.20</strong>: Starke Cluster-Effekte. LMM zwingend nötig, sonst stark verzerrte SE.</p>
+              <p>Faustregel im Bildungskontext: ICC für Schüler in Schulen ≈ 0.10–0.20.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODULE 3: RANDOM SLOPES ════════════════════════════════════════ -->
+<div id="mod-3" class="mod-panel" role="tabpanel">
+  <div class="mod-h">Random Slopes — <em>Effekt-Heterogenität zwischen Gruppen</em></div>
+  <div class="mod-sub">Hat Lernzeit in jeder Klasse denselben Effekt? Mit Random Slopes erlaubt das Modell Gruppen-spezifische Steigungen.</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <!-- Canvas -->
+    <div>
+      <div class="cv-label">Gruppen-spezifische Steigungen</div>
+      <div class="cv-wrap"><canvas id="cv3" width="560" height="400"></canvas></div>
+    </div>
+
+    <!-- Controls + Info -->
+    <div style="flex:1;min-width:260px;max-width:400px">
+      <div class="ctrl-block">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Steigungsvar. τ₁</span>
+          <input type="range" id="sl-tau1" min="0" max="5" step="0.1" value="1.5" oninput="updTau1(this.value)">
+          <span class="ctrl-val" id="val-tau1">1.5</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Korrelation ρ</span>
+          <input type="range" id="sl-rho" min="-0.9" max="0.9" step="0.05" value="0" oninput="updRho(this.value)">
+          <span class="ctrl-val" id="val-rho">0.00</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Fixed Slope γ₁₀</span>
+          <input type="range" id="sl-g10" min="0" max="8" step="0.2" value="3" oninput="updG10(this.value)">
+          <span class="ctrl-val" id="val-g10-mod3">3.0</span>
+        </div>
+      </div>
+
+      <!-- Koeffizienten -->
+      <div class="coef-grid g2" style="margin-bottom:.85rem">
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">γ₁₀ (Ø Steigung)</div>
+          <div class="coef-cell-val" id="c3-g10">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">τ₁ (Slope-SD)</div>
+          <div class="coef-cell-val accent1" id="c3-tau1">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">ρ(u₀,u₁)</div>
+          <div class="coef-cell-val" id="c3-rho">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">Steigungsbereich</div>
+          <div class="coef-cell-val accent3" id="c3-range">—</div>
+        </div>
+      </div>
+
+      <!-- Formel -->
+      <div class="formula-card">
+        <div class="fc-level">Random Intercepts + Slopes Modell</div>
+        <div class="fc-line">Y<sub>ij</sub> = (<span class="fxd">γ₀₀</span>+<span class="rnd">u<sub>0j</sub></span>) + (<span class="fxd">γ₁₀</span>+<span class="rnd">u<sub>1j</sub></span>)·X<sub>ij</sub> + <span class="eps">ε<sub>ij</sub></span></div>
+        <div class="fc-line" style="font-size:.68rem;color:var(--ink3)">(u<sub>0j</sub>,u<sub>1j</sub>) ~ MVN(0, Σ) &nbsp;·&nbsp; Σ = [[τ₀²,ρτ₀τ₁],[ρτ₀τ₁,τ₁²]]</div>
+      </div>
+
+      <!-- Erklärungs-Box -->
+      <div class="erklaer">
+        <strong>τ₁ = 0</strong>: Alle Klassen haben dieselbe Steigung — nur Random Intercepts.<br>
+        <strong>τ₁ &gt; 0, ρ = 0</strong>: Steigungen variieren, unabhängig vom Intercept-Offset.<br>
+        <strong>ρ &gt; 0</strong> (Fan-out): Klassen mit höherem Intercept zeigen auch stärkere Lernzeit-Effekte.<br>
+        <strong>ρ &lt; 0</strong> (Kompensation): Klassen mit hohem Ausgangsniveau profitieren weniger von Lernzeit.
+      </div>
+
+      <!-- Akkordeon -->
+      <div class="acc-wrap">
+        <div class="acc-item">
+          <button class="acc-trigger" onclick="toggleAcc(this)">
+            <span>🔍 Wann brauche ich Random Slopes?</span><span class="acc-arrow">▶</span>
+          </button>
+          <div class="acc-body">
+            <div class="info-box">
+              <p>Faustregel: <strong>Immer mit Random Slope starten</strong>, wenn du die Within-Gruppe-Regression als inhaltlich variierbar betrachtest.</p>
+              <p>Indizien für Random Slopes: Theoretisch sinnvolle Effektheterogenität (z.B. Lehrqualität moderiert Lernzeit-Effekt), große n_j (sonst numerisch instabil), Modell-Vergleich via LRT oder LOOIC.</p>
+              <p>Achtung: Korrelationsparameter ρ kann bei kleinen Stichproben schlecht identifiziert sein → ggf. <code>||</code> Syntax in lme4 (uncorrelated RE).</p>
+            </div>
+          </div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-trigger" onclick="toggleAcc(this)">
+            <span>📦 R-Code: lme4 / brms</span><span class="acc-arrow">▶</span>
+          </button>
+          <div class="acc-body">
+            <div class="info-box">
+              <p><code>lmer(Y ~ X + (1 + X | Klasse), data = df)</code></p>
+              <p><code>brm(Y ~ X + (1 + X | Klasse), data = df, family = gaussian())</code></p>
+              <p>Uncorrelated RE: <code>(1 + X || Klasse)</code> in lme4 / <code>(1 | Klasse) + (0 + X | Klasse)</code> in brms.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODULE 4: SIMPSON-PARADOXON ════════════════════════════════════ -->
+<div id="mod-4" class="mod-panel" role="tabpanel">
+  <div class="mod-h">Simpson-Paradoxon — <em>When the whole lies about the parts</em></div>
+  <div class="mod-sub">Der aggregierte Zusammenhang kann dem gruppeninternen Zusammenhang widersprechen — ein Paradebeispiel für konfundierte Gruppenstruktur.</div>
+
+  <div class="cv-row" style="align-items:flex-start">
+    <!-- Canvas -->
+    <div>
+      <div class="cv-label">Within- vs. Between-Effekt</div>
+      <div class="cv-wrap"><canvas id="cv4" width="560" height="400"></canvas></div>
+    </div>
+
+    <!-- Controls + Info -->
+    <div style="flex:1;min-width:260px;max-width:400px">
+      <!-- Szenario-Voreinstellungen Modul 4 -->
+      <div class="scen-btns">
+        <button class="scen-btn active" id="simp-mild" onclick="setSimpsonScen('mild')">Mild (ρ=−0.5)</button>
+        <button class="scen-btn warn" id="simp-stark" onclick="setSimpsonScen('stark')">Stark (ρ=−1.0)</button>
+        <button class="scen-btn" id="simp-pos" onclick="setSimpsonScen('pos')">Positiv (kein Paradox)</button>
+      </div>
+
+      <div class="ctrl-block">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Within-Effekt β_W</span>
+          <input type="range" id="sl-bw" min="-6" max="8" step="0.2" value="3" oninput="updBw(this.value)">
+          <span class="ctrl-val" id="val-bw">3.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Between-Offset β_B</span>
+          <input type="range" id="sl-bb" min="-8" max="0" step="0.2" value="-6" oninput="updBb(this.value)">
+          <span class="ctrl-val" id="val-bb">−6.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Gruppen-Spread</span>
+          <input type="range" id="sl-xoff" min="2" max="14" step="0.5" value="6" oninput="updXoff(this.value)">
+          <span class="ctrl-val" id="val-xoff">6.0</span>
+        </div>
+      </div>
+
+      <!-- Koeffizienten-Vergleich -->
+      <div class="coef-grid g3" style="margin-bottom:.85rem">
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">OLS (gesamt)</div>
+          <div class="coef-cell-val accent1" id="c4-ols">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">Within β_W</div>
+          <div class="coef-cell-val accent3" id="c4-bw">—</div>
+        </div>
+        <div class="coef-cell">
+          <div class="coef-cell-lbl">Vorzeichen-Flip</div>
+          <div class="coef-cell-val" id="c4-flip">—</div>
+        </div>
+      </div>
+
+      <!-- Formel -->
+      <div class="formula-card">
+        <div class="fc-level">Within- vs. Between-Zerlegung</div>
+        <div class="fc-line"><span class="fxd">β_OLS</span> = β_W · w_W + β_B · w_B</div>
+        <div class="fc-line" style="font-size:.68rem;color:var(--ink3)">w_W = Anteil Within-Varianz in X</div>
+        <div class="fc-line" style="font-size:.68rem;color:var(--ink3)">w_B = Anteil Between-Varianz in X</div>
+      </div>
+
+      <!-- Erklärungs-Box -->
+      <div class="erklaer">
+        <strong>Das Paradoxon entsteht</strong>, wenn β_B den entgegengesetzten Effekt von β_W hat <em>und</em> Between-Varianz in X dominiert.<br><br>
+        Beispiel: Mehr Lernzeit <em>innerhalb</em> der Klasse hilft (β_W &gt; 0). Aber Klassen mit generell mehr Lernzeit sind schlechtere Klassen (negativer Between-Effekt). OLS „sieht" netto einen negativen Zusammenhang.<br><br>
+        <strong>LMM löst das Problem</strong>: Der Fixed Slope γ₁₀ schätzt den Within-Effekt (Kontrolle für Gruppenintercepts).
+      </div>
+
+      <!-- Akkordeon -->
+      <div class="acc-wrap">
+        <div class="acc-item">
+          <button class="acc-trigger" onclick="toggleAcc(this)">
+            <span>🔬 Historische Beispiele</span><span class="acc-arrow">▶</span>
+          </button>
+          <div class="acc-body">
+            <div class="info-box">
+              <p><strong>UC-Berkeley-Aufnahme (1973)</strong>: Frauen schienen geringere Aufnahmequoten zu haben. Aggregiert betrachtet. Aufgedröselt nach Fachrichtung: Frauen hatten in fast allen Fächern <em>höhere</em> oder gleiche Aufnahmechancen. Sie bewarben sich häufiger für kompetitive Fächer mit generell niedrigerer Quote.</p>
+              <p><strong>Nierenstein-Behandlung</strong>: Behandlung A sieht schlechter aus als B. Stratifiziert nach Steingröße: A ist in beiden Gruppen besser. B wurde für einfachere Fälle bevorzugt (Confounding by indication).</p>
+            </div>
+          </div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-trigger" onclick="toggleAcc(this)">
+            <span>🔄 Verbindung zu Fixed Effects</span><span class="acc-arrow">▶</span>
+          </button>
+          <div class="acc-body">
+            <div class="info-box">
+              <p>In der Ökonometrie: <strong>Fixed-Effects-Modell</strong> = No-Pooling-Regression mit Gruppen-Dummies. Schätzt nur Within-Effekte, bereinigt automatically von Between-Konfundierung.</p>
+              <p>LMM (Partial Pooling) liegt dazwischen: schätzt primär Within-Effekt, profitiert aber von Shrinkage und erlaubt Level-2-Prädiktoren (Between-Effekte explizit modellieren).</p>
+              <p>Wenn Between-Konfundierung das Hauptproblem ist: <strong>Fixed Effects oder LMM mit Between-Prädiktor</strong> auf Gruppenebene.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LERNKARTEN ════════════════════════════════════════════════════ -->
+<section id="lernkarten">
+  <div class="lk-head">Lernkarten — Multilevel Modelle</div>
+  <div class="lcard-grid">
+
+    <div class="lcard">
+      <div class="lcard-h">① ICC — Intraklassen-Korrelation</div>
+      <div class="lcard-body">
+        Der ICC (Intraclass Correlation Coefficient) misst den Anteil der Gesamtvarianz, der <strong>zwischen den Gruppen</strong> liegt. Formal: <code>ICC = τ₀² / (τ₀² + σ²)</code>. Ein ICC von 0 bedeutet: Gruppen sind einander nicht ähnlicher als Zufallsstichproben — OLS reicht. Ein hoher ICC (> 0.10–0.20) signalisiert starke Clusterstruktur: Individuen innerhalb derselben Gruppe sind sich ähnlich. Dann führt OLS zu <strong>falschen (zu kleinen) Standardfehlern</strong>.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h">② Complete vs. No vs. Partial Pooling</div>
+      <div class="lcard-body">
+        <strong>Complete Pooling</strong> ignoriert Gruppen — eine Gerade für alle. <strong>No Pooling</strong> schätzt jede Gruppe separat — viele Freiheitsgrade verbraucht, instabil bei kleinen n_j. <strong>Partial Pooling</strong> (LMM) ist der Kompromiss: Gruppen-Intercepts werden zur Grand Mean <em>geschrumpft</em>. Kleine Gruppen werden stärker angepasst; die Stärke des Shrinkage hängt von ICC und n_j ab. Das Ergebnis ist ein regularisierter Schätzer mit besserer Vorhersage auf neuen Daten.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h">③ Shrinkage &amp; Empirical Bayes</div>
+      <div class="lcard-body">
+        Partial Pooling ist äquivalent zu <strong>Empirical Bayes</strong>: Die Gruppen-Intercepts werden als zufällig aus einer Normalverteilung gezogen betrachtet. Der Shrinkage-Faktor λ = τ₀²/(τ₀² + σ²/n_j) gewichtet, wie stark der gruppenspezifische vs. globale Schätzwert eingeht. Der Caterpillar-Plot zeigt die geschrumpften Intercepts mit 95%-KI. Gruppen weit vom Grand Mean entfernt haben breitere KI — <strong>mehr Unsicherheit, weniger Shrinkage nötig</strong>.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h">④ Random Slopes</div>
+      <div class="lcard-body">
+        Ein <strong>Random-Intercept-Modell</strong> nimmt an, dass alle Gruppen dieselbe Steigung haben (gleicher Lernzeit-Effekt in allen Klassen). <strong>Random-Slope-Modelle</strong> erlauben, dass dieser Effekt variiert: τ₁ = SD der Steigungsverteilung. Der Korrelationsparameter ρ zwischen Intercept- und Slope-Random-Effect ist inhaltlich aufschlussreich: ρ &gt; 0 (Fan-out) bedeutet, Gruppen mit hohem Ausgangsniveau profitieren auch stärker vom Prädiktor. In <code>lme4</code>: <code>(1 + X | Gruppe)</code>.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h">⑤ Simpson-Paradoxon &amp; Within/Between-Effekte</div>
+      <div class="lcard-body">
+        Der aggregierte OLS-Schätzer mischt <strong>Within-Gruppen-Effekte</strong> (wirklich interessant) mit <strong>Between-Gruppen-Effekten</strong> (oft konfundiert). Das <strong>Simpson-Paradoxon</strong> entsteht, wenn beide Effekte gegensätzliche Vorzeichen haben und Between-Varianz in X dominiert. LMM schätzt im Fixed-Slope γ₁₀ den Within-Effekt, bereinigt von Gruppenunterschieden. Wer nur OLS nutzt, kann die kausal falsche Schlussfolgerung ziehen.
+      </div>
+    </div>
+
+    <div class="lcard">
+      <div class="lcard-h">⑥ Modellformel &amp; R-Syntax</div>
+      <div class="lcard-body">
+        Das Random-Intercept-LMM in R: <code>lmer(Y ~ X + (1 | Gruppe), data = df)</code>. Mit Random Slope: <code>lmer(Y ~ X + (1 + X | Gruppe), data = df)</code>. In <strong>brms</strong> (Bayesianisch): <code>brm(Y ~ X + (1 | Gruppe), data = df, family = gaussian())</code>. Die Ergebnisse aus <code>summary()</code> zeigen Fixed Effects (γ₀₀, γ₁₀) und Random Effects (τ₀, σ). Der ICC kann mit <code>performance::icc(model)</code> berechnet werden.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══ HELP MODAL ════════════════════════════════════════════════════ -->
+<div class="ml-modal" id="help-modal" onclick="closeModalOuter(event,'help-modal')">
+  <div class="ml-modal-box">
+    <button class="ml-modal-close" onclick="closeModal('help-modal')">✕</button>
+    <div class="ml-modal-eyebrow">? Hilfe — Multilevel &amp; Mixed Models</div>
+    <div class="ml-modal-body">
+      <h3>Was zeigt dieses Tool?</h3>
+      <p>Das <strong>Multilevel-Modell-Tool</strong> erklärt Linear Mixed Models (LMM) für hierarchisch strukturierte Daten anhand von J=5 Schulklassen mit je n_j=10 Schülern. Du kannst interaktiv sehen, wie sich verschiedene Pooling-Strategien, Shrinkage und Random Slopes auf die Schätzungen auswirken.</p>
+
+      <h3>Die vier Module</h3>
+      <ul>
+        <li><strong>① Pooling-Vergleich</strong>: Complete, No und Partial Pooling im direkten Vergleich. ICC-Balken zeigt Varianzzerlegung. Szenarien (hohe ICC, Simpson-Paradox) auf Knopfdruck.</li>
+        <li><strong>② Shrinkage &amp; ICC</strong>: Caterpillar-Plot der geschrumpften Intercepts. Slider für τ₀, σ, n_j erlauben direktes Erleben, wie λ den Shrinkage steuert.</li>
+        <li><strong>③ Random Slopes</strong>: τ₁ und ρ kontrollieren Steigungsvariabilität und Intercept-Slope-Korrelation. Fan-out / Fan-in / Kompensations-Muster sichtbar machen.</li>
+        <li><strong>④ Simpson-Paradoxon</strong>: Within- und Between-Effekte einstellen, OLS-Aggregat vs. LMM-Within-Effekt vergleichen. Vorzeichen-Flip live erleben.</li>
+      </ul>
+
+      <h3>Begriffe</h3>
+      <ul>
+        <li><strong>ICC</strong> (Intraclass Correlation): τ₀² / (τ₀² + σ²) — Anteil Zwischen-Varianz.</li>
+        <li><strong>γ₀₀</strong>: Grand Intercept (Fixed Effect — Gesamtmittelwert aller Gruppen).</li>
+        <li><strong>γ₁₀</strong>: Fixed Slope — gemeinsame Steigung (Within-Effekt).</li>
+        <li><strong>u₀j</strong>: Random Intercept der Gruppe j — Abweichung vom Grand Mean.</li>
+        <li><strong>u₁j</strong>: Random Slope der Gruppe j — Abweichung vom Fixed Slope.</li>
+        <li><strong>τ₀² / τ₁²</strong>: Varianz der Random Intercepts / Slopes zwischen Gruppen.</li>
+        <li><strong>σ²</strong>: Residualvarianz (Within-Gruppen-Fehler).</li>
+        <li><strong>λ</strong>: Shrinkage-Faktor = τ₀² / (τ₀² + σ²/n_j).</li>
+      </ul>
+
+      <h3>Verwandte Tools</h3>
+      <ul>
+        <li><a href="LM_interactive.html">LM Interactive</a> — Grundlagen der einfachen / multiplen Regression (OLS)</li>
+        <li><a href="GLM_transition.html">GLM Transition</a> — Verallgemeinerte Lineare Modelle</li>
+        <li><a href="Causal_Estimands.html">Causal Estimands</a> — Kausale Schätzgrößen, DAGs, G-Computation</li>
+        <li><a href="Brms_model_builder.html">brms Model Builder</a> — Bayesianische Modelle mit brms</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ── Seeded RNG ──────────────────────────────────────────────── */
+function mulberry32(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function randn(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+/* ── Colours ─────────────────────────────────────────────────── */
+const GC=['#e05a3a','#2a7fd8','#3aad7a','#d08030','#9b59d0'];
+
+/* ── State ───────────────────────────────────────────────────── */
+const ST={seed:42,g00:50,g10:3,tau0:8,sig:8,J:5,nj:10,
+  tau0_m2:8,sig_m2:8,nj_m2:10,tau1:1.5,rho:0,g10_m3:3,
+  bw:3,bb:-6,xoff:6,activeModule:1,
+  poolCP:true,poolNP:true,poolPP:true,
+  data:null,cpFit:null,npFit:null,ppFit:null};
+
+/* ── Data generation ─────────────────────────────────────────── */
+function genData(seed,g00,g10,tau0,sig,J,nj,tau1,rho){
+  const r=mulberry32(seed); tau1=tau1||0; rho=rho||0;
+  return Array.from({length:J},(_,j)=>{
+    const z0=randn(r),z1=randn(r);
+    const u0=tau0*z0;
+    const u1=tau1*(rho*z0+Math.sqrt(Math.max(0,1-rho*rho))*z1);
+    const pts=Array.from({length:nj},()=>{
+      const x=r()*12+2, e=randn(r)*sig;
+      return{x, y:g00+u0+(g10+u1)*x+e};
+    });
+    return{j,u0,u1,pts};
+  });
+}
+
+/* ── OLS ─────────────────────────────────────────────────────── */
+function ols(pts){
+  let sx=0,sy=0,sxx=0,sxy=0,n=pts.length;
+  pts.forEach(p=>{sx+=p.x;sy+=p.y;sxx+=p.x*p.x;sxy+=p.x*p.y;});
+  const xm=sx/n,ym=sy/n,d=sxx-n*xm*xm;
+  const b=d?((sxy-n*xm*ym)/d):0;
+  return{b,a:ym-b*xm,xm,ym,n};
+}
+function fitCP(g){const all=[];g.forEach(g=>g.pts.forEach(p=>all.push(p)));return ols(all);}
+function fitNP(g){return g.map(grp=>({j:grp.j,...ols(grp.pts)}));}
+function fitPP(groups,np){
+  let ng=0,dg=0;
+  groups.forEach((g,j)=>{const sx2=g.pts.reduce((s,p)=>s+(p.x-np[j].xm)**2,0);ng+=np[j].b*sx2;dg+=sx2;});
+  const g10=dg?ng/dg:np.reduce((s,g)=>s+g.b,0)/np.length;
+  const aNP=np.map(g=>g.ym-g10*g.xm);
+  const g00=aNP.reduce((s,a)=>s+a,0)/aNP.length;
+  let ssR=0,nT=0;
+  groups.forEach((g,j)=>{g.pts.forEach(p=>{ssR+=(p.y-(aNP[j]+g10*p.x))**2;nT++;});});
+  const sigSq=ssR/Math.max(1,nT-aNP.length-1);
+  const vB=aNP.reduce((s,a)=>{const d=a-g00;return s+d*d;},0)/(aNP.length-1);
+  const tau0Sq=Math.max(0,vB-sigSq/np[0].n);
+  const sig=Math.sqrt(Math.max(0,sigSq));
+  const tau0=Math.sqrt(tau0Sq);
+  const icc=tau0Sq/(tau0Sq+sigSq+1e-10);
+  const pp=aNP.map((aNPj,j)=>{
+    const lam=tau0Sq/(tau0Sq+sigSq/np[j].n+1e-10);
+    return{j,aPP:lam*aNPj+(1-lam)*g00,aNP:aNPj,lam};
+  });
+  return{g00,g10,tau0,tau0Sq,sig,sigSq,icc,pp};
+}
+
+/* ── Canvas helpers ──────────────────────────────────────────── */
+function cv(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function mkSc(xmn,xmx,ymn,ymx,w,h){
+  const p={l:50,r:16,t:18,b:40};
+  const pw=w-p.l-p.r,ph=h-p.t-p.b;
+  return{tx:x=>p.l+(x-xmn)/(xmx-xmn)*pw,ty:y=>p.t+(ymx-y)/(ymx-ymn)*ph,
+    xmn,xmx,ymn,ymx,p,pw,ph,w,h};
+}
+function dRange(groups,xp){
+  let xmn=Infinity,xmx=-Infinity,ymn=Infinity,ymx=-Infinity;
+  groups.forEach(g=>g.pts.forEach(p=>{xmn=Math.min(xmn,p.x);xmx=Math.max(xmx,p.x);ymn=Math.min(ymn,p.y);ymx=Math.max(ymx,p.y);}));
+  const xd=(xmx-xmn)*.08+(xp||.5),yd=(ymx-ymn)*.12;
+  return{xmn:xmn-xd,xmx:xmx+xd,ymn:ymn-yd,ymx:ymx+yd};
+}
+function grid(ctx,sc,nx,ny){
+  ctx.save();ctx.strokeStyle=cv('--grid');ctx.lineWidth=.8;
+  for(let i=0;i<=nx;i++){const x=sc.xmn+i*(sc.xmx-sc.xmn)/nx;ctx.beginPath();ctx.moveTo(sc.tx(x),sc.ty(sc.ymn));ctx.lineTo(sc.tx(x),sc.ty(sc.ymx));ctx.stroke();}
+  for(let i=0;i<=ny;i++){const y=sc.ymn+i*(sc.ymx-sc.ymn)/ny;ctx.beginPath();ctx.moveTo(sc.tx(sc.xmn),sc.ty(y));ctx.lineTo(sc.tx(sc.xmx),sc.ty(y));ctx.stroke();}
+  ctx.restore();
+}
+function axes(ctx,sc,xl,yl){
+  ctx.save();ctx.strokeStyle=cv('--border');ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(sc.p.l,sc.p.t);ctx.lineTo(sc.p.l,sc.h-sc.p.b);ctx.lineTo(sc.w-sc.p.r,sc.h-sc.p.b);ctx.stroke();
+  ctx.fillStyle=cv('--ink3');ctx.font='10.5px "DM Mono",monospace';
+  for(let i=0;i<=5;i++){
+    const xv=sc.xmn+i*(sc.xmx-sc.xmn)/5;ctx.textAlign='center';ctx.fillText(xv.toFixed(0),sc.tx(xv),sc.h-sc.p.b+14);
+    const yv=sc.ymn+i*(sc.ymx-sc.ymn)/5;ctx.textAlign='right';ctx.fillText(yv.toFixed(0),sc.p.l-5,sc.ty(yv)+4);
+  }
+  if(xl){ctx.textAlign='center';ctx.fillText(xl,sc.p.l+sc.pw/2,sc.h-4);}
+  if(yl){ctx.save();ctx.translate(12,sc.p.t+sc.ph/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(yl,0,0);ctx.restore();}
+  ctx.restore();
+}
+function line(ctx,sc,a,b,col,lw,dash){
+  ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||2;if(dash)ctx.setLineDash(dash);
+  ctx.beginPath();ctx.moveTo(sc.tx(sc.xmn),sc.ty(a+b*sc.xmn));ctx.lineTo(sc.tx(sc.xmx),sc.ty(a+b*sc.xmx));ctx.stroke();ctx.restore();
+}
+function dot(ctx,sc,x,y,col,r){ctx.save();ctx.fillStyle=col;ctx.beginPath();ctx.arc(sc.tx(x),sc.ty(y),r||3.5,0,2*Math.PI);ctx.fill();ctx.restore();}
+
+/* ── MODULE 1 ────────────────────────────────────────────────── */
+function drawMod1(){
+  if(!ST.data)return;
+  const el=document.getElementById('cv1');if(!el)return;
+  const ctx=el.getContext('2d');ctx.clearRect(0,0,el.width,el.height);
+  const r=dRange(ST.data);
+  const sc=mkSc(r.xmn,r.xmx,r.ymn,r.ymx,el.width,el.height);
+  grid(ctx,sc,6,5);axes(ctx,sc,'Lernzeit (h/Woche)','Klausurnote');
+  ST.data.forEach((g,j)=>g.pts.forEach(p=>dot(ctx,sc,p.x,p.y,GC[j%5])));
+  if(ST.poolCP&&ST.cpFit)line(ctx,sc,ST.cpFit.a,ST.cpFit.b,cv('--a1'),2.5,[6,3]);
+  if(ST.poolNP&&ST.npFit)ST.npFit.forEach((g,j)=>line(ctx,sc,g.a,g.b,GC[j%5]+'bb',1.8,[3,2]));
+  if(ST.poolPP&&ST.ppFit)ST.ppFit.pp.forEach(g=>line(ctx,sc,g.aPP,ST.ppFit.g10,cv('--a2'),2.5));
+  // Legend
+  [[ST.poolCP,cv('--a1'),'CP',[6,3]],[ST.poolNP,GC[0]+'bb','NP',[3,2]],[ST.poolPP,cv('--a2'),'PP',null]].filter(v=>v[0]).forEach(([,c,lbl,d],i)=>{
+    ctx.save();ctx.strokeStyle=c;ctx.lineWidth=2;if(d)ctx.setLineDash(d);
+    ctx.beginPath();ctx.moveTo(sc.p.l+8+i*56,sc.p.t+14);ctx.lineTo(sc.p.l+30+i*56,sc.p.t+14);ctx.stroke();
+    ctx.fillStyle=cv('--ink2');ctx.font='11px "DM Mono",monospace';ctx.textAlign='left';ctx.setLineDash([]);
+    ctx.fillText(lbl,sc.p.l+33+i*56,sc.p.t+18);ctx.restore();
+  });
+}
+function updMod1UI(){
+  if(!ST.ppFit)return;
+  const p=ST.ppFit,icc=p.icc;
+  document.getElementById('c-g00').textContent=p.g00.toFixed(2);
+  document.getElementById('c-g10').textContent=p.g10.toFixed(3);
+  document.getElementById('c-tau0sq').textContent=p.tau0Sq.toFixed(2);
+  document.getElementById('c-sigsq').textContent=p.sigSq.toFixed(2);
+  document.getElementById('tau0-val').textContent=p.tau0.toFixed(2);
+  document.getElementById('sig-val').textContent=p.sig.toFixed(2);
+  document.getElementById('icc-val').textContent=icc.toFixed(3);
+  document.getElementById('icc-seg-btw').style.width=(icc*100).toFixed(1)+'%';
+  document.getElementById('icc-btw-txt').textContent='Zwischen: '+(icc*100).toFixed(0)+'%';
+  document.getElementById('icc-wit-txt').textContent='Innerhalb: '+((1-icc)*100).toFixed(0)+'%';
+}
+
+/* ── MODULE 2 ────────────────────────────────────────────────── */
+function drawMod2(){
+  const g2=genData(ST.seed,ST.g00,ST.g10,ST.tau0_m2,ST.sig_m2,ST.J,ST.nj_m2,0,0);
+  const np2=fitNP(g2),pp2=fitPP(g2,np2);
+  _drawCat(np2,pp2,pp2.sig,ST.nj_m2);
+  _drawShr(np2,pp2);
+  const icc=pp2.icc,lam=pp2.pp[0].lam;
+  document.getElementById('c2-icc').textContent=icc.toFixed(3);
+  document.getElementById('c2-lambda').textContent=lam.toFixed(3);
+  const shr=pp2.pp.map((g,j)=>Math.abs(g.aPP-np2[j].a));
+  document.getElementById('c2-maxshr').textContent=Math.max(...shr).toFixed(2);
+  document.getElementById('c2-meandiff').textContent=(shr.reduce((s,v)=>s+v,0)/shr.length).toFixed(2);
+  document.getElementById('icc2-val').textContent=icc.toFixed(3);
+  document.getElementById('lambda-val').textContent=lam.toFixed(3);
+  document.getElementById('icc2-seg-btw').style.width=(icc*100).toFixed(1)+'%';
+  document.getElementById('icc2-btw-txt').textContent='Zwischen: '+(icc*100).toFixed(0)+'%';
+  document.getElementById('icc2-wit-txt').textContent='Innerhalb: '+((1-icc)*100).toFixed(0)+'%';
+}
+function _drawCat(np2,pp2,sig,nj){
+  const el=document.getElementById('cv2cat');if(!el)return;
+  const ctx=el.getContext('2d');const w=el.width,h=el.height;ctx.clearRect(0,0,w,h);
+  const allA=[...pp2.pp.map(g=>g.aPP),...np2.map(g=>g.a)];
+  const amn=Math.min(...allA)-10,amx=Math.max(...allA)+10;
+  const pd={l:50,r:20,t:28,b:28};
+  const pw=w-pd.l-pd.r,rowH=(h-pd.t-pd.b)/(pp2.pp.length+1);
+  const tx=a=>pd.l+(a-amn)/(amx-amn)*pw,ty=j=>pd.t+(j+.5)*rowH;
+  ctx.save();ctx.strokeStyle=cv('--grid');ctx.lineWidth=.8;
+  for(let i=0;i<=6;i++){const a=amn+i*(amx-amn)/6;ctx.beginPath();ctx.moveTo(tx(a),pd.t);ctx.lineTo(tx(a),h-pd.b);ctx.stroke();
+    ctx.fillStyle=cv('--ink3');ctx.font='9.5px "DM Mono",monospace';ctx.textAlign='center';ctx.fillText(a.toFixed(1),tx(a),h-pd.b+13);}
+  ctx.restore();
+  ctx.save();ctx.strokeStyle=cv('--border');ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(tx(pp2.g00),pd.t-6);ctx.lineTo(tx(pp2.g00),h-pd.b);ctx.stroke();
+  ctx.fillStyle=cv('--ink3');ctx.font='9px "DM Mono",monospace';ctx.textAlign='center';ctx.fillText('γ̂₀₀',tx(pp2.g00),pd.t-8);ctx.restore();
+  const npCI=1.96*sig/Math.sqrt(nj);
+  pp2.pp.forEach((g,j)=>{
+    const aNP=np2[j].a,aPP=g.aPP,yj=ty(j),col=GC[j%5];
+    ctx.save();
+    ctx.strokeStyle=col+'66';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(tx(aNP-npCI),yj);ctx.lineTo(tx(aNP+npCI),yj);ctx.stroke();
+    ctx.strokeStyle=col;ctx.fillStyle='transparent';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(tx(aNP),yj,4,0,2*Math.PI);ctx.stroke();
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(tx(aPP),yj,5,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle=col+'99';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(tx(aNP),yj);ctx.lineTo(tx(aPP),yj);ctx.stroke();
+    ctx.fillStyle=cv('--ink2');ctx.font='10px "DM Mono",monospace';ctx.textAlign='right';ctx.fillText('K'+(j+1),pd.l-5,yj+4);
+    ctx.restore();
+  });
+  ctx.fillStyle=cv('--ink3');ctx.font='9px "DM Mono",monospace';ctx.textAlign='left';ctx.fillText('◆ PP  ○ NP  ─ 95% CI',pd.l,14);
+}
+function _drawShr(np2,pp2){
+  const el=document.getElementById('cv2shr');if(!el)return;
+  const ctx=el.getContext('2d');const w=el.width,h=el.height;ctx.clearRect(0,0,w,h);
+  const allA=[...pp2.pp.map(g=>g.aPP),...np2.map(g=>g.a),pp2.g00];
+  const amn=Math.min(...allA)-4,amx=Math.max(...allA)+4;
+  const pd={l:50,r:20,t:30,b:22};
+  const pw=w-pd.l-pd.r,rowH=(h-pd.t-pd.b)/(pp2.pp.length+1);
+  const tx=a=>pd.l+(a-amn)/(amx-amn)*pw,ty=j=>pd.t+(j+.5)*rowH;
+  ctx.save();ctx.strokeStyle=cv('--border');ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(tx(pp2.g00),pd.t-10);ctx.lineTo(tx(pp2.g00),h-pd.b);ctx.stroke();
+  ctx.fillStyle=cv('--ink3');ctx.font='9px "DM Mono",monospace';ctx.textAlign='center';
+  ctx.fillText('γ̂₀₀='+pp2.g00.toFixed(1),tx(pp2.g00),pd.t-12);ctx.restore();
+  pp2.pp.forEach((g,j)=>{
+    const aNP=np2[j].a,aPP=g.aPP,yj=ty(j),col=GC[j%5];
+    const x0=tx(aNP),x1=tx(aPP),dr=x1>x0?1:-1;
+    ctx.save();
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x0,yj);ctx.lineTo(x1,yj);ctx.stroke();
+    ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x1,yj);ctx.lineTo(x1-dr*7,yj-3.5);ctx.lineTo(x1-dr*7,yj+3.5);ctx.fill();
+    ctx.fillStyle=col+'55';ctx.beginPath();ctx.arc(x0,yj,4.5,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(x1,yj,4.5,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle=cv('--ink2');ctx.font='10px "DM Mono",monospace';ctx.textAlign='right';ctx.fillText('K'+(j+1),pd.l-5,yj+4);
+    ctx.fillStyle=col;ctx.font='9px "DM Mono",monospace';ctx.textAlign='center';ctx.fillText('λ='+g.lam.toFixed(2),tx((aNP+aPP)/2),yj-7);
+    ctx.restore();
+  });
+  ctx.fillStyle=cv('--ink3');ctx.font='9px "DM Mono",monospace';ctx.textAlign='left';ctx.fillText('Shrinkage: NP → PP (Pfeil zeigt Richtung)',pd.l,16);
+}
+
+/* ── MODULE 3 ────────────────────────────────────────────────── */
+function drawMod3(){
+  const g=genData(ST.seed,ST.g00,ST.g10_m3||ST.g10,ST.tau0,ST.sig,ST.J,ST.nj,ST.tau1,ST.rho);
+  const el=document.getElementById('cv3');if(!el)return;
+  const ctx=el.getContext('2d');ctx.clearRect(0,0,el.width,el.height);
+  const r=dRange(g);const sc=mkSc(r.xmn,r.xmx,r.ymn,r.ymx,el.width,el.height);
+  grid(ctx,sc,6,5);axes(ctx,sc,'Lernzeit (h/Woche)','Klausurnote');
+  g.forEach((grp,j)=>grp.pts.forEach(p=>dot(ctx,sc,p.x,p.y,GC[j%5])));
+  const np=fitNP(g),cp=fitCP(g);
+  np.forEach((grp,j)=>line(ctx,sc,grp.a,grp.b,GC[j%5],2.5));
+  line(ctx,sc,cp.a,cp.b,cv('--ink2'),1.5,[5,4]);
+  const slp=np.map(gr=>gr.b);
+  document.getElementById('c3-g10').textContent=(ST.g10_m3||ST.g10).toFixed(2);
+  document.getElementById('c3-tau1').textContent=ST.tau1.toFixed(2);
+  document.getElementById('c3-rho').textContent=ST.rho.toFixed(2);
+  document.getElementById('c3-range').textContent=(Math.max(...slp)-Math.min(...slp)).toFixed(2);
+}
+
+/* ── MODULE 4 ────────────────────────────────────────────────── */
+function drawMod4(){
+  const rng=mulberry32(ST.seed+77),J=ST.J,nj=ST.nj,bw=ST.bw,bb=ST.bb,xoff=ST.xoff,sig=ST.sig;
+  const groups=Array.from({length:J},(_,j)=>{
+    const xc=(j-(J-1)/2)*xoff;
+    const u0=bb*xc/xoff;
+    const pts=Array.from({length:nj},()=>{
+      const x=xc+randn(rng)*2.2,e=randn(rng)*sig;
+      return{x,y:50+u0+bw*(x-xc)+e};
+    });
+    return{j,u0,pts};
+  });
+  const el=document.getElementById('cv4');if(!el)return;
+  const ctx=el.getContext('2d');ctx.clearRect(0,0,el.width,el.height);
+  const r=dRange(groups,1);const sc=mkSc(r.xmn,r.xmx,r.ymn,r.ymx,el.width,el.height);
+  grid(ctx,sc,6,5);axes(ctx,sc,'Lernzeit (h/Woche)','Klausurnote');
+  groups.forEach((g,j)=>g.pts.forEach(p=>dot(ctx,sc,p.x,p.y,GC[j%5])));
+  const np=fitNP(groups),cp=fitCP(groups);
+  np.forEach((g,j)=>line(ctx,sc,g.a,g.b,GC[j%5],2,[3,3]));
+  line(ctx,sc,cp.a,cp.b,cv('--a1'),3,[7,4]);
+  [[cv('--a1'),'OLS gesamt',[7,4]],[GC[0]+'cc','Within (NP)',[3,3]]].forEach(([c,lbl,d],i)=>{
+    ctx.save();ctx.strokeStyle=c;ctx.lineWidth=2;ctx.setLineDash(d);
+    ctx.beginPath();ctx.moveTo(sc.p.l+8,sc.p.t+14+i*18);ctx.lineTo(sc.p.l+30,sc.p.t+14+i*18);ctx.stroke();
+    ctx.fillStyle=cv('--ink2');ctx.font='11px "DM Mono",monospace';ctx.textAlign='left';ctx.setLineDash([]);
+    ctx.fillText(lbl,sc.p.l+34,sc.p.t+18+i*18);ctx.restore();
+  });
+  const mw=np.reduce((s,g)=>s+g.b,0)/np.length,flip=cp.b*bw<0;
+  document.getElementById('c4-ols').textContent=cp.b.toFixed(3);
+  document.getElementById('c4-bw').textContent=mw.toFixed(3);
+  document.getElementById('c4-flip').textContent=flip?'⚠ JA':'Nein';
+  document.getElementById('c4-flip').style.color=flip?cv('--a5'):'';
+}
+
+/* ── Sim / Redraw ────────────────────────────────────────────── */
+function runSim(){
+  ST.data=genData(ST.seed,ST.g00,ST.g10,ST.tau0,ST.sig,ST.J,ST.nj);
+  ST.cpFit=fitCP(ST.data);ST.npFit=fitNP(ST.data);ST.ppFit=fitPP(ST.data,ST.npFit);
+  document.getElementById('seed-info').textContent='Seed: '+ST.seed;
+  updMod1UI();redrawActive();
+}
+function redrawActive(){
+  const m=ST.activeModule;
+  if(m===1)drawMod1();else if(m===2)drawMod2();else if(m===3)drawMod3();else drawMod4();
+}
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+function showMod(n){
+  document.querySelectorAll('.mod-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mod-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('mod-'+n).classList.add('active');
+  document.getElementById('tab-'+n).classList.add('active');
+  ST.activeModule=n;redrawActive();
+}
+
+/* ── Pooling ─────────────────────────────────────────────────── */
+function togglePool(m){
+  const k='pool'+m.toUpperCase();ST[k]=!ST[k];
+  document.getElementById('pool-'+m).classList.toggle('active',ST[k]);
+  drawMod1();
+}
+
+/* ── Scenarios ───────────────────────────────────────────────── */
+function setScenario(n){
+  document.querySelectorAll('.scen-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('scen-'+n)&&document.getElementById('scen-'+n).classList.add('active');
+  if(n==='standard'){ST.g00=50;ST.g10=3;ST.tau0=8;ST.sig=8;ST.nj=10;}
+  else if(n==='hohe-icc'){ST.tau0=18;ST.sig=4;ST.nj=10;}
+  else if(n==='kleine-gruppen'){ST.nj=4;ST.tau0=8;ST.sig=8;}
+  else if(n==='simpson'){showMod(4);setSimpsonScen('stark');return;}
+  runSim();
+}
+function setSimpsonScen(n){
+  document.querySelectorAll('[id^="simp-"]').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('simp-'+n);if(el)el.classList.add('active');
+  if(n==='mild'){ST.bw=3;ST.bb=-3;ST.xoff=5;}
+  else if(n==='stark'){ST.bw=3;ST.bb=-6;ST.xoff=7;}
+  else if(n==='pos'){ST.bw=3;ST.bb=2;ST.xoff=5;}
+  ['bw','bb','xoff'].forEach(k=>{
+    const sl=document.getElementById('sl-'+k);if(sl)sl.value=ST[k];
+    const vl=document.getElementById('val-'+k);if(vl)vl.textContent=ST[k].toFixed(1);
+  });
+  drawMod4();
+}
+
+/* ── Sliders ─────────────────────────────────────────────────── */
+function updTau0(v){ST.tau0_m2=+v;document.getElementById('val-tau0').textContent=(+v).toFixed(1);drawMod2();}
+function updSig(v){ST.sig_m2=+v;document.getElementById('val-sig').textContent=(+v).toFixed(1);drawMod2();}
+function updNj(v){ST.nj_m2=+v;document.getElementById('val-nj').textContent=v;drawMod2();}
+function updTau1(v){ST.tau1=+v;document.getElementById('val-tau1').textContent=(+v).toFixed(1);drawMod3();}
+function updRho(v){ST.rho=+v;document.getElementById('val-rho').textContent=(+v).toFixed(2);drawMod3();}
+function updG10(v){ST.g10_m3=+v;document.getElementById('val-g10-mod3').textContent=(+v).toFixed(1);drawMod3();}
+function updBw(v){ST.bw=+v;document.getElementById('val-bw').textContent=(+v).toFixed(1);drawMod4();}
+function updBb(v){ST.bb=+v;document.getElementById('val-bb').textContent=(+v).toFixed(1);drawMod4();}
+function updXoff(v){ST.xoff=+v;document.getElementById('val-xoff').textContent=(+v).toFixed(1);drawMod4();}
+
+/* ── Utils ───────────────────────────────────────────────────── */
+function neueDaten(){ST.seed=Math.floor(Math.random()*99999)+1;runSim();}
+function toggleAcc(btn){const b=btn.nextElementSibling;const o=b.classList.toggle('open');btn.classList.toggle('open',o);}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function closeModalOuter(e,id){if(e.target===e.currentTarget)closeModal(id);}
+function toggleTheme(){
+  const ct=document.documentElement.getAttribute('data-theme')||'dark';
+  const nt=ct==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',nt);
+  localStorage.setItem('btl-theme',nt);
+  document.getElementById('btn-theme').textContent=nt==='dark'?'☀ Hell':'🌙 Dunkel';
+  redrawActive();
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded',function(){
+  ST.tau0_m2=ST.tau0;ST.sig_m2=ST.sig;ST.nj_m2=ST.nj;ST.g10_m3=ST.g10;
+  runSim();
+});
+</script>
+</body>
+</html>
