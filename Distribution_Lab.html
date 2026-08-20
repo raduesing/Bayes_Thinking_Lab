@@ -16,12 +16,14 @@
 html{font-size:18px}
 :root{
   --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;
-  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#6E2646;
+  --density-color:#0e7c7b;
   --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--header-h:180px;
 }
 [data-theme="dark"]{
   --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;
-  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#812C52;
+  --density-color:#2bc7c4;
   --grid:#1e242e;--panel:#171d28;--border:#2a3040;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -460,6 +462,12 @@ let X_FIXED = false;
 let FIXED_XRANGE = null;
 
 function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function darken(hex,amt){
+  hex=hex.replace('#','');
+  const r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+  const f=v=>Math.max(0,Math.round(v*(1-amt))).toString(16).padStart(2,'0');
+  return '#'+f(r)+f(g)+f(b);
+}
 
 // ── Math ───────────────────────────────────────────────────────
 function logGamma(z){
@@ -1343,7 +1351,8 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   }
   ctx.lineTo(toX(xs[N]), toY(0));
   ctx.closePath();
-  const a6=cv('--a6'); ctx.fillStyle=a6+'40'; ctx.fill();
+  const a6=cv('--density-color'); ctx.fillStyle=a6+'40'; ctx.fill();
+  const a6dark=darken(a6,.35);
   // PDF line
   ctx.beginPath();
   let started=false;
@@ -1353,7 +1362,7 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const px=toX(xs[i]), py=toY(Math.min(yc,ymax*1.5));
     started?ctx.lineTo(px,py):(ctx.moveTo(px,py),started=true);
   }
-  ctx.strokeStyle=a6; ctx.lineWidth=2; ctx.stroke();
+  ctx.strokeStyle=a6dark; ctx.lineWidth=2; ctx.stroke();
 
   // Compute moments
   const mean=d.meanFn?d.meanFn(cp):NaN;
@@ -1439,13 +1448,13 @@ function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
 
   // Bars
   const bW=Math.max(2,(Wp/(khi-klo+1))*0.65);
-  const a6=cv('--a6');
+  const a6=cv('--density-color'); const a6dark=darken(a6,.35);
   pmfs.forEach((pmf,i)=>{
     const cx=toX(ks[i]);
     const bh=pmf/ymax*Hp;
     ctx.fillStyle=a6+'55';
     ctx.fillRect(cx-bW/2, H-m.b-bh, bW, bh);
-    ctx.strokeStyle=a6; ctx.lineWidth=1.5;
+    ctx.strokeStyle=a6dark; ctx.lineWidth=1.5;
     ctx.strokeRect(cx-bW/2, H-m.b-bh, bW, bh);
   });
 
@@ -1536,7 +1545,7 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   ctx.strokeStyle=DARK?'#3a5060':'#c5bba8'; ctx.lineWidth=1.2;
   ctx.strokeRect(m.l,m.t,Wp,Hp);
 
-  const a6=cv('--a6');
+  const a6=cv('--density-color'); const a6dark=darken(a6,.35);
   // Draw point masses as impulse bars
   const impPx=Math.max(6, (toX(impulseW)-toX(0)));
   Object.entries(masses).forEach(([xVal, prob])=>{
@@ -1570,7 +1579,7 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const px=toX(xs[i]), py=toY(Math.min(yc,ymax*1.5));
     started?ctx.lineTo(px,py):(ctx.moveTo(px,py),started=true);
   }
-  ctx.strokeStyle=a6; ctx.lineWidth=2; ctx.stroke();
+  ctx.strokeStyle=a6dark; ctx.lineWidth=2; ctx.stroke();
 
   // Moments
   const mean=d.meanFn(PARAMS);
