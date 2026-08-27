@@ -3263,12 +3263,20 @@ function parseCSV(text,name) {
   const sep=lines[0].includes(';')?';':lines[0].includes('\t')?'\t':',';
   const hdrs=lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/"/g,''));
   if(!hdrs.includes('y')){uploadMsg(`Fehler: Spalte "Y" fehlt. Gefunden: ${hdrs.join(', ')}`,true);return;}
+  // y and any x*-columns are paired positionally downstream (uploadedData.y[j] / .x[j] = same row j) —
+  // a row missing just one of them must be dropped entirely, not just from that one column,
+  // otherwise later rows silently shift out of alignment between columns.
+  const numericHdrs = hdrs.filter(h=>h==='y'||/^x\d*$/.test(h));
   const cols={}; hdrs.forEach(h=>cols[h]=[]);
   const rawCols={}; hdrs.forEach(h=>rawCols[h]=[]);
+  let skippedRows=0;
   lines.slice(1).forEach(row=>{
     const vs=row.split(sep);
+    const raws=hdrs.map((h,i)=>(vs[i]||'').trim().replace(/"/g,''));
+    const rowOK=numericHdrs.every(h=>isFinite(parseFloat(raws[hdrs.indexOf(h)])));
+    if(!rowOK){ skippedRows++; return; }
     hdrs.forEach((h,i)=>{
-      const raw=(vs[i]||'').trim().replace(/"/g,'');
+      const raw=raws[i];
       rawCols[h].push(raw);
       const v=parseFloat(raw);if(isFinite(v))cols[h].push(v);
     });
@@ -3294,7 +3302,8 @@ function parseCSV(text,name) {
       groupNote = ` · group: ${uniqueGroups} Gruppen erkannt → nGroups gesetzt`;
     }
   }
-  uploadMsg(`✓ ${name}: ${cols.y.length} Zeilen · Spalten: ${hdrs.join(', ')}${groupNote}`);
+  const skipNote = skippedRows ? ` · ${skippedRows} Zeile${skippedRows>1?'n':''} mit fehlenden Werten übersprungen` : '';
+  uploadMsg(`✓ ${name}: ${cols.y.length} Zeilen · Spalten: ${hdrs.join(', ')}${groupNote}${skipNote}`);
   const btn=document.getElementById('del-data-btn'); if(btn) btn.style.display='block';
   // Full re-render so the ovl panel appears immediately after pp-a
   if(lastSimA) render(); else requestAnimationFrame(drawAllPlots);
