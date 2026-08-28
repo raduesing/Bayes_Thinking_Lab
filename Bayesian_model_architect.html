@@ -118,6 +118,8 @@ body{font-family:'Fraunces',serif;background:var(--bg);color:var(--ink);
 .sl-r{display:flex;align-items:center;gap:.45rem;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.18rem}
 .sl-r label{color:var(--ink2);min-width:1.2rem;font-size:.75rem}
 .sl-r span.sv{min-width:2.3rem;text-align:right;color:var(--a2);font-size:.75rem;font-weight:500}
+.sv-hint{text-align:right;color:var(--ink2);font-size:.62rem;font-family:'DM Mono',monospace;
+  margin:-.08rem 0 .26rem 0}
 input[type=range]{flex:1;height:4px;cursor:pointer;background:var(--grid);appearance:none;outline:none}
 input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;background:var(--a2);border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .detail-g{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.3rem;margin-bottom:.4rem}
@@ -158,6 +160,11 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 .cv-bar{background:var(--paper);border-bottom:1px solid var(--border);
         padding:.35rem .85rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .cv-t{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);letter-spacing:.04em;text-transform:uppercase}
+.mono-tgl{font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);
+  border:1px solid var(--border);color:var(--ink2);padding:.15rem .55rem;cursor:pointer;
+  transition:all .15s;margin-left:.7rem;margin-right:auto}
+.mono-tgl:hover{border-color:var(--a2);color:var(--a2)}
+.mono-tgl.act{background:var(--a2);color:var(--paper);border-color:var(--a2)}
 .legend{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
 .li{display:flex;align-items:center;gap:.2rem}
 .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -324,21 +331,20 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 
   <div class="cv-bar">
     <span class="cv-t">Modelldiagramm (Kruschke-Notation)</span>
+    <button class="mono-tgl" id="btn-mono" onclick="toggleMono()" title="Zwischen Rollenfarben und einfarbiger Original-Darstellung wechseln">◐ Monochrom</button>
     <div class="legend">
       <span class="li"><span class="ld" style="background:var(--a2)"></span>α</span>
       <span class="li"><span class="ld" style="background:var(--a3)"></span>β</span>
       <span class="li"><span class="ld" style="background:var(--a5)"></span>σ</span>
       <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
       <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
-      <span class="li"><span class="lr" style="color:var(--ink2)"></span>Plate</span>
-      <span class="li" style="opacity:.55">○ latent &nbsp; □ beobachtet</span>
+      <span class="li" style="opacity:.55">"~" = stochastische Ziehung &nbsp; "=" in der Formel = deterministisch</span>
     </div>
   </div>
 
   <div id="dw">
     <svg id="svg" xmlns="http://www.w3.org/2000/svg">
       <defs id="defs"></defs>
-      <g id="g-plates"></g>
       <g id="g-edges"></g>
       <g id="g-nodes"></g>
     </svg>
@@ -435,7 +441,7 @@ MathJax = {
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
-let DARK=true, DET='medium', ACTIVE=null, SHOW_EX=true;
+let DARK=true, DET='medium', ACTIVE=null, SHOW_EX=true, MONO=localStorage.getItem('btl-arch-mono')==='1';
 let _t=null, GSTEP=0, GOPEN=true;
 
 const M = {
@@ -788,6 +794,11 @@ const C={
   nu:  ()=>cv('--a6'), re:  ()=>cv('--a4'), data:()=>cv('--a1'),
   ink2:()=>cv('--ink2'), ink:()=>cv('--ink'), paper:()=>cv('--paper'), grid:()=>cv('--grid'),
 };
+// Kruschke-Original nutzt nur einen Blauton für Kurven/Unterklammern und schwarze Pfeile/Text —
+// im Monochrom-Modus ersetzt curveCol() die Rollenfarbe, edgeCol() bleibt bei Ink statt Rollenfarbe.
+const KBLUE=()=> DARK ? '#6fb3e0' : '#3f7ca8';
+function curveCol(colKey){ return MONO ? KBLUE() : (C[colKey]?C[colKey]():C.ink2()); }
+function edgeCol(colKey){ return MONO ? C.ink() : (C[colKey]?C[colKey]():C.ink2()); }
 
 // ═══════════════════════════════════════════════════════
 //  PRIOR STRING
@@ -905,8 +916,8 @@ function se(tag,a={},txt){
 // ═══════════════════════════════════════════════════════
 const R=42, OR=38;
 
-// ── Approx monospace char width at 13px ──
-const _CW=8.4;
+// ── Approx monospace char width at the 17.5px formula font-size ──
+const _CW=10.9;
 
 // Returns array of {text, nodeId} for formula terms
 function buildFormulaTerms(){
@@ -964,7 +975,7 @@ function buildLayout(){
   const cx=W/2;
   const K=M.preds.length, isML=M.ml;
   const hS=hasSig(), hN=hasNu();
-  const nodes={}, edges=[], plates=[];
+  const nodes={}, edges=[];
 
   // ── Parameter nodes ──────────────────────────────────
   const pNodes=[];
@@ -980,7 +991,7 @@ function buildLayout(){
   const nP=pNodes.length;
   const pY=220;
   const usableW=W*0.82;
-  const sp=nP<=1?0:Math.min(170,usableW/(nP-1));
+  const sp=nP<=1?0:Math.min(205,usableW/(nP-1));
   const px0=cx-(nP-1)*sp/2;
   pNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
 
@@ -1000,7 +1011,7 @@ function buildLayout(){
     const hasSlope=M.ret==='slope'&&K>0;
     const uX=hasSlope?cx-55:cx, vX=cx+55;
     // sigRY well below pY nodes (pY+R=262) so pl_sigma labels (sigRY-82) don't overlap
-    const sigRY=pY+165; uY=sigRY+140; // τ₀/τ₁ at 385, u₀ⱼ/u₁ⱼ at 525
+    const sigRY=pY+172; uY=sigRY+158;
 
     // τ₀: hyperprior for u₀ⱼ
     nodes['sigma_u']={id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
@@ -1017,15 +1028,10 @@ function buildLayout(){
       nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
       edges.push({fr:'sigma_v',to:'v_j',col:'re'});
     }
-    // Group plate: τ nodes at top, u nodes at bottom — uY+65 must stay below detY-68
-    const plateMinX=(hasSlope?Math.min(uX,vX):uX)-85;
-    const plateW=hasSlope?Math.abs(vX-uX)+170:170;
-    plates.push({id:'grp',lbl:`j = 1…J  (${M.gv})`,x:plateMinX,y:sigRY-55,w:plateW,h:uY-sigRY+110,col:'re',dash:true});
   }
 
   // ── Deterministic formula node ────────────────────────
-  // detY: uY+155 for ML → obs plate top (detY-68)=uY+87, group plate bottom (sigRY-55+h)=uY+55 → 32px gap ✓
-  const detY=isML?uY+155:370;
+  const detY=isML?uY+173:393;
   const terms=buildFormulaTerms();
   const fw=Math.max(formulaWidth(terms)+56, 180);
   const boxHalfW=fw/2;
@@ -1045,14 +1051,8 @@ function buildLayout(){
     x:cx, y:detY};
 
   // ── Data node ─────────────────────────────────────────
-  const dataY=detY+140;
+  const dataY=detY+160;
   nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
-
-  // ── Observation plate ─────────────────────────────────
-  if(DET!=='simple'){
-    const pm=Math.max(fw/2+30, 90);
-    plates.push({id:'obs',lbl:isML?'i = 1…Nⱼ':'i = 1…N',x:cx-pm,y:detY-68,w:pm*2,h:240,col:'data',dash:false});
-  }
 
   // ── Covariate boxes ────────────────────────────────────
   if(DET==='full'){
@@ -1081,11 +1081,11 @@ function buildLayout(){
       edges.push({fr:'v_j',to:'det',col:'re',termX:cx+vRel});
     }
   }
-  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-55});
-  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 55});
+  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-70});
+  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 70});
   edges.push({fr:'det',to:'y',col:'data'});
 
-  return {nodes,edges,plates,W,H};
+  return {nodes,edges,W,H};
 }
 
 const SUB=['₁','₂','₃','₄'];
@@ -1116,18 +1116,17 @@ function sampStr(){
 // ═══════════════════════════════════════════════════════
 function render(){
   const defs=document.getElementById('defs');
-  const gP=document.getElementById('g-plates');
   const gE=document.getElementById('g-edges');
   const gN=document.getElementById('g-nodes');
-  defs.innerHTML='';gP.innerHTML='';gE.innerHTML='';gN.innerHTML='';
+  defs.innerHTML='';gE.innerHTML='';gN.innerHTML='';
 
   ['int','beta','sig','nu','re','data','ink2'].forEach(c=>{
     const m=se('marker',{id:`a-${c}`,markerWidth:'7',markerHeight:'7',refX:'5.5',refY:'3.5',orient:'auto'});
-    m.appendChild(se('path',{d:'M0,0 L0,7 L7,3.5 z',fill:C[c]?C[c]():C.ink2()}));
+    m.appendChild(se('path',{d:'M0,0 L0,7 L7,3.5 z',fill:edgeCol(c)}));
     defs.appendChild(m);
     // Softer arrow for prior labels
     const ms=se('marker',{id:`as-${c}`,markerWidth:'5',markerHeight:'5',refX:'4',refY:'2.5',orient:'auto'});
-    ms.appendChild(se('path',{d:'M0,0 L0,5 L5,2.5 z',fill:C[c]?C[c]():C.ink2()}));
+    ms.appendChild(se('path',{d:'M0,0 L0,5 L5,2.5 z',fill:edgeCol(c)}));
     defs.appendChild(ms);
   });
 
@@ -1139,22 +1138,12 @@ function render(){
   const neededH=yNode?yNode.y+120:D.H;
   svgEl.setAttribute('height',Math.max(neededH,dwH));
 
-  D.plates.forEach(p=>drawPlate(gP,p));
   D.edges.forEach(e=>{ const a=D.nodes[e.fr],b=D.nodes[e.to]; if(a&&b) drawEdge(gE,a,b,e); });
   Object.values(D.nodes).forEach(n=>drawNode(gN,n));
 }
 
-function drawPlate(g,p){
-  const c=p.col==='data'?C.data():p.col==='re'?C.re():C.ink2();
-  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:c,'fill-opacity':'0.04',stroke:'none'}));
-  g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:'none',stroke:c,
-    'stroke-width':'1.5','stroke-dasharray':p.dash?'7,4':'6,5',opacity:'0.5'}));
-  g.appendChild(se('text',{x:p.x+p.w-10,y:p.y+p.h-8,'text-anchor':'end',fill:c,
-    'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.75'},p.lbl));
-}
-
 function drawEdge(g,a,b,edge){
-  const c=C[edge.col]?C[edge.col]():C.ink2();
+  const c=edgeCol(edge.col);
   if(a.type==='plbl') return; // prior info is now inside drawStoch
   const rA=a.type==='det'?8:a.type==='obs'?23:32;
   const rB=b.type==='det'?8:b.type==='obs'?23:22;
@@ -1172,23 +1161,49 @@ function drawEdge(g,a,b,edge){
   // End point: for term-targeted edges, land exactly at termX
   const x2=edge.termX!=null?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
   const y2=edge.termX!=null?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
-  // Control point with gentle curve
-  const midX=((+x1+ +x2)/2).toFixed(1);
-  const midY=((+y1+ +y2)/2).toFixed(1);
-  const cx1=(+x1+(edge.crv||0)*0.3).toFixed(1);
+  // Control point with gentle curve. The start control point (cx1) carries the full
+  // bulge so the path can sweep around neighboring nodes; the end control point (cx2)
+  // only gets a fraction of it, so the curve always arrives at its target close to
+  // perpendicular — otherwise a strongly-curved edge (e.g. σ→y) lands with a visibly
+  // tilted arrowhead, since SVG's marker orient="auto" follows the exact local tangent.
+  const cx1=(+x1+(edge.crv||0)*0.35).toFixed(1);
   const cy1=(+y1+(+y2- +y1)*0.3).toFixed(1);
-  const cx2=(+x2+(edge.crv||0)*0.3).toFixed(1);
+  const cx2=(+x2+(edge.crv||0)*0.06).toFixed(1);
   const cy2=(+y2-(+y2- +y1)*0.3).toFixed(1);
   const d=`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
   g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.2':'1.8',
     fill:'none','stroke-dasharray':edge.dash?'5,2.5':'',
     'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
-  // Kruschke-style "~" label on sampling arrows
-  if(!edge.dash&&b.type==='obs'&&a.type!=='cov'){
-    const tx=((+x1+ +x2)/2+8).toFixed(1), ty=((+y1+ +y2)/2-4).toFixed(1);
-    g.appendChild(se('text',{x:tx,y:ty,'text-anchor':'middle',
-      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12',opacity:'0.6'},'~'));
-  }
+  // Kruschke/McElreath notation: "~" marks every stochastic relationship — a parameter
+  // drawn from its prior curve, a random effect drawn from its hyperprior, or the
+  // likelihood generating the observed data. There is no separate "=" arrow: the one
+  // deterministic step (formula → μᵢ) is already written as a literal "=" inside the
+  // formula text itself, so no edge in this diagram is ever labeled "=".
+  // Label sits at the curve's actual midpoint (t=0.5 on the cubic bezier, not the
+  // straight-line midpoint) and is offset perpendicular to the local tangent, so it
+  // never sits on top of the stroke regardless of how much the edge curves.
+  if(edge.dash||a.type==='cov') return;
+  const bx=(+x1+3*+cx1+3*+cx2+ +x2)/8, by=(+y1+3*+cy1+3*+cy2+ +y2)/8;
+  const tvx=(+x2+ +cx2- +cx1- +x1), tvy=(+y2+ +cy2- +cy1- +y1);
+  const tlen=Math.sqrt(tvx*tvx+tvy*tvy)||1;
+  let nx=-tvy/tlen, ny=tvx/tlen;
+  if(nx<0){ nx=-nx; ny=-ny; } // keep labels consistently on the same side
+  // Index suffix: "j" on hyperprior→random-effect draws, "i" (or "i,j") only on the
+  // final likelihood→data draw — σ/ν feed the likelihood but aren't themselves
+  // redrawn per observation, so they get a plain "~".
+  let idx='';
+  const isDetToY=b.type==='obs'&&a.type==='det';
+  if(b.id==='u_j'||b.id==='v_j') idx=' j';
+  else if(isDetToY) idx=M.ml?' i,j':' i';
+  // Offset large enough to clear the label's own bounding box (not just its center) —
+  // longer labels ("~ i,j") need more clearance than short ones ("~"). The det→y edge
+  // gets extra clearance: when σ/ν also feed y, their curved approach converges close
+  // to det→y's own (nearly straight) path right near the target, close enough that a
+  // bigger crv on the σ/ν side doesn't help — only pushing det→y's own label out further does.
+  const labelOff=25+(1+idx.length)*2.7+(isDetToY?16:0);
+  const tx=(bx+nx*labelOff).toFixed(1), ty=(by+ny*labelOff).toFixed(1);
+  g.appendChild(se('text',{x:tx,y:ty,'text-anchor':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'15',opacity:'0.75'},'~'+idx));
 }
 
 function drawNode(g,node){
@@ -1207,71 +1222,72 @@ function drawPLbl(g,node){
 }
 
 function drawStoch(g,node){
-  const c=C[node.col]?C[node.col]():C.ink2();
+  const c=curveCol(node.col);
+  const lc=MONO?C.ink():c; // symbol/label text: black in mono mode, matches the book
   const isAct=ACTIVE===node.id;
   const pr=getPr(node);
   const f=pr?.fam||'normal';
   const isUniform=f==='uniform';
-  const cW=70, cH=30;       // curve canvas width/height
+  const cW=96, cH=41;       // curve canvas width/height
   const cL=-cW/2;           // left edge
-  const cTop=-14;           // curve top (relative to node center)
-  const cBase=cTop+cH;      // baseline y = +16
+  const cTop=-19;           // curve top (relative to node center)
+  const cBase=cTop+cH;      // baseline y
 
   // ── Active glow ──────────────────────────────────────
   if(isAct){
-    g.appendChild(se('rect',{x:String(cL-7),y:String(cTop-32),
-      width:String(cW+14),height:String(cH+62),rx:'7',
-      fill:'none',stroke:c,'stroke-width':'1.5',opacity:'0.22'}));
+    g.appendChild(se('rect',{x:String(cL-9),y:String(cTop-41),
+      width:String(cW+18),height:String(cH+80),rx:'9',
+      fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
   }
 
   // ── Distribution shape ───────────────────────────────
   if(isUniform){
     g.appendChild(se('rect',{x:String(cL),y:String(cTop),
       width:String(cW),height:String(cH),rx:'2',
-      fill:c,'fill-opacity':'0.2',stroke:c,'stroke-width':'2'}));
+      fill:c,'fill-opacity':'0.2',stroke:c,'stroke-width':'2.5'}));
     if(pr&&DET!=='simple'){
       const lo=parseFloat(pr.p1??0).toFixed(0),hi=parseFloat(pr.p2??1).toFixed(0);
-      g.appendChild(se('text',{x:String(cL+5),y:String(cTop-3),'text-anchor':'start',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.82'},`L=${lo}`));
-      g.appendChild(se('text',{x:String(cW/2-5),y:String(cTop-3),'text-anchor':'end',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.82'},`H=${hi}`));
+      g.appendChild(se('text',{x:String(cL+5),y:String(cTop-5),'text-anchor':'start',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.82'},`L=${lo}`));
+      g.appendChild(se('text',{x:String(cW/2-5),y:String(cTop-5),'text-anchor':'end',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.82'},`H=${hi}`));
     }
   } else {
     const {stroke,fill}=kruschkePath(pr,cW,cH);
     const tx=`translate(${cL},${cTop})`;
     g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',
       stroke:'none',transform:tx}));
-    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2',fill:'none',transform:tx}));
+    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.6',fill:'none',transform:tx}));
     if(pr&&DET!=='simple'){
-      g.appendChild(se('text',{x:'0',y:String(cTop-20),'text-anchor':'middle',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'8.5',opacity:'0.85'},prS(pr)));
+      g.appendChild(se('text',{x:'0',y:String(cTop-26),'text-anchor':'middle',
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.85'},prS(pr)));
     }
   }
 
   // ── Baseline ─────────────────────────────────────────
   g.appendChild(se('line',{x1:String(cL),y1:String(cBase),
     x2:String(cW/2),y2:String(cBase),
-    stroke:c,'stroke-width':'1.5',opacity:'0.8'}));
+    stroke:c,'stroke-width':'1.8',opacity:'0.8'}));
 
   // ── Parameter name (between hyperparams and curve top) ──
-  const fs=node.lbl.length>4?'11':node.lbl.length>2?'13':'17';
-  g.appendChild(se('text',{x:'0',y:String(cTop-8),'text-anchor':'middle',
+  const fs=node.lbl.length>4?'15':node.lbl.length>2?'17':'23';
+  g.appendChild(se('text',{x:'0',y:String(cTop-10),'text-anchor':'middle',
     'dominant-baseline':'middle',
-    fill:c,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'700'},node.lbl));
+    fill:lc,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'700'},node.lbl));
 
-  // ── Family label below baseline (italic, Kruschke-style) ──
+  // ── Family label below baseline (underlined, Kruschke-style) ──
   if(DET!=='simple'){
     const famLbl={normal:'normal',student_t:'student-t',exponential:'exp',
       half_normal:'half-normal',gamma:'gamma',beta:'beta',uniform:'uniform'}[f]||f;
-    g.appendChild(se('text',{x:'0',y:String(cBase+14),'text-anchor':'middle',
-      fill:c,'font-family':"'DM Mono',monospace",'font-size':'9.5','font-style':'italic',
-      opacity:'0.9'},famLbl));
+    g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
+      'text-decoration':'underline',opacity:'0.9'},famLbl));
   }
 
   // ── Optional subscript ───────────────────────────────
   if(DET==='full'&&node.sub){
-    g.appendChild(se('text',{x:'0',y:String(cBase+27),'text-anchor':'middle',
-      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'9',opacity:'0.5'},node.sub));
+    g.appendChild(se('text',{x:'0',y:String(cBase+35),'text-anchor':'middle',
+      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.5'},node.sub));
   }
 }
 
@@ -1289,73 +1305,103 @@ function getPr(node){
 }
 
 function drawDet(g,node){
-  const c=C.ink2(); const isAct=ACTIVE===node.id;
+  const isAct=ACTIVE===node.id;
   const terms=node.formulaTerms||[];
   const bHW=node.boxHalfW||100;
-  const relTCs=node.relTermCenters||{};
 
   if(DET==='simple'){
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:'9',fill:c,opacity:isAct?'0.85':'0.55'}));
-    g.appendChild(se('text',{x:'15',y:'1','dominant-baseline':'middle',fill:c,
-      'font-family':"'DM Mono',monospace",'font-size':'13',opacity:'0.85'},node.lbl));
+    const c=MONO?C.ink():C.ink2();
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'11',fill:c,opacity:isAct?'0.85':'0.55'}));
+    g.appendChild(se('text',{x:'19',y:'1','dominant-baseline':'middle',fill:c,
+      'font-family':"'DM Mono',monospace",'font-size':'17',opacity:'0.85'},node.lbl));
     return;
   }
 
-  // ── Formula box (all coords relative to node center) ──
-  const bL=-bHW, bT=-20, bW=bHW*2, bH=40;
-
-  g.appendChild(se('rect',{x:bL,y:bT,width:bW,height:bH,rx:'6',
-    fill:C.paper(),'fill-opacity':'0.9',stroke:c,'stroke-width':'1.2','stroke-opacity':'0.4'}));
-  if(isAct) g.appendChild(se('rect',{x:bL-3,y:bT-3,width:bW+6,height:bH+6,rx:'8',
-    fill:'none',stroke:c,'stroke-width':'1.5',opacity:'0.2'}));
-
-  // Render terms — positions relative to node center
-  let rx=-bHW+28;
-  terms.forEach(t=>{
-    let fill=c, fw='400', opacity='0.75';
-    if(t.nodeId==='alpha'){fill=C.int();fw='700';opacity='0.98';}
-    else if(t.nodeId&&t.nodeId.startsWith('b')){fill=C.beta();fw='700';opacity='0.98';}
-    else if(t.nodeId==='sigma'){fill=C.sig();fw='700';opacity='0.98';}
-    g.appendChild(se('text',{x:rx.toFixed(1),y:'6','dominant-baseline':'middle',
-      fill,'font-family':"'DM Mono',monospace",'font-size':'13.5','font-weight':fw,opacity},t.text));
+  // Kruschke-style: plain text, no box. Positions relative to node center.
+  let rx=-bHW+28, firstTermX=null, lastTermEnd=null;
+  terms.forEach((t,i)=>{
+    let fill=C.ink(), fw='400', opacity=isAct?'1':'0.9';
+    if(!MONO){
+      if(t.nodeId==='alpha'){fill=C.int();fw='700';opacity='0.98';}
+      else if(t.nodeId&&t.nodeId.startsWith('b')){fill=C.beta();fw='700';opacity='0.98';}
+      else if(t.nodeId==='sigma'){fill=C.sig();fw='700';opacity='0.98';}
+    } else if(t.nodeId){ fw='700'; }
+    g.appendChild(se('text',{x:rx.toFixed(1),y:'8','dominant-baseline':'middle',
+      fill,'font-family':"'DM Mono',monospace",'font-size':'17.5','font-weight':fw,opacity},t.text));
+    if(i>0 && firstTermX===null) firstTermX=rx; // skip the leading "μᵢ = " prefix term
     rx+=t.text.length*_CW;
+    lastTermEnd=rx;
   });
 
-  // Dot indicator above-left of box
-  const dotX=(-bHW+14).toFixed(1);
-  g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'7',fill:c,opacity:isAct?'0.85':'0.55'}));
-  if(isAct) g.appendChild(se('circle',{cx:dotX,cy:'-30',r:'11',fill:'none',stroke:c,'stroke-width':'1.1',opacity:'0.22'}));
-  g.appendChild(se('line',{x1:dotX,y1:'-22',x2:dotX,y2:bT.toString(),stroke:c,'stroke-width':'1.1',opacity:'0.35'}));
+  // Underbrace (⏟) beneath the right-hand expression — replaces the old box
+  if(firstTermX!=null){
+    const bc=MONO?KBLUE():C.ink2();
+    const by=22, x0=firstTermX-2, x1=lastTermEnd-2;
+    const dpath=`M${x0.toFixed(1)},${by} Q${((x0+x1)/2).toFixed(1)},${(by+9).toFixed(1)} ${x1.toFixed(1)},${by}`;
+    if(isAct) g.appendChild(se('path',{d:dpath,stroke:bc,'stroke-width':'5','stroke-linecap':'round',fill:'none',opacity:'0.18'}));
+    g.appendChild(se('path',{d:dpath,stroke:bc,'stroke-width':'2',fill:'none',opacity:'0.85'}));
+  }
+}
+
+// Small discrete-distribution "icon" (bar pictogram) for the likelihood of count/binary outcomes
+function discreteIcon(fam,cW,cH){
+  const bars = fam==='bernoulli' ? [0.62,0.38] : [0.18,0.42,0.68,0.95,0.55,0.22,0.08];
+  const n=bars.length, gap=4, bw=(cW-gap*(n-1))/n;
+  return bars.map((h,i)=>({x:-cW/2+i*(bw+gap), y:cH/2-h*cH, w:bw, h:h*cH}));
 }
 
 function drawObs(g,node){
-  const c=C.data(); const isAct=ACTIVE===node.id;
+  const isAct=ACTIVE===node.id;
   const lbl=node.lbl||'y';
-  // Width adapts to label length
-  const rw=Math.max(70, lbl.length*14+32), rh=46, rx2=8;
-  const x0=-rw/2, y0=-rh/2;
-  // Shadow
-  g.appendChild(se('rect',{x:x0+3,y:y0+4,width:rw,height:rh,rx:rx2,fill:'rgba(0,0,0,0.14)'}));
-  // Fill
-  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:c,opacity:'0.12'}));
-  // Border (double-line effect: outer thin + inner)
-  g.appendChild(se('rect',{x:x0,y:y0,width:rw,height:rh,rx:rx2,fill:'none',stroke:c,'stroke-width':isAct?'3.5':'3'}));
-  g.appendChild(se('rect',{x:x0+6,y:y0+6,width:rw-12,height:rh-12,rx:Math.max(2,rx2-4),fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.4'}));
-  if(isAct) g.appendChild(se('rect',{x:x0-4,y:y0-4,width:rw+8,height:rh+8,rx:rx2+3,fill:'none',stroke:c,'stroke-width':'1.2',opacity:'0.2'}));
-  // Label
-  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'Fraunces',serif",'font-size':'18','font-weight':'600'},lbl));
-  if(DET!=='simple'&&node.sub){
-    g.appendChild(se('text',{x:'0',y:rh/2+14,'text-anchor':'middle',
-      fill:c,'font-family':"'DM Mono',monospace",'font-size':'10',opacity:'0.65'},node.sub));
+
+  if(DET==='simple'){
+    const c=curveCol('data'), lc=MONO?C.ink():c;
+    g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+      fill:lc,'font-family':"'Fraunces',serif",'font-size':'23','font-weight':'600'},lbl));
+    return;
   }
+
+  // Kruschke-style: y drawn like a stochastic node — no box. Likelihood curve/bars,
+  // underlined family name, plain italic "yᵢ" text below (the datum is just a label).
+  const c=curveCol('data'), lc=MONO?C.ink():c;
+  const cW=90, cH=39, cTop=-19, cBase=cTop+cH;
+  const f=M.fam;
+
+  if(isAct){
+    g.appendChild(se('rect',{x:String(-cW/2-9),y:String(cTop-20),width:String(cW+18),height:String(cH+62),
+      rx:'9',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
+  }
+
+  if(f==='bernoulli'||f==='poisson'){
+    discreteIcon(f,cW,cH).forEach(r=>{
+      g.appendChild(se('rect',{x:r.x.toFixed(1),y:(cTop+r.y).toFixed(1),
+        width:r.w.toFixed(1),height:r.h.toFixed(1),fill:c,'fill-opacity':DARK?'0.28':'0.18',
+        stroke:c,'stroke-width':'1.5'}));
+    });
+  } else {
+    const pr=f==='student'?{fam:'student_t',sig:1}:f==='gamma'?{fam:'gamma',p1:2,p2:.5}:{fam:'normal',sig:1};
+    const {stroke,fill}=kruschkePath(pr,cW,cH);
+    const tx=`translate(${-cW/2},${cTop})`;
+    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',stroke:'none',transform:tx}));
+    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.6',fill:'none',transform:tx}));
+  }
+  g.appendChild(se('line',{x1:String(-cW/2),y1:String(cBase),x2:String(cW/2),y2:String(cBase),
+    stroke:c,'stroke-width':'1.8',opacity:'0.8'}));
+  if(DET!=='simple'){
+    const famLbl={normal:'normal',student:'student-t',bernoulli:'bernoulli',poisson:'poisson',gamma:'gamma'}[f]||f;
+    g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
+      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
+      'text-decoration':'underline',opacity:'0.9'},famLbl));
+  }
+  g.appendChild(se('text',{x:'0',y:String(cBase+41),'text-anchor':'middle',
+    fill:lc,'font-family':"'Fraunces',serif",'font-size':'20','font-style':'italic','font-weight':'600'},lbl+'ᵢ'));
 }
 
 function drawCov(g,node){
   const c=C.ink2();
-  g.appendChild(se('rect',{x:-19,y:-9,width:38,height:18,fill:c,opacity:'0.1',stroke:c,'stroke-width':'0.9',rx:'3'}));
+  g.appendChild(se('rect',{x:-22,y:-10,width:44,height:20,fill:c,opacity:'0.1',stroke:c,'stroke-width':'1',rx:'3'}));
   g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'11'},node.lbl));
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5'},node.lbl));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1449,28 +1495,38 @@ function buildPriorUI(){
   const isML=M.ml,hS=hasSig(),hN=hasNu();
   let html='';
 
-  function blk(cls,lbl,badgeCls,valStr,exTxt,sliders){
+  function blk(cls,lbl,badgeCls,valStr,exTxt,sliders,valId){
     return `<div class="prior-b pi-${cls}">
       <div class="prior-h" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'">
         <div class="prior-h-l">
           <span class="pbg pbg-${badgeCls}">${cls}</span>
           <span class="prior-lbl">${lbl}</span>
         </div>
-        <span class="prior-val">${valStr}</span>
+        <span class="prior-val"${valId?` id="${valId}"`:''}>${valStr}</span>
       </div>
       <div class="prior-exp">${exTxt}</div>
       ${sliders}
     </div>`;
   }
 
-  function sls(params){
-    return params.map(p=>`
+  // badgeUpd: JS expression (as a string) that recomputes the collapsed-header
+  // "prior-val" badge (e.g. "Normal(0, 2.5)") for THIS block, so slider drags can
+  // keep it live without rebuilding the DOM (see schedSlider() for why that matters).
+  function sls(params,valId,badgeUpd){
+    return params.map(p=>{
+      const badgeJs=badgeUpd?`;document.getElementById('${valId}').textContent=${badgeUpd}`:'';
+      // Hint goes on its own right-aligned line below the slider (not inline) — the
+      // 300px sidebar has no room for label+slider+value+hint side by side.
+      const hintDiv=p.hint?`<div class="sv-hint">${p.hint}</div>`:'';
+      const hintJs=p.hintFn?`;this.parentElement.nextElementSibling.textContent=${p.hintFn}`:'';
+      return `
       <div class="sl-r">
         <label>${p.l}</label>
         <input type="range" min="${p.mn}" max="${p.mx}" step="${p.st}" value="${p.v}"
-          oninput="${p.fn};sched()">
+          oninput="${p.fn}${hintJs}${badgeJs};schedSlider()">
         <span class="sv">${parseFloat(p.v).toFixed(p.dp||1)}</span>
-      </div>`).join('');
+      </div>${hintDiv}`;
+    }).join('');
   }
 
   // Alpha
@@ -1481,7 +1537,8 @@ function buildPriorUI(){
        fn:"M.pr.alpha.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
       {l:'σ',mn:0.1,mx:20,st:0.2,dp:1,v:M.pr.alpha.sig??2.5,
        fn:"M.pr.alpha.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
-    ])
+    ],'pv-int','prS(M.pr.alpha)'),
+    'pv-int'
   );
 
   // Per-predictor betas
@@ -1496,17 +1553,23 @@ function buildPriorUI(){
          fn:`M.preds[${i}].pr.mu=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
         {l:'σ',mn:0.1,mx:10,st:0.1,dp:1,v:p.pr.sig??2.5,
          fn:`M.preds[${i}].pr.sig=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)`},
-      ])
+      ],`pv-beta-${i}`,`prS(M.preds[${i}].pr)`),
+      `pv-beta-${i}`
     );
   });
 
-  // Sigma
+  // Sigma — the exponential rate λ is inversely related to E[σ]=1/λ, which feels
+  // backwards while dragging (bigger λ → narrower curve). Show the implied mean live
+  // next to the slider so the relationship is visible instead of just felt as "off".
   if(hS) html+=blk('sig','σ — Residualstreuung','sig',prS(M.pr.sigma),
     PR_EX.exponential+'<br><b>Tipp:</b> E[σ] = 1/λ. Wenn σ ≈ 5 erwartet: λ = 0.2.',
     sls([
       {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sigma.p1??1,
-       fn:"M.pr.sigma.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
-    ])
+       fn:"M.pr.sigma.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
+       hint:`≈ E[σ]=${(1/(M.pr.sigma.p1??1)).toFixed(2)}`,
+       hintFn:"'≈ E[σ]='+(1/this.value).toFixed(2)"},
+    ],'pv-sig','prS(M.pr.sigma)'),
+    'pv-sig'
   );
 
   // Nu
@@ -1517,7 +1580,8 @@ function buildPriorUI(){
        fn:"M.pr.nu.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
       {l:'β',mn:0.01,mx:0.5,st:0.01,dp:2,v:M.pr.nu.p2??0.1,
        fn:"M.pr.nu.p2=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
-    ])
+    ],'pv-nu','prS(M.pr.nu)'),
+    'pv-nu'
   );
 
   // Hyperpriors (brms-style)
@@ -1525,15 +1589,21 @@ function buildPriorUI(){
     html+=blk('re','τ₀ — SD Rand. Intercepts','re',prS(M.pr.sig_a),
       PR_EX.exponential+'<br><b>Was:</b> u₀ⱼ ~ Normal(0, τ₀). τ₀ steuert, wie stark Intercepts zwischen Gruppen variieren. Klein = starkes Pooling. In brms: prior(exponential(1), class=sd).',
       sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
-           fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
-      ])
+           fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
+           hint:`≈ E[τ₀]=${(1/(M.pr.sig_a.p1??1)).toFixed(2)}`,
+           hintFn:"'≈ E[τ₀]='+(1/this.value).toFixed(2)"},
+      ],'pv-siga','prS(M.pr.sig_a)'),
+      'pv-siga'
     );
     if(M.ret==='slope'&&M.preds.length>0){
       html+=blk('re','τ₁ — SD Rand. Slopes','re',prS(M.pr.sig_b),
         PR_EX.exponential+'<br><b>Was:</b> u₁ⱼ ~ Normal(0, τ₁). τ₁ steuert, wie stark Slopes für '+((M.preds[0]?.name)||'x1')+' zwischen Gruppen variieren. Der gruppenspezifische Slope ist β₁ + u₁ⱼ.',
         sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
-             fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)"},
-        ])
+             fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
+             hint:`≈ E[τ₁]=${(1/(M.pr.sig_b?.p1??1)).toFixed(2)}`,
+             hintFn:"'≈ E[τ₁]='+(1/this.value).toFixed(2)"},
+        ],'pv-sigb','prS(M.pr.sig_b)'),
+        'pv-sigb'
       );
     }
   }
@@ -1586,6 +1656,14 @@ function toggleTheme(){
   document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
   document.getElementById('btn-th').textContent=DARK?'☀ Light':'🌙 Dark';
   localStorage.setItem('btl-theme',DARK?'dark':'light');
+  sched();
+}
+function toggleMono(){
+  MONO=!MONO;
+  const btn=document.getElementById('btn-mono');
+  btn.classList.toggle('act',MONO);
+  btn.textContent=MONO?'◑ Farbig':'◐ Monochrom';
+  localStorage.setItem('btl-arch-mono',MONO?'1':'0');
   sched();
 }
 
@@ -1646,6 +1724,15 @@ function update(){
   document.getElementById('ml-opts').style.display=M.ml?'flex':'none';
   renderPreds();buildPriorUI();render();buildMath();
 }
+// Prior sliders use this instead of sched(): sched()→update() rebuilds the whole
+// #prior-ui panel (buildPriorUI() replaces innerHTML), which destroys and recreates
+// the <input type=range> the user is actively dragging — the browser then loses
+// mouse capture on it, so the drag appears to "stop" after the first tick. Nothing
+// about a slider's own value changes the panel's structure, so only re-render the
+// diagram/math panel; the slider's own value readout is already updated inline by
+// its oninput handler without touching the DOM tree.
+let _ts=null;
+function schedSlider(){ clearTimeout(_ts); _ts=setTimeout(()=>{render();buildMath();},55); }
 
 // ═══════════════════════════════════════════════════════
 //  FLOATING HILFE PANEL
@@ -1679,6 +1766,10 @@ function showToast(msg){
 //  INIT
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
+  if(MONO){
+    const btn=document.getElementById('btn-mono');
+    btn.classList.add('act'); btn.textContent='◑ Farbig';
+  }
   renderGuide();update();
   // Knoten-Info: start active, show default hint
   document.getElementById('btn-ex').classList.add('act');
