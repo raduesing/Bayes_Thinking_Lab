@@ -2730,32 +2730,56 @@ function generateMediationCode() {
   const xName = getNodeName(X), yName = getNodeName(Y);
   const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
   const medNames = mediators.map(getNodeName);
+  // True ancestor mediators of `node` — real reachability, not sort order (see comment above).
+  const medAncestorsOf = node => mediators.filter(m => m !== node && hasDirectedPath(m, node));
 
   const adjIds = (state.analysisResult?.minimal?.[0] || []);
-  const formulaAllowed = new Set([X, ...mediators, ...adjIds]);
   const pathAllowed = new Set([X, ...mediators, Y]);
+  const hasDirectXY = getChildren(X).includes(Y);
+  const hasUnorderedMediatorPair = mediators.some((m1, i) =>
+    mediators.slice(i + 1).some(m2 => !hasDirectedPath(m1, m2) && !hasDirectedPath(m2, m1)));
 
   const lines = [];
   lines.push('# MEDIATION ANALYSIS — Bayesian joint model (Pearl 2009 / McElreath SR 2020)');
   lines.push(`# Mediator(s): ${medNames.join(', ')}`);
   lines.push('# All equations estimated jointly for a full joint posterior over the direct,');
-  lines.push('# indirect, and total effect. Assumes no unmeasured confounding among the');
-  lines.push('# mediators themselves (only the backdoor adjustment set already computed for');
-  lines.push('# X→Y is carried over into each equation).');
+  lines.push('# indirect, and total effect. Every equation includes X plus every mediator that');
+  lines.push('# is a true ancestor of that node (not just its direct DAG parents) — this makes');
+  lines.push('# the estimate robust to an incompletely drawn DAG. Assumes no unmeasured');
+  lines.push('# confounding among the mediators themselves (only the backdoor adjustment set');
+  lines.push('# already computed for X→Y is carried over per equation, where it is a real parent).');
   lines.push('');
   lines.push('library(brms)');
 
   const bfNames = [];
   mediators.forEach(m => {
     const mName = getNodeName(m);
-    const parents = getParents(m).filter(p => formulaAllowed.has(p)).map(getNodeName);
-    lines.push(`bf_${mName} <- bf(${mName} ~ ${parents.join(' + ') || '1'})`);
+    const adjParents = getParents(m).filter(p => adjIds.includes(p)).map(getNodeName);
+    const preds = [xName, ...medAncestorsOf(m).map(getNodeName), ...adjParents];
+    lines.push(`bf_${mName} <- bf(${mName} ~ 1 + ${preds.join(' + ')})`);
     bfNames.push(`bf_${mName}`);
   });
-  const yParents = getParents(Y).filter(p => formulaAllowed.has(p)).map(getNodeName);
-  lines.push(`bf_${yName} <- bf(${yName} ~ ${yParents.join(' + ') || '1'})`);
+  const yAdjParents = getParents(Y).filter(p => adjIds.includes(p)).map(getNodeName);
+  const yPreds = [xName, ...medAncestorsOf(Y).map(getNodeName), ...yAdjParents];
+  lines.push(`bf_${yName} <- bf(${yName} ~ 1 + ${yPreds.join(' + ')})`);
   bfNames.push(`bf_${yName}`);
+  if (!hasDirectXY) {
+    lines.push(`# b_${yName}_${xName} is still estimated even though the DAG has no direct ${xName}→${yName}`);
+    lines.push(`# edge — as a plausibility check (should be ~0 if the chain assumption holds). Not`);
+    lines.push(`# included in total_effect below, since no real path of length 1 exists.`);
+  }
   lines.push('');
+  if (hasUnorderedMediatorPair) {
+    lines.push('# Residual-correlation note: rescor = FALSE, because mvbf() only allows ONE shared');
+    lines.push('# rescor across all response pairs — not just between the (parallel) mediators');
+    lines.push('# themselves, but necessarily also between every mediator and Y. rescor = TRUE would');
+    lines.push('# therefore also give up the "no unmeasured mediator-outcome confounding" assumption');
+    lines.push('# the simple product formula for the indirect effect below relies on — the');
+    lines.push('# interpretation would then need a sensitivity approach (e.g. Imai et al. 2010), not');
+    lines.push('# the plain posterior multiplication anymore. Modeling only the mediator-mediator');
+    lines.push('# correlation would require hand-extending the model in Stan — not expressible via');
+    lines.push('# mvbf() alone.');
+  }
   lines.push('fit_mediation <- brm(');
   lines.push(`  mvbf(${bfNames.join(', ')}, rescor = FALSE),`);
   lines.push('  data = dat,');

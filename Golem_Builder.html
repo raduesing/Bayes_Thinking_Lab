@@ -2728,11 +2728,19 @@ function buildFormulaRHS(targetId) {
 // X and Y (pure serial, pure parallel, or a hybrid mix with edges between mediators),
 // unlike the old serial-vs-parallel split which mis-modeled hybrid DAGs (a mediator
 // that itself feeds another mediator was wrongly treated as an independent parallel
-// path to Y, giving it a spurious direct effect estimate). Fix: build every equation
-// from the mediator's ACTUAL DAG parents, then decompose the total effect as the sum,
-// over every real causal path from X to Y, of the product of that path's real edge
-// coefficients — this reduces to the old serial/parallel formulas as special cases and
-// also handles the hybrid case correctly.
+// path to Y, giving it a spurious direct effect estimate).
+// Each equation's predictors = X + every OTHER mediator that is a true ANCESTOR of that
+// node (hasDirectedPath), not just its literal direct DAG parents. This matters even when
+// no direct edge is drawn: e.g. in a pure chain X→M1→M2→Y, M2's equation still includes X
+// (not just M1) so the posterior of b_M2_X can empirically confirm/refute the "no direct
+// edge" assumption instead of baking it into the model; Y's equation includes every
+// mediator that lies on any path to it, not just its immediate parent. Ancestor status is
+// computed from real graph reachability, not an arbitrary topological sort order — with
+// unordered ("parallel") mediators that have no path between them, this correctly leaves
+// them out of each other's equations regardless of sort order.
+// The total effect is then the sum, over every real causal path from X to Y, of the
+// product of that path's real edge coefficients — this reduces to the classic serial and
+// parallel formulas as special cases and also handles hybrid mixes correctly.
 // Also estimates the indirect effect(s) alongside the direct and total effect (not just
 // total/direct via separate single-equation regressions), via one joint multivariate
 // model — the "goody" requested alongside the topology fix.
@@ -2744,32 +2752,56 @@ function generateMediationCode() {
   const xName = getNodeName(X), yName = getNodeName(Y);
   const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
   const medNames = mediators.map(getNodeName);
+  // True ancestor mediators of `node` — real reachability, not sort order (see comment above).
+  const medAncestorsOf = node => mediators.filter(m => m !== node && hasDirectedPath(m, node));
 
   const adjIds = (state.analysisResult?.minimal?.[0] || []);
-  const formulaAllowed = new Set([X, ...mediators, ...adjIds]);
   const pathAllowed = new Set([X, ...mediators, Y]);
+  const hasDirectXY = getChildren(X).includes(Y);
+  const hasUnorderedMediatorPair = mediators.some((m1, i) =>
+    mediators.slice(i + 1).some(m2 => !hasDirectedPath(m1, m2) && !hasDirectedPath(m2, m1)));
 
   const lines = [];
   lines.push('# MEDIATIONSANALYSE — Bayesianisches joint model (Pearl 2009 / McElreath SR 2020)');
   lines.push(`# Mediator(en): ${medNames.join(', ')}`);
   lines.push('# Alle Gleichungen gemeinsam geschätzt für einen vollen gemeinsamen Posterior über');
-  lines.push('# direkten, indirekten und totalen Effekt. Nimmt an, dass keine unbeobachteten');
-  lines.push('# Confounder zwischen den Mediatoren selbst bestehen (nur das für X→Y berechnete');
-  lines.push('# Adjustierungsset wird pro Gleichung mit übernommen).');
+  lines.push('# direkten, indirekten und totalen Effekt. Jede Gleichung enthält X plus alle');
+  lines.push('# Mediatoren, die echte Vorfahren des jeweiligen Knotens sind (nicht nur direkte');
+  lines.push('# DAG-Eltern) — das macht die Schätzung robust gegen einen unvollständig');
+  lines.push('# gezeichneten DAG. Nimmt an, dass keine unbeobachteten Confounder zwischen den');
+  lines.push('# Mediatoren selbst bestehen (nur das für X→Y berechnete Adjustierungsset wird');
+  lines.push('# pro Gleichung mit übernommen, wo es ein echter Elternknoten ist).');
   lines.push('');
   lines.push('library(brms)');
 
   const bfNames = [];
   mediators.forEach(m => {
     const mName = getNodeName(m);
-    const parents = getParents(m).filter(p => formulaAllowed.has(p)).map(getNodeName);
-    lines.push(`bf_${mName} <- bf(${mName} ~ ${parents.join(' + ') || '1'})`);
+    const adjParents = getParents(m).filter(p => adjIds.includes(p)).map(getNodeName);
+    const preds = [xName, ...medAncestorsOf(m).map(getNodeName), ...adjParents];
+    lines.push(`bf_${mName} <- bf(${mName} ~ 1 + ${preds.join(' + ')})`);
     bfNames.push(`bf_${mName}`);
   });
-  const yParents = getParents(Y).filter(p => formulaAllowed.has(p)).map(getNodeName);
-  lines.push(`bf_${yName} <- bf(${yName} ~ ${yParents.join(' + ') || '1'})`);
+  const yAdjParents = getParents(Y).filter(p => adjIds.includes(p)).map(getNodeName);
+  const yPreds = [xName, ...medAncestorsOf(Y).map(getNodeName), ...yAdjParents];
+  lines.push(`bf_${yName} <- bf(${yName} ~ 1 + ${yPreds.join(' + ')})`);
   bfNames.push(`bf_${yName}`);
+  if (!hasDirectXY) {
+    lines.push(`# b_${yName}_${xName} wird trotzdem mitgeschätzt, obwohl im DAG keine direkte ${xName}→${yName}-Kante`);
+    lines.push(`# eingezeichnet ist — als Plausibilitätscheck (sollte ~0 sein, wenn die Kettenannahme`);
+    lines.push(`# stimmt). Fließt unten NICHT in total_effect ein, da kein echter Pfad der Länge 1 existiert.`);
+  }
   lines.push('');
+  if (hasUnorderedMediatorPair) {
+    lines.push('# Hinweis Residualkorrelation: rescor = FALSE, da mvbf() nur EIN gemeinsames rescor für');
+    lines.push('# alle Antwortpaare erlaubt — nicht nur zwischen den (parallelen) Mediatoren selbst,');
+    lines.push('# sondern zwangsläufig auch zwischen jedem Mediator und Y. rescor = TRUE würde damit');
+    lines.push('# die Annahme "keine unbeobachtete Mediator-Outcome-Konfundierung" mit aufgeben, auf der');
+    lines.push('# die einfache Produkt-Formel für den indirekten Effekt unten beruht — die Interpretation');
+    lines.push('# bräuchte dann einen Sensitivitätsansatz (z.B. Imai et al. 2010), nicht mehr die simple');
+    lines.push('# Posterior-Multiplikation. Für nur die Mediator-Mediator-Korrelation müsste man das Modell');
+    lines.push('# von Hand in Stan erweitern — mit mvbf() allein nicht abbildbar.');
+  }
   lines.push('fit_mediation <- brm(');
   lines.push(`  mvbf(${bfNames.join(', ')}, rescor = FALSE),`);
   lines.push('  data = dat,');
