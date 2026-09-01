@@ -967,14 +967,14 @@ function renderCorrTab(){
       <div class="corr-title">${esc(f.name)} (${k}×${k})</div>
       <div class="corr-structure-row">
         <label>Struktur:</label>
-        <select class="inp" style="width:auto" onchange="applyCorrType('${f.id}',this.value)">
+        <select class="inp" style="width:auto" onchange="applyCorrType('${f.id}',this.value)" ${nonGauss?'disabled':''}>
           <option value="cs" ${type==='cs'?'selected':''}>Compound Symmetry</option>
           <option value="ar1" ${type==='ar1'?'selected':''}>AR(1)</option>
           <option value="custom" ${type==='custom'?'selected':''}>Individuell</option>
         </select>
         ${type!=='custom'?`<label>ρ:</label>
           <input class="inp inp-sm" type="number" step="0.05" min="-0.99" max="0.99" value="${rho}"
-                 onchange="updateGlobalRho('${f.id}',this.value)">`:''
+                 onchange="updateGlobalRho('${f.id}',this.value)" ${nonGauss?'disabled':''}>`:''
         }
       </div>`;
 
@@ -993,10 +993,10 @@ function renderCorrTab(){
           // Mirror cell: updates automatically when upper triangle changes
           html+=`<td style="background:${bg}"><span class="corr-mirror">${v.toFixed(2)}</span></td>`;
         } else {
-          const editable=type==='custom';
+          const editable=type==='custom'&&!nonGauss;
           html+=`<td style="background:${bg}">
             <input class="corr-inp" type="number" step="0.05" min="-0.99" max="0.99"
-                   value="${v.toFixed(2)}" ${editable?'':'readonly'}
+                   value="${v.toFixed(2)}" ${editable?'':'readonly'} ${nonGauss?'disabled':''}
                    style="cursor:${editable?'text':'default'}"
                    oninput="updateCorrCell('${f.id}',${i},${j},this.value)">
           </td>`;
@@ -1009,10 +1009,15 @@ function renderCorrTab(){
     html+=`</div>`;
   });
 
-  // Non-Gaussian note: correlation acts only via cluster RE in v1
+  // Non-Gaussian note: for these families sd=0 is used on the eta scale (see buildRCode),
+  // so there is no variance left for the correlation matrix to act on — r has NO effect on
+  // the generated data at all, not just a "reduced" one. Fields are disabled above so this
+  // can't be missed by only reading a comment. Confirmed empirically: configuring AR(1)
+  // rho=0.65 produced an observed correlation of ~0.05-0.10 (pure sampling noise) in the
+  // resulting Poisson counts.
   if(nonGauss){
     html+=`<div class="info-box" style="margin-top:.6rem;background:var(--warn-bg);border:1px solid var(--warn);color:var(--warn);font-family:'DM Mono',monospace;font-size:.72rem;padding:.35rem .6rem;border-radius:4px;line-height:1.6">
-      ⓘ Note (v1): For non-Gaussian likelihoods (${esc(lik)}) the correlation matrix acts only indirectly — as the structure of the linear predictors η (Gaussian approximation). The resulting Y values are then transformed by the target likelihood; the Pearson correlation in Y is therefore lower than ρ. Exact marginal within-correlation structure requires copulas (v2).
+      ⓘ For non-Gaussian likelihoods (${esc(lik)}) this correlation matrix currently has <strong>no effect</strong> on the generated data (which is why it's locked). Reason: η is generated with no variance (sd = 0), since the spread instead comes from the target likelihood itself — but without variance on η there is nothing for the correlation structure to act on. Real marginal within-correlation for non-Gaussian likelihoods needs a different approach (e.g. copulas) and isn't implemented yet.
     </div>`;
   }
   el.innerHTML=html;
@@ -2012,6 +2017,12 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`  ),`);
     }
     lines.push(`  sd      = ${sdPart},${sdComment}`);
+    if(noSdLik){
+      lines.push(`  # ⚠ r has NO EFFECT HERE: without variance on the eta scale (sd = 0 above) there`);
+      lines.push(`  # is no spread for a correlation structure to act on. Confirmed empirically:`);
+      lines.push(`  # a configured AR(1) rho=0.65 produced an observed correlation of ~0.05-0.10`);
+      lines.push(`  # (pure sampling noise) in the ${lik}-distributed Y values.`);
+    }
     lines.push(rParam+',');
     lines.push('  empirical = FALSE,');
     lines.push('  plot     = FALSE');
