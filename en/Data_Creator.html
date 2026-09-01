@@ -1961,41 +1961,19 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       return `    ${key} = c(${vals.join(', ')})`;
     });
 
-    // sd: for SD-likelihoods (gaussian, student, lognormal) use cell SDs from grid.
-    // For all others (Poisson, Bernoulli, Binomial, Gamma, Beta, NegBin): sd = 0 —
-    // sim_design() generates constant η = cell mean; variability comes from the
-    // target distribution itself (rpois, rbinom, …), so no σ on η-scale.
-    const noSdLik=!['gaussian','student','lognormal'].includes(lik);
-    const sdComment=noSdLik?`  # no σ on η-scale — spread from ${lik} distribution`:'';
-    let sdPart;
-    if(noSdLik){
-      sdPart='0';
-    } else if(!hasB){
-      const vals=wNames.map(lv=>(ST.sds[lv]??ST.sds['all']??1).toFixed(2));
-      sdPart=`c(${vals.join(', ')})`;
-    } else {
-      const sdListParts=bRows.map(bc=>{
-        const bk=cellKey(bc);
-        const vals=wNames.map(lv=>{
-          const sdKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
-          return (ST.sds[sdKey]??1).toFixed(2);
-        });
-        return `    ${bc.join('_')} = c(${vals.join(', ')})`;
-      });
-      sdPart=`list(\n${sdListParts.join(',\n')}\n  )`;
-    }
-
-    // r parameter
-    const corrMat=wf?ST.corrMats[wf.id]:null;
-    const corrType=wf?ST.corrTypes[wf.id]:'cs';
-    const rho=wf?ST.corrRho[wf.id]??0.65:0.65;
-    let rParam;
-    if(corrType==='cs') rParam=`  r = ${rho.toFixed(2)},   # compound symmetry`;
-    else if(corrType==='ar1') rParam=`  r = ${rho.toFixed(2)},   # AR(1) base (ρ^|j-k|)`;
-    else {
-      const flat=corrMat?corrMat.map(row=>row.map(v=>v.toFixed(2)).join(', ')).join(',\n    '):rho.toFixed(2);
-      rParam=`  r = matrix(c(\n    ${flat}\n  ), ${wNames.length}, ${wNames.length}),   # custom`;
-    }
+    // sd/r: for SD-likelihoods (gaussian, student, lognormal) use cell SDs from grid and
+    // the configured correlation. For all others (Poisson, Bernoulli, Binomial, Gamma,
+    // Beta, NegBin): sd = 0 — sim_design() generates constant η = cell mean; variability
+    // comes from the target distribution itself (rpois, rbinom, …), so no σ on η-scale
+    // (which also makes r inert there — see the warning this emits below).
+    const {noSdLik,sdPart,sdComment,rParam:rParamRaw}=buildWithinSdR(lik,hasB,bRows,wNames,wf);
+    // Restore the "  r = ...,   # comment" shape this call site expects (2-space indent,
+    // "r = " name prefix, trailing comma before the end-of-line comment) from the helper's
+    // bare, un-prefixed value.
+    const rLines=rParamRaw.split('\n');
+    rLines[0]='  r = '+rLines[0];
+    rLines[rLines.length-1]=rLines[rLines.length-1].replace(/(\s*)(#.*)$/,',$1$2');
+    const rParam=rLines.join('\n');
 
     // ── sim_design() call ─────────────────────────────────────
     lines.push('# ── Design with sim_design() ────────────────────────────');
@@ -2023,7 +2001,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`  # a configured AR(1) rho=0.65 produced an observed correlation of ~0.05-0.10`);
       lines.push(`  # (pure sampling noise) in the ${lik}-distributed Y values.`);
     }
-    lines.push(rParam+',');
+    lines.push(rParam);
     lines.push('  empirical = FALSE,');
     lines.push('  plot     = FALSE');
     lines.push(')');
@@ -2309,6 +2287,55 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
 }
 
 // ────────────────────────────────────────────────────────────
+// WITHIN-DESIGN sd=/r= HELPER — shared by buildRCode() and buildPowerRCode() so the
+// power block's sim_data_one() always matches the exact SD/correlation settings the
+// main code uses, instead of silently falling back to faux::sim_design()'s defaults
+// (sd=1, r=0) whenever those args were previously omitted. Returns un-prefixed,
+// possibly multi-line snippets — callers add "#" comment prefixes where needed.
+// ────────────────────────────────────────────────────────────
+function buildWithinSdR(lik,hasB,bRows,wNames,wf){
+  const noSdLik=!['gaussian','student','lognormal'].includes(lik);
+  const sdComment=noSdLik?`  # no σ on η-scale — spread from ${lik} distribution`:'';
+  let sdPart;
+  if(noSdLik){
+    sdPart='0';
+  } else if(!hasB){
+    const vals=wNames.map(lv=>(ST.sds[lv]??ST.sds['all']??1).toFixed(2));
+    sdPart=`c(${vals.join(', ')})`;
+  } else {
+    const sdListParts=bRows.map(bc=>{
+      const bk=cellKey(bc);
+      const vals=wNames.map(lv=>{
+        const sdKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
+        return (ST.sds[sdKey]??1).toFixed(2);
+      });
+      return `    ${bc.join('_')} = c(${vals.join(', ')})`;
+    });
+    sdPart=`list(\n${sdListParts.join(',\n')}\n  )`;
+  }
+
+  const corrMat=wf?ST.corrMats[wf.id]:null;
+  const corrType=wf?ST.corrTypes[wf.id]:'cs';
+  const rho=wf?ST.corrRho[wf.id]??0.65:0.65;
+  // Bare value, no "r = " prefix — kept consistent with sdPart so both can go through the
+  // same "name = <value>" formatting at each call site instead of double-prefixing.
+  // Compound symmetry is genuinely uniform, so a scalar r=rho is correct and matches
+  // what faux::sim_design() does with a bare number. AR(1) is NOT uniform (correlation
+  // must decay with |i-j|) — passing a bare scalar there would make sim_design() build a
+  // *compound-symmetric* matrix instead, silently ignoring the intended decay. So AR(1)
+  // must also pass the full pre-computed matrix (ST.corrMats, already ρ^|i-j| via
+  // applyCorrType()), exactly like the "custom" case.
+  let rParam;
+  if(corrType==='cs') rParam=`${rho.toFixed(2)}   # compound symmetry`;
+  else {
+    const flat=corrMat?corrMat.map(row=>row.map(v=>v.toFixed(2)).join(', ')).join(',\n    '):rho.toFixed(2);
+    const label=corrType==='ar1'?`AR(1), ρ=${rho.toFixed(2)}`:'custom';
+    rParam=`matrix(c(\n    ${flat}\n  ), ${wNames.length}, ${wNames.length})   # ${label}`;
+  }
+  return {noSdLik,sdPart,sdComment,rParam};
+}
+
+// ────────────────────────────────────────────────────────────
 // COVARIATE R-CODE HELPER
 // ────────────────────────────────────────────────────────────
 function buildCovAssignment(cov,cR,datObjName,bNamesR,zExpr){
@@ -2431,6 +2458,24 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       });
       return `#     ${hasB?bc.join('_'):'Y'} = c(${vals.join(', ')})`;
     });
+    // sd/r come from the SAME helper buildRCode() uses, so the power simulation always
+    // matches the exact SD/correlation settings — not faux::sim_design()'s defaults
+    // (sd=1, r=0) that silently applied here before this was wired up (only masked
+    // whenever a design happened to use sd=1 and no correlation).
+    const {noSdLik:pwNoSdLik,sdPart:pwSdPart,sdComment:pwSdComment,rParam:pwRParamRaw}=buildWithinSdR(lik,hasB,bRows,wNames,wf);
+    // Push a possibly multi-line "name = <value>," snippet as "#"-prefixed comment lines.
+    // The trailer (",${comment}" etc.) is inserted BEFORE any trailing inline "# ..."
+    // comment already in value, not after — appending after it would put the comma
+    // inside that inline R comment, where it's silently swallowed if a user later
+    // uncomments this block (breaking the next constructor argument).
+    function pushCommentedArg(name,value,trailer){
+      const withTrailer=txt=>txt.replace(/(\s*)(#.*)?$/,(m,sp,cm)=>`${trailer}${sp||''}${cm||''}`);
+      const vLines=value.split('\n');
+      if(vLines.length===1){ L.push(`#     ${name} = ${withTrailer(vLines[0])}`); return; }
+      L.push(`#     ${name} = ${vLines[0]}`);
+      for(let i=1;i<vLines.length-1;i++) L.push(`#   ${vLines[i]}`);
+      L.push(`#   ${withTrailer(vLines[vLines.length-1])}`);
+    }
     if(!hasB){
       const bk2=cellKey([]);
       const muVals2=wNames.map(lv=>{
@@ -2438,13 +2483,17 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
         return (ST.means[mKey]??0).toFixed(2);
       });
       L.push(`#   d <- faux::sim_design(within = ${withinDef}, between = ${betweenDef},`);
-      L.push(`#     n = ${n}, mu = c(${muVals2.join(', ')}), empirical = FALSE, plot = FALSE)`);
+      L.push(`#     n = ${n}, mu = c(${muVals2.join(', ')}),`);
     } else {
       L.push(`#   d <- faux::sim_design(within = ${withinDef}, between = ${betweenDef},`);
       L.push(`#     n = ${n}, mu = list(`);
       muParts.forEach(p=>L.push(p+(p!==muParts[muParts.length-1]?',':'')));
-      L.push('#   ), empirical = FALSE, plot = FALSE)');
+      L.push(`#   ),`);
     }
+    pushCommentedArg('sd',pwSdPart,','+pwSdComment);
+    if(pwNoSdLik) L.push(`#   # ⚠ r has no effect here either — see the note above in the main code.`);
+    pushCommentedArg('r',pwRParamRaw,',');
+    L.push('#   empirical = FALSE, plot = FALSE)');
 
     if(clActive){
       L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
