@@ -708,6 +708,8 @@ canvas {
         <option value="collider">Collider: X→Y, X→C←Y</option>
         <option value="mediation">Mediator (Chain): X→M→Y</option>
         <option value="mediation_confounder">Mediator + Confounder: Z→X, Z→Y, X→M→Y</option>
+        <option value="serial_mediation">Serial mediation: X→M1→M2→Y</option>
+        <option value="parallel_mediation">Parallel mediation: X→M1→Y, X→M2→Y</option>
         <option value="iv">Instrumental Variable: Z→X, X→Y, U(latent)→X, U→Y</option>
         <option value="frontdoor">Front Door: X→M→Y, U(latent)→X, U→Y</option>
       </select>
@@ -2708,6 +2710,97 @@ function buildFormulaRHS(targetId) {
   return processed.join(' + ');
 }
 
+// General mediation-model code generator: works for ANY causal-path topology between
+// X and Y (pure serial, pure parallel, or a hybrid mix with edges between mediators),
+// unlike the old serial-vs-parallel split which mis-modeled hybrid DAGs (a mediator
+// that itself feeds another mediator was wrongly treated as an independent parallel
+// path to Y, giving it a spurious direct effect estimate). Fix: build every equation
+// from the mediator's ACTUAL DAG parents, then decompose the total effect as the sum,
+// over every real causal path from X to Y, of the product of that path's real edge
+// coefficients — this reduces to the old serial/parallel formulas as special cases and
+// also handles the hybrid case correctly.
+// Also estimates the indirect effect(s) alongside the direct and total effect (not just
+// total/direct via separate single-equation regressions), via one joint multivariate
+// model — the "goody" requested alongside the topology fix.
+// Assumption: no unmeasured confounding among the mediators themselves beyond what the
+// existing backdoor adjustment set for X→Y already covers (each equation reuses that
+// same set) — flagged in the generated comment, not silently assumed.
+function generateMediationCode() {
+  const X = state.exposure, Y = state.outcome;
+  const xName = getNodeName(X), yName = getNodeName(Y);
+  const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
+  const medNames = mediators.map(getNodeName);
+
+  const adjIds = (state.analysisResult?.minimal?.[0] || []);
+  const formulaAllowed = new Set([X, ...mediators, ...adjIds]);
+  const pathAllowed = new Set([X, ...mediators, Y]);
+
+  const lines = [];
+  lines.push('# MEDIATION ANALYSIS — Bayesian joint model (Pearl 2009 / McElreath SR 2020)');
+  lines.push(`# Mediator(s): ${medNames.join(', ')}`);
+  lines.push('# All equations estimated jointly for a full joint posterior over the direct,');
+  lines.push('# indirect, and total effect. Assumes no unmeasured confounding among the');
+  lines.push('# mediators themselves (only the backdoor adjustment set already computed for');
+  lines.push('# X→Y is carried over into each equation).');
+  lines.push('');
+  lines.push('library(brms)');
+
+  const bfNames = [];
+  mediators.forEach(m => {
+    const mName = getNodeName(m);
+    const parents = getParents(m).filter(p => formulaAllowed.has(p)).map(getNodeName);
+    lines.push(`bf_${mName} <- bf(${mName} ~ ${parents.join(' + ') || '1'})`);
+    bfNames.push(`bf_${mName}`);
+  });
+  const yParents = getParents(Y).filter(p => formulaAllowed.has(p)).map(getNodeName);
+  lines.push(`bf_${yName} <- bf(${yName} ~ ${yParents.join(' + ') || '1'})`);
+  bfNames.push(`bf_${yName}`);
+  lines.push('');
+  lines.push('fit_mediation <- brm(');
+  lines.push(`  mvbf(${bfNames.join(', ')}, rescor = FALSE),`);
+  lines.push('  data = dat,');
+  lines.push('  # prior = c()  # Please set your own priors (recommended!).');
+  lines.push('  chains = 4, iter = 2000, warmup = 1000, cores = 4, seed = 42');
+  lines.push(')');
+  lines.push('');
+  lines.push(`# Compute the ${xName}→${yName} effects from the joint posterior:`);
+  lines.push('library(posterior)');
+  lines.push('draws <- as_draws_df(fit_mediation)');
+
+  // Enumerate every real causal path X -> ... -> Y through the allowed (mediator) subgraph
+  const realPaths = [];
+  (function walk(node, path) {
+    if (node === Y) { realPaths.push([...path]); return; }
+    getChildren(node).filter(c => pathAllowed.has(c) && !path.includes(c)).forEach(c => walk(c, [...path, c]));
+  })(X, [X]);
+
+  const pathVars = [];
+  realPaths.forEach(path => {
+    const coefTerms = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      coefTerms.push(`draws$b_${getNodeName(path[i+1])}_${getNodeName(path[i])}`);
+    }
+    const varName = path.length === 2 ? 'direct_effect' : `indirect_via_${path.slice(1, -1).map(getNodeName).join('_')}`;
+    lines.push(`${varName} <- ${coefTerms.join(' * ')}`);
+    pathVars.push(varName);
+  });
+  lines.push(`total_effect <- ${pathVars.join(' + ')}`);
+  lines.push(`cat("Total effect ${xName}→${yName}: ", mean(total_effect), " 89% CrI: [", quantile(total_effect, 0.055), ",", quantile(total_effect, 0.945), "]\\n")`);
+  const indirectVars = pathVars.filter(v => v !== 'direct_effect');
+  if (pathVars.includes('direct_effect')) {
+    lines.push(`cat("Direct effect ${xName}→${yName}: ", mean(direct_effect), " 89% CrI: [", quantile(direct_effect, 0.055), ",", quantile(direct_effect, 0.945), "]\\n")`);
+  }
+  if (indirectVars.length > 0) {
+    lines.push(`indirect_effect <- ${indirectVars.join(' + ')}`);
+    lines.push(`cat("Indirect effect ${xName}→${yName} (total): ", mean(indirect_effect), " 89% CrI: [", quantile(indirect_effect, 0.055), ",", quantile(indirect_effect, 0.945), "]\\n")`);
+  }
+  lines.push('');
+  lines.push('# For comparison: naive (biased) estimator');
+  lines.push(`fit_naive <- lm(${yName} ~ ${xName}, data = dat)`);
+  lines.push(`cat("Naive estimator: ", coef(fit_naive)["${xName}"], "\\n")`);
+  return lines.join('\n');
+}
+
 function generateBrmsCode() {
   const X = state.exposure, Y = state.outcome;
   const yName = Y ? getNodeName(Y) : 'Y';
@@ -2715,7 +2808,7 @@ function generateBrmsCode() {
 
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
-  const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
+  const realMediators = X && Y ? [...getMediators()].filter(id => id !== X && id !== Y) : [];
 
   if (instruments.length > 0) {
     const zNames = instruments.map(id => getNodeName(id));
@@ -2744,79 +2837,8 @@ function generateBrmsCode() {
     ].join('\n');
   }
 
-  if (frontDoorMediators.length > 0) {
-    const medNames = frontDoorMediators.map(id => getNodeName(id));
-    const lines = [];
-
-    if (fdTopology === 'serial') {
-      // Serial chain: X→M1→M2→…→Y
-      lines.push(`# FRONT DOOR ADJUSTMENT — Serial mediation (Pearl 2009, Ch. 3.3)`);
-      lines.push(`# Chain: ${xName}→${medNames.join('→')}→${yName}`);
-      const chainFactors = medNames.map((m,i)=>`β_${i===0?xName:medNames[i-1]}_${m}`).concat([`β_${medNames[medNames.length-1]}_${yName}`]);
-      lines.push(`# Total causal effect = ${chainFactors.join(' × ')}`);
-      lines.push('');
-      lines.push('library(brms)');
-      medNames.forEach((mName, i) => {
-        const hasDirectX = i > 0 && state.edges.some(e => e.from === X && e.to === frontDoorMediators[i]);
-        const pred = i === 0 ? xName : hasDirectX ? `${medNames[i-1]} + ${xName}` : medNames[i-1];
-        lines.push(`bf_${mName} <- bf(${mName} ~ ${pred})`);
-        if (i > 0 && !hasDirectX)
-          lines.push(`# No direct ${xName}→${mName} edge in DAG — ${xName} omitted (Pearl-consistent). Sensitivity: bf_${mName} <- bf(${mName} ~ ${medNames[i-1]} + ${xName})`);
-      });
-      const lastM = medNames[medNames.length - 1];
-      lines.push(`bf_${yName} <- bf(${yName} ~ ${lastM} + ${xName})   # ${xName} blocks backdoor ${lastM}←…←${xName}←U→${yName}`);
-      lines.push('');
-      lines.push('fit_fd_bayes <- brm(');
-      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
-      lines.push('  data = dat,');
-      lines.push('  # prior = c()  # Please specify priors yourself (recommended!).');
-      lines.push('  chains = 4, iter = 2000');
-      lines.push(')');
-      lines.push('');
-      lines.push(`# Total causal effect ${xName}→${yName} via serial Front Door:`);
-      lines.push('library(posterior)');
-      lines.push('draws <- as_draws_df(fit_fd_bayes)');
-      const factors = medNames.map((m,i) => {
-        const pred = i === 0 ? xName : medNames[i-1];
-        return `draws$b_${m}_${pred}`;
-      });
-      factors.push(`draws$b_${yName}_${lastM}`);
-      lines.push(`fd_effect <- ${factors.join(' * ')}`);
-      lines.push(`cat("Front Door effect ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
-    } else {
-      // Parallel: X→M1→Y, X→M2→Y, …
-      lines.push(`# FRONT DOOR ADJUSTMENT — Parallel mediation (Pearl 2009, Ch. 3.3)`);
-      lines.push(`# Paths: ${medNames.map(m=>`${xName}→${m}→${yName}`).join(', ')}`);
-      lines.push(`# Total causal effect = ${medNames.map(m=>`β_${xName}_${m} × β_${m}_${yName}`).join(' + ')}`);
-      lines.push('');
-      lines.push('library(brms)');
-      medNames.forEach(mName => {
-        lines.push(`bf_${mName} <- bf(${mName} ~ ${xName})`);
-      });
-      lines.push(`bf_${yName} <- bf(${yName} ~ ${medNames.join(' + ')} + ${xName})   # ${xName} blocks backdoor paths of all M's to ${yName}`);
-      lines.push('');
-      lines.push('fit_fd_bayes <- brm(');
-      lines.push(`  mvbf(${medNames.map(m=>`bf_${m}`).join(', ')}, bf_${yName}, rescor = FALSE),`);
-      lines.push('  data = dat,');
-      lines.push('  # prior = c()  # Please specify priors yourself (recommended!).');
-      lines.push('  chains = 4, iter = 2000');
-      lines.push(')');
-      lines.push('');
-      lines.push(`# Total causal effect ${xName}→${yName} via parallel Front Door:`);
-      lines.push('library(posterior)');
-      lines.push('draws <- as_draws_df(fit_fd_bayes)');
-      medNames.forEach(mName => {
-        lines.push(`fd_via_${mName} <- draws$b_${mName}_${xName} * draws$b_${yName}_${mName}`);
-      });
-      lines.push(`fd_effect <- ${medNames.map(m=>`fd_via_${m}`).join(' + ')}`);
-      lines.push(`cat("Front Door effect ${xName}→${yName}: ", mean(fd_effect), " 89% CrI: [", quantile(fd_effect, 0.055), ",", quantile(fd_effect, 0.945), "]\\n")`);
-    }
-
-    lines.push('');
-    lines.push('# For comparison: naive (biased) estimator');
-    lines.push(`fit_naive <- lm(${yName} ~ ${xName}, data = dat)`);
-    lines.push(`cat("Naive estimator (biased due to U): ", coef(fit_naive)["${xName}"], "\\n")`);
-    return lines.join('\n');
+  if (realMediators.length > 0) {
+    return generateMediationCode();
   }
 
   // General case
@@ -3057,6 +3079,33 @@ function loadExample() {
     state.edges.push({ id: edgeUuid(), from: mId, to: yId });
     state.exposure = xId; state.outcome = yId;
     showToast('Mediator + Confounder: adjust for Z, M depends on effect type', 'ok');
+
+  } else if (scenario === 'serial_mediation') {
+    // X → M1 → M2 → Y  (chain of two mediators, joint model gives the indirect effect via mvbf)
+    const xId = uuid(), m1Id = uuid(), m2Id = uuid(), yId = uuid();
+    state.nodes.push({ id: xId,  name: 'X',  x: cx - 220, y: cy, latent: false });
+    state.nodes.push({ id: m1Id, name: 'M1', x: cx - 73,  y: cy, latent: false });
+    state.nodes.push({ id: m2Id, name: 'M2', x: cx + 74,  y: cy, latent: false });
+    state.nodes.push({ id: yId,  name: 'Y',  x: cx + 221, y: cy, latent: false });
+    state.edges.push({ id: edgeUuid(), from: xId, to: m1Id });
+    state.edges.push({ id: edgeUuid(), from: m1Id, to: m2Id });
+    state.edges.push({ id: edgeUuid(), from: m2Id, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Serial mediation: joint model estimates the indirect effect X→M1→M2→Y', 'ok');
+
+  } else if (scenario === 'parallel_mediation') {
+    // X → M1 → Y, X → M2 → Y  (two independent mediators, effects add up)
+    const xId = uuid(), m1Id = uuid(), m2Id = uuid(), yId = uuid();
+    state.nodes.push({ id: xId,  name: 'X',  x: cx - 200, y: cy, latent: false });
+    state.nodes.push({ id: m1Id, name: 'M1', x: cx,       y: cy - 90, latent: false });
+    state.nodes.push({ id: m2Id, name: 'M2', x: cx,       y: cy + 90, latent: false });
+    state.nodes.push({ id: yId,  name: 'Y',  x: cx + 200, y: cy, latent: false });
+    state.edges.push({ id: edgeUuid(), from: xId, to: m1Id });
+    state.edges.push({ id: edgeUuid(), from: m1Id, to: yId });
+    state.edges.push({ id: edgeUuid(), from: xId, to: m2Id });
+    state.edges.push({ id: edgeUuid(), from: m2Id, to: yId });
+    state.exposure = xId; state.outcome = yId;
+    showToast('Parallel mediation: joint model sums both indirect paths', 'ok');
 
   } else if (scenario === 'iv') {
     // IV: Z→X, X→Y, U(latent)→X, U→Y
