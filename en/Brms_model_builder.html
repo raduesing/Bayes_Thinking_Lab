@@ -119,6 +119,10 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
 .add-pred:hover{border-color:var(--accent3);color:var(--accent3)}
 /* Prior rows */
 .prior-row{display:grid;grid-template-columns:1.1fr 1.6fr;gap:.3rem;align-items:center;margin-bottom:.3rem}
+.prior-note{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.6;
+            background:var(--panel);border-left:3px solid var(--accent4);
+            padding:.4rem .55rem;margin-bottom:.5rem}
+.prior-note code{color:var(--ink)}
 .prior-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
            background:var(--panel);padding:.22rem .38rem;overflow:hidden;text-overflow:ellipsis;
            white-space:nowrap;border:1px solid var(--grid);display:flex;align-items:center;gap:.2rem}
@@ -622,6 +626,14 @@ function removePredictor(idx) {
   update();
 }
 
+// brms renames I(x^n)-style formula terms to valid Stan parameter names by dropping
+// the parentheses and turning "^" into "E" (confirmed against brms::default_prior():
+// "I(x1^2)" -> "Ix1E2"). Prior coef="..." strings must use this sanitized form, not
+// the raw formula term, or brms rejects the prior as matching no model parameter.
+function brmsCoefName(term) {
+  return term.replace(/[()]/g, '').replace(/\^/g, 'E');
+}
+
 // Expand predictor names to include polynomial terms: ['x1','I(x1^2)','I(x1^3)']
 function expandPreds(names, degrees) {
   const terms = [];
@@ -724,8 +736,8 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
   const rows = [];
   const f    = gFamily();
 
-  const addRow = (id, label, cls, coef, dpar, sym, defOverride) => {
-    rows.push({ id, label, cls, coef, dpar, sym, defOverride });
+  const addRow = (id, label, cls, coef, dpar, sym, defOverride, group) => {
+    rows.push({ id, label, cls, coef, dpar, sym, defOverride, group });
   };
 
   // Link-aware prior defaults
@@ -741,6 +753,15 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
 
   // Intercept — explicit 0+Intercept parameterization (except ordinal thresholds)
   const isOrdinal = f === 'cumulative' || f === 'categorical';
+  // categorical is NOT like cumulative here: brms fits one linear predictor per
+  // non-reference outcome category (dpar = "mu<category>"), so a single generic
+  // class=Intercept/class=b prior is invalid — brms rejects it ("do not correspond
+  // to any model parameter"). The number of categories depends on the user's actual
+  // data, which this tool never sees, so the correct dpar tags can't be generated
+  // here. Skip these rows entirely; buildRCode() adds an explanatory comment
+  // instead and lets brms fall back to its own per-category defaults.
+  const isCategoricalFam = f === 'categorical';
+  if (!isCategoricalFam) {
   if (isOrdinal) {
     addRow('mu_int', 'α Intercept', 'Intercept', null, null, '\\alpha', defInt);
   } else {
@@ -757,6 +778,7 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
   inters.forEach(ix =>
     addRow('mu_b_' + ix, 'β\u2009' + ix, 'b', ix, null,
            '\\beta_{' + ix.replace(/:/g, '\\!:\\!') + '}', defB));
+  }
 
   // Distributional priors (log-scale) — use tighter defaults
   activeD.forEach(d => {
@@ -795,13 +817,18 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     // No extra params needed — the Intercept prior above covers thresholds
   }
 
-  // Random effects priors
-  if (hasRE) {
-    addRow('re_sd_int', 'τ₀\u2009sd(Intercept)', 'sd', 'Intercept', null, '\\tau_0');
+  // Random effects priors — same dpar problem as the fixed effects above: brms needs
+  // sd(...)/cor(...) tagged per category for categorical models too (confirmed via
+  // default_prior()), and the category count still isn't known here. Skip these rows
+  // for categorical as well; the R-code comment covers both cases.
+  if (hasRE && !isCategoricalFam) {
+    // brms requires group= on sd(...) priors once a coef is specified — omitting it
+    // makes the prior match no model parameter (confirmed against brms directly).
+    addRow('re_sd_int', 'τ₀\u2009sd(Intercept)', 'sd', 'Intercept', null, '\\tau_0', undefined, g);
     if (reType === 'slope') {
       slopeVars.forEach((sv, idx) =>
         addRow('re_sd_slp_' + sv, 'τ' + (idx+1) + '\u2009sd(' + sv + ')', 'sd', sv, null,
-               '\\tau_{' + (idx+1) + '}'));
+               '\\tau_{' + (idx+1) + '}', undefined, g));
       // Correlation prior
       if (!userPriors['re_cor']) userPriors['re_cor'] = DEF_PRIORS.cor;
       rows.push({ id:'re_cor', label:'ρ\u2009cor', cls:'cor', coef:null, dpar:null, sym:'\\rho' });
@@ -822,6 +849,12 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     return `<span class="prior-class ${badgeCls}">${dpar ? dpar+'·'+cls : cls}</span>`;
   };
   let pUI = '';
+  if (isCategoricalFam) {
+    pUI += `<div class="prior-note">Categorical (nominal) needs its own <code>dpar</code>-tagged
+      prior per non-reference category (e.g. <code>dpar = "mu2"</code>) — how many depends on
+      your data, which this builder doesn't know. Intercept/β are therefore left without a
+      specific prior (brms defaults); see the comment in the generated R code for details.</div>`;
+  }
   rows.forEach(r => {
     pUI += `<div class="prior-row">
       <div class="prior-lbl">${clsBadge(r.cls, r.dpar)}${r.label}</div>
@@ -889,10 +922,14 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   // priors array — class without quotes (R convention), coef always with quotes
   // Note: for class = sd, brms/Stan applies lb=0 automatically (truncation)
   const pArr = priorRows.map(r => {
-    const cls  = `class = ${r.cls}`;
-    const coef = r.coef ? `, coef = "${r.coef}"` : '';
-    const dpar = r.dpar ? `, dpar = "${r.dpar}"` : '';
-    return `  <span class="str">prior(${gPrior(r.id, r.cls, r.defOverride)}, ${cls}${coef}${dpar})</span>`;
+    const cls   = `class = ${r.cls}`;
+    const coef  = r.coef ? `, coef = "${brmsCoefName(r.coef)}"` : '';
+    // group=: required by brms on sd(...) priors once a coef is given (e.g. sd(Intercept)) —
+    // without it the prior matches no model parameter. cor(...) works without it, so only
+    // emit this for rows that actually carry a group (currently just the sd rows).
+    const group = r.group ? `, group = "${r.group}"` : '';
+    const dpar  = r.dpar ? `, dpar = "${r.dpar}"` : '';
+    return `  <span class="str">prior(${gPrior(r.id, r.cls, r.defOverride)}, ${cls}${coef}${group}${dpar})</span>`;
   });
 
   const famStr =
@@ -911,7 +948,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     f === 'zero_inflated_beta'   ? 'zero_inflated_beta("logit")' :
     f === 'zero_one_inflated_beta' ? 'zero_one_inflated_beta("logit")' :
     f === 'cumulative'           ? 'cumulative("logit")' :
-    f === 'categorical'          ? 'categorical("logistic")' :
+    f === 'categorical'          ? 'categorical("logit")' :
     `${f}()`;
 
   return `<span class="cm"># brms Model Builder — generated code</span>
@@ -925,7 +962,16 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
 <span class="cm"># → Intercept = E[y] at average predictor; coefficient per SD (z-std.) or unit (centered)</span>
 
 <span class="nm">model_formula</span> <span class="kw">&lt;-</span> ${formCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-
+${f === 'categorical' ? `
+<span class="cm"># Categorical (nominal): no Intercept/β prior generated.</span>
+<span class="cm">#   Why: brms fits categorical() with one linear predictor per non-reference category</span>
+<span class="cm">#   (dpar = "mu2", "mu3", ...). A single class=Intercept/class=b prior without a dpar tag</span>
+<span class="cm">#   matches no model parameter and brms will error out.</span>
+<span class="cm">#   The number of categories (and thus the required dpar tags) depends on your data —</span>
+<span class="cm">#   which this builder never sees. brms therefore uses its own defaults for Intercept/β.</span>
+<span class="cm">#   To add your own priors: first call default_prior(model_formula, data = my_data, family = ${famStr})</span>
+<span class="cm">#   to see the correct dpar names for your data, then override them specifically.</span>
+` : ''}
 <span class="nm">priors</span> <span class="kw">&lt;-</span> <span class="fn">c</span>(
 ${pArr.join(',\n')}
 )
@@ -1538,13 +1584,13 @@ function importFromPPC() {
   if (d.sigma) userPriors['fixed_sigma'] = ppcSigmaToStr(d.sigma);
 
   // Interactions
-  if (d.inters && d.inters.length > 0) {
-    inters = [...d.inters];
-    if (d.interPriors) {
-      d.interPriors.forEach(ip => {
-        if (ip.prior) userPriors['mu_b_' + ip.name] = ppcLocToStr(brmsParsToPPCLoc(ip.prior));
-      });
-    }
+  // Interactions — always overwrite (not just when non-empty), otherwise a source model
+  // with no interactions leaves stale interaction terms from a previous import in place.
+  inters = (d.inters && d.inters.length > 0) ? [...d.inters] : [];
+  if (d.interPriors) {
+    d.interPriors.forEach(ip => {
+      if (ip.prior) userPriors['mu_b_' + ip.name] = ppcLocToStr(brmsParsToPPCLoc(ip.prior));
+    });
   }
 
   // RE settings
@@ -1656,7 +1702,8 @@ const BRMS_HELP_HTML = `
   <li>This builder uses <code>y ~ 0 + Intercept + x</code> by default instead of the brms default <code>y ~ x</code></li>
   <li><strong>Why?</strong> With <code>y ~ x</code>, brms centers predictors internally — a custom prior then acts on a shifted parameter, not your intended scale</li>
   <li>With <code>0 + Intercept</code>, <code>prior(…, class = b, coef = Intercept)</code> applies directly to the raw scale: the prior corresponds to the expected outcome when all predictors = 0</li>
-  <li><em>Exception:</em> Ordinal models (cumulative, categorical) keep <code>class = Intercept</code> for threshold parameters</li>
+  <li><em>Exception:</em> Cumulative-ordinal models (cumulative) keep <code>class = Intercept</code> for the shared threshold parameters</li>
+  <li><em>Categorical (nominal):</em> needs its own <code>dpar</code>-tagged prior per category (e.g. <code>dpar = "mu2"</code>) — this builder doesn't generate specific priors for it, since the number of categories depends on your data; see the comment in the generated code</li>
   <li><strong>Recommendation:</strong> Still center predictors (<code>scale()</code> etc.) — greatly improves interpretability of the intercept and stabilizes MCMC sampling</li>
 </ul>
 
@@ -1703,7 +1750,8 @@ document.addEventListener('click', function(e) {
       <strong>Syntax difference</strong><br>
       brms default: <code>prior(normal(0, 2.5), class = Intercept)</code><br>
       Explicit (this formula): <code>prior(normal(0, 2.5), class = b, coef = Intercept)</code><br><br>
-      <span class="ipm-strong">Exception: Ordinal models (cumulative, categorical) — their threshold parameters keep <code>class = Intercept</code>, as brms treats them differently.</span>
+      <span class="ipm-strong">Exception: Cumulative-ordinal models (cumulative) — their shared threshold parameters keep <code>class = Intercept</code>, as brms treats them differently.</span><br><br>
+      <span class="ipm-strong">Categorical (nominal) is different: brms fits one linear predictor per category (<code>dpar = "mu2"</code>, <code>"mu3"</code>, …). Since the number of categories depends on your data, this builder generates no specific priors for it — brms uses its own defaults, see the comment in the generated code.</span>
     </div>
   </div>
 </div>

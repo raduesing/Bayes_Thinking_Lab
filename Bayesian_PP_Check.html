@@ -2689,6 +2689,13 @@ function plotInterLines(el, draws, interIdx, interTerm, colVar) {
      .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace')
      .text(`${parts[0]}`);
 }
+// brms renames I(x^n)-style formula terms to valid Stan parameter names by dropping
+// the parentheses and turning "^" into "E" (confirmed against brms::default_prior():
+// "I(x1^2)" -> "Ix1E2"). Prior coef="..." strings must use this sanitized form, not
+// the raw formula term, or brms rejects the prior as matching no model parameter.
+function brmsCoefName(term) {
+  return term.replace(/[()]/g, '').replace(/\^/g, 'E');
+}
 // ─────────────────────────────────────────────────────────
 function brmsCode(cfg) {
   const fmMap={
@@ -2707,7 +2714,7 @@ function brmsCode(cfg) {
     zero_inflated_beta:   'zero_inflated_beta("logit")',
     zero_one_inflated_beta:'zero_one_inflated_beta("logit")',
     cumulative:           'cumulative("logit")',
-    categorical:          'categorical("logistic")',
+    categorical:          'categorical("logit")',
   };
   const fm=fmMap[MODEL]||'gaussian()';
   const hasSig=['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(MODEL);
@@ -2737,8 +2744,13 @@ function brmsCode(cfg) {
   let formulaRHS;
   const distSigActive = cfg.distSigOn && (cfg.distSigBetas||[]).length > 0;
   const distNuActive  = cfg.distNuOn  && (cfg.distNuBetas||[]).length > 0;
-  // Always use 0 + Intercept parameterization (explicit intercept prior on raw scale)
-  const intercPart = xTerms ? `0 + Intercept + ${xTerms}` : `0 + Intercept`;
+  // Always use 0 + Intercept parameterization (explicit intercept prior on raw scale) —
+  // EXCEPT cumulative(), which forbids an explicit intercept term entirely (brms
+  // auto-generates the threshold intercepts; "0 + Intercept" errors with "Cannot
+  // remove the intercept in an ordinal model.", confirmed against brms directly).
+  const intercPart = MODEL === 'cumulative'
+    ? (xTerms || '1')
+    : (xTerms ? `0 + Intercept + ${xTerms}` : `0 + Intercept`);
   if (distSigActive || distNuActive) {
     let bfLines = `  Y ~ ${intercPart}${interTermsStr}${lmmPart}`;
     if (distSigActive) {
@@ -2761,16 +2773,24 @@ function brmsCode(cfg) {
   const iFam=cfg.ifam==='student_t'?`student_t(${Math.round(cfg.inu)}, ${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
     :cfg.ifam==='cauchy'?`cauchy(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`
     :`normal(${cfg.imu.toFixed(1)}, ${cfg.isig.toFixed(1)})`;
-  const isOrdCatFam = MODEL==='cumulative' || MODEL==='categorical';
-  const priorLines=[isOrdCatFam
-    ? `  <span class="str">prior(${iFam}, class = Intercept)</span>  <span class="cm">// thresholds τ_k</span>`
-    : `  <span class="str">prior(${iFam}, class = b, coef = Intercept)</span>`];
+  const isCumulative = MODEL==='cumulative';
+  const isCategoricalFam = MODEL==='categorical';
+  const priorLines = isCumulative
+    ? [`  <span class="str">prior(${iFam}, class = Intercept)</span>  <span class="cm">// thresholds τ_k</span>`]
+    : isCategoricalFam
+      ? [`  <span class="cm">// categorical() fits one linear predictor per non-reference outcome category —</span>`,
+         `  <span class="cm">// every prior needs dpar = "mu&lt;category&gt;" (e.g. mub, muc), not a single shared</span>`,
+         `  <span class="cm">// Intercept/β prior, so no specific priors are generated here. Run</span>`,
+         `  <span class="cm">// default_prior(model_formula, data = my_data, family = ${fm}) to see the exact</span>`,
+         `  <span class="cm">// dpar names for your outcome's categories, then add priors manually.</span>`]
+      : [`  <span class="str">prior(${iFam}, class = b, coef = Intercept)</span>`];
 
   // β priors — coef quoted, class = b without quotes; includes polynomial betas
+  // (skipped for categorical(): see comment above — needs per-category dpar tags instead)
   const totalTerms = allTermNames.length;
-  cfg.preds.forEach((p,i)=>{
+  if (!isCategoricalFam) cfg.preds.forEach((p,i)=>{
     const bname = pNames[i];
-    const coefStr = totalTerms>1 ? `, coef = "${bname}"` : '';
+    const coefStr = totalTerms>1 ? `, coef = "${brmsCoefName(bname)}"` : '';
     const dist=p.fam==='student_t'?`student_t(${Math.round(p.nu)}, ${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
       :p.fam==='cauchy'?`cauchy(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`
       :`normal(${p.mu.toFixed(1)}, ${p.sig.toFixed(1)})`;
@@ -2781,14 +2801,14 @@ function brmsCode(cfg) {
       const pdist=pb.fam==='student_t'?`student_t(${Math.round(pb.nu||3)}, ${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`
         :pb.fam==='cauchy'?`cauchy(${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`
         :`normal(${(pb.mu||0).toFixed(1)}, ${(pb.sig||0.5).toFixed(1)})`;
-      priorLines.push(`  <span class="str">prior(${pdist}, class = b, coef = "${termName}")</span>`);
+      priorLines.push(`  <span class="str">prior(${pdist}, class = b, coef = "${brmsCoefName(termName)}")</span>`);
     });
   });
 
   // Interaction β priors — coef uses : notation (Issue 4), quoted
-  (cfg.interTerms||[]).forEach(t=>{
+  if (!isCategoricalFam) (cfg.interTerms||[]).forEach(t=>{
     const mu=t.mu||0, sig=t.sig||1;
-    priorLines.push(`  <span class="str">prior(normal(${mu.toFixed(1)}, ${sig.toFixed(1)}), class = b, coef = "${t.name}")</span>`);
+    priorLines.push(`  <span class="str">prior(normal(${mu.toFixed(1)}, ${sig.toFixed(1)}), class = b, coef = "${brmsCoefName(t.name)}")</span>`);
   });
 
   // Sigma prior — only when NOT distributional (if distributional, sigma has no global class=sigma prior)
@@ -2861,7 +2881,7 @@ function brmsCode(cfg) {
     const tv = (document.getElementById('trials-var')?.value||'trials').trim();
     // Note in code: add | trials() to formula
   }
-  // Note: cumulative/categorical threshold prior already added at top (isOrdCatFam branch)
+  // Note: cumulative threshold prior / categorical dpar comment already added at top
 
   // LMM priors
   if (cfg.lmm) {
@@ -4768,10 +4788,11 @@ window.importFromBuilder = function() {
   });
   renderPredictors();
 
-  // Interaction terms
+  // Interaction terms — always overwrite (not just when non-empty), otherwise a source
+  // model with no interactions leaves stale interaction terms from a previous import in place.
+  interTerms = [];
+  nextInterId = 0;
   if (d.inters && d.inters.length > 0) {
-    interTerms = [];
-    nextInterId = 0;
     d.inters.forEach(name => {
       const existing = d.interPriors && d.interPriors.find(ip => ip.name === name);
       const prior = existing?.prior;
@@ -4781,8 +4802,8 @@ window.importFromBuilder = function() {
         sig: prior?.sig ?? 1
       });
     });
-    renderInterTerms();
   }
+  renderInterTerms();
 
   // Reset distributional flags — only restore what Builder actually sent
   const resetDistSig = () => {
