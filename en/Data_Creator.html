@@ -1207,7 +1207,10 @@ function updateFormula(){
   const clActive=document.getElementById('clusterActive')?.checked;
   const clName=document.getElementById('clusterName')?.value||'school';
   const lik=document.getElementById('likSel')?.value||'gaussian';
-  const yName=likYName(lik);
+  // binomial with N>1 trials needs a trials-aware LHS — plain "Y" would be raw success
+  // counts, which glmmTMB/glm/brms all reject or silently misinterpret as 0/1 Bernoulli.
+  const ntrialsFm=lik==='binomial'?+(document.getElementById('extraNtrials')?.value||10):null;
+  const yn=likYName(lik,ntrialsFm);
 
   const clTau1=+(document.getElementById('clusterTau1')?.value||0);
   const slopeOnId=document.getElementById('clusterSlopeOn')?.value;
@@ -1231,14 +1234,20 @@ function updateFormula(){
   if(clActive) reTerms.push(hasSlope?`(1 + ${cleanR(fmSlopeFactor.name)} | ${cleanR(clName)})`:`(1 | ${cleanR(clName)})`);
   const re=reTerms.length?' + '+reTerms.join(' + '):'';
 
-  const lme4=`${yName} ~ ${fixed}${re}`;
-  const brms=`bf(${yName} ~ ${fixed}${re}${lik!=='gaussian'?`, family = ${brmsFamily(lik)}`:''})`;
+  const lme4=`${yn.lme4} ~ ${fixed}${re}`;
+  const brms=`bf(${yn.brms} ~ ${fixed}${re}${lik!=='gaussian'?`, family = ${brmsFamily(lik)}`:''})`;
 
   document.getElementById('formulaLme4').textContent=lme4;
   document.getElementById('formulaBrms').textContent=brms;
 }
 
-function likYName(l){return 'Y';}
+// binomial with N>1 trials: lme4/glmmTMB use cbind(successes, failures) as the response;
+// brms uses "Y | trials(N)". Both differ from the plain "Y" that works for every other
+// family (including binomial with N=1, which is already 0/1-coded).
+function likYName(l,ntrials){
+  if(l==='binomial'&&ntrials>1) return {lme4:`cbind(Y, ${ntrials} - Y)`, brms:`Y | trials(${ntrials})`};
+  return {lme4:'Y', brms:'Y'};
+}
 function brmsFamily(l){return{gaussian:'gaussian()',student:'student()',lognormal:'lognormal()',gamma:'Gamma(link="log")',bernoulli:'bernoulli()',beta:'Beta()',binomial:'binomial()',poisson:'poisson()',negbinomial:'negbinomial()'}[l]||'gaussian()';}
 
 // ────────────────────────────────────────────────────────────
@@ -1251,7 +1260,7 @@ function onLikChange(){
   let html='';
   if(lik==='student') html+=`<label>ν</label><input class="inp inp-sm" id="extraNu" type="number" step="1" min="1" value="4">`;
   if(['gamma','beta','negbinomial'].includes(lik)) html+=`<label>φ</label><input class="inp inp-sm" id="extraPhi" type="number" step="0.5" min="0.1" value="2">`;
-  if(lik==='binomial') html+=`<label>N_trials</label><input class="inp inp-sm" id="extraNtrials" type="number" step="1" min="1" value="10">`;
+  if(lik==='binomial') html+=`<label>N_trials</label><input class="inp inp-sm" id="extraNtrials" type="number" step="1" min="1" value="10" oninput="updateFormula()">`;
   el.innerHTML=html;
 
   const nonGaussWithin=ST.within.length>0&&lik!=='gaussian';
@@ -2564,7 +2573,10 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
 
   function pwMkFml(fixedTerms){
     const fx=fixedTerms.length?fixedTerms.join(' + '):'1';
-    return `Y ~ ${fx}${pwCovStr}${pwReStr}`;
+    // binomial with N>1 trials: raw "Y" counts need cbind(successes, failures), or
+    // glmmTMB rejects them ("y values must be 0 <= y <= 1"). See likYName().
+    const yLhs=(lik==='binomial'&&extra.ntrials>1)?`cbind(Y, ${extra.ntrials} - Y)`:'Y';
+    return `${yLhs} ~ ${fx}${pwCovStr}${pwReStr}`;
   }
   const pwFmlFull =pwMkFml(pwAllTermsFull);
   const pwFmlAdd  =pwMkFml(pwAllMain);          // nur Haupteffekte
