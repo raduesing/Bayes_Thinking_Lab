@@ -736,8 +736,13 @@ function gPrior(id, cls, defOverride) {
   return userPriors[id];
 }
 
-// Render the prior section and return { ui: htmlString, rows: [{id,label,cls,coef,dpar,sym}] }
-function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
+// Returns rows: [{id,label,cls,coef,dpar,sym}]
+// Pure row computation, no DOM writes — safe to call on every keystroke inside a
+// prior-value input. buildPriorSection() (below) additionally rebuilds the sidebar
+// HTML from these rows; that rebuild destroys and recreates every <input> in the
+// list (including the one currently focused), so it must NOT run on every keystroke
+// — see schedPriorInput()/updatePriorDerived() for the keystroke-safe path.
+function computePriorRows(preds, activeD, hasRE, g, reType, slopeVars) {
   const rows = [];
   const f    = gFamily();
 
@@ -841,6 +846,17 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
     }
   }
 
+  return rows;
+}
+
+// Rebuilds the #prior-list sidebar HTML from a rows array — destroys and recreates
+// every <input> in the list, so this must only run on STRUCTURAL changes (family,
+// predictor list, RE toggle, distributional-model toggle), never on a keystroke
+// inside a prior-value input (that would steal focus back from the user mid-type —
+// exactly the "jumps out after every character" bug this split fixes).
+function renderPriorListUI(rows) {
+  const f = gFamily();
+  const isCategoricalFam = f === 'categorical';
   // Build UI HTML — color-coded by parameter family
   const clsBadge = (cls, dpar) => {
     // For distributional rows, badge color matches the dpar type
@@ -866,11 +882,18 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
       <div class="prior-lbl">${clsBadge(r.cls, r.dpar)}${r.label}</div>
       <input class="prior-inp" type="text" id="pi-${r.id}"
              value="${gPrior(r.id, r.cls, r.defOverride)}"
-             oninput="userPriors['${r.id}']=this.value;schedUpdate()">
+             oninput="userPriors['${r.id}']=this.value;schedPriorInput()">
     </div>`;
   });
   document.getElementById('prior-list').innerHTML = pUI;
+}
 
+// Structural path: recompute rows AND rebuild the sidebar. Called from update()
+// whenever something that changes the SET of prior rows happens (family switch,
+// predictor added/removed, RE toggled, distributional model toggled, …).
+function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
+  const rows = computePriorRows(preds, activeD, hasRE, g, reType, slopeVars);
+  renderPriorListUI(rows);
   return rows;
 }
 
@@ -1251,6 +1274,37 @@ function update() {
   mathContent.innerHTML = buildMath(predsExpanded, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
 
   // Typeset MathJax
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetPromise([mathContent]).catch(()=>{});
+  }
+}
+
+// Keystroke-safe debounce for prior-value <input>s: unlike schedUpdate()/update(),
+// this never calls buildPriorSection()/renderPriorListUI() — it only recomputes the
+// derived R-code and Math panels. Wiring prior inputs to schedUpdate() instead used
+// to rebuild the whole #prior-list sidebar 250ms after every keystroke, destroying
+// and recreating the input the user was actively typing in (losing focus/cursor
+// after each character) — this path leaves that sidebar untouched.
+function schedPriorInput() { clearTimeout(_updTimer); _updTimer = setTimeout(updatePriorDerived, 250); }
+
+function updatePriorDerived() {
+  const preds         = predictorNames.filter(Boolean);
+  const predsExpanded = expandPreds(preds, predictorDegrees);
+  const hasRE     = document.getElementById('has-re').checked;
+  const g         = document.getElementById('group-var').value.trim() || 'group';
+  const reType    = document.getElementById('re-type').value;
+  const slopeVars = reType === 'slope'
+    ? document.getElementById('re-slope-vars').value.split(',').map(s=>s.trim()).filter(Boolean)
+    : [];
+  const activeD = getActiveDistParams();
+  const priorRows = computePriorRows(predsExpanded, activeD, hasRE, g, reType, slopeVars);
+
+  document.getElementById('code-block').innerHTML =
+    buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+
+  const mathContent = document.getElementById('math-content');
+  mathContent.innerHTML = buildMath(predsExpanded, inters, activeD, hasRE, g, reType, slopeVars, priorRows);
+
   if (window.MathJax && MathJax.typesetPromise) {
     MathJax.typesetPromise([mathContent]).catch(()=>{});
   }
