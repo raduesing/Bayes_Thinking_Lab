@@ -2022,37 +2022,27 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         lines.push(`rho01 <- ${clRho01}  # intercept–slope correlation`);
       }
       if(hasSlopes){
-        // Correlated (u0, u1) via MASS::mvrnorm
-        lines.push(`Sigma_re <- matrix(c(tau0^2, rho01*tau0*tau1,`);
-        lines.push(`                    rho01*tau0*tau1, tau1^2), nrow = 2)`);
-        lines.push(`RE <- MASS::mvrnorm(k, mu = c(0, 0), Sigma = Sigma_re)`);
-        lines.push(`u0 <- setNames(RE[, 1], paste0("${clNameR}", 1:k))`);
-        lines.push(`u1 <- setNames(RE[, 2], paste0("${clNameR}", 1:k))`);
+        const m=clSlopeFactor.levels.length;
+        buildSlopeSigmaLines('k','tau0','tau1','rho01','Sigma_re','RE',i=>'u'+i,clNameR,m).forEach(l=>lines.push(l));
       } else {
         lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
       }
       lines.push(`dat_wide$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat_wide), replace = TRUE))`);
       if(hasSlopes&&slopeIsWithin){
-        // Slope on within factor: code = level index (0, 1, 2, …)
         lines.push(`dat_wide <- dat_wide |>`);
         lines.push(`  mutate(`);
-        wNames.forEach((lv,wi)=>{
-          const comma=wi<wNames.length-1?',':'';
-          lines.push(`    \`${lv}\` = \`${lv}\` + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * ${wi}${comma}`);
-        });
+        const rows=applyWithinSlopeLines(wNames,clNameR,i=>'u'+i);
+        rows.forEach((r,i)=>lines.push(`    ${r}${i<rows.length-1?',':''}`));
         lines.push(`  )`);
       } else if(hasSlopes&&slopeIsBetween){
-        // Slope on between factor: slope code = level index of that factor per row
-        const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
-        lines.push(`# Slope code: level index of between factor "${clSlopeFactor.name}" (0-based)`);
         lines.push(`dat_wide <- dat_wide |>`);
         lines.push(`  mutate(`);
-        lines.push(`    .slope_code = match(${sfNameR}, c(${sfLevels})) - 1L,`);
+        const expr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i);
         wNames.forEach((lv,wi)=>{
           const comma=wi<wNames.length-1?',':'';
-          lines.push(`    \`${lv}\` = \`${lv}\` + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code${comma}`);
+          lines.push(`    \`${lv}\` = \`${lv}\` + ${expr}${comma}`);
         });
-        lines.push(`  ) |> select(-.slope_code)`);
+        lines.push(`  )`);
       } else {
         lines.push(`dat_wide <- dat_wide |>`);
         lines.push(`  mutate(across(c(${wNames.map(l=>`"${l}"`).join(', ')}), \\(x) x + u0[as.character(${clNameR})]))`);
@@ -2209,28 +2199,23 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     if(hasSlopesNoW){
       lines.push(`tau1  <- ${clTau1}   # random-slope SD (slope on: ${clSlopeFactor.name})`);
       lines.push(`rho01 <- ${clRho01}  # intercept–slope correlation`);
-      lines.push(`Sigma_re <- matrix(c(tau0^2, rho01*tau0*tau1,`);
-      lines.push(`                    rho01*tau0*tau1, tau1^2), nrow = 2)`);
-      lines.push(`RE <- MASS::mvrnorm(k, mu = c(0, 0), Sigma = Sigma_re)`);
-      lines.push(`u0 <- setNames(RE[, 1], paste0("${clNameR}", 1:k))`);
-      lines.push(`u1 <- setNames(RE[, 2], paste0("${clNameR}", 1:k))`);
+      const mNoW=clSlopeFactor.levels.length;
+      buildSlopeSigmaLines('k','tau0','tau1','rho01','Sigma_re','RE',i=>'u'+i,clNameR,mNoW).forEach(l=>lines.push(l));
     } else {
       lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
     }
     lines.push(`dat$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat), replace = TRUE))`);
     const useEtaColCl = !isIdentityLink(lik);
     if(hasSlopesNoW){
-      const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
+      const slopeExpr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i);
       lines.push(`dat <- dat |>`);
-      lines.push(`  mutate(`);
-      lines.push(`    .slope_code = match(${sfNameR}, c(${sfLevels})) - 1L,`);
       if(useEtaColCl){
-        lines.push(`    .eta = .eta + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code,`);
+        lines.push(`  mutate(`);
+        lines.push(`    .eta = .eta + ${slopeExpr},`);
         lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
-        lines.push(`  ) |> select(-c(.slope_code, .eta${lik==='lognormal'?', .sigma':''}))`);
+        lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
       } else {
-        lines.push(`    Y = Y + u0[as.character(${clNameR})] + u1[as.character(${clNameR})] * .slope_code`);
-        lines.push(`  ) |> select(-.slope_code)`);
+        lines.push(`  mutate(Y = Y + ${slopeExpr})`);
       }
     } else {
       lines.push(`dat <- dat |>`);
@@ -2336,6 +2321,61 @@ function buildWithinSdR(lik,hasB,bRows,wNames,wf){
 }
 
 // ────────────────────────────────────────────────────────────
+// RANDOM-SLOPE COVARIANCE HELPERS — shared by buildRCode() and buildPowerRCode(),
+// for both within- and between-slope targets. A slope factor with m levels needs m-1
+// independent slope dummies (one per non-reference level) via treatment coding — exactly
+// what "(1 + factor | cluster)" itself estimates in lme4/glmmTMB. The old code instead
+// scaled a SINGLE slope by the level's numeric position (0, 1, 2, …), i.e. assumed a
+// strictly linear trend across levels — wrong for any slope factor with >2 levels, and
+// inconsistent with the fitted model, which allows each non-reference level its own
+// unconstrained slope. Reduces exactly to the previous 2x2 structure when m=2.
+// ────────────────────────────────────────────────────────────
+function buildSlopeSigmaLines(kVar,tau0Var,tau1Var,rhoVar,sigmaVar,reVar,uName,clNameR,m){
+  const L=[];
+  if(m===2){
+    L.push(`${sigmaVar} <- matrix(c(${tau0Var}^2, ${rhoVar}*${tau0Var}*${tau1Var},`);
+    L.push(`${' '.repeat(sigmaVar.length+13)}${rhoVar}*${tau0Var}*${tau1Var}, ${tau1Var}^2), nrow = 2)`);
+  } else {
+    const rows=[];
+    for(let i=0;i<m;i++){
+      const row=[];
+      for(let j=0;j<m;j++){
+        if(i===0&&j===0) row.push(`${tau0Var}^2`);
+        else if(i===0||j===0) row.push(`${rhoVar}*${tau0Var}*${tau1Var}`);
+        else if(i===j) row.push(`${tau1Var}^2`);
+        else row.push('0');
+      }
+      rows.push(row.join(', '));
+    }
+    L.push(`${sigmaVar} <- matrix(c(`);
+    rows.forEach((r,i)=>L.push(`  ${r}${i<rows.length-1?',':''}`));
+    L.push(`), ${m}, ${m})`);
+  }
+  L.push(`${reVar} <- MASS::mvrnorm(${kVar}, mu = rep(0, ${m}), Sigma = ${sigmaVar})`);
+  L.push(`${uName(0)} <- setNames(${reVar}[, 1], paste0("${clNameR}", 1:${kVar}))`);
+  for(let i=1;i<m;i++) L.push(`${uName(i)} <- setNames(${reVar}[, ${i+1}], paste0("${clNameR}", 1:${kVar}))`);
+  return L;
+}
+// Applies per-level slope REs to wide-format within-design data: the reference level
+// (levels[0]) gets only the intercept RE; each non-reference level i gets intercept +
+// its own independent slope RE (u_i).
+function applyWithinSlopeLines(wNames,clNameR,uName){
+  return wNames.map((lv,wi)=>{
+    const term = wi===0 ? `${uName(0)}[as.character(${clNameR})]` : `${uName(0)}[as.character(${clNameR})] + ${uName(wi)}[as.character(${clNameR})]`;
+    return `\`${lv}\` = \`${lv}\` + ${term}`;
+  });
+}
+// Builds the row-wise RE addition expression for a between-factor slope target: sums the
+// intercept RE plus, for each non-reference level, its own slope RE gated by an equality
+// indicator — replaces the old single-slope * numeric-level-code approximation, and
+// (as a side effect) no longer needs an intermediate .slope_code column.
+function betweenSlopeAdditionExpr(clNameR,sfNameR,levels,uName){
+  const terms=[`${uName(0)}[as.character(${clNameR})]`];
+  for(let i=1;i<levels.length;i++) terms.push(`${uName(i)}[as.character(${clNameR})] * (${sfNameR} == "${levels[i]}")`);
+  return terms.join(' + ');
+}
+
+// ────────────────────────────────────────────────────────────
 // COVARIATE R-CODE HELPER
 // ────────────────────────────────────────────────────────────
 function buildCovAssignment(cov,cR,datObjName,bNamesR,zExpr){
@@ -2419,27 +2459,22 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     if(!clActive) return;
     L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
     if(hasSlopes){
+      const mBW=clSlopeFactor.levels.length;
       L.push(`#   tau1_pw <- ${clTau1}; rho_pw <- ${clRho01}`);
-      L.push(`#   Sig <- matrix(c(tau0_pw^2, rho_pw*tau0_pw*tau1_pw,`);
-      L.push(`#                   rho_pw*tau0_pw*tau1_pw, tau1_pw^2), 2, 2)`);
-      L.push(`#   RE_pw <- MASS::mvrnorm(k_pw, c(0,0), Sig)`);
-      L.push(`#   u0_pw <- setNames(RE_pw[,1], paste0("${clNameR}", 1:k_pw))`);
-      L.push(`#   u1_pw <- setNames(RE_pw[,2], paste0("${clNameR}", 1:k_pw))`);
+      buildSlopeSigmaLines('k_pw','tau0_pw','tau1_pw','rho_pw','Sig','RE_pw',i=>'u'+i+'_pw',clNameR,mBW).forEach(l=>L.push('#   '+l));
     } else {
       L.push(`#   u0_pw <- setNames(rnorm(k_pw, 0, tau0_pw), paste0("${clNameR}", 1:k_pw))`);
     }
     L.push(`#   ${datVar}$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k_pw), nrow(${datVar}), replace = TRUE))`);
     if(hasSlopes){
-      const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
-      L.push(`#   ${datVar} <- ${datVar} |> mutate(`);
-      L.push(`#     .sc = match(${sfNameR}, c(${sfLevels})) - 1L,`);
+      const slopeExpr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i+'_pw');
       if(useEtaCol){
-        L.push(`#     .eta = .eta + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * .sc,`);
+        L.push(`#   ${datVar} <- ${datVar} |> mutate(`);
+        L.push(`#     .eta = .eta + ${slopeExpr},`);
         L.push(`#     Y = ${rYFromEtaCol(lik, extra)}`);
-        L.push(`#   ) |> select(-c(.sc, .eta${lik==='lognormal'?', .sigma':''}))`);
+        L.push(`#   ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
       } else {
-        L.push(`#     Y = Y + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * .sc`);
-        L.push(`#   ) |> select(-.sc)`);
+        L.push(`#   ${datVar} <- ${datVar} |> mutate(Y = Y + ${slopeExpr})`);
       }
     } else if(useEtaCol){
       L.push(`#   ${datVar} <- ${datVar} |> mutate(`);
@@ -2546,12 +2581,9 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     if(clActive){
       L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
       if(hasSlopes){
+        const mW=clSlopeFactor.levels.length;
         L.push(`#   tau1_pw <- ${clTau1}; rho_pw <- ${clRho01}`);
-        L.push(`#   Sig <- matrix(c(tau0_pw^2, rho_pw*tau0_pw*tau1_pw,`);
-        L.push(`#                   rho_pw*tau0_pw*tau1_pw, tau1_pw^2), 2, 2)`);
-        L.push(`#   RE_pw <- MASS::mvrnorm(k_pw, c(0,0), Sig)`);
-        L.push(`#   u0_pw <- setNames(RE_pw[,1], paste0("${clNameR}", 1:k_pw))`);
-        L.push(`#   u1_pw <- setNames(RE_pw[,2], paste0("${clNameR}", 1:k_pw))`);
+        buildSlopeSigmaLines('k_pw','tau0_pw','tau1_pw','rho_pw','Sig','RE_pw',i=>'u'+i+'_pw',clNameR,mW).forEach(l=>L.push('#   '+l));
       } else {
         L.push(`#   u0_pw <- setNames(rnorm(k_pw, 0, tau0_pw), paste0("${clNameR}", 1:k_pw))`);
       }
@@ -2565,20 +2597,17 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       L.push(`#   d <- dplyr::left_join(d, ${clNameR}_map, by = "id")`);
       if(hasSlopes&&pwSlopeIsWithin){
         L.push(`#   d <- d |> mutate(`);
-        wNames.forEach((lv,wi)=>{
-          const comma=wi<wNames.length-1?',':'';
-          L.push(`#     \`${lv}\` = \`${lv}\` + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * ${wi}${comma}`);
-        });
+        const rows=applyWithinSlopeLines(wNames,clNameR,i=>'u'+i+'_pw');
+        rows.forEach((r,i)=>L.push(`#     ${r}${i<rows.length-1?',':''}`));
         L.push('#   )');
       } else if(hasSlopes&&pwSlopeIsBetween){
-        const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
         L.push(`#   d <- d |> mutate(`);
-        L.push(`#     .sc = match(${sfNameR}, c(${sfLevels})) - 1L,`);
+        const expr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i+'_pw');
         wNames.forEach((lv,wi)=>{
           const comma=wi<wNames.length-1?',':'';
-          L.push(`#     \`${lv}\` = \`${lv}\` + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * .sc${comma}`);
+          L.push(`#     \`${lv}\` = \`${lv}\` + ${expr}${comma}`);
         });
-        L.push('#   ) |> select(-.sc)');
+        L.push('#   )');
       } else {
         L.push(`#   d <- d |> mutate(across(c(${wNames.map(l=>`"${l}"`).join(', ')}), \\(x) x + u0_pw[as.character(${clNameR})]))`);
       }
