@@ -2385,6 +2385,13 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     const out=[];
     if(!ST.covariates.length) return out;
     const bNR=ST.between.map(f=>cleanR(f.name));
+    // buildCovAssignment() can return a single array element containing embedded
+    // newlines (e.g. the multi-line "mu_cov1 <- c(...)" list for group-mean covariates).
+    // Prefixing only at the array-element level left the embedded lines completely
+    // uncommented — live, unprefixed R code sitting inside what's supposed to be an
+    // entirely commented-out block, which broke sourcing the whole generated script.
+    // Split on "\n" first so every actual line gets its own "#" prefix.
+    const pushCommented=arr=>arr.forEach(ln=>ln.split('\n').forEach(sub=>out.push(`#   ${sub}`)));
     out.push(`#   # ── Kovariablen ──`);
     if(ST.covariates.length===2&&ST.covRho!==0){
       const c1=ST.covariates[0],c2=ST.covariates[1];
@@ -2392,13 +2399,11 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       out.push(`#   Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
       out.push(`#   cov_z <- MASS::mvrnorm(nrow(${datName}), mu = c(0, 0), Sigma = Sigma_cov)`);
       ST.covariates.forEach((cov,ci)=>{
-        buildCovAssignment(cov,cleanR(cov.name),datName,bNR,`cov_z[, ${ci+1}]`)
-          .forEach(ln=>out.push(`#   ${ln}`));
+        pushCommented(buildCovAssignment(cov,cleanR(cov.name),datName,bNR,`cov_z[, ${ci+1}]`));
       });
     }else{
       ST.covariates.forEach(cov=>{
-        buildCovAssignment(cov,cleanR(cov.name),datName,bNR,`rnorm(nrow(${datName}), 0, ${cov.sd.toFixed(2)})`)
-          .forEach(ln=>out.push(`#   ${ln}`));
+        pushCommented(buildCovAssignment(cov,cleanR(cov.name),datName,bNR,`rnorm(nrow(${datName}), 0, ${cov.sd.toFixed(2)})`));
       });
     }
     return out;
