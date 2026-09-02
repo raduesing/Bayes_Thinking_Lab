@@ -1281,26 +1281,38 @@ function drawEdge(g,a,b,edge){
   // must clear that text too, not just the curve — otherwise it visibly cuts
   // through the label on its way out.
   const rA=edge.srcX!=null?0:a.type==='det'?8:a.type==='lik'?42:a.type==='obs'?23:a.type==='anchor'?12:44;
-  // u_j/v_j get a bigger target radius than other stoch nodes: the arrow should
-  // stop at their "Normal(0, τ₀)" prior-label text (which sits well above the
-  // curve itself), not travel all the way down past it to the curve/node — that
-  // was the whole point of adding that text: show what τ actually sets.
-  const rB=b.type==='det'?8:b.type==='obs'||b.type==='lik'?23:b.type==='anchor'?12
-          :(b.id==='u_j'||b.id==='v_j')?46:22;
+  const rB=b.type==='det'?8:b.type==='obs'||b.type==='lik'?23:b.type==='anchor'?12:22;
 
   // For α/β→det edges: arrow tip lands at the term's x-position in the formula
-  let tx2=b.x, ty2=b.y;
+  let tx2=b.x, ty2=b.y, fixedEnd=false;
   if(b.type==='det' && edge.termX!=null){
     tx2=edge.termX;
     ty2=b.y-10; // top of formula box
+    fixedEnd=true;
+  } else if(b.id==='u_j'||b.id==='v_j'){
+    // u_j/v_j's arrow must stop at their "Normal(0,τ₀)"/"MVNormal(0,Σ)" prior-label
+    // text, which sits a FIXED vertical distance above the curve, regardless of the
+    // arrow's approach angle. A Euclidean source-radius (used everywhere else) works
+    // fine for the near-vertical τ→u_j/v_j arrows, but ρ approaches much more
+    // diagonally (it sits off to the side, between τ₀ and τ₁) — the same radius
+    // then buys far less VERTICAL clearance, so the tip lands on top of the text
+    // instead of above it. Solving for the point on the source→target line that's
+    // exactly vertClear above the target's center fixes this for any angle.
+    const ddx=b.x-srcX, ddy=b.y-srcY;
+    const vertClear=55;
+    if(Math.abs(ddy)>0.01){
+      tx2=b.x-ddx*vertClear/ddy;
+      ty2=b.y-vertClear;
+      fixedEnd=true;
+    }
   }
 
   const dx=tx2-srcX, dy=ty2-srcY, len=Math.sqrt(dx*dx+dy*dy)||1;
   const ux=dx/len, uy=dy/len;
   const x1=(srcX+ux*(rA+3)).toFixed(1), y1=(srcY+uy*(rA+3)).toFixed(1);
-  // End point: for term-targeted edges, land exactly at termX
-  const x2=edge.termX!=null?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
-  const y2=edge.termX!=null?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
+  // End point: for term-targeted (or otherwise fixed) edges, land exactly at tx2/ty2
+  const x2=fixedEnd?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
+  const y2=fixedEnd?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
   // Control point with gentle curve. The start control point (cx1) carries the full
   // bulge so the path can sweep around neighboring nodes; the end control point (cx2)
   // only gets a fraction of it, so the curve always arrives at its target close to
