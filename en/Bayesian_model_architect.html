@@ -424,7 +424,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     · <b>• dot</b> = deterministic node (μᵢ) — no prior, computed from inputs<br>
     · <b>Arrows</b> show the generative direction: Prior → Parameter → Data<br>
     · <b>Plates</b> (dashed frames) mark repeated units (i = 1…N observations; j = 1…J groups)<br><br>
-    In the <b>hierarchical model</b>, each group j receives a deviation from the global intercept: <b>u₀ⱼ ~ Normal(0, τ₀)</b>. τ₀ controls the degree of partial pooling — small τ₀ = strong shrinkage. In McElreath (Ch. 14, p. 441 ff.) this parameter is called <em>σ_α</em>. <b>Random Slopes</b> (u₁ⱼ ~ Normal(0, τ₁), corresponding to McElreath's <em>σ_β</em>) are implemented here only for the first predictor, to illustrate the diagram principle.
+    In the <b>hierarchical model</b>, each group j receives a deviation from the global intercept: <b>u₀ⱼ ~ Normal(0, τ₀)</b>. τ₀ controls the degree of partial pooling — small τ₀ = strong shrinkage. In McElreath (Ch. 14, p. 441 ff.) this parameter is called <em>σ_α</em>. <b>Random Slopes</b> are implemented here only for the first predictor. Once they're active, u₀ⱼ and u₁ⱼ are NOT drawn independently anymore — jointly, <b>[u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ)</b>, with an additional correlation ρ between the intercept and slope deviations (brms default).
   </div>
   <div class="ahp-tip">
     <b>Simple example models only:</b> up to 4 predictors, one group structure, 5 likelihoods. The focus is on <em>structure</em>, not full model complexity. Click on any node in the diagram for an explanation.
@@ -473,6 +473,7 @@ const M = {
     sig_a: {fam:'exponential', p1:1          },
     mu_b:  {fam:'normal',      mu:0,  sig:0.5},  // McElreath: Normal(0,0.5) für z-std.
     sig_b: {fam:'exponential', p1:1          },
+    rho:   {fam:'lkj',         p1:2           },  // Correlation u₀ⱼ↔u₁ⱼ — brms default: lkj(2)
   }
 };
 
@@ -556,11 +557,25 @@ function genSimCode(){
     L.push('n_groups <- 10   # number of groups — adjust as needed');
     L.push(`${gv}       <- sample(1:n_groups, n, replace = TRUE)`);
     L.push(`tau_0    <- rexp(1, rate = ${sa_lam})   # Hyperprior: Exponential(${sa_lam})`);
-    L.push(`u0_j     <- rnorm(n_groups, mean = 0, sd = tau_0)   # Random intercept deviations`);
     if(M.ret==='slope'&&K>0){
-      const sb_lam=M.pr.sig_b?.p1??1;
+      // u0_j and u1_j are NOT independent draws — brms fits them jointly via a
+      // 2x2 covariance matrix built from tau_0, tau_1 AND their correlation rho
+      // (brms default: (1+x|group), prior class="cor"). Drawing them as two
+      // separate rnorm(...,0,tau) calls (as this code used to) silently ignores
+      // that correlation, producing simulated data the fitted model wouldn't
+      // actually generate. rho itself is drawn from LKJ(eta) — for a single
+      // correlation (2x2 case) that's exactly 2*rbeta(1,eta,eta)-1: both have
+      // density ∝ (1-rho^2)^(eta-1) on [-1,1] after the linear change of variable.
+      const sb_lam=M.pr.sig_b?.p1??1, rho_eta=M.pr.rho?.p1??2;
       L.push(`tau_1    <- rexp(1, rate = ${sb_lam})   # Hyperprior: Exponential(${sb_lam})`);
-      L.push(`u1_j     <- rnorm(n_groups, mean = 0, sd = tau_1)   # Random slope deviations`);
+      L.push(`rho      <- 2 * rbeta(1, ${rho_eta}, ${rho_eta}) - 1   # Hyperprior: LKJ(${rho_eta}), 2x2 case = scaled Beta(η,η)`);
+      L.push(`Sigma    <- matrix(c(tau_0^2, rho*tau_0*tau_1,`);
+      L.push(`                     rho*tau_0*tau_1, tau_1^2), nrow = 2)`);
+      L.push(`U        <- MASS::mvrnorm(n_groups, mu = c(0, 0), Sigma = Sigma)`);
+      L.push(`u0_j     <- U[, 1]   # Random intercept deviations`);
+      L.push(`u1_j     <- U[, 2]   # Random slope deviations — correlated with u0_j via rho`);
+    } else {
+      L.push(`u0_j     <- rnorm(n_groups, mean = 0, sd = tau_0)   # Random intercept deviations`);
     }
     L.push('');
   }
@@ -639,12 +654,22 @@ function genSimCode(){
   L.push(`  data    = d,`);
   L.push(`  family  = ${FAM_BRMS[fam]||fam}(),`);
   L.push('  prior   = c(');
+  // sd(Intercept)/sd(slope) need coef= once BOTH exist, or brms can't tell which
+  // slider (τ₀'s vs τ₁'s) each prior line is meant for; the correlation between
+  // them then needs its own class="cor" (LKJ) line — omitting it (as this used
+  // to) doesn't mean "no correlation", it just means brms silently falls back to
+  // its own cor() default instead of the ρ slider's value.
+  const hasSlopeFit=isML&&M.ret==='slope'&&K>0;
   const pl=[
     '    '+priorToR(M.pr.alpha,'b','Intercept'),
     ...(fam==='normal'||fam==='student'?['    '+priorToR(M.pr.sigma,'sigma')]:[]),
     ...(fam==='student'?['    '+priorToR(M.pr.nu,'nu')]:[]),
     ...M.preds.map((p,i)=>'    '+priorToR(p.pr,'b',p.name||`x${i+1}`)),
-    ...(isML?['    '+priorToR(M.pr.sig_a,'sd')]:[])
+    ...(isML?['    '+priorToR(M.pr.sig_a,'sd',hasSlopeFit?'Intercept':undefined)]:[]),
+    ...(hasSlopeFit?[
+      '    '+priorToR(M.pr.sig_b,'sd',M.preds[0].name||'x1'),
+      '    '+priorToR(M.pr.rho,'cor')
+    ]:[])
   ];
   L.push(pl.join(',\n'));
   L.push('  ),');
@@ -766,13 +791,18 @@ const EX={
     why:'Exp(1): favours moderate heterogeneity between groups. σ_α is substantively very informative!',
     tip:'Look at σ_α in the posterior: it tells you how different the groups still are after controlling for predictors.'},
   u_j:{title:'Random intercept u₀ⱼ',
-    what:'u₀ⱼ is the group-specific deviation from the global intercept α. Each group j gets its own value u₀ⱼ ~ Normal(0, τ₀). The full group intercept is α + u₀ⱼ.',
-    why:'Partial pooling: groups with little data are pulled toward 0 (shrinkage). τ₀ determines the extent — small τ₀ = strong pooling. In brms: (1|group).',
-    tip:'u₀ⱼ corresponds to McElreath\'s α[j] shifted: α + u₀ⱼ = α[j]. Centering at 0 is technically necessary for identifiability.'},
+    what:'u₀ⱼ is the group-specific deviation from the global intercept α. The full group intercept is α + u₀ⱼ. With ONLY a random intercept (no random slope): u₀ⱼ ~ Normal(0, τ₀) — a plain univariate Normal. In brms: (1|group).',
+    why:'Partial pooling: groups with little data are pulled toward 0 (shrinkage). τ₀ determines the extent — small τ₀ = strong pooling.',
+    tip:'Once a random slope is also active, this changes: u₀ⱼ and u₁ⱼ are then NOT independent anymore, but jointly MVNormal(0, Σ) — see ρ. Two separate Normal(0,τ) distributions would then be wrong.'},
   v_j:{title:'Random slope u₁ⱼ',
-    what:'u₁ⱼ is the group-specific deviation from the global slope β₁. u₁ⱼ ~ Normal(0, τ₁). The full group slope is β₁ + u₁ⱼ.',
-    why:'Random slopes are useful when the relationship between predictor and DV varies from group to group — i.e. when an interaction with the group structure exists. In brms: (1+x|group).',
+    what:'u₁ⱼ is the group-specific deviation from the global slope β₁. The full group slope is β₁ + u₁ⱼ.',
+    why:'u₀ⱼ and u₁ⱼ are NOT drawn independently — brms assumes by default that groups with a more deviant intercept also tend to have a (positively or negatively) deviant slope. Together: [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ), with Σ built from τ₀, τ₁ AND the correlation ρ. In brms: (1+x|group).',
     tip:'Models with random slopes are considerably more complex. A random intercept often suffices. Check necessity with WAIC/LOO.'},
+  rho:{title:'Correlation ρ — Intercept↔Slope',
+    what:'ρ is the correlation between the group-specific deviations u₀ⱼ and u₁ⱼ. It is part of the SAME joint distribution [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ), not a third independent quantity.',
+    whyLbl:'Why is this needed?',
+    why:'Without ρ, u₀ⱼ and u₁ⱼ would be treated as independent — that\'s almost never true for real group data (e.g.: groups that already start high often grow more slowly). brms models the correlation by default; ignoring it distorts both the uncertainty and the estimate itself.',
+    tip:'LKJ(η): η=1 → every correlation equally likely (uniform). η&gt;1 (brms default: η=2) → weaker correlations favored, regularizes against |ρ|≈1. In brms: prior(lkj(2), class=cor).'},
   sigma_u:{title:'τ₀ — SD of random intercepts',
     what:'τ₀ is the standard deviation of u₀ⱼ across all groups. It is itself unknown and gets a prior (Exponential).',
     why:'Exponential(λ): E[τ₀]=1/λ. Small τ₀ → group intercepts lie close together (little variation). Large τ₀ → groups very different.',
@@ -828,6 +858,7 @@ function prS(pr,dp=1){
   if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
   if(f==='gamma')       return `Gamma(${n(pr.p1??2)}, ${n(pr.p2??0.1,2)})`;
   if(f==='half_normal') return `Normal⁺(0, ${n(pr.p1??1)})`;
+  if(f==='lkj')         return `LKJ(${n(pr.p1??2,0)})`;
   return `${f}(${n(pr.p1??1)})`;
 }
 function famS(pr){ return {normal:'Normal',exponential:'Exp',gamma:'Gamma',half_normal:'HN',student_t:'t'}[pr?.fam]||pr?.fam||''; }
@@ -858,6 +889,12 @@ function kruschkePath(pr,W,H){
     } else if(f==='beta'){
       const a=Math.max(0.1,p1),b=Math.max(0.1,p2);
       d=(t<=0||t>=1)?0:Math.pow(t,a-1)*Math.pow(1-t,b-1);
+    } else if(f==='lkj'){
+      // Marginal density of a single correlation ρ∈(-1,1) under LKJ(η):
+      // f(ρ) ∝ (1-ρ²)^(η-1). η=1 → flat/uniform; η>1 → peaked at 0 (weak
+      // correlation favored, brms default η=2); η<1 → U-shaped (favors ±1).
+      const eta=Math.max(0.05,p1), rho=t*2-1;
+      d=Math.pow(Math.max(0,1-rho*rho),eta-1);
     } else {
       d=Math.exp(-0.5*((t-0.5)*7)**2);
     }
@@ -904,6 +941,12 @@ function miniCurve(pr){
     } else if(f==='beta'){
       const a=Math.max(0.1,p1),b=Math.max(0.1,p2);
       d=(t<=0||t>=1)?0:Math.pow(t,a-1)*Math.pow(1-t,b-1);
+    } else if(f==='lkj'){
+      // Marginal density of a single correlation ρ∈(-1,1) under LKJ(η):
+      // f(ρ) ∝ (1-ρ²)^(η-1). η=1 → flat/uniform; η>1 → peaked at 0 (weak
+      // correlation favored, brms default η=2); η<1 → U-shaped (favors ±1).
+      const eta=Math.max(0.05,p1), rho=t*2-1;
+      d=Math.pow(Math.max(0,1-rho*rho),eta-1);
     } else {
       d=Math.exp(-0.5*((t-0.5)*7)**2);
     }
@@ -1011,7 +1054,13 @@ function buildLayout(){
   });
   if(isML){
     topNodes.push({id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',feedsFormula:false,isTau:true});
-    if(hasSlope) topNodes.push({id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',feedsFormula:false,isTau:true});
+    if(hasSlope){
+      // ρ sits between τ₀ and τ₁ in column order, so it lands horizontally
+      // between u₀ⱼ and u₁ⱼ below — its two arrows (to both) fan out
+      // symmetrically instead of one having to reach much further than the other.
+      topNodes.push({id:'rho',lbl:'ρ',sub:'Cor(u₀ⱼ,u₁ⱼ)',col:'re',pk:'rho',feedsFormula:false});
+      topNodes.push({id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',feedsFormula:false,isTau:true});
+    }
   }
   if(hN) topNodes.push({id:'nu',lbl:'ν',sub:'df',col:'nu',pk:'nu',feedsFormula:false});
 
@@ -1026,7 +1075,7 @@ function buildLayout(){
   topNodes.forEach((p)=>{
     const nd=nodes[p.id];
     const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu
-            :p.pk==='sig_a'?M.pr.sig_a:p.pk==='sig_b'?M.pr.sig_b:p.prObj;
+            :p.pk==='sig_a'?M.pr.sig_a:p.pk==='sig_b'?M.pr.sig_b:p.pk==='rho'?M.pr.rho:p.prObj;
     const pid=`pl_${p.id}`;
     nodes[pid]={id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+52),col:p.col,parentId:p.id};
     edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
@@ -1037,16 +1086,29 @@ function buildLayout(){
   const uY=pY+150;
   if(isML){
     const uX=nodes['sigma_u'].x;
-    // prLabelText spells out "Normal(0, τ₀)" above the curve — without it, the
+    // prLabelText spells out the actual prior above the curve — without it, the
     // incoming τ₀ arrow just points at a generic bell curve with no indication
-    // that τ₀ IS that curve's SD (mean fixed at 0). Mirrors how every other
-    // stochastic node in this diagram already shows its own prior's parameters.
-    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY,prLabelText:'Normal(0, τ₀)'};
+    // of what it's setting. With ONLY a random intercept, u₀ⱼ really is a plain
+    // univariate Normal(0, τ₀) — that's what brms fits and what's shown below.
+    // But once a random SLOPE joins it, u₀ⱼ and u₁ⱼ are no longer independent:
+    // brms (and the "correct" generative model) draws them jointly as
+    // [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ), Σ built from τ₀, τ₁ AND their correlation ρ.
+    // Showing two independent Normal(0,τ) curves in that case would misstate
+    // the model — hence the MVNormal label + a second incoming arrow from ρ
+    // whenever hasSlope is true.
+    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY,
+      prLabelText:hasSlope?'MVNormal(0, Σ)':'Normal(0, τ₀)',
+      famLabelOverride:hasSlope?'MVNormal':undefined};
     edges.push({fr:'sigma_u',to:'u_j',col:'re'});
     if(hasSlope){
       const vX=nodes['sigma_v'].x;
-      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY,prLabelText:'Normal(0, τ₁)'};
+      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY,
+        prLabelText:'MVNormal(0, Σ)',famLabelOverride:'MVNormal'};
       edges.push({fr:'sigma_v',to:'v_j',col:'re'});
+      // ρ feeds BOTH u₀ⱼ and u₁ⱼ — it's the correlation between them, not a
+      // property of either one alone, so it fans out to both curves.
+      edges.push({fr:'rho',to:'u_j',col:'re'});
+      edges.push({fr:'rho',to:'v_j',col:'re'});
     }
   }
 
@@ -1357,10 +1419,12 @@ function drawStoch(g,node){
   // ── Family label below baseline (underlined, Kruschke-style) ──
   if(DET!=='simple'){
     const famLbl={normal:'normal',student_t:'student-t',exponential:'exp',
-      half_normal:'half-normal',gamma:'gamma',beta:'beta',uniform:'uniform'}[f]||f;
+      half_normal:'half-normal',gamma:'gamma',beta:'beta',uniform:'uniform',lkj:'LKJ'}[f]||f;
+    // famLabelOverride lets u₀ⱼ/u₁ⱼ say "MVNormal" here instead of "normal" once a
+    // random slope makes them jointly (not independently) drawn — see buildLayout().
     g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
       fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
-      'text-decoration':'underline',opacity:'0.9'},famLbl));
+      'text-decoration':'underline',opacity:'0.9'},node.famLabelOverride||famLbl));
   }
 
   // ── Optional subscript ───────────────────────────────
@@ -1378,6 +1442,7 @@ function getPr(node){
   if(node.pk==='sig_a') return M.pr.sig_a;
   if(node.pk==='mu_b')  return M.pr.mu_b;
   if(node.pk==='sig_b') return M.pr.sig_b;
+  if(node.pk==='rho')   return M.pr.rho;
   if(node.pk?.startsWith('beta_')){ const i=parseInt(node.pk.split('_')[1]); return M.preds[i]?.pr; }
   if(node.prObj) return node.prObj;
   return null;
@@ -1556,12 +1621,20 @@ function buildMath(){
   let pRows='';
   pRows+=row(`α ${sim} ${htmlPr(M.pr.alpha)}`,'int','alpha');
   if(isML){
+    const hasSlopeMath=M.ret==='slope'&&K>0;
     pRows+='<div style="height:.2rem"></div>';
-    pRows+=row(`u${sub('0j')} ${sim} Normal(0,&thinsp;τ${sub('0')})`,'re','u_j');
-    pRows+=row(`τ${sub('0')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
-    if(M.ret==='slope'&&K>0){
-      pRows+=row(`u${sub('1j')} ${sim} Normal(0,&thinsp;τ${sub('1')})`,'re','v_j');
+    // Random intercept alone: a plain univariate Normal. Once a random slope
+    // joins it, u₀ⱼ/u₁ⱼ are no longer independent — brms draws them jointly
+    // from a bivariate Normal built out of τ₀, τ₁ and their correlation ρ.
+    if(hasSlopeMath){
+      pRows+=row(`u${sub('0j')} ${sim} MVNormal(0,&thinsp;Σ)`,'re','u_j');
+      pRows+=row(`u${sub('1j')} ${sim} MVNormal(0,&thinsp;Σ)`,'re','v_j');
+      pRows+=row(`τ${sub('0')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
       pRows+=row(`τ${sub('1')} ${sim} ${htmlPr(M.pr.sig_b)}`,'re','sigma_v');
+      pRows+=row(`ρ ${sim} ${htmlPr(M.pr.rho)}`,'re','rho');
+    } else {
+      pRows+=row(`u${sub('0j')} ${sim} Normal(0,&thinsp;τ${sub('0')})`,'re','u_j');
+      pRows+=row(`τ${sub('0')} ${sim} ${htmlPr(M.pr.sig_a)}`,'re','sigma_u');
     }
   }
   M.preds.forEach((p,i)=>{
@@ -1585,6 +1658,7 @@ function htmlPr(pr){
   if(f==='exponential') return `Exponential(${n(pr.p1??1,2)})`;
   if(f==='gamma')       return `Gamma(${n(pr.p1??2)},&thinsp;${n(pr.p2??0.1,2)})`;
   if(f==='half_normal') return `Normal<sup>+</sup>(0,&thinsp;${n(pr.p1??1)})`;
+  if(f==='lkj')         return `LKJ(${n(pr.p1??2,0)})`;
   return `${f}(${n(pr.p1??1)})`;
 }
 
@@ -1686,8 +1760,11 @@ function buildPriorUI(){
 
   // Hyperpriors (brms-style)
   if(isML){
+    const hasSlopeUI=M.ret==='slope'&&M.preds.length>0;
     html+=blk('re','τ₀ — SD Rand. Intercepts','re',prS(M.pr.sig_a),
-      PR_EX.exponential+'<br><b>What:</b> u₀ⱼ ~ Normal(0, τ₀). τ₀ controls how strongly intercepts vary between groups. Small = strong pooling. In brms: prior(exponential(1), class=sd).',
+      PR_EX.exponential+(hasSlopeUI
+        ?'<br><b>What:</b> τ₀ is the SD component of u₀ⱼ — but u₀ⱼ itself is no longer independently normal because a random slope is active; it\'s part of [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ) (see ρ). In brms: prior(exponential(1), class=sd, coef=Intercept).'
+        :'<br><b>What:</b> u₀ⱼ ~ Normal(0, τ₀). τ₀ controls how strongly intercepts vary between groups. Small = strong pooling. In brms: prior(exponential(1), class=sd).'),
       sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_a.p1??1,
            fn:"M.pr.sig_a.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
            hint:`≈ E[τ₀]=${(1/(M.pr.sig_a.p1??1)).toFixed(2)}`,
@@ -1695,15 +1772,24 @@ function buildPriorUI(){
       ],'pv-siga','prS(M.pr.sig_a)'),
       'pv-siga'
     );
-    if(M.ret==='slope'&&M.preds.length>0){
+    if(hasSlopeUI){
       html+=blk('re','τ₁ — SD Rand. Slopes','re',prS(M.pr.sig_b),
-        PR_EX.exponential+'<br><b>What:</b> u₁ⱼ ~ Normal(0, τ₁). τ₁ controls how strongly slopes for '+((M.preds[0]?.name)||'x1')+' vary between groups. The group-specific slope is β₁ + u₁ⱼ.',
+        PR_EX.exponential+'<br><b>What:</b> τ₁ is the SD component of u₁ⱼ, which (together with u₀ⱼ) is drawn jointly from [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ) — not independently. The group-specific slope is β₁ + u₁ⱼ. In brms: prior(exponential(1), class=sd, coef='+((M.preds[0]?.name)||'x1')+').',
         sls([{l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sig_b?.p1??1,
              fn:"M.pr.sig_b.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
              hint:`≈ E[τ₁]=${(1/(M.pr.sig_b?.p1??1)).toFixed(2)}`,
              hintFn:"'≈ E[τ₁]='+(1/this.value).toFixed(2)"},
         ],'pv-sigb','prS(M.pr.sig_b)'),
         'pv-sigb'
+      );
+      // ρ's LKJ shape parameter η — brms default lkj(2). η is stored in p1 to
+      // reuse the same {fam,p1} shape every other single-parameter prior uses.
+      html+=blk('re','ρ — Cor(u₀ⱼ, u₁ⱼ)','re',prS(M.pr.rho),
+        '<b>LKJ(η)</b>: prior over the correlation of two random effects (here: intercept↔slope), not over a scale parameter. η=1 → uniform on [-1,1]. η&gt;1 → pulls ρ toward 0 (brms default η=2). η&lt;1 → pulls ρ toward ±1.<br><b>What:</b> [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ), Σ built from τ₀, τ₁ and ρ. In brms: prior(lkj(2), class=cor).',
+        sls([{l:'η',mn:0.5,mx:10,st:0.1,dp:1,v:M.pr.rho?.p1??2,
+             fn:"M.pr.rho.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1)"},
+        ],'pv-rho','prS(M.pr.rho)'),
+        'pv-rho'
       );
     }
   }
