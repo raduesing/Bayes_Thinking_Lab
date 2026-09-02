@@ -231,6 +231,13 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
   margin-top:.2rem;letter-spacing:.03em}
 .hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
   opacity:.5;margin-top:.1rem}
+
+/* ── Intro box ── */
+#intro{background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;
+  padding:.6rem 1.8rem;font-family:'DM Mono',monospace;font-size:.75rem;
+  color:var(--ink2);line-height:1.7}
+#intro b{color:var(--ink)}
+#intro .ib-guide{color:var(--a2);cursor:pointer;border-bottom:1px dotted var(--a2)}
 </style>
 </head>
 <body>
@@ -250,6 +257,16 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
     <button class="hbtn" onclick="toggleArchHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Hilfe</button>
     <button class="hbtn" id="btn-th"    onclick="toggleTheme()">☀ Light</button>
   </div>
+</div>
+
+<div id="intro">
+  Was du hier siehst: Links baut das <b>Kruschke-Diagramm</b> dein Modell als Netz aus
+  Verteilungskurven auf — inklusive der hierarchischen Struktur, die bei Bayesianischer
+  Parameterschätzung ganz natürlich entsteht, mit jedem Parameter sichtbar über einen Pfeil
+  mit seinem Prior verbunden. Rechts übersetzt die <b>McElreath-Notation</b> dasselbe Modell in
+  kompakte Formeln: jede stochastische ("~") und deterministische ("=") Beziehung sowie alle
+  Prior-Annahmen stehen dort explizit ausformuliert. Neu hier? Klicke oben auf
+  <span class="ib-guide" onclick="toggleGuide()">📖 Guide</span> für eine Schritt-für-Schritt-Anleitung.
 </div>
 
 <div id="main">
@@ -310,7 +327,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 <!-- ═══ CENTER ═══ -->
 <div id="ca">
 
-  <div id="guide" class="open">
+  <div id="guide" class="closed">
     <div class="g-inner">
       <div class="g-steps">
         <span class="g-step-n" id="gs-n"></span>
@@ -338,7 +355,7 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
       <span class="li"><span class="ld" style="background:var(--a5)"></span>σ</span>
       <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
       <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
-      <span class="li" style="opacity:.55">"~" = stochastische Ziehung &nbsp; "=" in der Formel = deterministisch</span>
+      <span class="li" style="opacity:.55">"~" = stochastische Ziehung &nbsp; "=" = deterministische Berechnung</span>
     </div>
   </div>
 
@@ -442,7 +459,7 @@ MathJax = {
 //  STATE
 // ═══════════════════════════════════════════════════════
 let DARK=true, DET='medium', ACTIVE=null, SHOW_EX=true, MONO=localStorage.getItem('btl-arch-mono')==='1';
-let _t=null, GSTEP=0, GOPEN=true;
+let _t=null, GSTEP=0, GOPEN=false;
 
 const M = {
   fam:'normal', out:'y',
@@ -673,7 +690,7 @@ document.addEventListener('click',e=>{
 // ═══════════════════════════════════════════════════════
 const STEPS=[
   {t:'Schritt 1 — Likelihood: Wie entstehen deine Daten?',
-   tx:'Der erste Schritt: Welcher Prozess hat deine Daten erzeugt? <b>Gaussian</b> → stetig, symmetrisch (z.B. IQ-Werte, Körpergröße, z-standardisierte Testwerte). <b>Student-t</b> → wie Gaussian, robuster gegen Ausreißer (z.B. Reaktionszeiten nach Ausreißerbereinigung, Einkommensdaten). <b>Bernoulli</b> → binäre Ja/Nein-Outcomes (Kauf, Rückfall, Therapieerfolg). <b>Poisson</b> → Ereigniszählungen (Arztbesuche, Fehleranzahl). <b>Gamma</b> → positiv, rechtsschief (Reaktionszeiten in ms/s, Wartezeiten, Cortisol). Wähle jetzt links.',
+   tx:'Der erste Schritt: Welcher Prozess hat deine Daten erzeugt? <b>Gaussian</b> → stetig, symmetrisch (z.B. IQ-Werte, Körpergröße, z-standardisierte Testwerte). <b>Student-t</b> → wie Gaussian, aber robuster bei vereinzelten Extremwerten, die in den Daten bleiben dürfen (z.B. physiologische Messungen wie Blutdruck, Residuen einer robusten Regression). <b>Bernoulli</b> → binäre Ja/Nein-Outcomes (Kauf, Rückfall, Therapieerfolg). <b>Poisson</b> → Ereigniszählungen (Arztbesuche, Fehleranzahl). <b>Gamma</b> → positiv, rechtsschief (Reaktionszeiten in ms/s, Wartezeiten, Cortisol). Wähle jetzt links.',
    hl:'sc-lk'},
   {t:'Schritt 2 — Variablen: Was modellierst du?',
    tx:'Gib der abhängigen Variable (AV) einen sinnvollen Namen. Kein Prädiktor nötig, wenn nur der Mittelwert interessiert. Hast du erklärende Variablen? → füge sie als Prädiktoren hinzu (max. 4). <b>Hinweis zu Namen:</b> Die Prädiktor-Namen im Feld sind rein für die Diagrammdarstellung — sie erscheinen in der Formelnotation als Variablenbezeichner. Sie ändern nichts an der Modellstruktur selbst. Im Diagramm siehst du live, wie das Modell wächst.',
@@ -977,61 +994,64 @@ function buildLayout(){
   const hS=hasSig(), hN=hasNu();
   const nodes={}, edges=[];
 
-  // ── Parameter nodes ──────────────────────────────────
-  const pNodes=[];
-  pNodes.push({id:'alpha',lbl:'α',sub:'Intercept',col:'int',pk:'alpha'});
+  // ── Top row — ALL top-level priors share one row, spread across the full
+  // canvas width, rather than being stacked into separate vertical bands.
+  // σ sits at the far left and ν at the far right of the α/β/τ group; their
+  // arrows down to the likelihood-parameter row end up diagonal, which is
+  // exactly how Kruschke draws them too — a diagonal line reads just as
+  // clearly as a vertical one and costs far less vertical space than giving
+  // them their own row (the earlier version's mistake).
+  const hasSlope=isML&&M.ret==='slope'&&K>0;
+  const topNodes=[];
+  if(hS) topNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma',feedsFormula:false});
+  topNodes.push({id:'alpha',lbl:'α',sub:'Intercept',col:'int',pk:'alpha',feedsFormula:true});
   M.preds.forEach((p,i)=>{
     const bLbl=K>1?`β${SUB[i]||i+1}`:'β';
-    pNodes.push({id:`b${i}`,lbl:bLbl,sub:p.name||`x${i+1}`,col:'beta',pk:`beta_${i}`,prObj:p.pr});
+    topNodes.push({id:`b${i}`,lbl:bLbl,sub:p.name||`x${i+1}`,col:'beta',pk:`beta_${i}`,prObj:p.pr,feedsFormula:true});
   });
-  if(hS) pNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma'});
-  if(hN) pNodes.push({id:'nu',   lbl:'ν',sub:'df',col:'nu',pk:'nu'});
+  if(isML){
+    topNodes.push({id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',feedsFormula:false,isTau:true});
+    if(hasSlope) topNodes.push({id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',feedsFormula:false,isTau:true});
+  }
+  if(hN) topNodes.push({id:'nu',lbl:'ν',sub:'df',col:'nu',pk:'nu',feedsFormula:false});
 
-  // Wide spacing — use 80% of width for params
-  const nP=pNodes.length;
-  const pY=220;
-  const usableW=W*0.82;
-  const sp=nP<=1?0:Math.min(205,usableW/(nP-1));
-  const px0=cx-(nP-1)*sp/2;
-  pNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
+  const nTop=topNodes.length;
+  const pY=170;
+  const usableW=W*0.87;
+  const sp=nTop<=1?0:Math.min(190,usableW/(nTop-1));
+  const px0=cx-(nTop-1)*sp/2;
+  topNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
 
-  // ── Prior labels above each parameter node ───────────
-  pNodes.forEach((p)=>{
+  // ── Prior labels above each top-row node ───────────
+  topNodes.forEach((p)=>{
     const nd=nodes[p.id];
-    const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu:p.prObj;
+    const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu
+            :p.pk==='sig_a'?M.pr.sig_a:p.pk==='sig_b'?M.pr.sig_b:p.prObj;
     const pid=`pl_${p.id}`;
     nodes[pid]={id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+52),col:p.col,parentId:p.id};
     edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
   });
 
-  // ── Multilevel random effects (brms-style) ───────────
-  // uY hoisted: needed for detY computation below (uY is const-scoped inside the block otherwise)
-  let uY=pY+305; // = pY+165+140 — used by detY; overwritten inside if(isML)
+  // ── Multilevel random effects (brms-style) — directly below their own
+  // hyperprior's column, which now lives in the unified top row above ───
+  const uY=pY+150;
   if(isML){
-    const hasSlope=M.ret==='slope'&&K>0;
-    const uX=hasSlope?cx-55:cx, vX=cx+55;
-    // sigRY well below pY nodes (pY+R=262) so pl_sigma labels (sigRY-82) don't overlap
-    const sigRY=pY+172; uY=sigRY+158;
-
-    // τ₀: hyperprior for u₀ⱼ
-    nodes['sigma_u']={id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',type:'stoch',x:uX,y:sigRY};
-    nodes['pl_sigma_u']={id:'pl_sigma_u',type:'plbl',prObj:M.pr.sig_a,x:uX,y:sigRY-(R+40),col:'re',parentId:'sigma_u'};
-    edges.push({fr:'pl_sigma_u',to:'sigma_u',col:'re',isPL:true});
-    // u₀ⱼ: random intercept deviation (inside group plate)
-    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY};
+    const uX=nodes['sigma_u'].x;
+    // prLabelText spells out "Normal(0, τ₀)" above the curve — without it, the
+    // incoming τ₀ arrow just points at a generic bell curve with no indication
+    // that τ₀ IS that curve's SD (mean fixed at 0). Mirrors how every other
+    // stochastic node in this diagram already shows its own prior's parameters.
+    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY,prLabelText:'Normal(0, τ₀)'};
     edges.push({fr:'sigma_u',to:'u_j',col:'re'});
-
     if(hasSlope){
-      nodes['sigma_v']={id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',type:'stoch',x:vX,y:sigRY};
-      nodes['pl_sigma_v']={id:'pl_sigma_v',type:'plbl',prObj:M.pr.sig_b,x:vX,y:sigRY-(R+40),col:'re',parentId:'sigma_v'};
-      edges.push({fr:'pl_sigma_v',to:'sigma_v',col:'re',isPL:true});
-      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY};
+      const vX=nodes['sigma_v'].x;
+      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY,prLabelText:'Normal(0, τ₁)'};
       edges.push({fr:'sigma_v',to:'v_j',col:'re'});
     }
   }
 
-  // ── Deterministic formula node ────────────────────────
-  const detY=isML?uY+173:393;
+  // ── Deterministic formula node ("μᵢ = α + β·xᵢ + …") ──
+  const detY=isML?uY+150:pY+160;
   const terms=buildFormulaTerms();
   const fw=Math.max(formulaWidth(terms)+56, 180);
   const boxHalfW=fw/2;
@@ -1039,20 +1059,69 @@ function buildLayout(){
   // Text starts at -boxHalfW+28 (left padding inside box)
   let relX=-boxHalfW+28;
   const relTermCenters={};
-  terms.forEach(t=>{
+  // Track the RHS expression's span (everything after the leading "μᵢ = " term) —
+  // matches drawDet()'s own firstTermX/lastTermEnd calc exactly, so the underbrace
+  // it draws beneath the RHS and the "=" edge's start point (below) always agree
+  // on where that brace actually sits, regardless of formula length.
+  let firstTermRelX=null, lastTermRelEnd=null;
+  terms.forEach((t,i)=>{
     const tw=t.text.length*_CW;
     if(t.nodeId) relTermCenters[t.nodeId]=relX+tw/2;
+    if(i>0&&firstTermRelX===null) firstTermRelX=relX;
     relX+=tw;
+    lastTermRelEnd=relX;
   });
-  const detLbl=M.fam==='bernoulli'?'p_i':M.fam==='poisson'?'λ_i':'μ_i';
+  const braceMidXRel=firstTermRelX!=null?((firstTermRelX-2)+(lastTermRelEnd-2))/2:0;
+  const braceYRel=31; // by(22)+9, matching drawDet()'s brace-dip control point
+  const detLbl=M.fam==='bernoulli'?'pᵢ':M.fam==='poisson'?'λᵢ':'μᵢ';
   nodes['det']={id:'det',type:'det',lbl:detLbl,
     formula:buildLinear(), formulaTerms:terms,
     relTermCenters, boxHalfW,
+    braceX:cx+braceMidXRel, braceY:detY+braceYRel,
     x:cx, y:detY};
 
+  // ── Likelihood-parameter row — Kruschke style: μᵢ (or pᵢ/λᵢ), σ, ν sit
+  // directly above the likelihood curve, right where they're actually used.
+  // μᵢ arrives via "=" (deterministic, from the formula directly above);
+  // σ/ν arrive via "~" from their prior curves up in the top row — those
+  // arrows are long and diagonal, which is fine; they no longer need to be
+  // vertical since nothing else crosses their path down here.
+  const anchOrder=[]; // left → right: σ, μ, ν
+  if(hS) anchOrder.push('sigma');
+  anchOrder.push('mu');
+  if(hN) anchOrder.push('nu');
+  const anchCount=anchOrder.length;
+  const anchSp=Math.min(150,usableW/Math.max(anchCount-1,1));
+  const anchX0=cx-(anchCount-1)*anchSp/2;
+  const anchXOf={};
+  anchOrder.forEach((k,i)=>{ anchXOf[k]=anchX0+i*anchSp; });
+
+  const anchorY=detY+120;
+  const likY=anchorY+60;
+  const dataY=likY+110;
+
+  nodes['anch_mu']={id:'anch_mu',type:'anchor',lbl:detLbl,col:'data',x:anchXOf.mu,y:anchorY,mapsTo:'det'};
+  // Starts at the underbrace under the formula's RHS (not the det node's own
+  // center, which can sit anywhere inside the equation text) — so the "="
+  // arrow visibly grows out of "this whole expression", not out of a random
+  // point mid-formula.
+  edges.push({fr:'det',to:'anch_mu',col:'data',eq:true,srcX:nodes['det'].braceX,srcY:nodes['det'].braceY});
+  if(hS){
+    nodes['anch_sigma']={id:'anch_sigma',type:'anchor',lbl:'σ',col:'sig',x:anchXOf.sigma,y:anchorY,mapsTo:'sigma'};
+    edges.push({fr:'sigma',to:'anch_sigma',col:'sig'});
+  }
+  if(hN){
+    nodes['anch_nu']={id:'anch_nu',type:'anchor',lbl:'ν',col:'nu',x:anchXOf.nu,y:anchorY,mapsTo:'nu'};
+    edges.push({fr:'nu',to:'anch_nu',col:'nu'});
+  }
+
+  // ── Likelihood curve (distribution shape only — the data node below
+  // carries the yᵢ label, matching how Kruschke separates the two) ────
+  nodes['lik']={id:'lik',type:'lik',x:cx,y:likY};
+
   // ── Data node ─────────────────────────────────────────
-  const dataY=detY+160;
   nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
+  edges.push({fr:'lik',to:'y',col:'data'});
 
   // ── Covariate boxes ────────────────────────────────────
   if(DET==='full'){
@@ -1063,27 +1132,22 @@ function buildLayout(){
   }
 
   // ── Structural edges ──────────────────────────────────
-  // α and β → det: arrow tip targets the term in the formula box
-  pNodes.forEach(p=>{
-    if(p.id!=='sigma'&&p.id!=='nu'){
-      // termX is ABSOLUTE: node.x + relative offset
-      const rel=relTermCenters[p.id]??0;
-      const termX=cx+rel; // absolute x of term center
-      edges.push({fr:p.id,to:'det',col:p.col,termX});
-    }
+  // α, β, τ₀, τ₁ → det: arrow tip targets the term in the formula box
+  // (σ/ν are excluded — they don't feed the formula, they feed the
+  // likelihood-parameter row directly, handled above)
+  topNodes.filter(p=>p.feedsFormula).forEach(p=>{
+    const rel=relTermCenters[p.id]??0;
+    const termX=cx+rel; // absolute x of term center
+    edges.push({fr:p.id,to:'det',col:p.col,termX});
   });
   if(isML){
-    const hasSlope=M.ret==='slope'&&K>0;
     const uRel=relTermCenters['u_j']??0;
     edges.push({fr:'u_j',to:'det',col:'re',termX:cx+uRel});
-    if(hasSlope&&K>0){
+    if(hasSlope){
       const vRel=relTermCenters['v_j']??0;
       edges.push({fr:'v_j',to:'det',col:'re',termX:cx+vRel});
     }
   }
-  if(hS) edges.push({fr:'sigma',to:'y',col:'sig',crv:-70});
-  if(hN) edges.push({fr:'nu',   to:'y',col:'nu', crv: 70});
-  edges.push({fr:'det',to:'y',col:'data'});
 
   return {nodes,edges,W,H};
 }
@@ -1145,8 +1209,17 @@ function render(){
 function drawEdge(g,a,b,edge){
   const c=edgeCol(edge.col);
   if(a.type==='plbl') return; // prior info is now inside drawStoch
-  const rA=a.type==='det'?8:a.type==='obs'?23:32;
-  const rB=b.type==='det'?8:b.type==='obs'?23:22;
+  // srcX/srcY override the source node's own center — used by det→anch_mu so the
+  // "=" arrow starts at the underbrace under the formula's RHS, not wherever the
+  // det node's center happens to fall inside the (variable-length) equation text.
+  const srcX=edge.srcX??a.x, srcY=edge.srcY??a.y;
+  const rA=edge.srcX!=null?0:a.type==='det'?8:a.type==='obs'||a.type==='lik'?23:a.type==='anchor'?12:32;
+  // u_j/v_j get a bigger target radius than other stoch nodes: the arrow should
+  // stop at their "Normal(0, τ₀)" prior-label text (which sits well above the
+  // curve itself), not travel all the way down past it to the curve/node — that
+  // was the whole point of adding that text: show what τ actually sets.
+  const rB=b.type==='det'?8:b.type==='obs'||b.type==='lik'?23:b.type==='anchor'?12
+          :(b.id==='u_j'||b.id==='v_j')?46:22;
 
   // For α/β→det edges: arrow tip lands at the term's x-position in the formula
   let tx2=b.x, ty2=b.y;
@@ -1155,9 +1228,9 @@ function drawEdge(g,a,b,edge){
     ty2=b.y-10; // top of formula box
   }
 
-  const dx=tx2-a.x, dy=ty2-a.y, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const dx=tx2-srcX, dy=ty2-srcY, len=Math.sqrt(dx*dx+dy*dy)||1;
   const ux=dx/len, uy=dy/len;
-  const x1=(a.x+ux*(rA+3)).toFixed(1), y1=(a.y+uy*(rA+3)).toFixed(1);
+  const x1=(srcX+ux*(rA+3)).toFixed(1), y1=(srcY+uy*(rA+3)).toFixed(1);
   // End point: for term-targeted edges, land exactly at termX
   const x2=edge.termX!=null?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
   const y2=edge.termX!=null?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
@@ -1176,9 +1249,10 @@ function drawEdge(g,a,b,edge){
     'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
   // Kruschke/McElreath notation: "~" marks every stochastic relationship — a parameter
   // drawn from its prior curve, a random effect drawn from its hyperprior, or the
-  // likelihood generating the observed data. There is no separate "=" arrow: the one
-  // deterministic step (formula → μᵢ) is already written as a literal "=" inside the
-  // formula text itself, so no edge in this diagram is ever labeled "=".
+  // likelihood generating the observed data. "=" marks the one deterministic step —
+  // the formula computing μᵢ (or pᵢ/λᵢ) — as its own explicit arrow into the
+  // likelihood-parameter row, mirroring how Kruschke draws it rather than leaving it
+  // implicit in the formula text alone.
   // Label sits at the curve's actual midpoint (t=0.5 on the cubic bezier, not the
   // straight-line midpoint) and is offset perpendicular to the local tangent, so it
   // never sits on top of the stroke regardless of how much the edge curves.
@@ -1192,18 +1266,16 @@ function drawEdge(g,a,b,edge){
   // final likelihood→data draw — σ/ν feed the likelihood but aren't themselves
   // redrawn per observation, so they get a plain "~".
   let idx='';
-  const isDetToY=b.type==='obs'&&a.type==='det';
+  const isLikToY=b.type==='obs'&&a.type==='lik';
   if(b.id==='u_j'||b.id==='v_j') idx=' j';
-  else if(isDetToY) idx=M.ml?' i,j':' i';
+  else if(isLikToY) idx=M.ml?' i,j':' i';
+  const label=edge.eq?'=':('~'+idx);
   // Offset large enough to clear the label's own bounding box (not just its center) —
-  // longer labels ("~ i,j") need more clearance than short ones ("~"). The det→y edge
-  // gets extra clearance: when σ/ν also feed y, their curved approach converges close
-  // to det→y's own (nearly straight) path right near the target, close enough that a
-  // bigger crv on the σ/ν side doesn't help — only pushing det→y's own label out further does.
-  const labelOff=25+(1+idx.length)*2.7+(isDetToY?16:0);
+  // longer labels ("~ i,j") need more clearance than short ones ("~").
+  const labelOff=25+(1+idx.length)*2.7+(isLikToY?16:0);
   const tx=(bx+nx*labelOff).toFixed(1), ty=(by+ny*labelOff).toFixed(1);
   g.appendChild(se('text',{x:tx,y:ty,'text-anchor':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'15',opacity:'0.75'},'~'+idx));
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'15',opacity:'0.75'},label));
 }
 
 function drawNode(g,node){
@@ -1212,6 +1284,8 @@ function drawNode(g,node){
   if(node.type==='plbl')  drawPLbl(grp,node);
   else if(node.type==='stoch') drawStoch(grp,node);
   else if(node.type==='det')   drawDet(grp,node);
+  else if(node.type==='anchor')drawAnchor(grp,node);
+  else if(node.type==='lik')   drawLik(grp,node);
   else if(node.type==='obs')   drawObs(grp,node);
   else if(node.type==='cov')   drawCov(grp,node);
   g.appendChild(grp);
@@ -1258,9 +1332,9 @@ function drawStoch(g,node){
     g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',
       stroke:'none',transform:tx}));
     g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.6',fill:'none',transform:tx}));
-    if(pr&&DET!=='simple'){
+    if((pr||node.prLabelText)&&DET!=='simple'){
       g.appendChild(se('text',{x:'0',y:String(cTop-26),'text-anchor':'middle',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.85'},prS(pr)));
+        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.85'},node.prLabelText||prS(pr)));
     }
   }
 
@@ -1350,25 +1424,24 @@ function discreteIcon(fam,cW,cH){
   return bars.map((h,i)=>({x:-cW/2+i*(bw+gap), y:cH/2-h*cH, w:bw, h:h*cH}));
 }
 
-function drawObs(g,node){
-  const isAct=ACTIVE===node.id;
-  const lbl=node.lbl||'y';
-
-  if(DET==='simple'){
-    const c=curveCol('data'), lc=MONO?C.ink():c;
-    g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-      fill:lc,'font-family':"'Fraunces',serif",'font-size':'23','font-weight':'600'},lbl));
-    return;
-  }
-
-  // Kruschke-style: y drawn like a stochastic node — no box. Likelihood curve/bars,
-  // underlined family name, plain italic "yᵢ" text below (the datum is just a label).
-  const c=curveCol('data'), lc=MONO?C.ink():c;
+// Kruschke-style: the likelihood is its own node — curve/bars + underlined family
+// name, no data label attached. Sits directly below the μᵢ/σ/ν anchor row (which
+// carries its parameters); the observed datum yᵢ gets its own node below this one,
+// reached via a single "~i" arrow, matching how Kruschke keeps "the distribution"
+// and "the datum drawn from it" visually distinct.
+function drawLik(g,node){
+  const isAct=ACTIVE==='lik';
+  const c=curveCol('data');
   const cW=90, cH=39, cTop=-19, cBase=cTop+cH;
   const f=M.fam;
 
+  if(DET==='simple'){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'11',fill:c,opacity:isAct?'0.85':'0.55'}));
+    return;
+  }
+
   if(isAct){
-    g.appendChild(se('rect',{x:String(-cW/2-9),y:String(cTop-20),width:String(cW+18),height:String(cH+62),
+    g.appendChild(se('rect',{x:String(-cW/2-9),y:String(cTop-14),width:String(cW+18),height:String(cH+55),
       rx:'9',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
   }
 
@@ -1387,14 +1460,36 @@ function drawObs(g,node){
   }
   g.appendChild(se('line',{x1:String(-cW/2),y1:String(cBase),x2:String(cW/2),y2:String(cBase),
     stroke:c,'stroke-width':'1.8',opacity:'0.8'}));
-  if(DET!=='simple'){
-    const famLbl={normal:'normal',student:'student-t',bernoulli:'bernoulli',poisson:'poisson',gamma:'gamma'}[f]||f;
-    g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
-      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
-      'text-decoration':'underline',opacity:'0.9'},famLbl));
+  const famLbl={normal:'normal',student:'student-t',bernoulli:'bernoulli',poisson:'poisson',gamma:'gamma'}[f]||f;
+  g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
+    fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
+    'text-decoration':'underline',opacity:'0.9'},famLbl));
+}
+
+// The observed datum yᵢ — plain italic label, nothing else. Reached from the
+// likelihood curve above via a single "~i" (or "~i,j") arrow.
+function drawObs(g,node){
+  const isAct=ACTIVE===node.id;
+  const lbl=node.lbl||'y';
+  const c=curveCol('data'), lc=MONO?C.ink():c;
+  if(isAct){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'26',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
   }
-  g.appendChild(se('text',{x:'0',y:String(cBase+41),'text-anchor':'middle',
-    fill:lc,'font-family':"'Fraunces',serif",'font-size':'20','font-style':'italic','font-weight':'600'},lbl+'ᵢ'));
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:lc,'font-family':"'Fraunces',serif",'font-size':'23','font-style':'italic','font-weight':'600'},lbl+'ᵢ'));
+}
+
+// Likelihood-parameter anchor (μᵢ/pᵢ/λᵢ, σ, ν) — a small symbolic slot sitting
+// directly above the likelihood curve, showing where that parameter plugs in.
+// Clicking it shows the explanation of whatever actually feeds it (node.mapsTo).
+function drawAnchor(g,node){
+  const c=curveCol(node.col);
+  const isAct=ACTIVE===node.mapsTo;
+  if(isAct){
+    g.appendChild(se('circle',{cx:'0',cy:'0',r:'20',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
+  }
+  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
+    fill:c,'font-family':"'Fraunces',serif",'font-size':'19','font-style':'italic','font-weight':'700'},node.lbl));
 }
 
 function drawCov(g,node){
@@ -1669,8 +1764,9 @@ function toggleMono(){
 
 function onNodeClick(node){
   if(node.type==='plbl') ACTIVE=node.parentId;
+  else if(node.type==='anchor') ACTIVE=node.mapsTo;
   else ACTIVE=node.id;
-  const ek=ACTIVE==='det'?'det':ACTIVE==='y'?'y'
+  const ek=ACTIVE==='det'?'det':ACTIVE==='y'?'y':ACTIVE==='lik'?'y'
           :ACTIVE==='u_j'?'u_j':ACTIVE==='v_j'?'v_j'
           :ACTIVE==='sigma_u'?'sigma_u':ACTIVE==='sigma_v'?'sigma_v'
           :ACTIVE?.startsWith('b')?'beta'
@@ -1681,7 +1777,7 @@ function onNodeClick(node){
 function onMathClick(nid){
   if(!nid) return;
   ACTIVE=nid;
-  const ek=nid==='det'?'det':nid==='y'?'y'
+  const ek=nid==='det'?'det':nid==='y'?'y':nid==='lik'?'y'
           :nid==='u_j'?'u_j':nid==='v_j'?'v_j'
           :nid==='sigma_u'?'sigma_u':nid==='sigma_v'?'sigma_v'
           :nid.startsWith('b')?'beta':EX[nid]?nid:'alpha';
