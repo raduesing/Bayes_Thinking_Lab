@@ -2408,6 +2408,49 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     return out;
   }
 
+  // Cluster-RE injection for between-only / no-factor designs (no within factor) —
+  // mirrors buildRCode()'s main-code logic (~line 2217ff). Previously only the hasW
+  // branch fully implemented this (with random-slope support); the between-only branch
+  // had forgotten random slopes entirely (always intercept-only), and the no-factor
+  // branch had NO cluster injection at all — the generated power-block model referenced
+  // a "school" column that the simulated dataset never created, which would have made
+  // glmmTMB fail there with "object not found".
+  function pushClusterInjection(datVar,useEtaCol){
+    if(!clActive) return;
+    L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
+    if(hasSlopes){
+      L.push(`#   tau1_pw <- ${clTau1}; rho_pw <- ${clRho01}`);
+      L.push(`#   Sig <- matrix(c(tau0_pw^2, rho_pw*tau0_pw*tau1_pw,`);
+      L.push(`#                   rho_pw*tau0_pw*tau1_pw, tau1_pw^2), 2, 2)`);
+      L.push(`#   RE_pw <- MASS::mvrnorm(k_pw, c(0,0), Sig)`);
+      L.push(`#   u0_pw <- setNames(RE_pw[,1], paste0("${clNameR}", 1:k_pw))`);
+      L.push(`#   u1_pw <- setNames(RE_pw[,2], paste0("${clNameR}", 1:k_pw))`);
+    } else {
+      L.push(`#   u0_pw <- setNames(rnorm(k_pw, 0, tau0_pw), paste0("${clNameR}", 1:k_pw))`);
+    }
+    L.push(`#   ${datVar}$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k_pw), nrow(${datVar}), replace = TRUE))`);
+    if(hasSlopes){
+      const sfLevels=clSlopeFactor.levels.map(l=>`"${l}"`).join(', ');
+      L.push(`#   ${datVar} <- ${datVar} |> mutate(`);
+      L.push(`#     .sc = match(${sfNameR}, c(${sfLevels})) - 1L,`);
+      if(useEtaCol){
+        L.push(`#     .eta = .eta + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * .sc,`);
+        L.push(`#     Y = ${rYFromEtaCol(lik, extra)}`);
+        L.push(`#   ) |> select(-c(.sc, .eta${lik==='lognormal'?', .sigma':''}))`);
+      } else {
+        L.push(`#     Y = Y + u0_pw[as.character(${clNameR})] + u1_pw[as.character(${clNameR})] * .sc`);
+        L.push(`#   ) |> select(-.sc)`);
+      }
+    } else if(useEtaCol){
+      L.push(`#   ${datVar} <- ${datVar} |> mutate(`);
+      L.push(`#     .eta = .eta + u0_pw[as.character(${clNameR})],`);
+      L.push(`#     Y = ${rYFromEtaCol(lik, extra)}`);
+      L.push(`#   ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+    } else {
+      L.push(`#   ${datVar} <- ${datVar} |> mutate(Y = Y + u0_pw[as.character(${clNameR})])`);
+    }
+  }
+
   // glmmTMB family strings — NOTE: glmmTMB-specific names!
   // student → t_family()          (nicht gaussian())
   // lognormal → lognormal()       (nicht gaussian(link="log"))
@@ -2584,31 +2627,22 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     });
     L.push(`#   d <- rbind(${bCells.map(bc=>'d_'+bc.join('_')).join(', ')})`);
     ST.between.forEach((f,i)=>L.push(`#   d$${bNamesR[i]} <- factor(d$${bNamesR[i]})`));
-    if(clActive){
-      L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
-      L.push(`#   u0_pw <- setNames(rnorm(k_pw, 0, tau0_pw), paste0("${clNameR}", 1:k_pw))`);
-      L.push(`#   d$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k_pw), nrow(d), replace = TRUE))`);
-      if(pwUseEtaCol){
-        L.push(`#   d <- d |> mutate(`);
-        L.push(`#     .eta = .eta + u0_pw[as.character(${clNameR})],`);
-        L.push(`#     Y = ${rYFromEtaCol(lik, extra)}`);
-        L.push(`#   ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
-      } else {
-        L.push(`#   d <- d |> mutate(Y = Y + u0_pw[as.character(${clNameR})])`);
-      }
-    }
+    pushClusterInjection('d',pwUseEtaCol);
     pwCovLines('d').forEach(ln=>L.push(ln));
     L.push('#   return(d)');
   } else {
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
+    const pwUseEtaColNoFactor = clActive && !isIdentityLink(lik);
     if(!isIdentityLink(lik)){
       const defLine=rEtaDef('eta',lik,ST.means['all']??0);
       if(defLine){ L.push(`#   ${defLine}`); L.push('#'); }
-      L.push(`#   d <- data.frame(Y = ${rSamplePointFromEtaVar('n','eta',lik,extra,sd)})`);
+      if(pwUseEtaColNoFactor) L.push(`#   d <- data.frame(.eta = rep(eta, n)${lik==='lognormal'?`, .sigma = rep(${sd}, n)`:''})`);
+      else L.push(`#   d <- data.frame(Y = ${rSamplePointFromEtaVar('n','eta',lik,extra,sd)})`);
     } else {
       L.push(`#   d <- data.frame(Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
     }
+    pushClusterInjection('d',pwUseEtaColNoFactor);
     pwCovLines('d').forEach(ln=>L.push(ln));
     L.push('#   return(d)');
   }
