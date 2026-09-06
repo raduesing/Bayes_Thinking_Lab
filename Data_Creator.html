@@ -21,6 +21,7 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
 .hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
 .hbtn:hover{border-color:var(--a2);color:var(--a2)}
 .hbtn.act{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+#btn-exact.act{background:var(--a3);color:var(--paper);border-color:var(--a3)}
 #shell{flex:1;overflow-y:auto;min-height:0}
 /* HELP PANEL */
 .help-panel{position:fixed;top:var(--nav-h);right:0;width:min(480px,95vw);height:calc(100vh - var(--nav-h));background:var(--paper);border-left:2px solid var(--a5);box-shadow:-4px 0 24px rgba(0,0,0,.18);z-index:500;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
@@ -152,6 +153,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
   </div>
   <div class="hdr-btns">
     <button class="hbtn" onclick="window.open('index.html','_self')" style="border-color:var(--a5);color:var(--a5)">← Übersicht</button>
+    <button class="hbtn" id="btn-exact" onclick="toggleExactMode()" style="border-color:var(--a3);color:var(--a3)" title="Erzwingt exakte Stichproben-Mittelwerte/SDs (Prinzip von empirical=TRUE) statt zufälliger Sampling-Streuung — für Gaussian/Student/Lognormal. Bei anderen Verteilungsfamilien nur die zugrundeliegende η/Cluster-Struktur.">🎯 Exakte Parameter</button>
     <button class="hbtn" onclick="toggleHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Hilfe</button>
     <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
@@ -280,7 +282,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
         </ul>
         <p><strong>Nicht-Gauß-Likelihoods:</strong> <code>sim_design()</code> erzeugt immer normalverteilte η-Werte. Diese werden danach via <code>mutate(across(...))</code> in die Zielverteilung transformiert (z.B. <code>rbinom(n(), 1, plogis(eta))</code> für Bernoulli). Das ist eine Gauß-Approximation auf η-Ebene — für moderate Korrelationen und nicht zu extreme Verteilungsparameter gut geeignet.</p>
         <p><strong>Wide → Long:</strong> Within-Designs erzeugen dat_wide (eine Spalte pro Zeitpunkt). <code>pivot_longer()</code> macht daraus dat_long — das Format, das brms/lme4 erwartet. Kovariablen (between-subjects) werden dabei automatisch repliziert.</p>
-        <p><strong>empirical = TRUE:</strong> Wenn exakte Stichprobenkennwerte statt Zufallsziehung gewünscht werden — nützlich wenn JS-Visualisierung und R-Code übereinstimmen sollen.</p>
+        <p><strong>🎯 Exakte Parameter (Toggle oben):</strong> Erzwingt exakte Stichproben-Mittelwerte/SDs statt Zufallsstreuung — nützlich um z.B. zu prüfen, ob ein Modell die wahren Populationsparameter exakt zurückgewinnt. Nutzt das <code>empirical = TRUE</code>-Prinzip (linear reskalieren, statt neu zu ziehen) und wirkt identisch in der JS-Vorschau/CSV und im generierten R-Code. Gilt vollständig für Gaussian/Student/Lognormal (Kovariablen, Cluster-Random-Effects, Y); bei Gamma/Bernoulli/Beta/Binomial/Poisson/NegBinomial nur für die zugrundeliegende η-/Cluster-Struktur — die finale Ziehung bleibt dort zufällig, da es kein allgemeines exaktes Verfahren für diese Familien gibt. Der Poweranalyse-Codeblock ignoriert den Toggle bewusst (Monte-Carlo-Power braucht echte Stichprobenstreuung).</p>
         <p><strong>Pakete (Installation):</strong></p>
         <ul>
           <li><code>install.packages("faux")</code></li>
@@ -587,6 +589,7 @@ const ST = {
   corrTypes:{},  // {withinId: 'cs'|'ar1'|'custom'}
   corrRho:  {},  // {withinId: 0.65}
   generated: null,
+  exactMode: false, // "Exakte Parameter": erzwingt exakte Stichproben-Mittelwerte/SDs statt Sampling-Streuung
 };
 
 // ────────────────────────────────────────────────────────────
@@ -645,6 +648,48 @@ function mvNorm(n,means,sds,corrMat){
   for(let obs=0;obs<n;obs++){
     const z=Array.from({length:k},()=>rNorm());
     for(let i=0;i<k;i++){let v=means[i];for(let j=0;j<=i;j++)v+=L[i][j]*z[j];out[i][obs]=v;}
+  }
+  return out;
+}
+
+// ── "Exakte Parameter"-Modus: erzwingt exakte Stichproben-Kennwerte ──
+// (identisches Prinzip zu MASS::mvrnorm(empirical=TRUE) / faux::sim_design(empirical=TRUE)):
+// eine gezogene Stichprobe wird linear so reskaliert, dass ihr EMPIRISCHER Mittelwert/SD
+// (bzw. ihre Kovarianzmatrix) exakt den Zielwerten entspricht, statt zufällig zu streuen.
+function meanArr(a){return a.reduce((s,x)=>s+x,0)/a.length;}
+function sdArr(a){const m=meanArr(a),n=a.length;if(n<2)return 0;return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(n-1));}
+function rescaleExact1D(arr,targetMean,targetSD){
+  const m=meanArr(arr),s=sdArr(arr);
+  if(s<1e-12) return arr.map(()=>targetMean);
+  return arr.map(x=>(x-m)/s*targetSD+targetMean);
+}
+// Reskaliert k parallele Arrays (je Länge n) so, dass Mittelwertvektor UND Kovarianzmatrix
+// exakt den Zielwerten (targetSDs, targetCorr) entsprechen — via "Whiten & Recolor":
+// empirische Cholesky-Zerlegung entfernen, Ziel-Cholesky-Zerlegung aufprägen.
+function rescaleExactMulti(arrs,targetMeans,targetSDs,targetCorr){
+  const k=arrs.length,n=arrs[0].length;
+  const means=arrs.map(meanArr);
+  const cov=Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>{
+    let s=0; for(let r=0;r<n;r++) s+=(arrs[i][r]-means[i])*(arrs[j][r]-means[j]);
+    return s/(n-1);
+  }));
+  const Lemp=cholesky(cov);
+  const targetCov=Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>targetSDs[i]*targetSDs[j]*targetCorr[i][j]));
+  const Ltar=cholesky(targetCov);
+  const out=Array.from({length:k},()=>new Array(n));
+  for(let r=0;r<n;r++){
+    const d=arrs.map((a,i)=>a[r]-means[i]);
+    const w=new Array(k);
+    for(let i=0;i<k;i++){
+      let s=d[i];
+      for(let j=0;j<i;j++) s-=Lemp[i][j]*w[j];
+      w[i]=Lemp[i][i]<1e-12?0:s/Lemp[i][i];
+    }
+    for(let i=0;i<k;i++){
+      let s=targetMeans[i];
+      for(let j=0;j<=i;j++) s+=Ltar[i][j]*w[j];
+      out[i][r]=s;
+    }
   }
   return out;
 }
@@ -1347,8 +1392,13 @@ function generateAndRender(){
         grpEffects.push(l11*z1);
         slopeEffects.push(l21*z1+l22*z2);
       }
+      if(ST.exactMode){
+        const [ge,se]=rescaleExactMulti([grpEffects,slopeEffects],[0,0],[clTau0,clTau1],[[1,clRho01],[clRho01,1]]);
+        grpEffects=ge; slopeEffects=se;
+      }
     } else {
       grpEffects=Array.from({length:clK},()=>rNorm()*clTau0);
+      if(ST.exactMode) grpEffects=rescaleExact1D(grpEffects,0,clTau0);
     }
   }
   let grpCounter=0, obsInGrp=0, nPerGrp=Math.ceil(n/clK);
@@ -1359,10 +1409,15 @@ function generateAndRender(){
   const covZ=[];
   if(nCovs===2&&ST.covRho!==0){
     const rho=Math.max(-0.99,Math.min(0.99,ST.covRho||0));
-    const zPairs=mvNorm(nTotal,[0,0],[ST.covariates[0].sd,ST.covariates[1].sd],[[1,rho],[rho,1]]);
+    let zPairs=mvNorm(nTotal,[0,0],[ST.covariates[0].sd,ST.covariates[1].sd],[[1,rho],[rho,1]]);
+    if(ST.exactMode) zPairs=rescaleExactMulti(zPairs,[0,0],[ST.covariates[0].sd,ST.covariates[1].sd],[[1,rho],[rho,1]]);
     covZ.push(zPairs[0],zPairs[1]);
   }else{
-    ST.covariates.forEach(cov=>covZ.push(Array.from({length:nTotal},()=>rNorm()*cov.sd)));
+    ST.covariates.forEach(cov=>{
+      let z=Array.from({length:nTotal},()=>rNorm()*cov.sd);
+      if(ST.exactMode) z=rescaleExact1D(z,0,cov.sd);
+      covZ.push(z);
+    });
   }
 
   for(const bc of bRows){
@@ -1379,18 +1434,39 @@ function generateAndRender(){
         const bfi=ST.between.findIndex(f=>f.id===genSlopeFactor.id);
         if(bfi>=0) bSlopeCode=Math.max(0,genSlopeFactor.levels.indexOf(bc[bfi]));
       }
+      // Additive-noise families (gaussian/student/lognormal): the residual-noise layer is
+      // exact-rescaled INDEPENDENTLY of the cluster RE layer (which was already exact-rescaled
+      // to (0, tau0) above) — NOT as a combined block. Rescaling mu+re+slope+noise as one block
+      // would force the RE's variance contribution into the residual "sd" target, silently
+      // shrinking the configured Random-Intercept-SD's recoverability (violates the additive
+      // variance-decomposition semantics multilevel models rely on).
+      const isAdditiveB=(lik==='gaussian'||lik==='student'||lik==='lognormal');
+      const cellNoiseB=[], cellRowsB=[], cellReslopeB=[];
       for(let i=0;i<n;i++){
         const row={id:++subjId};
         if(clActive){row[cleanR(clName)]='G'+(grpCounter+1);obsInGrp++;if(obsInGrp>=nPerGrp){grpCounter=(grpCounter+1)%clK;obsInGrp=0;}}
         ST.between.forEach((f,fi)=>row[cleanR(f.name)]=bc[fi]);
         const re=clActive?(grpEffects[grpCounter]||0):0;
         const slope=hasSlopes?(slopeEffects[grpCounter]||0)*bSlopeCode:0;
-        row.Y=samplePoint(mu+re+slope, lik, extra, sd);
+        if(isAdditiveB){
+          const noise=lik==='student'?rStudentT(extra.nu||4)*sd:rNorm()*sd;
+          cellNoiseB.push(noise); cellReslopeB.push(re+slope); cellRowsB.push(row);
+        } else {
+          row.Y=samplePoint(mu+re+slope, lik, extra, sd);
+        }
         ST.covariates.forEach((cov,ci)=>{
           const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
           row[cleanR(cov.name)]=cmu+(covZ[ci]?.[subjId-1]||0);
         });
         data.push(row);
+      }
+      if(isAdditiveB){
+        let noiseVals=cellNoiseB;
+        if(ST.exactMode) noiseVals=rescaleExact1D(cellNoiseB,0,sd);
+        cellRowsB.forEach((row,idx)=>{
+          const v=mu+cellReslopeB[idx]+noiseVals[idx];
+          row.Y=lik==='lognormal'?Math.exp(v):v;
+        });
       }
     } else {
       // Within factor — correct RE handling: add RE on η (model scale) BEFORE inverse link
@@ -1421,6 +1497,15 @@ function generateAndRender(){
         if(bfi>=0) bCellSlopeCode=Math.max(0,genSlopeFactor.levels.indexOf(bc[bfi]));
       }
 
+      // Buffer only the zero-mean INNOVATION layer (within-level noise / Cholesky term) per
+      // level, exact-rescale THAT independently of the cluster RE (already exact-rescaled to
+      // (0, tau0) above), then recombine — analogous to the between/no-factor branch above,
+      // so cluster variance never gets absorbed into the within-level sd target.
+      const isAdditiveW=(lik==='gaussian'||lik==='student'||lik==='lognormal');
+      const innovBuffersW=isAdditiveW?wf.levels.map(()=>[]):null;
+      const reslopeBufW=isAdditiveW?[]:null;
+      const rowsW=isAdditiveW?[]:null;
+
       for(let obs=0;obs<n;obs++){
         const row={id:++subjId};
         if(clActive){row[cleanR(clName)]='G'+(grpCounter+1);obsInGrp++;if(obsInGrp>=nPerGrp){grpCounter=(grpCounter+1)%clK;obsInGrp=0;}}
@@ -1431,14 +1516,29 @@ function generateAndRender(){
         if(lik==='gaussian'){
           // RE on η, correlation preserved via pre-computed Cholesky L
           const z=Array.from({length:k},()=>rNorm());
-          wf.levels.forEach((lv,wi)=>{
+          rowsW.push(row);
+          reslopeBufW.push(wf.levels.map((_,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            let v=means[wi]+re+u1*slopeCode;
-            for(let j=0;j<=wi;j++) v+=L[wi][j]*z[j];
-            row[lv]=v;
+            return re+u1*slopeCode;
+          }));
+          wf.levels.forEach((lv,wi)=>{
+            let innov=0;
+            for(let j=0;j<=wi;j++) innov+=L[wi][j]*z[j];
+            innovBuffersW[wi].push(innov);
+          });
+        } else if(lik==='student'||lik==='lognormal'){
+          // Additive-noise, no cross-level correlation forced (matches non-exact behaviour)
+          rowsW.push(row);
+          reslopeBufW.push(wf.levels.map((_,wi)=>{
+            const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
+            return re+u1*slopeCode;
+          }));
+          wf.levels.forEach((lv,wi)=>{
+            const noise=lik==='student'?rStudentT(extra.nu||4)*sds[wi]:rNorm()*sds[wi];
+            innovBuffersW[wi].push(noise);
           });
         } else {
-          // Non-Gaussian: RE on η before inverse link — independent per within-level
+          // Non-additive (GLM-style): RE on η before inverse link — independent per within-level
           wf.levels.forEach((lv,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
             row[lv]=samplePoint(means[wi]+re+u1*slopeCode, lik, extra, sds[wi]);
@@ -1449,6 +1549,21 @@ function generateAndRender(){
           row[cleanR(cov.name)]=cmu+(covZ[ci]?.[subjId-1]||0);
         });
         data.push(row);
+      }
+
+      if(isAdditiveW){
+        let innov=innovBuffersW;
+        if(ST.exactMode){
+          innov=lik==='gaussian'
+            ? rescaleExactMulti(innovBuffersW,means.map(()=>0),sds,corrMat)
+            : wf.levels.map((_,wi)=>rescaleExact1D(innovBuffersW[wi],0,sds[wi]));
+        }
+        wf.levels.forEach((lv,wi)=>{
+          rowsW.forEach((row,idx)=>{
+            const v=means[wi]+reslopeBufW[idx][wi]+innov[wi][idx];
+            row[lv]=lik==='lognormal'?Math.exp(v):v;
+          });
+        });
       }
     }
   }
@@ -1941,9 +2056,27 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   lines.push(`set.seed(${seed})`);
   lines.push(`# Hinweis: JS (mulberry32) und R (Mersenne Twister) nutzen verschiedene PRNGs.`);
   lines.push(`# Gleicher Seed erzeugt ähnliche, aber nicht identische Zahlen.`);
-  lines.push(`# Für exakte Übereinstimmung: empirical = TRUE in sim_design() setzen`);
-  lines.push(`# (erzeugt dann Daten mit exakten Stichprobenkennwerten statt Zufallsziehung).`);
+  if(ST.exactMode){
+    lines.push(`# "Exakte Parameter" ist AKTIV: erzwingt exakte Stichproben-Mittelwerte/SDs`);
+    lines.push(`# (Prinzip von empirical = TRUE) für Gaussian/Student/Lognormal — Kovariablen,`);
+    lines.push(`# Cluster-Random-Effects und additive Y-Rauschterme. Bei anderen Verteilungs-`);
+    lines.push(`# familien (Gamma/Bernoulli/Beta/Binomial/Poisson/NegBinomial) bleibt die finale`);
+    lines.push(`# Ziehung zufällig — dafür existiert kein allgemeines exaktes Verfahren.`);
+  } else {
+    lines.push(`# Für exakte Stichproben-Kennwerte statt Zufallsziehung: Button "🎯 Exakte`);
+    lines.push(`# Parameter" oben aktivieren (Prinzip von empirical = TRUE).`);
+  }
   lines.push(`n <- ${n}   # Beobachtungen pro Zelle`);
+  if(ST.exactMode){
+    lines.push('');
+    lines.push('# ── "Exakte Parameter"-Hilfsfunktion ───────────────────');
+    lines.push('# Reskaliert x linear so, dass sein EMPIRISCHER Mittelwert/SD exakt');
+    lines.push('# target_mean/target_sd entspricht (gleiches Prinzip wie empirical = TRUE).');
+    lines.push('exact_mean_sd <- function(x, target_mean, target_sd) {');
+    lines.push('  if (sd(x) < 1e-9) return(rep(target_mean, length(x)))');
+    lines.push('  (x - mean(x)) / sd(x) * target_sd + target_mean');
+    lines.push('}');
+  }
   lines.push('');
 
   if(hasW){
@@ -2003,7 +2136,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`  # (reines Sampling-Rauschen) in den ${lik}-verteilten Y-Werten.`);
     }
     lines.push(rParam);
-    lines.push('  empirical = FALSE,');
+    lines.push(`  empirical = ${ST.exactMode?'TRUE':'FALSE'},`);
     lines.push('  plot     = FALSE');
     lines.push(')');
 
@@ -2025,10 +2158,19 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       if(hasSlopes){
         const m=clSlopeFactor.levels.length;
         buildSlopeSigmaLines('k','tau0','tau1','rho01','Sigma_re','RE',i=>'u'+i,clNameR,m).forEach(l=>lines.push(l));
+      } else if(ST.exactMode){
+        lines.push(`u0   <- setNames(exact_mean_sd(rnorm(k), 0, tau0), paste0("${clNameR}", 1:k))`);
       } else {
         lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
       }
-      lines.push(`dat_wide$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat_wide), replace = TRUE))`);
+      if(ST.exactMode){
+        lines.push(`# Balancierte (statt zufällige) Cluster-Zuordnung — nötig, damit die exakten`);
+        lines.push(`# Random-Intercept-Kennwerte (u0) sich auch im finalen η/Y-Mittelwert exakt`);
+        lines.push(`# niederschlagen (ungleiche Clustergrößen würden das verwässern).`);
+        lines.push(`dat_wide$${clNameR} <- factor(rep(paste0("${clNameR}", 1:k), each = ceiling(nrow(dat_wide) / k), length.out = nrow(dat_wide)))`);
+      } else {
+        lines.push(`dat_wide$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat_wide), replace = TRUE))`);
+      }
       if(hasSlopes&&slopeIsWithin){
         lines.push(`dat_wide <- dat_wide |>`);
         lines.push(`  mutate(`);
@@ -2101,7 +2243,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         lines.push(`# Korrelierte Kovariablen: ${c1R}, ${c2R}  (ρ = ${rho})`);
         lines.push(`Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)},`);
         lines.push(`                     ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
-        lines.push(`cov_z <- MASS::mvrnorm(nrow(dat_wide), mu = c(0, 0), Sigma = Sigma_cov)`);
+        lines.push(`cov_z <- MASS::mvrnorm(nrow(dat_wide), mu = c(0, 0), Sigma = Sigma_cov, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
         ST.covariates.forEach((cov,ci)=>{
           const cR=cleanR(cov.name);
           lines.push(...buildCovAssignment(cov,cR,'dat_wide',bNamesR_cov,`cov_z[, ${ci+1}]`));
@@ -2109,7 +2251,8 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       }else{
         ST.covariates.forEach(cov=>{
           const cR=cleanR(cov.name);
-          lines.push(...buildCovAssignment(cov,cR,'dat_wide',bNamesR_cov,`rnorm(nrow(dat_wide), 0, ${cov.sd.toFixed(2)})`));
+          const zExpr=ST.exactMode?`exact_mean_sd(rnorm(nrow(dat_wide)), 0, ${cov.sd.toFixed(2)})`:`rnorm(nrow(dat_wide), 0, ${cov.sd.toFixed(2)})`;
+          lines.push(...buildCovAssignment(cov,cR,'dat_wide',bNamesR_cov,zExpr));
         });
       }
     }
@@ -2202,10 +2345,19 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`rho01 <- ${clRho01}  # Korrelation Intercept–Slope`);
       const mNoW=clSlopeFactor.levels.length;
       buildSlopeSigmaLines('k','tau0','tau1','rho01','Sigma_re','RE',i=>'u'+i,clNameR,mNoW).forEach(l=>lines.push(l));
+    } else if(ST.exactMode){
+      lines.push(`u0   <- setNames(exact_mean_sd(rnorm(k), 0, tau0), paste0("${clNameR}", 1:k))`);
     } else {
       lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
     }
-    lines.push(`dat$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat), replace = TRUE))`);
+    if(ST.exactMode){
+      lines.push(`# Balancierte (statt zufällige) Cluster-Zuordnung — nötig, damit die exakten`);
+      lines.push(`# Random-Intercept-Kennwerte (u0) sich auch im finalen η/Y-Mittelwert exakt`);
+      lines.push(`# niederschlagen (ungleiche Clustergrößen würden das verwässern).`);
+      lines.push(`dat$${clNameR} <- factor(rep(paste0("${clNameR}", 1:k), each = ceiling(nrow(dat) / k), length.out = nrow(dat)))`);
+    } else {
+      lines.push(`dat$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat), replace = TRUE))`);
+    }
     const useEtaColCl = !isIdentityLink(lik);
     if(hasSlopesNoW){
       const slopeExpr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i);
@@ -2215,8 +2367,19 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         lines.push(`    .eta = .eta + ${slopeExpr},`);
         lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
         lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+        if(ST.exactMode){
+          lines.push(`# ⚠ "Exakte Parameter" erzwingt hier nur eine exakte η-/Cluster-Struktur;`);
+          lines.push(`# die finale ${lik}-Ziehung bleibt zufällig — für diese Verteilungsfamilie`);
+          lines.push(`# existiert kein allgemeines exaktes Verfahren.`);
+        }
       } else {
         lines.push(`  mutate(Y = Y + ${slopeExpr})`);
+        if(ST.exactMode){
+          lines.push(`# Hinweis: Y hat bereits exakten Mittelwert/SD je Zelle, die Random-Slope/`);
+          lines.push(`# -Intercept-REs (Sigma_re) exakte Kennwerte — beide Varianzquellen bleiben`);
+          lines.push(`# unabhängig exakt (kein gemeinsames Reskalieren, sonst wäre Sigma_re im`);
+          lines.push(`# Modell-Fit nicht mehr exakt rekonstruierbar).`);
+        }
       }
     } else {
       lines.push(`dat <- dat |>`);
@@ -2227,6 +2390,17 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
       } else {
         lines.push(`  mutate(Y = Y + u0[as.character(${clNameR})])`);
+        if(ST.exactMode){
+          lines.push(`# Hinweis: Y (Zeile oben) hat bereits exakten Mittelwert/SD je Zelle, u0 exakten`);
+          lines.push(`# Mittelwert 0/SD tau0 — beide Varianzquellen bleiben dadurch UNABHÄNGIG exakt`);
+          lines.push(`# reskaliert (kein gemeinsames Reskalieren, sonst wäre tau0 im Modell-Fit nicht`);
+          lines.push(`# mehr exakt rekonstruierbar).`);
+        }
+      }
+      if(ST.exactMode&&useEtaColCl){
+        lines.push(`# ⚠ "Exakte Parameter" erzwingt hier nur eine exakte η-/Cluster-Struktur;`);
+        lines.push(`# die finale ${lik}-Ziehung (Y = ${rYFromEtaCol(lik, extra)}) bleibt zufällig —`);
+        lines.push(`# für diese Verteilungsfamilie existiert kein allgemeines exaktes Verfahren.`);
       }
     }
   }
@@ -2244,7 +2418,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`# Korrelierte Kovariablen: ${c1R}, ${c2R}  (ρ = ${rho})`);
       lines.push(`Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)},`);
       lines.push(`                     ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
-      lines.push(`cov_z <- MASS::mvrnorm(nrow(dat), mu = c(0, 0), Sigma = Sigma_cov)`);
+      lines.push(`cov_z <- MASS::mvrnorm(nrow(dat), mu = c(0, 0), Sigma = Sigma_cov, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
       ST.covariates.forEach((cov,ci)=>{
         const cR=cleanR(cov.name);
         lines.push(...buildCovAssignment(cov,cR,'dat',bNamesR_cov,`cov_z[, ${ci+1}]`));
@@ -2252,7 +2426,8 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     }else{
       ST.covariates.forEach(cov=>{
         const cR=cleanR(cov.name);
-        lines.push(...buildCovAssignment(cov,cR,'dat',bNamesR_cov,`rnorm(nrow(dat), 0, ${cov.sd.toFixed(2)})`));
+        const zExpr=ST.exactMode?`exact_mean_sd(rnorm(nrow(dat)), 0, ${cov.sd.toFixed(2)})`:`rnorm(nrow(dat), 0, ${cov.sd.toFixed(2)})`;
+        lines.push(...buildCovAssignment(cov,cR,'dat',bNamesR_cov,zExpr));
       });
     }
   }
@@ -2352,7 +2527,7 @@ function buildSlopeSigmaLines(kVar,tau0Var,tau1Var,rhoVar,sigmaVar,reVar,uName,c
     rows.forEach((r,i)=>L.push(`  ${r}${i<rows.length-1?',':''}`));
     L.push(`), ${m}, ${m})`);
   }
-  L.push(`${reVar} <- MASS::mvrnorm(${kVar}, mu = rep(0, ${m}), Sigma = ${sigmaVar})`);
+  L.push(`${reVar} <- MASS::mvrnorm(${kVar}, mu = rep(0, ${m}), Sigma = ${sigmaVar}, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
   L.push(`${uName(0)} <- setNames(${reVar}[, 1], paste0("${clNameR}", 1:${kVar}))`);
   for(let i=1;i<m;i++) L.push(`${uName(i)} <- setNames(${reVar}[, ${i+1}], paste0("${clNameR}", 1:${kVar}))`);
   return L;
@@ -2879,6 +3054,13 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
 }
 
 function rSamplePoint(nVar,lik,mu,sd,extra){
+  if(ST.exactMode&&(lik==='gaussian'||lik==='student'||lik==='lognormal')){
+    switch(lik){
+      case 'gaussian': return `exact_mean_sd(rnorm(${nVar}), ${mu}, ${sd})`;
+      case 'student':  return `exact_mean_sd(${mu} + ${sd} * rt(${nVar}, df = ${extra.nu||4}), ${mu}, ${sd})`;
+      case 'lognormal':return `exp(exact_mean_sd(rnorm(${nVar}), ${mu}, ${sd}))`;
+    }
+  }
   switch(lik){
     case 'gaussian':    return `rnorm(${nVar}, mean = ${mu}, sd = ${sd})`;
     case 'student':     return `${mu} + ${sd} * rt(${nVar}, df = ${extra.nu||4})`;
@@ -2954,6 +3136,13 @@ function rEtaDef(etaVarName, lik, mu){
 // Like rSamplePoint but uses a named R variable for η instead of a numeric literal.
 function rSamplePointFromEtaVar(nVar, etaVar, lik, extra, sd){
   const phi=extra.phi||2, ntrials=extra.ntrials||10, nu=extra.nu||4;
+  if(ST.exactMode&&(lik==='gaussian'||lik==='student'||lik==='lognormal')){
+    switch(lik){
+      case 'gaussian': return `exact_mean_sd(rnorm(${nVar}), ${etaVar}, ${sd})`;
+      case 'student':  return `exact_mean_sd(${etaVar} + ${sd} * rt(${nVar}, df = ${nu}), ${etaVar}, ${sd})`;
+      case 'lognormal':return `exp(exact_mean_sd(rnorm(${nVar}), ${etaVar}, ${sd}))`;
+    }
+  }
   switch(lik){
     case 'gaussian':    return `rnorm(${nVar}, mean = ${etaVar}, sd = ${sd})`;
     case 'student':     return `${etaVar} + ${sd} * rt(${nVar}, df = ${nu})`;
@@ -2984,7 +3173,9 @@ function cleanR(str){
 function rTransformLambda(lik, extra){
   const phi=extra.phi||2, ntrials=extra.ntrials||10, nu=extra.nu||4;
   switch(lik){
-    case 'student':     return `\\(eta) { m <- mean(eta); s <- sd(eta); if(s < 1e-9) return(eta); m + s * qt(pnorm((eta - m) / s), df = ${nu}) }`;
+    case 'student':     return ST.exactMode
+      ? `\\(eta) { m <- mean(eta); s <- sd(eta); if(s < 1e-9) return(eta); x <- m + s * qt(pnorm((eta - m) / s), df = ${nu}); exact_mean_sd(x, m, s) }`
+      : `\\(eta) { m <- mean(eta); s <- sd(eta); if(s < 1e-9) return(eta); m + s * qt(pnorm((eta - m) / s), df = ${nu}) }`;
     case 'lognormal':   return '\\(eta) exp(eta)';
     case 'gamma':       return `\\(eta) rgamma(n(), shape = ${phi}, rate = ${phi} / exp(eta))`;
     case 'bernoulli':   return '\\(eta) rbinom(n(), 1, plogis(eta))';
@@ -3236,6 +3427,12 @@ function toggleHelpSection(hdr){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function toggleTheme(){const h=document.documentElement;const dark=h.getAttribute('data-theme')==='dark';h.setAttribute('data-theme',dark?'light':'dark');document.getElementById('btn-theme').textContent=dark?'🌙 Dark':'☀ Light';localStorage.setItem('btl-theme',dark?'light':'dark');}
+
+function toggleExactMode(){
+  ST.exactMode=!ST.exactMode;
+  document.getElementById('btn-exact').classList.toggle('act',ST.exactMode);
+  if(ST.generated) generateAndRender();
+}
 
 // ────────────────────────────────────────────────────────────
 // INIT
