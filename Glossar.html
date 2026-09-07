@@ -1564,14 +1564,99 @@ const TERMS = [
   def:'Sphärizität ist die Annahme, dass die Varianzen ALLER paarweisen Differenzen zwischen den Stufen eines Messwiederholungsfaktors gleich groß sind: Var(Yⱼ − Yₖ) ist für jedes Paar j≠k identisch. Diese Annahme ist notwendig für die Gültigkeit des klassischen F-Tests in der Messwiederholungs-ANOVA und wird üblicherweise mit Mauchlys Test geprüft. Bei Verletzung wird der F-Test zu liberal (zu viele falsch-positive Ergebnisse); Korrekturen wie Greenhouse-Geisser- oder Huynh-Feldt-ε reduzieren die Freiheitsgrade, um das zu kompensieren.',
   formula:'Var(Yⱼ − Yₖ) konstant für alle j ≠ k',
   intuition:'Compound Symmetry ist eine hinreichende (aber nicht notwendige) Bedingung für Sphärizität — jede CS-Struktur ist sphärisch, aber nicht jede sphärische Struktur ist CS. Der eleganteste Ausweg aus der ganzen Sphärizitätsproblematik: ein GLMM mit Random Intercept (und ggf. Random Slope) verwenden statt der klassischen Messwiederholungs-ANOVA — Mixed Models benötigen keine Sphärizitätsannahme und modellieren die Kovarianzstruktur explizit und flexibel.',
-  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly-Test'}]
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly-Test'},{id:'greenhouse-geisser-huynh-feldt',label:'Greenhouse-Geisser / Huynh-Feldt'}]
 },
 
 { id:'mauchly-test', cats:['glm','reg'], az:'M', name:'Mauchly-Test', longname:'Mauchlys Test auf Sphärizität',
   def:'Der Mauchly-Test (Mauchly, 1940) prüft die Nullhypothese, dass die Kovarianzmatrix eines Messwiederholungsfaktors sphärisch ist — also dass alle paarweisen Differenzvarianzen gleich sind. Die Teststatistik W basiert auf dem Verhältnis von geometrischem zu arithmetischem Mittel der Eigenwerte der Kovarianzmatrix der orthonormalisierten Differenzvariablen und ist approximativ χ²-verteilt. Ein signifikantes Ergebnis (p &lt; .05) bedeutet: Sphärizität ist verletzt, der klassische F-Test der Messwiederholungs-ANOVA wird zu liberal, und eine Greenhouse-Geisser- oder Huynh-Feldt-Korrektur der Freiheitsgrade (oder ein Wechsel zum GLMM) wird nötig.',
   formula:'W = |S| / [(tr(S)/(p−1))^(p−1)]   (S = Kovarianzmatrix der p−1 Differenzvariablen)',
   intuition:'Der Mauchly-Test hat ein bekanntes Dilemma: Bei kleinen Stichproben hat er zu wenig Power, um echte Sphärizitätsverletzungen zu erkennen (er wird fälschlich nicht signifikant) — bei großen Stichproben wird er dagegen oft schon bei trivialen, praktisch bedeutungslosen Abweichungen signifikant. Dieses Dilemma ist einer der Gründe, warum viele Methodiker:innen heute direkt zum GLMM raten, statt sich auf den Mauchly-Test und nachträgliche Korrekturen zu verlassen — das Mixed Model braucht die Sphärizitätsannahme erst gar nicht.',
-  related:[{id:'sphaerizitaet',label:'Sphärizität'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'}]
+  related:[{id:'sphaerizitaet',label:'Sphärizität'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'},{id:'greenhouse-geisser-huynh-feldt',label:'Greenhouse-Geisser / Huynh-Feldt'}]
+},
+
+{ id:'greenhouse-geisser-huynh-feldt', cats:['glm','reg'], az:'G', name:'Greenhouse-Geisser / Huynh-Feldt', longname:'ε-Korrekturen für Sphärizitätsverletzungen in der Messwiederholungs-ANOVA',
+  def:'Zeigt der Mauchly-Test eine Sphärizitätsverletzung an, korrigieren beide Verfahren den klassischen F-Test, indem sie dessen Freiheitsgrade mit einem geschätzten ε (0 &lt; ε ≤ 1) multiplizieren — das macht den Test konservativer und kompensiert die sonst überhöhte Typ-I-Fehlerrate. Die Greenhouse-Geisser-Korrektur (1959) schätzt ε tendenziell zu konservativ, besonders bei kleinem wahren ε; die Huynh-Feldt-Korrektur (1976) ist weniger verzerrt, kann aber leicht anti-konservativ werden (ε_HF kann rechnerisch über 1 liegen und wird dann auf 1 gedeckelt). Beide Verfahren sind heute Standardoutput jeder Statistiksoftware für Messwiederholungs-ANOVAs (z.B. R: ez::ezANOVA(), afex::aov_ez()).',
+  formula:'df₁ = ε·(k−1),  df₂ = ε·(k−1)(n−1);   üblich: ε_GG ≤ ε_HF ≤ 1',
+  intuition:'Faustregel aus der Literatur: Greenhouse-Geisser verwenden, wenn das geschätzte ε unter ca. 0,75 liegt (starke Sphärizitätsverletzung) — Huynh-Feldt, wenn ε darüber liegt (moderate Verletzung), da GG dann unnötig konservativ wird. In der Praxis ist diese ganze Entscheidung oft vermeidbar: Ein GLMM mit Random Intercept modelliert die Kovarianzstruktur direkt und benötigt weder Mauchly-Test noch ε-Korrektur — genau deshalb ist der Trend in der modernen Methodenlehre weg von der klassischen Messwiederholungs-ANOVA hin zum Mixed Model.',
+  related:[{id:'mauchly-test',label:'Mauchly-Test'},{id:'sphaerizitaet',label:'Sphärizität'},{id:'glmm',label:'GLMM'}]
+},
+
+/* ── Ergänzung: OLS-Diagnostik, Effektgrößen, Regressionsdiagnostik ── */
+{ id:'tss', cats:['reg'], az:'T', name:'TSS', longname:'Total Sum of Squares — Gesamtvarianz in Y',
+  def:'Die TSS ist die Summe der quadrierten Abweichungen aller beobachteten Y-Werte von ihrem Mittelwert: TSS = Σ(yᵢ − ȳ)². Sie quantifiziert die gesamte Variabilität in Y, die VOR jeglicher Modellanpassung besteht — unabhängig davon, welche Prädiktoren später verwendet werden. TSS zerlegt sich exakt in einen erklärten und einen unerklärten Anteil: TSS = SSM + RSS (Sum of Squares Model + Residual Sum of Squares), die Grundlage für R² = SSM/TSS = 1 − RSS/TSS.',
+  formula:'TSS = Σ(yᵢ − ȳ)² = SSM + RSS',
+  intuition:'TSS ist die „Baseline": wie stark Y streut, wenn man nichts als den Mittelwert vorhersagt. Jedes Modell hat die Aufgabe, möglichst viel von TSS über SSM zu erklären und möglichst wenig als RSS unerklärt zu lassen — TSS selbst ändert sich dabei nie, da sie unabhängig vom Modell ist.',
+  related:[{id:'rss',label:'RSS'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'gauss-markov', cats:['reg'], az:'G', name:'Gauss-Markov-Theorem', longname:'BLUE-Eigenschaft des OLS-Schätzers unter den klassischen Annahmen',
+  def:'Das Gauss-Markov-Theorem besagt: Unter fünf klassischen Annahmen (Linearität, exogene/mittelwertfreie Fehler, Homoskedastizität, keine Autokorrelation, keine perfekte Multikollinearität) ist der OLS-Schätzer BLUE — Best Linear Unbiased Estimator. Das bedeutet: Unter allen linearen unverzerrten Schätzern hat OLS die kleinste Varianz. Entscheidend: Normalverteilung der Fehler wird für diese Eigenschaft NICHT benötigt — sie ist nur für die exakte Inferenz (t-/F-Tests) bei kleinen Stichproben nötig.',
+  formula:'OLS ist BLUE  ⟺  Var(β̂_OLS) ≤ Var(β̃)  für jeden anderen linearen unverzerrten Schätzer β̃',
+  intuition:'Häufiges Missverständnis: OLS „braucht" normalverteilte Fehler, um zu funktionieren — das ist falsch. Gauss-Markov garantiert die BLUE-Eigenschaft ganz ohne Normalverteilungsannahme. Normalität wird nur für exakte Inferenz bei kleinen Stichproben gebraucht; bei großem n rettet ohnehin der Zentrale Grenzwertsatz die Inferenz.',
+  related:[{id:'ols',label:'OLS'},{id:'homoskedastizitaet',label:'Homoskedastizität'},{id:'normalverteilungsannahme',label:'Normalverteilungsannahme'},{id:'residuen',label:'Residuen'}]
+},
+
+{ id:'anscombe-quartet', cats:['reg','diag'], az:'A', name:"Anscombe's Quartet", longname:'Vier Datensätze, identische Kennwerte, fundamental verschiedene Muster',
+  def:'Anscombes Quartett (Francis Anscombe, 1973) besteht aus vier konstruierten Datensätzen mit nahezu identischen deskriptiven Kennwerten (Mittelwert, Varianz, Korrelation, Regressionsgerade, R²), die aber bei grafischer Darstellung dramatisch unterschiedliche Muster zeigen: ein echter linearer Zusammenhang, ein klar nichtlinearer (quadratischer) Zusammenhang, ein perfekter linearer Fit, der durch einen einzigen Ausreißer verzerrt wird, und ein Datensatz, dessen scheinbare Korrelation komplett von einem einzigen High-Leverage-Punkt erzeugt wird.',
+  formula:'Alle vier Datensätze: b₁ ≈ 0.50, b₀ ≈ 3.0, r ≈ .816, R² ≈ .667',
+  intuition:'Die zentrale Lehre: Kennwerte allein — auch R² — genügen nie, um ein Modell zu beurteilen. Residualdiagnostik und Visualisierung sind Pflicht, kein optionales Extra. „Never trust a regression without looking at the data first."',
+  related:[{id:'residuen',label:'Residuen'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'cohens-f2', cats:['eff','reg'], az:'C', name:"Cohen's f²", longname:'Effektgröße für Regression und Varianzanalyse',
+  def:'Cohens f² ist ein Effektgrößenmaß für Regression und ANOVA, das den Anteil erklärter Varianz relativ zur unerklärten Varianz ausdrückt: f² = R²/(1−R²). Konventionen (Cohen, 1988): klein ≥ .02, mittel ≥ .15, groß ≥ .35. f² lässt sich auch für den inkrementellen Varianzzuwachs durch einen zusätzlichen Prädiktorblock berechnen: f² = (R²_voll − R²_reduziert)/(1−R²_voll) — Standard-Input für die Poweranalyse multipler Regression.',
+  formula:'f² = R²/(1−R²)   [Gesamtmodell];   f² = (R²_voll−R²_reduziert)/(1−R²_voll)   [inkrementell]',
+  intuition:'Cohens Konventionen sind bewusst grobe Faustregeln, keine feste Wahrheit — besser ist eine SESOI-basierte Einschätzung: Was ist der kleinste inhaltlich bedeutsame Effekt in diesem konkreten Forschungskontext? f² ist der Standard-Effektgrößeninput für die Poweranalyse multipler Regressionsmodelle.',
+  related:[{id:'r2',label:'R²'},{id:'cohens-d',label:"Cohen's d / Delta"},{id:'power',label:'Power / Poweranalyse'},{id:'sesoi',label:'SESOI'}]
+},
+
+{ id:'hc3', cats:['reg'], az:'R', name:'Robuste Standardfehler (HC0–HC5)', longname:'Heteroskedastizitätskonsistente Kovarianzschätzung',
+  def:'Heteroskedastizitätskonsistente (HC) Standardfehler korrigieren die Standardfehler der OLS-Koeffizienten für Heteroskedastizität, ohne die Punktschätzer selbst zu verändern — anders als WLS erfordern sie kein explizites Varianzmodell. Es existiert eine ganze Familie von Varianten, die sich in der Stärke der Leverage-Korrektur unterscheiden: HC0 (Original-White-Schätzer 1980, keine Korrektur), HC1 (einfache Freiheitsgrade-Korrektur n/(n−k)), HC2 (Korrektur mit 1/(1−hᵢᵢ), unter Homoskedastizität exakt unverzerrt), HC3 (Korrektur mit 1/(1−hᵢᵢ)², approximiert die Jackknife-Varianz — in der Praxis die am häufigsten empfohlene Variante, besonders bei kleinen Stichproben). Neuere, adaptive Varianten wie HC4 (Cribari-Neto, 2004) und HC5 (Cribari-Neto, Souza &amp; Vasconcellos, 2007) passen den Korrekturexponenten zusätzlich an das individuelle Leverage relativ zum mittleren Leverage an und sind bei extrem einflussreichen Beobachtungen robuster als HC3. In R: sandwich::vcovHC(model, type=...) mit "HC0" bis "HC5", kombiniert mit lmtest::coeftest().',
+  formula:'V̂ar(β̂)_HC = (XᵀX)⁻¹ Xᵀ diag(eᵢ²·ωᵢ) X (XᵀX)⁻¹;   HC2: ωᵢ=1/(1−hᵢᵢ);  HC3: ωᵢ=1/(1−hᵢᵢ)²;  HC4/HC5: adaptiver Exponent ~ hᵢᵢ/h̄',
+  intuition:'Im Gegensatz zu WLS (verändert auch den Punktschätzer, braucht ein korrektes Varianzmodell) ist der HC-Ansatz ein reines „SE-Reparatur"-Verfahren beim gleichen (ineffizienten) OLS-Punktschätzer. Trotz der neueren HC4/HC5-Varianten bleibt HC3 in den meisten Statistikpaketen der Standard-Default und die in der Literatur am häufigsten empfohlene Wahl — HC4/HC5 lohnen sich vor allem, wenn einzelne extrem einflussreiche Beobachtungen (sehr hohes Leverage) vorliegen. Viele Methodiker:innen empfehlen HC-Standardfehler routinemäßig zu verwenden — sie kosten kaum etwas, wenn Homoskedastizität ohnehin vorliegt, schützen aber zuverlässig, wenn nicht.',
+  related:[{id:'homoskedastizitaet',label:'Homoskedastizität'},{id:'wls',label:'WLS'},{id:'standardfehler',label:'Standardfehler'}]
+},
+
+{ id:'wls', cats:['reg'], az:'W', name:'WLS', longname:'Weighted Least Squares — Gewichtete Kleinste-Quadrate-Schätzung',
+  def:'Weighted Least Squares erweitert OLS, indem jede Beobachtung invers proportional zu ihrer (geschätzten) Fehlervarianz gewichtet wird: wᵢ = 1/σᵢ². Beobachtungen mit höherer Varianz (weniger verlässlich) erhalten weniger Einfluss auf den Fit. Voraussetzung ist ein Modell dafür, wie sich die Varianz mit X oder den Fitted Values ändert — ist dieses Varianzmodell korrekt, ist WLS effizienter (geringere Varianz) als OLS mit robusten Standardfehlern; ist es falsch spezifiziert, kann WLS schlechter abschneiden als einfaches OLS.',
+  formula:'β̂_WLS = (XᵀWX)⁻¹XᵀWy,   W = diag(w₁,...,wₙ),   wᵢ = 1/σᵢ²',
+  intuition:'Der Unterschied zu HC-robusten Standardfehlern: WLS verändert den Punktschätzer selbst (effizienter, wenn das Varianzmodell stimmt) — HC-Standardfehler korrigieren nur die Inferenz um denselben (weniger effizienten) OLS-Punktschätzer herum, ohne ein Varianzmodell zu benötigen.',
+  related:[{id:'hc3',label:'Robuste Standardfehler (HC0–HC5)'},{id:'homoskedastizitaet',label:'Homoskedastizität'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'zentraler-grenzwertsatz', cats:['reg'], az:'Z', name:'Zentraler Grenzwertsatz', longname:'Central Limit Theorem (CLT)',
+  def:'Der Zentrale Grenzwertsatz besagt, dass sich die Stichprobenverteilung des Mittelwerts (oder der Summe) einer hinreichend großen Anzahl unabhängiger, identisch verteilter Zufallsvariablen einer Normalverteilung annähert — unabhängig von der Form der Ursprungsverteilung. Das erklärt die Allgegenwart der Normalverteilung und begründet, warum OLS-Inferenz (t-/F-Tests) bei großen Stichproben approximativ gültig bleibt, selbst wenn die Normalverteilungsannahme der Fehler verletzt ist. Faustregel: n ≥ 30 wird oft genannt, der tatsächlich nötige Stichprobenumfang hängt aber von der Schiefe/Schwere der Tails der Ursprungsverteilung ab.',
+  formula:'X̄ₙ ≈ N(μ, σ²/n)   für n → ∞   (unabhängig von der Verteilung der Xᵢ)',
+  intuition:'Der ZGS ist der Grund, warum n ≥ 30 in der klassischen Statistik als „sicherer Bereich" gilt: Selbst bei nicht-normalverteilten Rohdaten wird die Stichprobenverteilung des Mittelwerts (und damit der Regressionskoeffizienten) hinreichend normal, damit t-/F-Tests approximativ korrekt funktionieren.',
+  related:[{id:'normalverteilung',label:'Normalverteilung'},{id:'normalverteilungsannahme',label:'Normalverteilungsannahme'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'added-variable-plot', cats:['reg'], az:'A', name:'Added Variable Plot', longname:'Partialregressionsplot — Visualisierung des Partial Slope',
+  def:'Ein Added Variable Plot (AVP, auch: Partialregressionsplot) visualisiert den partiellen Effekt eines Prädiktors X₁ auf Y in einer multiplen Regression, kontrolliert für andere Prädiktoren X₂: Sowohl Y als auch X₁ werden zunächst auf X₂ regrediert, und die Residuen e(Y|X₂) sowie e(X₁|X₂) werden gegeneinander geplottet. Die Steigung der Regressionsgeraden durch diese Residuen entspricht EXAKT dem partiellen Regressionskoeffizienten b₁ aus dem vollen multiplen Modell Y ~ X₁ + X₂ — eine direkte Konsequenz des Frisch-Waugh-Lovell-Theorems.',
+  formula:'Slope[e(Y|X₂) ~ e(X₁|X₂)] = b₁  aus  Y ~ X₁ + X₂   (Frisch-Waugh-Lovell-Theorem)',
+  intuition:'Der AVP macht sichtbar, was die Koeffiziententabelle verbirgt: wie viel der bivariaten Beziehung zwischen X₁ und Y eigentlich auf X₂ zurückzuführen war. Zusätzlich ist er diagnostisch nützlich, um Nichtlinearität oder Ausreißer zu erkennen, die spezifisch für die partielle Beziehung sind — ein einfacher Scatterplot von Roh-Y gegen Roh-X₁ zeigt das im multiplen Kontext nicht.',
+  related:[{id:'kovariate',label:'Kovariate'},{id:'confounder',label:'Konfundierung'},{id:'r2',label:'R²'}]
+},
+
+{ id:'normalgleichungen', cats:['reg'], az:'N', name:'Normalgleichungen', longname:'Normal Equations — analytische Lösung der OLS-Schätzung',
+  def:'Die Normalgleichungen sind das Gleichungssystem, das entsteht, wenn man die partiellen Ableitungen der OLS-Zielfunktion (RSS) nach jedem Koeffizienten gleich null setzt. In Matrixform: XᵀXβ = Xᵀy, gelöst durch β̂ = (XᵀX)⁻¹Xᵀy, sofern XᵀX invertierbar ist (keine perfekte Multikollinearität). Sie heißen „normal", weil der resultierende Residuenvektor orthogonal („normal" im geometrischen Sinn) zum Spaltenraum von X steht.',
+  formula:'XᵀXβ = Xᵀy   ⟹   β̂ = (XᵀX)⁻¹ Xᵀy',
+  intuition:'Geometrische Intuition: OLS findet den Punkt im Spaltenraum von X, der (im euklidischen Sinn) am nächsten an y liegt. Der Residuenvektor y − Xβ̂ muss dann zwingend senkrecht auf diesem Unterraum stehen — genau das drücken die Normalgleichungen aus.',
+  related:[{id:'ols',label:'OLS'},{id:'cholesky',label:'Cholesky-Zerlegung'},{id:'r2',label:'R²'}]
+},
+
+{ id:'freedman-paradox', cats:['reg'], az:'F', name:"Freedman's Paradox", longname:'Scheinbar signifikante Modelle durch zweistufige Prädiktorauswahl',
+  def:'Freedmans Paradox (Freedman, 1983) zeigt: Bei einem zweistufigen Auswahlverfahren — zunächst viele Prädiktoren auf eine bivariate Assoziation mit Y screenen, dann ein Regressionsmodell nur mit den „signifikanten" Prädiktoren fitten — kann das resultierende Modell ein aufgeblähtes R² und scheinbar signifikante F-Tests zeigen, OBWOHL KEINER der Prädiktoren tatsächlich mit Y zusammenhängt. Das Ergebnis entsteht rein durch Kapitalisierung auf Zufall in der Screening-Phase.',
+  formula:'(kein geschlossener Ausdruck — simulationsbasiert demonstriert)',
+  intuition:'Eine eindrückliche Warnung vor datengetriebener Prädiktorauswahl (Stepwise-Regression, Screening ohne Korrektur): R² steigt praktisch immer, sobald man aus vielen Kandidaten die „besten" auswählt — selbst wenn alle Kandidaten reines Rauschen sind. Absicherung: Kreuzvalidierung, Präregistrierung oder penalisierte Regression (Lasso/Ridge).',
+  related:[{id:'r2',label:'R²'},{id:'mle',label:'MLE'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'sesoi', cats:['eff'], az:'S', name:'SESOI', longname:'Smallest Effect Size Of Interest — kleinster inhaltlich relevanter Effekt',
+  def:'Die SESOI (Smallest Effect Size Of Interest) ist der kleinste Effekt, den eine Forscherin/ein Forscher als inhaltlich bzw. theoretisch bedeutsam erachtet — festgelegt VOR der Datenerhebung anhand fachlicher Überlegung, nicht anhand statistischer Konventionen. Sie dient zwei Zwecken: (1) als Effektgrößen-Input für die a-priori-Poweranalyse (statt willkürlicher „mittlerer Effekt"-Annahmen), und (2) als Äquivalenzgrenze für Äquivalenztests (TOST) — die Prüfung, ob ein beobachteter Effekt klein genug ist, um als praktisch vernachlässigbar zu gelten.',
+  formula:'(keine feste Formel — fachlich begründete Festlegung vor der Studie)',
+  intuition:'Die SESOI ist die methodisch bevorzugte Alternative zu pauschalen Konventionen wie Cohens klein/mittel/groß-Grenzwerten, die nie als Ersatz für fachspezifisches Urteilsvermögen gedacht waren. Eng verwandt mit Äquivalenztests: Ein Effekt, der kleiner als die SESOI ist, gilt als praktisch bedeutungslos — unabhängig davon, ob er statistisch signifikant von 0 verschieden ist.',
+  related:[{id:'power',label:'Power / Poweranalyse'},{id:'cohens-f2',label:"Cohen's f²"},{id:'aequivalenzhypothese',label:'Äquivalenzhypothesen (KI)'}]
 },
 
 { id:'cholesky', cats:['mcmc','reg'], az:'C', name:'Cholesky-Zerlegung', longname:'Cholesky Decomposition — Faktorisierung einer Kovarianz-/Korrelationsmatrix',

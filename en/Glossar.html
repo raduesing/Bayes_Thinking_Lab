@@ -1477,14 +1477,99 @@ const TERMS = [
   def:'Sphericity is the assumption that the variances of ALL pairwise differences between the levels of a within-subjects factor are equal: Var(Yⱼ − Yₖ) is identical for every pair j≠k. This assumption is required for the classical F-test in repeated-measures ANOVA to be valid, and is typically tested with Mauchly\'s test. When violated, the F-test becomes too liberal (too many false positives); corrections such as Greenhouse-Geisser or Huynh-Feldt epsilon reduce the degrees of freedom to compensate.',
   formula:'Var(Yⱼ − Yₖ) constant for all j ≠ k',
   intuition:'Compound symmetry is a sufficient (but not necessary) condition for sphericity — every CS structure is spherical, but not every spherical structure is CS. The most elegant way out of the whole sphericity problem: use a GLMM with a random intercept (and, if needed, a random slope) instead of the classical repeated-measures ANOVA — mixed models need no sphericity assumption and model the covariance structure explicitly and flexibly.',
-  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly Test'}]
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly Test'},{id:'greenhouse-geisser-huynh-feldt',label:'Greenhouse-Geisser / Huynh-Feldt'}]
 },
 
 { id:'mauchly-test', cats:['glm','reg'], az:'M', name:'Mauchly Test', longname:'Mauchly\'s test of sphericity',
   def:'Mauchly\'s test (Mauchly, 1940) tests the null hypothesis that the covariance matrix of a within-subjects factor is spherical — i.e. that all pairwise difference variances are equal. The test statistic W is based on the ratio of the geometric mean to the arithmetic mean of the eigenvalues of the covariance matrix of the orthonormalized difference variables, and is approximately chi-squared distributed. A significant result (p &lt; .05) means: sphericity is violated, the classical F-test in repeated-measures ANOVA becomes too liberal, and a Greenhouse-Geisser or Huynh-Feldt correction to the degrees of freedom (or switching to a GLMM) becomes necessary.',
   formula:'W = |S| / [(tr(S)/(p−1))^(p−1)]   (S = covariance matrix of the p−1 difference variables)',
   intuition:'Mauchly\'s test has a well-known dilemma: with small samples it has too little power to detect real sphericity violations (falsely non-significant) — with large samples it often becomes significant even for trivial, practically meaningless deviations. This dilemma is one reason many methodologists today recommend going straight to a GLMM instead of relying on Mauchly\'s test and post-hoc corrections — the mixed model never needs the sphericity assumption in the first place.',
-  related:[{id:'sphaerizitaet',label:'Sphericity'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'}]
+  related:[{id:'sphaerizitaet',label:'Sphericity'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'},{id:'greenhouse-geisser-huynh-feldt',label:'Greenhouse-Geisser / Huynh-Feldt'}]
+},
+
+{ id:'greenhouse-geisser-huynh-feldt', cats:['glm','reg'], az:'G', name:'Greenhouse-Geisser / Huynh-Feldt', longname:'ε corrections for sphericity violations in repeated-measures ANOVA',
+  def:'When Mauchly\'s test indicates a sphericity violation, both procedures correct the classical F-test by multiplying its degrees of freedom by an estimated ε (0 &lt; ε ≤ 1) — this makes the test more conservative and compensates for the otherwise inflated Type I error rate. The Greenhouse-Geisser correction (1959) tends to estimate ε too conservatively, especially when the true ε is small; the Huynh-Feldt correction (1976) is less biased but can become slightly anti-conservative (ε_HF can be computed above 1, in which case it is capped at 1). Both are standard output in any statistics software for repeated-measures ANOVA (e.g. R: ez::ezANOVA(), afex::aov_ez()).',
+  formula:'df₁ = ε·(k−1),  df₂ = ε·(k−1)(n−1);   typically: ε_GG ≤ ε_HF ≤ 1',
+  intuition:'Rule of thumb from the literature: use Greenhouse-Geisser when the estimated ε is below about .75 (strong sphericity violation) — use Huynh-Feldt when ε is above that (moderate violation), since GG then becomes unnecessarily conservative. In practice, this whole decision is often avoidable: a GLMM with a random intercept models the covariance structure directly and needs neither Mauchly\'s test nor an ε correction — which is exactly why the trend in modern methodology is away from the classical repeated-measures ANOVA and toward the mixed model.',
+  related:[{id:'mauchly-test',label:'Mauchly Test'},{id:'sphaerizitaet',label:'Sphericity'},{id:'glmm',label:'GLMM'}]
+},
+
+/* ── Addition: OLS diagnostics, effect sizes, regression diagnostics ── */
+{ id:'tss', cats:['reg'], az:'T', name:'TSS', longname:'Total Sum of Squares — total variance in Y',
+  def:'The TSS is the sum of squared deviations of all observed Y values from their mean: TSS = Σ(yᵢ − ȳ)². It quantifies the total variability in Y that exists BEFORE any model is fit — independent of which predictors are later used. TSS decomposes exactly into an explained and an unexplained part: TSS = SSM + RSS (Sum of Squares Model + Residual Sum of Squares), the basis for R² = SSM/TSS = 1 − RSS/TSS.',
+  formula:'TSS = Σ(yᵢ − ȳ)² = SSM + RSS',
+  intuition:'TSS is the "baseline": how much Y varies if you predict nothing but the mean for everyone. Every model\'s job is to explain as much of TSS as possible via SSM while leaving as little as possible unexplained as RSS — TSS itself never changes, since it is independent of the model.',
+  related:[{id:'rss',label:'RSS'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'gauss-markov', cats:['reg'], az:'G', name:'Gauss-Markov Theorem', longname:'The BLUE property of the OLS estimator under the classical assumptions',
+  def:'The Gauss-Markov theorem states: under five classical assumptions (linearity, exogenous/zero-mean errors, homoscedasticity, no autocorrelation, no perfect multicollinearity), the OLS estimator is BLUE — Best Linear Unbiased Estimator. This means: among all linear unbiased estimators, OLS has the smallest variance. Crucially, normality of the errors is NOT required for this property — it is only needed for exact inference (t/F tests) in small samples.',
+  formula:'OLS is BLUE  ⟺  Var(β̂_OLS) ≤ Var(β̃)  for any other linear unbiased estimator β̃',
+  intuition:'A common misconception: OLS "needs" normally distributed errors to work — that\'s false. Gauss-Markov guarantees the BLUE property without any normality assumption. Normality only matters for exact inference in small samples; with large n, the Central Limit Theorem rescues inference anyway.',
+  related:[{id:'ols',label:'OLS'},{id:'homoskedastizitaet',label:'Homoscedasticity'},{id:'normalverteilungsannahme',label:'Normality Assumption'},{id:'residuen',label:'Residuals'}]
+},
+
+{ id:'anscombe-quartet', cats:['reg','diag'], az:'A', name:"Anscombe's Quartet", longname:'Four datasets, identical summary statistics, fundamentally different patterns',
+  def:"Anscombe's Quartet (Francis Anscombe, 1973) consists of four constructed datasets with nearly identical descriptive statistics (mean, variance, correlation, regression line, R²) that nonetheless show dramatically different patterns when plotted: a genuine linear relationship, a clearly nonlinear (quadratic) relationship, a perfect linear fit distorted by a single outlier, and a dataset whose apparent correlation is entirely produced by a single high-leverage point.",
+  formula:'All four datasets: b₁ ≈ 0.50, b₀ ≈ 3.0, r ≈ .816, R² ≈ .667',
+  intuition:'The central lesson: summary statistics — even R² — are never sufficient on their own to judge a model. Residual diagnostics and visualization are mandatory, not optional. "Never trust a regression without looking at the data first."',
+  related:[{id:'residuen',label:'Residuals'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'cohens-f2', cats:['eff','reg'], az:'C', name:"Cohen's f²", longname:'Effect size for regression and analysis of variance',
+  def:"Cohen's f² is an effect size measure for regression and ANOVA, expressing the proportion of explained variance relative to unexplained variance: f² = R²/(1−R²). Conventions (Cohen, 1988): small ≥ .02, medium ≥ .15, large ≥ .35. f² can also be computed for the incremental variance explained by an added predictor set: f² = (R²_full − R²_reduced)/(1−R²_full) — the standard effect-size input for power analysis in multiple regression.",
+  formula:'f² = R²/(1−R²)   [full model];   f² = (R²_full−R²_reduced)/(1−R²_full)   [incremental]',
+  intuition:"Cohen's conventions are deliberately rough rules of thumb, not a fixed truth — a SESOI-based judgment is preferable: what is the smallest substantively meaningful effect in this specific research context? f² is the standard effect-size input for power analysis of multiple regression models.",
+  related:[{id:'r2',label:'R²'},{id:'cohens-d',label:"Cohen's d / Delta"},{id:'power',label:'Power / Power Analysis'},{id:'sesoi',label:'SESOI'}]
+},
+
+{ id:'hc3', cats:['reg'], az:'R', name:'Robust Standard Errors (HC0–HC5)', longname:'Heteroscedasticity-consistent covariance estimation',
+  def:'Heteroscedasticity-consistent (HC) standard errors correct the standard errors of OLS coefficients for heteroscedasticity without changing the point estimates themselves — unlike WLS, they require no explicit variance model. A whole family of variants exists, differing in the strength of their leverage-based correction: HC0 (the original White (1980) estimator, no correction), HC1 (a simple degrees-of-freedom correction n/(n−k)), HC2 (correction with 1/(1−hᵢᵢ), exactly unbiased under homoscedasticity), HC3 (correction with 1/(1−hᵢᵢ)², approximating the jackknife variance — in practice the most commonly recommended variant, especially in small samples). Newer, adaptive variants such as HC4 (Cribari-Neto, 2004) and HC5 (Cribari-Neto, Souza &amp; Vasconcellos, 2007) further adjust the correction exponent based on each observation\'s leverage relative to the average leverage, and are more robust than HC3 for extremely influential observations. In R: sandwich::vcovHC(model, type=...) with "HC0" through "HC5", combined with lmtest::coeftest().',
+  formula:'V̂ar(β̂)_HC = (XᵀX)⁻¹ Xᵀ diag(eᵢ²·ωᵢ) X (XᵀX)⁻¹;   HC2: ωᵢ=1/(1−hᵢᵢ);  HC3: ωᵢ=1/(1−hᵢᵢ)²;  HC4/HC5: adaptive exponent ~ hᵢᵢ/h̄',
+  intuition:'Unlike WLS (which also changes the point estimate and requires a correctly specified variance model), the HC approach is a pure "fix the SEs" procedure applied to the same (less efficient) OLS point estimate. Despite the newer HC4/HC5 variants, HC3 remains the standard default in most statistics packages and the most commonly recommended choice in the literature — HC4/HC5 pay off mainly when individual observations have extremely high leverage. Many methodologists recommend using HC standard errors routinely — they cost little when homoscedasticity actually holds, but protect reliably when it doesn\'t.',
+  related:[{id:'homoskedastizitaet',label:'Homoscedasticity'},{id:'wls',label:'WLS'},{id:'standardfehler',label:'Standard Error'}]
+},
+
+{ id:'wls', cats:['reg'], az:'W', name:'WLS', longname:'Weighted Least Squares',
+  def:'Weighted Least Squares extends OLS by weighting each observation inversely proportional to its (estimated) error variance: wᵢ = 1/σᵢ². Observations with higher variance (less reliable) get less influence on the fit. It requires a model for how variance changes with X or the fitted values — if that variance model is correct, WLS is more efficient (lower variance) than OLS with robust standard errors; if it is misspecified, WLS can perform worse than plain OLS.',
+  formula:'β̂_WLS = (XᵀWX)⁻¹XᵀWy,   W = diag(w₁,...,wₙ),   wᵢ = 1/σᵢ²',
+  intuition:'The contrast with HC-robust standard errors: WLS changes the point estimate itself (more efficient if the variance model is correct) — HC standard errors only correct inference around the same (less efficient) OLS point estimate, without requiring a variance model.',
+  related:[{id:'hc3',label:'Robust Standard Errors (HC0–HC5)'},{id:'homoskedastizitaet',label:'Homoscedasticity'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'zentraler-grenzwertsatz', cats:['reg'], az:'C', name:'Central Limit Theorem', longname:'CLT — why sample means tend toward normality',
+  def:"The Central Limit Theorem states that the sampling distribution of the mean (or sum) of a sufficiently large number of independent, identically distributed random variables approaches a normal distribution — regardless of the shape of the original distribution. This explains the ubiquity of the normal distribution and justifies why OLS inference (t/F tests) remains approximately valid in large samples even when the normality-of-errors assumption is violated. Rule of thumb: n ≥ 30 is often cited, though the sample size actually needed depends on how skewed or heavy-tailed the original distribution is.",
+  formula:'X̄ₙ ≈ N(μ, σ²/n)   as n → ∞   (regardless of the distribution of the Xᵢ)',
+  intuition:'The CLT is why n ≥ 30 is treated as a "safe zone" in classical statistics: even with non-normal raw data, the sampling distribution of the mean (and hence of regression coefficients) becomes normal enough for t/F tests to work approximately correctly.',
+  related:[{id:'normalverteilung',label:'Normal Distribution'},{id:'normalverteilungsannahme',label:'Normality Assumption'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'added-variable-plot', cats:['reg'], az:'A', name:'Added Variable Plot', longname:'Partial regression plot — visualizing the partial slope',
+  def:"An Added Variable Plot (AVP, also: partial regression plot) visualizes the partial effect of a predictor X₁ on Y in a multiple regression, controlling for other predictors X₂: both Y and X₁ are first regressed on X₂, and the residuals e(Y|X₂) and e(X₁|X₂) are plotted against each other. The slope of the regression line through these residuals equals EXACTLY the partial regression coefficient b₁ from the full multiple model Y ~ X₁ + X₂ — a direct consequence of the Frisch-Waugh-Lovell theorem.",
+  formula:'slope[e(Y|X₂) ~ e(X₁|X₂)] = b₁  from  Y ~ X₁ + X₂   (Frisch-Waugh-Lovell theorem)',
+  intuition:"AVPs make visible what the coefficient table hides: how much of X₁'s bivariate relationship with Y was actually attributable to X₂. They're also useful diagnostically for spotting nonlinearity or outliers specific to the partial relationship — something a simple scatterplot of raw Y against raw X₁ cannot reveal in a multiple-regression context.",
+  related:[{id:'kovariate',label:'Covariate'},{id:'confounder',label:'Confounding'},{id:'r2',label:'R²'}]
+},
+
+{ id:'normalgleichungen', cats:['reg'], az:'N', name:'Normal Equations', longname:'The analytical solution to OLS estimation',
+  def:'The normal equations are the system of equations obtained by setting the partial derivatives of the OLS objective function (RSS) with respect to each coefficient to zero. In matrix form: XᵀXβ = Xᵀy, solved by β̂ = (XᵀX)⁻¹Xᵀy, provided XᵀX is invertible (no perfect multicollinearity). They are called "normal" because the resulting residual vector is orthogonal ("normal" in the geometric sense) to the column space of X.',
+  formula:'XᵀXβ = Xᵀy   ⟹   β̂ = (XᵀX)⁻¹ Xᵀy',
+  intuition:"Geometric intuition: OLS finds the point in the column space of X that is closest (in Euclidean distance) to y. The residual vector y − Xβ̂ must then necessarily be perpendicular to that subspace — exactly what the normal equations express.",
+  related:[{id:'ols',label:'OLS'},{id:'cholesky',label:'Cholesky Decomposition'},{id:'r2',label:'R²'}]
+},
+
+{ id:'freedman-paradox', cats:['reg'], az:'F', name:"Freedman's Paradox", longname:'Spuriously significant models from two-stage predictor selection',
+  def:"Freedman's paradox (Freedman, 1983) demonstrates that in a two-stage selection procedure — first screen many predictors for a bivariate association with Y, then fit a regression using only the \"significant\" ones — the resulting model can show an inflated R² and seemingly significant F-tests EVEN WHEN NONE of the predictors are truly related to Y. The result arises purely from capitalizing on chance in the screening stage.",
+  formula:'(no closed-form expression — demonstrated via simulation)',
+  intuition:"A stark warning against data-driven predictor selection (stepwise regression, uncorrected screening): R² will practically always rise once you pick the \"best\" predictors out of many candidates — even if every candidate is pure noise. Safeguards: cross-validation, pre-registration, or penalized regression (lasso/ridge).",
+  related:[{id:'r2',label:'R²'},{id:'mle',label:'MLE'},{id:'ols',label:'OLS'}]
+},
+
+{ id:'sesoi', cats:['eff'], az:'S', name:'SESOI', longname:'Smallest Effect Size Of Interest',
+  def:'The Smallest Effect Size Of Interest (SESOI) is the smallest effect a researcher considers practically or theoretically meaningful, defined BEFORE data collection based on substantive reasoning — not on statistical convention. It serves two purposes: (1) as the effect-size input for a priori power analysis (replacing arbitrary "medium effect" assumptions), and (2) as the equivalence bound for equivalence testing (TOST) — testing whether an observed effect is small enough to be considered practically null.',
+  formula:'(no fixed formula — a substantively justified choice made before the study)',
+  intuition:"SESOI is the methodologically preferred alternative to blanket conventions such as Cohen's small/medium/large benchmarks, which were never meant to substitute for domain-specific judgment. Closely related to equivalence testing: an effect smaller than the SESOI is considered practically meaningless, regardless of whether it is statistically significantly different from zero.",
+  related:[{id:'power',label:'Power / Power Analysis'},{id:'cohens-f2',label:"Cohen's f²"},{id:'aequivalenzhypothese',label:'Equivalence Hypotheses (CI)'}]
 },
 
 { id:'cholesky', cats:['mcmc','reg'], az:'C', name:'Cholesky Decomposition', longname:'Factorization of a covariance/correlation matrix',
