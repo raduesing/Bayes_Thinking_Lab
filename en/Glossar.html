@@ -1444,6 +1444,63 @@ const TERMS = [
   related:[{id:'random-slope',label:'Random Slope'},{id:'random-effects',label:'Random Effects'},{id:'brms',label:'brms'},{id:'glmm',label:'GLMM'}]
 },
 
+/* ── Addition: power analysis, repeated-measures covariance structures, data formats ── */
+{ id:'power', cats:['reg','mle'], az:'P', name:'Power / Power Analysis', longname:'Statistical power and how to determine it',
+  def:'The power of a statistical test is the probability of correctly detecting a true effect as significant: Power = 1 − β, where β is the probability of a Type II error (failing to reject a false H₀). Power depends on four quantities that trade off against each other: effect size, sample size n, significance level α, and the variability of the data. A power analysis either determines a priori the sample size needed for a target power (e.g. 80%) under an assumed effect size, or computes the achieved power for a given design. For complex models (GLMMs, nested designs) a closed-form formula is usually unavailable — Monte Carlo simulation takes over instead: generate many synthetic datasets under the assumed parameters, run the test on each, and the proportion of significant results is the estimated power.',
+  formula:'Power = 1 − β = P(reject H₀ | H₁ true)',
+  intuition:'Important distinction: a priori power (computed before data collection, for study planning) is meaningful — post-hoc power (computed after the study from the observed data) is misleading and rejected by most methodologists, since it is just a deterministic transformation of the observed p-value and adds no new information. For multilevel models, simulation-based power analysis is the standard approach: simulate e.g. 500 datasets under the assumed parameters (true effects, random-effect SDs, sample size), fit the model to each, and test the target term for significance — the proportion of significant fits is the estimated power. This is exactly the approach implemented as the commented-out R code block in the BTL Data Creator.',
+  related:[{id:'lrt',label:'LRT'},{id:'glmm',label:'GLMM'},{id:'mle',label:'MLE'}]
+},
+
+{ id:'mixed-design', cats:['reg','glm'], az:'M', name:'Mixed Design', longname:'Split-plot design — combining a between and a within factor',
+  def:'A mixed design (also: split-plot design, originating in agricultural research) combines at least one between-subjects factor (each person has only one level, e.g. group) with at least one within-subjects factor (each person experiences all levels, e.g. measurement occasion). Classically, a mixed design was analyzed with mixed ANOVA (separate error terms for the between and within portions); today a GLMM with a random intercept per person (1 | id) is the more robust and flexible alternative — it requires no sphericity assumption and handles missing measurement occasions without listwise deletion.',
+  formula:'Y ~ Group * Time + (1 | Person)   [mixed design, GLMM notation]',
+  intuition:'Classic example: two training methods (between: group A vs. B) are compared across three measurement occasions (within: t1, t2, t3). The name "mixed" refers to the mixture of factor types in the design — not directly to "mixed model", though the two are closely related: a mixed design is nowadays almost always analyzed with a mixed model (GLMM), since repeated measurement already creates a hierarchical structure (measurements nested within persons) regardless.',
+  related:[{id:'random-intercept',label:'Random Intercept'},{id:'glmm',label:'GLMM'},{id:'sphaerizitaet',label:'Sphericity'}]
+},
+
+{ id:'compound-symmetry', cats:['glm','reg'], az:'C', name:'Compound Symmetry', longname:'CS — the simplest covariance structure for repeated measures',
+  def:'Compound symmetry (CS) is the simplest assumption about the correlation structure of repeated measurements: every pair of measurement occasions correlates equally strongly, regardless of the time distance between them — a single correlation ρ describes the entire structure, and all occasions share the same variance σ². This is exactly the correlation structure implied by a plain random-intercept model (1 | Person): the similarity between two measurements from the same person depends only on the fact that they come from the same person — not on how far apart the measurement occasions are in time.',
+  formula:'Cov(Yᵢ, Yⱼ) = ρσ² for i≠j,  σ² for i=j   (constant correlation ρ for all pairs)',
+  intuition:'CS is often too strong a simplification for real longitudinal data: in practice, measurement occasions close together usually correlate more strongly than those far apart (t1↔t2 more than t1↔t3) — a pattern AR(1) captures but CS does not. CS is a (but not the only) sufficient condition for sphericity, the assumption underlying the classical repeated-measures ANOVA. In the BTL Data Creator, CS is one of three selectable correlation structures for within designs.',
+  related:[{id:'ar1',label:'AR(1)'},{id:'sphaerizitaet',label:'Sphericity'},{id:'random-intercept',label:'Random Intercept'}]
+},
+
+{ id:'ar1', cats:['glm','reg'], az:'A', name:'AR(1)', longname:'First-order autoregressive covariance structure',
+  def:'AR(1) (first-order autoregressive) is a correlation structure for repeated measurements in which the correlation between two occasions decays exponentially with growing time distance: ρ^|j−k| for occasions j and k. Adjacent measurements (e.g. t1 and t2) correlate more strongly than distant ones (t1 and t5) — a pattern that is more realistic than the constant correlation of compound symmetry for many real longitudinal datasets (reaction times, physiological measures, learning trajectories).',
+  formula:'Cov(Yᵢ, Yⱼ) = σ² · ρ^|i−j|',
+  intuition:'AR(1) assumes equally spaced measurement occasions (e.g. weekly measurements) — for unequal spacing, variants such as the continuous-time AR(1) process are needed. For ρ close to 1, AR(1) behaves almost like a random walk (strong persistence); for ρ close to 0 it approaches independent measurements. In the BTL Data Creator, AR(1) is one of three selectable correlation structures for within designs, alongside compound symmetry and a freely editable custom matrix.',
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'random-slope',label:'Random Slope'},{id:'glmm',label:'GLMM'}]
+},
+
+{ id:'sphaerizitaet', cats:['glm','reg'], az:'S', name:'Sphericity', longname:'Homogeneity assumption of the classical repeated-measures ANOVA',
+  def:'Sphericity is the assumption that the variances of ALL pairwise differences between the levels of a within-subjects factor are equal: Var(Yⱼ − Yₖ) is identical for every pair j≠k. This assumption is required for the classical F-test in repeated-measures ANOVA to be valid, and is typically tested with Mauchly\'s test. When violated, the F-test becomes too liberal (too many false positives); corrections such as Greenhouse-Geisser or Huynh-Feldt epsilon reduce the degrees of freedom to compensate.',
+  formula:'Var(Yⱼ − Yₖ) constant for all j ≠ k',
+  intuition:'Compound symmetry is a sufficient (but not necessary) condition for sphericity — every CS structure is spherical, but not every spherical structure is CS. The most elegant way out of the whole sphericity problem: use a GLMM with a random intercept (and, if needed, a random slope) instead of the classical repeated-measures ANOVA — mixed models need no sphericity assumption and model the covariance structure explicitly and flexibly.',
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly Test'}]
+},
+
+{ id:'mauchly-test', cats:['glm','reg'], az:'M', name:'Mauchly Test', longname:'Mauchly\'s test of sphericity',
+  def:'Mauchly\'s test (Mauchly, 1940) tests the null hypothesis that the covariance matrix of a within-subjects factor is spherical — i.e. that all pairwise difference variances are equal. The test statistic W is based on the ratio of the geometric mean to the arithmetic mean of the eigenvalues of the covariance matrix of the orthonormalized difference variables, and is approximately chi-squared distributed. A significant result (p &lt; .05) means: sphericity is violated, the classical F-test in repeated-measures ANOVA becomes too liberal, and a Greenhouse-Geisser or Huynh-Feldt correction to the degrees of freedom (or switching to a GLMM) becomes necessary.',
+  formula:'W = |S| / [(tr(S)/(p−1))^(p−1)]   (S = covariance matrix of the p−1 difference variables)',
+  intuition:'Mauchly\'s test has a well-known dilemma: with small samples it has too little power to detect real sphericity violations (falsely non-significant) — with large samples it often becomes significant even for trivial, practically meaningless deviations. This dilemma is one reason many methodologists today recommend going straight to a GLMM instead of relying on Mauchly\'s test and post-hoc corrections — the mixed model never needs the sphericity assumption in the first place.',
+  related:[{id:'sphaerizitaet',label:'Sphericity'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'}]
+},
+
+{ id:'cholesky', cats:['mcmc','reg'], az:'C', name:'Cholesky Decomposition', longname:'Factorization of a covariance/correlation matrix',
+  def:'The Cholesky decomposition factors a positive-definite covariance or correlation matrix Σ into a product Σ = L·Lᵀ, where L is a lower-triangular matrix. It is the standard tool for turning independent standard-normal draws z into correlated multivariate draws: X = μ + L·z. Since L holds only half the entries of Σ (triangular form), computing it is more efficient than a general matrix square root, and the existence of a real-valued Cholesky factor is itself a test for positive definiteness — if it fails, the matrix is not a valid covariance matrix.',
+  formula:'Σ = L·Lᵀ  (L lower-triangular);   X = μ + L·z,  z ~ N(0, I)',
+  intuition:'Wherever correlated random quantities need to be generated from independent noise, the Cholesky decomposition shows up: sampling from an LKJ prior for random-slope correlations, generating correlated covariates (MASS::mvrnorm() uses it internally), and within designs with compound-symmetry or AR(1) correlation structure (faux::sim_design() uses it internally too). The BTL Data Creator uses it in exactly these three places.',
+  related:[{id:'lkj-prior',label:'LKJ Prior'},{id:'random-slope',label:'Random Slope'},{id:'normalverteilung',label:'Normal Distribution'}]
+},
+
+{ id:'wide-long-format', cats:['reg'], az:'W', name:'Wide / Long Format', longname:'Data formats for repeated-measures data',
+  def:'In wide format, there is one row per person and a separate column per measurement occasion (e.g. t1, t2, t3 as three columns). In long format, there is instead one row per individual measurement, with a column identifying the measurement occasion and a single shared outcome column. lme4 and brms require long format for repeated-measures models, since the random-intercept term (1 | id) needs one row per observation to correctly estimate the variance components. The conversion in R is done with tidyr::pivot_longer() (wide → long) or pivot_wider() (long → wide).',
+  formula:'pivot_longer(): wide → long;   pivot_wider(): long → wide   (tidyr)',
+  intuition:'The most common beginner mistake: fitting a wide-format dataset directly in brms/lme4 with a random-intercept term — the model then can\'t "see" the individual measurements as separate rows and can\'t correctly separate within-person from between-person variance. Covariates (between-subjects, time-invariant) are automatically kept as a single column by pivot_longer() and replicated for each measurement — they don\'t need to be duplicated manually.',
+  related:[{id:'mixed-design',label:'Mixed Design'},{id:'random-intercept',label:'Random Intercept'},{id:'glmm',label:'GLMM'}]
+},
+
 ];
 
 // ── Theme Toggle ──

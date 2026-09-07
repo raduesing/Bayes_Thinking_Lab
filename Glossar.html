@@ -1531,6 +1531,63 @@ const TERMS = [
   related:[{id:'random-slope',label:'Random Slope'},{id:'random-effects',label:'Random Effects'},{id:'brms',label:'brms'},{id:'glmm',label:'GLMM'}]
 },
 
+/* ── Ergänzung: Poweranalyse, Messwiederholungs-Kovarianzstrukturen, Datenformate ── */
+{ id:'power', cats:['reg','mle'], az:'P', name:'Power / Poweranalyse', longname:'Statistische Power (Teststärke) und ihre Bestimmung',
+  def:'Die Power (Teststärke) eines statistischen Tests ist die Wahrscheinlichkeit, einen tatsächlich vorhandenen Effekt korrekt als signifikant zu erkennen: Power = 1 − β, wobei β die Wahrscheinlichkeit eines Typ-II-Fehlers (fälschliches Nicht-Verwerfen von H₀) ist. Power hängt von vier Größen ab, die sich gegenseitig kompensieren: Effektgröße, Stichprobenumfang n, Signifikanzniveau α und die Streuung der Daten. Eine Poweranalyse bestimmt entweder a priori den benötigten Stichprobenumfang für eine gewünschte Power (z.B. 80%) bei angenommener Effektgröße, oder berechnet die erreichte Power für ein gegebenes Design. Für komplexe Modelle (GLMMs, verschachtelte Designs) ist eine geschlossene Formel meist nicht verfügbar — hier übernimmt Monte-Carlo-Simulation: Viele synthetische Datensätze mit den angenommenen Parametern erzeugen, jeweils den Test durchführen, und der Anteil signifikanter Ergebnisse ist die geschätzte Power.',
+  formula:'Power = 1 − β = P(H₀ verwerfen | H₁ wahr)',
+  intuition:'Wichtige Unterscheidung: A-priori-Power (vor der Datenerhebung berechnet, für die Studienplanung) ist sinnvoll — Post-hoc-Power (nach der Studie aus den beobachteten Daten berechnet) ist dagegen irreführend und wird von Methodiker:innen meist abgelehnt, da sie nur eine deterministische Transformation des beobachteten p-Werts ist und keine zusätzliche Information liefert. Bei Mehrebenenmodellen ist Simulationsbasierte Poweranalyse der Standard: Man simuliert z.B. 500 Datensätze unter den angenommenen Parametern (wahre Effekte, Random-Effect-SDs, Stichprobengröße), fittet für jeden das Modell und prüft den Zielterm auf Signifikanz — der Anteil signifikanter Fits ist die geschätzte Power. Genau dieser Ansatz ist im BTL Data Creator als auskommentierter R-Codeblock implementiert.',
+  related:[{id:'lrt',label:'LRT'},{id:'glmm',label:'GLMM'},{id:'mle',label:'MLE'}]
+},
+
+{ id:'mixed-design', cats:['reg','glm'], az:'M', name:'Mixed Design', longname:'Split-Plot-Design — Kombination aus Between- und Within-Faktor',
+  def:'Ein Mixed Design (auch: Split-Plot-Design, aus der Agrarforschung stammend) kombiniert mindestens einen Between-Subjects-Faktor (jede Person nur eine Stufe, z.B. Gruppe) mit mindestens einem Within-Subjects-Faktor (jede Person alle Stufen, z.B. Messzeitpunkt). Klassisch wurde ein Mixed Design mit der Mixed-ANOVA analysiert (getrennte Fehlerterme für Between- und Within-Anteil); heute ist ein GLMM mit Random Intercept pro Person (1 | id) die robustere und flexiblere Alternative — es benötigt keine Sphärizitätsannahme und verkraftet fehlende Messzeitpunkte ohne Listwise-Deletion.',
+  formula:'Y ~ Gruppe * Zeit + (1 | Person)   [Mixed Design, GLMM-Notation]',
+  intuition:'Klassisches Beispiel: Zwei Trainingsmethoden (Between: Gruppe A vs. B) werden über drei Messzeitpunkte verglichen (Within: t1, t2, t3). Der Name „mixed" bezieht sich auf die Mischung der Faktortypen im Design — nicht direkt auf „Mixed Model", auch wenn beide eng zusammenhängen: Ein Mixed Design wird heute so gut wie immer mit einem Mixed Model (GLMM) analysiert, weil die Messwiederholung ohnehin eine hierarchische Struktur (Messungen genestet in Personen) erzeugt.',
+  related:[{id:'random-intercept',label:'Random Intercept'},{id:'glmm',label:'GLMM'},{id:'sphaerizitaet',label:'Sphärizität'}]
+},
+
+{ id:'compound-symmetry', cats:['glm','reg'], az:'C', name:'Compound Symmetry', longname:'CS — Einfachste Kovarianzstruktur für Messwiederholungen',
+  def:'Compound Symmetry (CS) ist die einfachste Annahme über die Korrelationsstruktur wiederholter Messungen: Alle Paare von Messzeitpunkten korrelieren gleich stark miteinander, unabhängig vom zeitlichen Abstand — eine einzige Korrelation ρ beschreibt die gesamte Struktur, und alle Zeitpunkte haben dieselbe Varianz σ². Das entspricht genau der Korrelationsstruktur, die ein reines Random-Intercept-Modell (1 | Person) impliziert: Die Ähnlichkeit zwischen zwei Messungen derselben Person hängt nur davon ab, dass sie von derselben Person stammen — nicht davon, wie weit die Messzeitpunkte auseinanderliegen.',
+  formula:'Cov(Yᵢ, Yⱼ) = ρσ² für i≠j,  σ² für i=j   (konstante Korrelation ρ für alle Paare)',
+  intuition:'CS ist oft eine zu starke Vereinfachung für echte Längsschnittdaten: In der Praxis korrelieren nahe beieinanderliegende Messzeitpunkte meist stärker als weit auseinanderliegende (t1↔t2 stärker als t1↔t3) — ein Muster, das AR(1) abbildet, CS aber nicht. CS ist eine (aber nicht die einzige) hinreichende Bedingung für Sphärizität, die Voraussetzung der klassischen Messwiederholungs-ANOVA. Im BTL Data Creator ist CS eine von drei wählbaren Korrelationsstrukturen für Within-Designs.',
+  related:[{id:'ar1',label:'AR(1)'},{id:'sphaerizitaet',label:'Sphärizität'},{id:'random-intercept',label:'Random Intercept'}]
+},
+
+{ id:'ar1', cats:['glm','reg'], az:'A', name:'AR(1)', longname:'Autoregressive Kovarianzstruktur erster Ordnung',
+  def:'AR(1) (autoregressiv erster Ordnung) ist eine Korrelationsstruktur für wiederholte Messungen, bei der die Korrelation zwischen zwei Zeitpunkten mit wachsendem zeitlichen Abstand exponentiell abnimmt: ρ^|j−k| für Zeitpunkte j und k. Benachbarte Messungen (z.B. t1 und t2) korrelieren stärker als weit auseinanderliegende (t1 und t5) — ein Muster, das für viele echte Längsschnittdaten (Reaktionszeiten, physiologische Messungen, Lernverläufe) realistischer ist als die konstante Korrelation von Compound Symmetry.',
+  formula:'Cov(Yᵢ, Yⱼ) = σ² · ρ^|i−j|',
+  intuition:'AR(1) setzt gleich beabstandete Messzeitpunkte voraus (z.B. wöchentliche Messungen) — bei ungleichen Abständen braucht man Varianten wie den kontinuierlichen AR(1)-Prozess. Für ρ nahe 1 verhält sich AR(1) fast wie ein Random Walk (starke Persistenz), für ρ nahe 0 nähert es sich unabhängigen Messungen an. Im BTL Data Creator ist AR(1) eine der drei wählbaren Korrelationsstrukturen für Within-Designs, neben Compound Symmetry und einer frei editierbaren Custom-Matrix.',
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'random-slope',label:'Random Slope'},{id:'glmm',label:'GLMM'}]
+},
+
+{ id:'sphaerizitaet', cats:['glm','reg'], az:'S', name:'Sphärizität', longname:'Sphericity — Homogenitätsannahme der klassischen Messwiederholungs-ANOVA',
+  def:'Sphärizität ist die Annahme, dass die Varianzen ALLER paarweisen Differenzen zwischen den Stufen eines Messwiederholungsfaktors gleich groß sind: Var(Yⱼ − Yₖ) ist für jedes Paar j≠k identisch. Diese Annahme ist notwendig für die Gültigkeit des klassischen F-Tests in der Messwiederholungs-ANOVA und wird üblicherweise mit Mauchlys Test geprüft. Bei Verletzung wird der F-Test zu liberal (zu viele falsch-positive Ergebnisse); Korrekturen wie Greenhouse-Geisser- oder Huynh-Feldt-ε reduzieren die Freiheitsgrade, um das zu kompensieren.',
+  formula:'Var(Yⱼ − Yₖ) konstant für alle j ≠ k',
+  intuition:'Compound Symmetry ist eine hinreichende (aber nicht notwendige) Bedingung für Sphärizität — jede CS-Struktur ist sphärisch, aber nicht jede sphärische Struktur ist CS. Der eleganteste Ausweg aus der ganzen Sphärizitätsproblematik: ein GLMM mit Random Intercept (und ggf. Random Slope) verwenden statt der klassischen Messwiederholungs-ANOVA — Mixed Models benötigen keine Sphärizitätsannahme und modellieren die Kovarianzstruktur explizit und flexibel.',
+  related:[{id:'compound-symmetry',label:'Compound Symmetry'},{id:'ar1',label:'AR(1)'},{id:'glmm',label:'GLMM'},{id:'mixed-design',label:'Mixed Design'},{id:'mauchly-test',label:'Mauchly-Test'}]
+},
+
+{ id:'mauchly-test', cats:['glm','reg'], az:'M', name:'Mauchly-Test', longname:'Mauchlys Test auf Sphärizität',
+  def:'Der Mauchly-Test (Mauchly, 1940) prüft die Nullhypothese, dass die Kovarianzmatrix eines Messwiederholungsfaktors sphärisch ist — also dass alle paarweisen Differenzvarianzen gleich sind. Die Teststatistik W basiert auf dem Verhältnis von geometrischem zu arithmetischem Mittel der Eigenwerte der Kovarianzmatrix der orthonormalisierten Differenzvariablen und ist approximativ χ²-verteilt. Ein signifikantes Ergebnis (p &lt; .05) bedeutet: Sphärizität ist verletzt, der klassische F-Test der Messwiederholungs-ANOVA wird zu liberal, und eine Greenhouse-Geisser- oder Huynh-Feldt-Korrektur der Freiheitsgrade (oder ein Wechsel zum GLMM) wird nötig.',
+  formula:'W = |S| / [(tr(S)/(p−1))^(p−1)]   (S = Kovarianzmatrix der p−1 Differenzvariablen)',
+  intuition:'Der Mauchly-Test hat ein bekanntes Dilemma: Bei kleinen Stichproben hat er zu wenig Power, um echte Sphärizitätsverletzungen zu erkennen (er wird fälschlich nicht signifikant) — bei großen Stichproben wird er dagegen oft schon bei trivialen, praktisch bedeutungslosen Abweichungen signifikant. Dieses Dilemma ist einer der Gründe, warum viele Methodiker:innen heute direkt zum GLMM raten, statt sich auf den Mauchly-Test und nachträgliche Korrekturen zu verlassen — das Mixed Model braucht die Sphärizitätsannahme erst gar nicht.',
+  related:[{id:'sphaerizitaet',label:'Sphärizität'},{id:'compound-symmetry',label:'Compound Symmetry'},{id:'glmm',label:'GLMM'}]
+},
+
+{ id:'cholesky', cats:['mcmc','reg'], az:'C', name:'Cholesky-Zerlegung', longname:'Cholesky Decomposition — Faktorisierung einer Kovarianz-/Korrelationsmatrix',
+  def:'Die Cholesky-Zerlegung faktorisiert eine positiv-definite Kovarianz- oder Korrelationsmatrix Σ in ein Produkt Σ = L·Lᵀ, wobei L eine untere Dreiecksmatrix ist. Sie ist das Standardwerkzeug, um aus unabhängigen Standardnormalverteilungs-Ziehungen z korrelierte multivariate Ziehungen zu erzeugen: X = μ + L·z. Da L nur die Hälfte der Einträge von Σ besitzt (Dreiecksform), ist die Berechnung numerisch effizienter als eine allgemeine Matrixwurzel, und die Existenz einer reellen Cholesky-Zerlegung ist selbst ein Test auf positive Definitheit — schlägt sie fehl, ist die Matrix keine gültige Kovarianzmatrix.',
+  formula:'Σ = L·Lᵀ  (L untere Dreiecksmatrix);   X = μ + L·z,  z ~ N(0, I)',
+  intuition:'Überall dort, wo korrelierte Zufallsgrößen aus unabhängigem Rauschen erzeugt werden müssen, kommt die Cholesky-Zerlegung zum Einsatz: bei der Stichprobenziehung aus einem LKJ-Prior für Random-Slope-Korrelationen, bei korrelierten Kovariablen (MASS::mvrnorm() nutzt sie intern), und bei Within-Designs mit Compound-Symmetry- oder AR(1)-Korrelationsstruktur (faux::sim_design() nutzt sie ebenfalls intern). Der BTL Data Creator verwendet sie an genau diesen drei Stellen.',
+  related:[{id:'lkj-prior',label:'LKJ-Prior'},{id:'random-slope',label:'Random Slope'},{id:'normalverteilung',label:'Normalverteilung'}]
+},
+
+{ id:'wide-long-format', cats:['reg'], az:'W', name:'Wide- / Long-Format', longname:'Datenformate für Messwiederholungsdaten',
+  def:'Im Wide-Format gibt es eine Zeile pro Person und eine eigene Spalte pro Messzeitpunkt (z.B. t1, t2, t3 als drei Spalten). Im Long-Format gibt es dagegen eine Zeile pro einzelner Messung, mit einer Spalte, die den Messzeitpunkt identifiziert, und einer gemeinsamen Outcome-Spalte. lme4 und brms benötigen für Messwiederholungsmodelle zwingend das Long-Format, da der Random-Intercept-Term (1 | id) eine Zeile pro Beobachtung voraussetzt, um die Varianzkomponenten korrekt zu schätzen. Die Umwandlung erfolgt in R mit tidyr::pivot_longer() (Wide → Long) bzw. pivot_wider() (Long → Wide).',
+  formula:'pivot_longer(): Wide → Long;   pivot_wider(): Long → Wide   (tidyr)',
+  intuition:'Der häufigste Einsteigerfehler: ein Wide-Format-Datensatz wird direkt in brms/lme4 mit einem Random-Intercept-Term gefittet — das Modell „sieht" dann aber nicht die einzelnen Messungen als separate Zeilen und kann die Within-Person-Varianz nicht korrekt von der Between-Person-Varianz trennen. Kovariablen (between-subjects, zeitinvariant) bleiben beim pivot_longer() automatisch als eine Spalte erhalten und werden für jede Messung repliziert — sie müssen nicht manuell dupliziert werden.',
+  related:[{id:'mixed-design',label:'Mixed Design'},{id:'random-intercept',label:'Random Intercept'},{id:'glmm',label:'GLMM'}]
+},
+
 ];
 
 // ── Theme Toggle ──
