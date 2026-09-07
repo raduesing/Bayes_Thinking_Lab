@@ -1879,6 +1879,74 @@ const TERMS = [
   related:[{id:'gamma-verteilung',label:'Gamma-Verteilung'},{id:'brms',label:'brms'},{id:'prior',label:'Prior'},{id:'shrinkage',label:'Shrinkage'}]
 },
 
+/* ── Ergänzung: Distribution-Lab-Verteilungen ── */
+{ id:'skew-normal', cats:['dist'], az:'S', name:'Skew-Normal-Verteilung', longname:'Skew-Normal(ξ, ω, α) — asymmetrische Normalverteilung',
+  def:'Die Skew-Normal-Verteilung (Azzalini 1985) verallgemeinert die Normalverteilung um einen Schiefeparameter α: bei α=0 ist sie identisch mit Normal(ξ, ω); α>0 verlängert den rechten Rand, α<0 den linken. ξ ist der Lageparameter (nicht der Mittelwert!), ω>0 die Skala.',
+  formula:'E[X] = ξ + ω·δ·√(2/π), δ = α/√(1+α²)',
+  intuition:'Reaktionszeiten oder andere fast-normalverteilte Größen mit leichter Schiefe lassen sich mit Skew-Normal direkt auf der Originalskala modellieren — ohne wie bei Log-Normal auf die logarithmierte Skala wechseln zu müssen. α=0 reduziert die Verteilung exakt auf die Normalverteilung.',
+  related:[{id:'normalverteilung',label:'Normalverteilung'},{id:'log-normal',label:'Log-Normal-Verteilung'}]
+},
+{ id:'shifted-lognormal', cats:['dist'], az:'S', name:'Shifted-LogNormal-Verteilung', longname:'ShiftedLogNormal(μ, σ, δ) — Log-Normal mit Mindestwert',
+  def:'Die Shifted-LogNormal-Verteilung ist eine Log-Normal-Verteilung, die erst oberhalb eines Mindestwerts δ beginnt: Y−δ ist log-normalverteilt. Werte unterhalb von δ sind strukturell ausgeschlossen. In brms wird δ als ndt (Non-Decision-Time) bezeichnet.',
+  formula:'E[X] = δ + exp(μ+σ²/2)',
+  intuition:'Für Reaktionszeiten ist eine Log-Normal-Verteilung oft fast passend, erlaubt aber Werte beliebig nahe 0 — biologisch unplausibel, da jede Reaktion mindestens eine Non-Decision-Time (Wahrnehmung + motorische Ausführung) benötigt. Die Shifted-LogNormal baut diese Untergrenze δ direkt ins Modell ein.',
+  related:[{id:'log-normal',label:'Log-Normal-Verteilung'}]
+},
+{ id:'exgaussian', cats:['dist'], az:'E', name:'ExGaussian-Verteilung', longname:'ExGauss(μ, σ, β) — Faltung von Normal- und Exponentialverteilung',
+  def:'Die ExGaussian-Verteilung entsteht als Summe Y=Z+E einer normalverteilten Zufallsvariable Z~Normal(μ,σ) und einer unabhängigen exponentialverteilten Zufallsvariable E~Exponential(1/β). Das Ergebnis ist eine glockenförmige, rechtsschiefe Verteilung, die für β→0 in die Normalverteilung übergeht.',
+  formula:'E[X] = μ+β, Var(X) = σ²+β²',
+  intuition:'In der kognitiven Psychologie wird die Reaktionszeit oft als Summe eines normalverteilten Entscheidungsanteils (Z) und einer exponentiell verteilten motorischen Restzeit (E) modelliert — rein deskriptiv, ohne mechanistische Prozessannahme, im Gegensatz zur Inverse-Gauß-Verteilung, die einen expliziten Diffusionsprozess unterstellt.',
+  related:[{id:'normalverteilung',label:'Normalverteilung'},{id:'exponentialverteilung',label:'Exponentialverteilung'},{id:'inverse-gauss',label:'Inverse-Gauß-Verteilung'}]
+},
+{ id:'inverse-gauss', cats:['dist'], az:'I', name:'Inverse-Gauß-Verteilung', longname:'InvGauß(μ, λ) — Erstpassagezeit eines Drift-Prozesses',
+  def:'Die Inverse-Gauß-Verteilung (Wald-Verteilung) beschreibt die Zeit, bis ein Zufallsprozess mit Drift (Brownsche Bewegung) eine Schwelle erstmals überschreitet. Sie ist positiv, rechtsschief und wird durch Mittelwert μ und Shape-Parameter λ parametrisiert.',
+  formula:'Var(X) = μ³/λ',
+  intuition:'Im Drift-Diffusion-Modell der kognitiven Psychologie akkumuliert Evidenz gegen einen Rauschprozess, bis eine Entscheidungsschwelle erreicht wird — die Zeit bis dahin folgt exakt der Inverse-Gauß-Verteilung. Anders als die rein deskriptive ExGaussian-Verteilung hat sie damit einen klaren generativen Mechanismus.',
+  related:[{id:'exgaussian',label:'ExGaussian-Verteilung'},{id:'log-normal',label:'Log-Normal-Verteilung'}]
+},
+{ id:'chi-quadrat', cats:['dist'], az:'C', name:'Chi²-Verteilung', longname:'χ²(k) — Summe quadrierter Standardnormalvariablen',
+  def:'Die Chi²-Verteilung mit k Freiheitsgraden entsteht als Summe der Quadrate von k unabhängigen Standardnormalvariablen: χ²(k)=Z₁²+…+Zₖ². Sie ist ein Spezialfall der Gamma-Verteilung (α=k/2, β=½) und bildet die Grundlage klassischer Tests (Anpassungstests, Likelihood-Ratio-Test).',
+  formula:'E[X]=k, Var(X)=2k; χ²(k) = Gamma(k/2, ½)',
+  intuition:'Die Chi²-Verteilung wird in der Praxis fast nie direkt als Datenmodell verwendet, sondern als theoretisches Werkzeug: Die Teststatistik des Likelihood-Ratio-Tests ist unter H₀ asymptotisch χ²-verteilt, und auch LOO/WAIC-Vergleiche stützen sich auf verwandte Logik.',
+  related:[{id:'gamma-verteilung',label:'Gamma-Verteilung'},{id:'lrt',label:'LRT'},{id:'normalverteilung',label:'Normalverteilung'},{id:'f-verteilung',label:'F-Verteilung'}]
+},
+{ id:'f-verteilung', cats:['dist'], az:'F', name:'F-Verteilung', longname:'F(d₁, d₂) — Verhältnis zweier Chi²-Verteilungen',
+  def:'Die F-Verteilung ist das Verhältnis zweier unabhängiger, durch ihre Freiheitsgrade geteilter Chi²-Variablen: F(d₁,d₂) = [χ²(d₁)/d₁] / [χ²(d₂)/d₂]. Sie ist positiv, rechtsschief, und bildet die Grundlage der ANOVA und klassischer Modellvergleichstests.',
+  formula:'E[X] = d₂/(d₂−2) für d₂>2; F(1,d₂) = t²(d₂)',
+  intuition:'Der F-Test in der ANOVA vergleicht die Varianz zwischen Gruppen (d₁ Freiheitsgrade) mit der Varianz innerhalb der Gruppen (d₂ Freiheitsgrade). In der Bayesianischen Praxis wird die F-Verteilung kaum direkt genutzt — Modellvergleiche laufen stattdessen über LOO/WAIC.',
+  related:[{id:'chi-quadrat',label:'Chi²-Verteilung'},{id:'anova',label:'ANOVA'}]
+},
+{ id:'zi-beta', cats:['dist','glm'], az:'Z', name:'ZI-Beta-Verteilung', longname:'Zero-Inflated Beta — Beta mit Punktmasse bei 0',
+  def:'Die ZI-Beta-Verteilung ist eine Mischverteilung: Mit Wahrscheinlichkeit zi tritt exakt 0 auf (strukturelle Nullen), mit Wahrscheinlichkeit 1−zi folgt der Wert einer Beta-Verteilung auf (0,1). Sie modelliert Anteilsdaten, bei denen eine Untergruppe strukturell nie einen Anteil größer 0 aufweist.',
+  formula:'E[X] = (1−zi)·μ',
+  intuition:'Reine Beta-Verteilungen können keine echten Nullen erzeugen — bei Anteilsdaten wie „Sportanteil an der Woche" gibt es aber oft eine Gruppe, die grundsätzlich 0% aufweist, und eine andere Gruppe mit kontinuierlichen Anteilswerten. Die ZI-Beta trennt diese beiden Prozesse explizit.',
+  related:[{id:'beta-verteilung',label:'Beta-Verteilung'},{id:'zero-inflation',label:'Zero-Inflation'},{id:'zoib',label:'ZOIB-Verteilung'}]
+},
+{ id:'zoib', cats:['dist','glm'], az:'Z', name:'ZOIB-Verteilung', longname:'Zero-One-Inflated Beta — Beta mit Punktmassen bei 0 und 1',
+  def:'Die ZOIB-Verteilung erweitert die ZI-Beta um eine zweite Punktmasse bei 1: Mit Wahrscheinlichkeit zoi liegt Y in {0,1} (strukturelles Extrem), aufgeteilt über coi zwischen 0 und 1; mit Wahrscheinlichkeit 1−zoi folgt Y einer Beta-Verteilung auf (0,1).',
+  formula:'P(Y=0)=zoi·(1−coi), P(Y=1)=zoi·coi, E[X]=zoi·coi+(1−zoi)·μ',
+  intuition:'Bei Anteilsdaten mit harten Boden- UND Deckeneffekten — z.B. Compliance in einer Studie, wo 0% und 100% echte Kategorien sind — reicht eine einfache Zero-Inflation nicht aus. ZOIB modelliert beide Extreme und den kontinuierlichen Bereich dazwischen in einem einzigen Modell.',
+  related:[{id:'zi-beta',label:'ZI-Beta-Verteilung'},{id:'beta-verteilung',label:'Beta-Verteilung'}]
+},
+{ id:'beta-binomial', cats:['dist','glm'], az:'B', name:'Beta-Binomial-Verteilung', longname:'BetaBin(n, μ, φ) — Binomial mit Beta-verteilter Erfolgswahrscheinlichkeit',
+  def:'Die Beta-Binomial-Verteilung entsteht, wenn die Erfolgswahrscheinlichkeit p einer Binomialverteilung selbst nicht konstant ist, sondern zwischen Beobachtungseinheiten Beta-verteilt variiert (p~Beta(μφ,(1−μ)φ)). Sie modelliert für Anteilsdaten dieselbe Überdispersion, die Negative Binomial für Zähldaten leistet.',
+  formula:'E[X]=n·μ, Var(X)>n·μ(1−μ); für φ→∞: → Binomial(n,μ)',
+  intuition:'Wenn nicht alle Personen dieselbe Erfolgswahrscheinlichkeit haben — manche schneiden bei einem Test grundsätzlich besser ab als andere — erzeugt die Binomialverteilung zu wenig Streuung. Beta-Binomial lässt p über Personen hinweg variieren und fängt so die zusätzliche Heterogenität ein, analog zur Beziehung zwischen Poisson und Negative Binomial.',
+  related:[{id:'binomialverteilung',label:'Binomialverteilung'},{id:'beta-verteilung',label:'Beta-Verteilung'},{id:'negative-binomial',label:'Negative Binomial'}]
+},
+{ id:'cumprobit', cats:['dist','glm'], az:'K', name:'Kumulatives Probit-Modell', longname:'OrderedProbit(η,τ,K) — Schwellenmodell für ordinale Daten mit Normal-Link',
+  def:'Das kumulative Probit-Modell nimmt an, dass hinter einer ordinalen Antwort mit K Kategorien eine latente Variable Y*~Normal(η,1) steht. Beobachtet wird Kategorie k, wenn Y* zwischen den Schwellenwerten τₖ₋₁ und τₖ liegt. Der lineare Prädiktor η verschiebt die latente Verteilung, ohne ihre Form zu ändern.',
+  formula:'P(Y=k) = Φ(τₖ−η) − Φ(τₖ₋₁−η), τ₀=−∞, τ_K=+∞',
+  intuition:'Bei Likert-Skalen sind die Abstände zwischen Kategorien meist nicht gleich groß — „stimme völlig zu" zu „stimme zu" ist nicht zwingend derselbe Sprung wie „neutral" zu „stimme zu". Das kumulative Probit-Modell schätzt die Schwellenwerte τ direkt aus den Daten. Bei nur K=2 Kategorien reduziert es sich auf eine gewöhnliche Probit-Regression.',
+  related:[{id:'cumlogit',label:'Kumulatives Logit-Modell'},{id:'logit',label:'Logit / Log-Odds'}]
+},
+{ id:'cumlogit', cats:['dist','glm'], az:'K', name:'Kumulatives Logit-Modell', longname:'OrderedLogit(η,τ,K) — Proportional-Odds-Modell für ordinale Daten',
+  def:'Das kumulative Logit-Modell (Proportional-Odds-Modell) ist strukturell identisch zum kumulativen Probit-Modell, verwendet aber eine logistische statt einer Normalverteilung für die latente Variable Y*. Dadurch sind die Koeffizienten β direkt als Log-Odds-Ratios für „höhere Kategorie" interpretierbar.',
+  formula:'P(Y=k) = F(τₖ−η) − F(τₖ₋₁−η), F = logistische CDF',
+  intuition:'Das kumulative Logit-Modell ist der Goldstandard für ordinale Regression in den Sozialwissenschaften, weil es dieselbe direkte Odds-Ratio-Interpretation wie die logistische Regression bietet: eine Einheit mehr in X multipliziert die kumulativen Odds für eine höhere Kategorie um exp(β). Bei K=2 Kategorien reduziert es sich auf eine gewöhnliche binäre logistische Regression.',
+  related:[{id:'cumprobit',label:'Kumulatives Probit-Modell'},{id:'logit',label:'Logit / Log-Odds'},{id:'odds-ratio',label:'Odds Ratio'}]
+},
+
 ];
 
 // ── Theme Toggle ──

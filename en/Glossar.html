@@ -1792,6 +1792,74 @@ const TERMS = [
   related:[{id:'gamma-verteilung',label:'Gamma Distribution'},{id:'brms',label:'brms'},{id:'prior',label:'Prior'},{id:'shrinkage',label:'Shrinkage'}]
 },
 
+/* ── Addendum: Distribution Lab distributions ── */
+{ id:'skew-normal', cats:['dist'], az:'S', name:'Skew-Normal Distribution', longname:'Skew-Normal(ξ, ω, α) — asymmetric normal distribution',
+  def:'The skew-normal distribution (Azzalini 1985) generalizes the normal distribution with a skewness parameter α: at α=0 it is identical to Normal(ξ, ω); α>0 stretches the right tail, α<0 the left. ξ is the location parameter (not the mean!), ω>0 is the scale.',
+  formula:'E[X] = ξ + ω·δ·√(2/π), δ = α/√(1+α²)',
+  intuition:'Reaction times or other nearly-normal quantities with slight skew can be modeled with skew-normal directly on the original scale — without switching to the log scale as with log-normal. α=0 reduces the distribution exactly to the normal distribution.',
+  related:[{id:'normalverteilung',label:'Normal Distribution'},{id:'log-normal',label:'Log-Normal Distribution'}]
+},
+{ id:'shifted-lognormal', cats:['dist'], az:'S', name:'Shifted-LogNormal Distribution', longname:'ShiftedLogNormal(μ, σ, δ) — log-normal with a minimum value',
+  def:'The shifted-lognormal distribution is a log-normal distribution that only starts above a minimum value δ: Y−δ is log-normally distributed. Values below δ are structurally excluded. In brms, δ is called ndt (non-decision time).',
+  formula:'E[X] = δ + exp(μ+σ²/2)',
+  intuition:'For reaction times, a log-normal distribution is often almost a good fit, but it allows values arbitrarily close to 0 — biologically implausible, since every reaction requires at least a non-decision time (perception plus motor execution). Shifted-lognormal builds this lower bound δ directly into the model.',
+  related:[{id:'log-normal',label:'Log-Normal Distribution'}]
+},
+{ id:'exgaussian', cats:['dist'], az:'E', name:'ExGaussian Distribution', longname:'ExGauss(μ, σ, β) — convolution of a normal and an exponential distribution',
+  def:'The ExGaussian distribution arises as the sum Y=Z+E of a normally distributed variable Z~Normal(μ,σ) and an independent exponentially distributed variable E~Exponential(1/β). The result is a bell-shaped, right-skewed distribution that converges to the normal distribution as β→0.',
+  formula:'E[X] = μ+β, Var(X) = σ²+β²',
+  intuition:'In cognitive psychology, reaction time is often modeled as the sum of a normally distributed decision component (Z) and an exponentially distributed motor residual (E) — purely descriptive, without a mechanistic process assumption, unlike the inverse-Gaussian distribution, which posits an explicit diffusion process.',
+  related:[{id:'normalverteilung',label:'Normal Distribution'},{id:'exponentialverteilung',label:'Exponential Distribution'},{id:'inverse-gauss',label:'Inverse-Gaussian Distribution'}]
+},
+{ id:'inverse-gauss', cats:['dist'], az:'I', name:'Inverse-Gaussian Distribution', longname:'InvGaussian(μ, λ) — first-passage time of a drift process',
+  def:'The inverse-Gaussian distribution (Wald distribution) describes the time until a random process with drift (Brownian motion) first crosses a threshold. It is positive, right-skewed, and parametrized by mean μ and shape parameter λ.',
+  formula:'Var(X) = μ³/λ',
+  intuition:'In the drift-diffusion model of cognitive psychology, evidence accumulates against a noise process until a decision threshold is reached — the time until then follows exactly the inverse-Gaussian distribution. Unlike the purely descriptive ExGaussian distribution, it therefore has a clear generative mechanism.',
+  related:[{id:'exgaussian',label:'ExGaussian Distribution'},{id:'log-normal',label:'Log-Normal Distribution'}]
+},
+{ id:'chi-quadrat', cats:['dist'], az:'C', name:'Chi-Squared Distribution', longname:'χ²(k) — sum of squared standard normal variables',
+  def:'The chi-squared distribution with k degrees of freedom arises as the sum of squares of k independent standard normal variables: χ²(k)=Z₁²+…+Zₖ². It is a special case of the Gamma distribution (α=k/2, β=½) and underlies classical tests (goodness-of-fit tests, the likelihood-ratio test).',
+  formula:'E[X]=k, Var(X)=2k; χ²(k) = Gamma(k/2, ½)',
+  intuition:'The chi-squared distribution is almost never used directly as a data model in practice, but as a theoretical tool: the likelihood-ratio test statistic is asymptotically chi-squared distributed under H₀, and LOO/WAIC comparisons rely on related logic.',
+  related:[{id:'gamma-verteilung',label:'Gamma Distribution'},{id:'lrt',label:'LRT'},{id:'normalverteilung',label:'Normal Distribution'},{id:'f-verteilung',label:'F Distribution'}]
+},
+{ id:'f-verteilung', cats:['dist'], az:'F', name:'F Distribution', longname:'F(d₁, d₂) — ratio of two chi-squared distributions',
+  def:'The F distribution is the ratio of two independent chi-squared variables, each divided by its degrees of freedom: F(d₁,d₂) = [χ²(d₁)/d₁] / [χ²(d₂)/d₂]. It is positive, right-skewed, and underlies ANOVA and classical model-comparison tests.',
+  formula:'E[X] = d₂/(d₂−2) for d₂>2; F(1,d₂) = t²(d₂)',
+  intuition:'The F test in ANOVA compares the variance between groups (d₁ degrees of freedom) to the variance within groups (d₂ degrees of freedom). In Bayesian practice the F distribution is rarely used directly — model comparison instead relies on LOO/WAIC.',
+  related:[{id:'chi-quadrat',label:'Chi-Squared Distribution'},{id:'anova',label:'ANOVA'}]
+},
+{ id:'zi-beta', cats:['dist','glm'], az:'Z', name:'ZI-Beta Distribution', longname:'Zero-Inflated Beta — Beta with a point mass at 0',
+  def:'The ZI-Beta distribution is a mixture: with probability zi the value is exactly 0 (structural zeros), and with probability 1−zi it follows a Beta distribution on (0,1). It models proportion data where a subgroup structurally never has a proportion above 0.',
+  formula:'E[X] = (1−zi)·μ',
+  intuition:'Plain Beta distributions cannot produce true zeros — but with proportion data like "share of the week spent exercising" there is often a group that structurally has exactly 0%, and another group with continuous proportion values. ZI-Beta separates these two processes explicitly.',
+  related:[{id:'beta-verteilung',label:'Beta Distribution'},{id:'zero-inflation',label:'Zero-Inflation'},{id:'zoib',label:'ZOIB Distribution'}]
+},
+{ id:'zoib', cats:['dist','glm'], az:'Z', name:'ZOIB Distribution', longname:'Zero-One-Inflated Beta — Beta with point masses at 0 and 1',
+  def:'The ZOIB distribution extends ZI-Beta with a second point mass at 1: with probability zoi, Y is in {0,1} (a structural extreme), split via coi between 0 and 1; with probability 1−zoi, Y follows a Beta distribution on (0,1).',
+  formula:'P(Y=0)=zoi·(1−coi), P(Y=1)=zoi·coi, E[X]=zoi·coi+(1−zoi)·μ',
+  intuition:'For proportion data with hard floor AND ceiling effects — e.g. compliance in a study, where 0% and 100% are genuine categories — simple zero-inflation is not enough. ZOIB models both extremes and the continuous range in between within a single model.',
+  related:[{id:'zi-beta',label:'ZI-Beta Distribution'},{id:'beta-verteilung',label:'Beta Distribution'}]
+},
+{ id:'beta-binomial', cats:['dist','glm'], az:'B', name:'Beta-Binomial Distribution', longname:'BetaBin(n, μ, φ) — Binomial with a Beta-distributed success probability',
+  def:'The beta-binomial distribution arises when the success probability p of a binomial distribution is itself not constant but varies Beta-distributed across observational units (p~Beta(μφ,(1−μ)φ)). It models for proportion data the same overdispersion that Negative Binomial handles for count data.',
+  formula:'E[X]=n·μ, Var(X)>n·μ(1−μ); as φ→∞: → Binomial(n,μ)',
+  intuition:'When not everyone has the same success probability — some people are systematically better at a test than others — the binomial distribution produces too little spread. Beta-binomial lets p vary across people, capturing the extra heterogeneity, analogous to the relationship between Poisson and Negative Binomial.',
+  related:[{id:'binomialverteilung',label:'Binomial Distribution'},{id:'beta-verteilung',label:'Beta Distribution'},{id:'negative-binomial',label:'Negative Binomial'}]
+},
+{ id:'cumprobit', cats:['dist','glm'], az:'C', name:'Cumulative Probit Model', longname:'OrderedProbit(η,τ,K) — threshold model for ordinal data with a normal link',
+  def:'The cumulative probit model assumes that behind an ordinal response with K categories lies a latent variable Y*~Normal(η,1). Category k is observed when Y* falls between thresholds τₖ₋₁ and τₖ. The linear predictor η shifts the latent distribution without changing its shape.',
+  formula:'P(Y=k) = Φ(τₖ−η) − Φ(τₖ₋₁−η), τ₀=−∞, τ_K=+∞',
+  intuition:'On Likert scales, the distances between categories are usually not equal — "strongly agree" to "agree" is not necessarily the same jump as "neutral" to "agree". The cumulative probit model estimates the thresholds τ directly from the data. At K=2 categories it reduces to an ordinary probit regression.',
+  related:[{id:'cumlogit',label:'Cumulative Logit Model'},{id:'logit',label:'Logit / Log-Odds'}]
+},
+{ id:'cumlogit', cats:['dist','glm'], az:'C', name:'Cumulative Logit Model', longname:'OrderedLogit(η,τ,K) — proportional-odds model for ordinal data',
+  def:'The cumulative logit model (proportional-odds model) is structurally identical to the cumulative probit model, but uses a logistic instead of a normal distribution for the latent variable Y*. This makes the coefficients β directly interpretable as log-odds-ratios for a "higher category".',
+  formula:'P(Y=k) = F(τₖ−η) − F(τₖ₋₁−η), F = logistic CDF',
+  intuition:'The cumulative logit model is the gold standard for ordinal regression in the social sciences, because it offers the same direct odds-ratio interpretation as logistic regression: one more unit of X multiplies the cumulative odds of a higher category by exp(β). At K=2 categories it reduces to ordinary binary logistic regression.',
+  related:[{id:'cumprobit',label:'Cumulative Probit Model'},{id:'logit',label:'Logit / Log-Odds'},{id:'odds-ratio',label:'Odds Ratio'}]
+},
+
 ];
 
 // ── Theme Toggle ──
