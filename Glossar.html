@@ -1979,6 +1979,116 @@ const TERMS = [
   related:[{id:'prior-predictive-check',label:'Prior Predictive Check'},{id:'ppc',label:'PPC'},{id:'posterior',label:'Posterior'}]
 },
 
+/* ── Ergänzung: Advanced Model Builder — fortgeschrittene brms-Bausteine ── */
+{ id:'multivariates-modell', cats:['bayes','glm'], az:'M', name:'Multivariates Modell', longname:'Gemeinsames Fitten mehrerer Response-Variablen',
+  def:'In einem multivariaten Modell werden mehrere Response-Variablen gemeinsam in einem einzigen Modell gefittet, statt sie in getrennten Analysen zu behandeln. In brms geschieht das über mvbf(bf(y1~...), bf(y2~...)) — jede Response bekommt ihre eigene Formel, eigene Prädiktoren, eigene Familie und eigene Priors, aber alle werden gemeinsam in einem Stan-Modell geschätzt. Der Vorteil gegenüber getrennten Modellen: die Unsicherheit wird korrekt propagiert, und es lässt sich eine echte Korrelation zwischen den Responses mitschätzen — entweder über die Residuen (Residualkorrelation, nur bei Gaussian/Student möglich) oder über korrelierte Random Effects mit gemeinsamem Gruppierungs-Tag (funktioniert für jede Familienkombination).',
+  formula:'mvbf(bf(y1 ~ x), bf(y2 ~ x))',
+  intuition:'Man könnte y1 und y2 auch in zwei separaten brm()-Aufrufen fitten — aber dann bleibt jede mögliche Verbindung zwischen ihnen unsichtbar. Ein multivariates Modell macht diese Verbindung explizit schätzbar: Korreliert ein hoher Wert von y1 (nach Kontrolle für die Prädiktoren) systematisch mit einem hohen Wert von y2? Das ist typischerweise der eigentliche Forschungsgrund für ein multivariates statt zwei getrennter Modelle.',
+  related:[{id:'residualkorrelation',label:'Residualkorrelation'},{id:'random-effects',label:'Random Effects'},{id:'brms',label:'brms'}]
+},
+{ id:'residualkorrelation', cats:['bayes','glm'], az:'R', name:'Residualkorrelation (rescor)', longname:'Geschätzte Korrelation zwischen den Residuen mehrerer Responses',
+  def:'Die Residualkorrelation (rescor) ist die geschätzte Korrelation zwischen den Residuen mehrerer gemeinsam gefitteter Response-Variablen in einem multivariaten Modell. Sie erfasst, was nach Berücksichtigung aller Prädiktoren an gemeinsamer, unerklärter Variation zwischen den Responses übrig bleibt — z.B. durch eine gemeinsame unbeobachtete Ursache. In brms funktioniert rescor nur für Familien mit einem echten, stetigen Residualterm (Gaussian, Student-t); bei Poisson, Bernoulli & Co. ist die Varianz an den Erwartungswert gekoppelt, sodass dieser Freiheitsgrad fehlt — dort behilft man sich mit korrelierten Random Effects auf einer gemeinsamen Beobachtungs-ID als Ersatz.',
+  formula:'Ω_res[i,j] = Cor(εᵢ, εⱼ) für Responses i, j',
+  intuition:'Eine positive Residualkorrelation zwischen y1 und y2 heißt: eine Beobachtung, die bei y1 überraschend hoch ausfällt, fällt tendenziell auch bei y2 überraschend hoch aus — nicht weil x das erklärt, sondern wegen etwas Drittem, das beide Responses gemeinsam beeinflusst.',
+  related:[{id:'multivariates-modell',label:'Multivariates Modell'},{id:'random-effects',label:'Random Effects'}]
+},
+{ id:'splines', cats:['glm','reg'], az:'S', name:'Splines / Smooth Terms', longname:'Glatte, nichtlineare Effekte — s(x)',
+  def:'Ein Spline (Smooth Term, s(x) in brms/mgcv) ersetzt die Annahme, dass der Effekt eines Prädiktors x eine Gerade ist, durch die schwächere Annahme, dass er irgendeine glatte Kurve ist. Technisch wird eine Basis aus vielen kleinen, überlappenden Kurvenstücken (typischerweise Thin-Plate-Splines) konstruiert, und das Modell schätzt, wie stark jedes Stück gewichtet wird. Die "Wackeligkeit" der resultierenden Kurve wird nicht vorab festgelegt, sondern über einen eigenen Hyperparameter (Regularisierungsstärke) selbst mitgeschätzt — kleiner Wert = sehr glatt/fast linear, großer Wert = folgt den Daten enger.',
+  formula:'y ~ s(x)   (brms/mgcv-Syntax)',
+  intuition:'Splines sind die Wahl, wenn man vermutet, dass ein Zusammenhang nicht linear ist, aber keine konkrete funktionale Form (quadratisch, logarithmisch, …) postulieren will oder kann. Die einzelnen Basis-Koeffizienten sind für sich genommen nicht interpretierbar — nur die resultierende Kurve als Ganzes zählt, meist visualisiert statt als einzelne Zahl berichtet.',
+  related:[{id:'gaussian-process',label:'Gaussian Process'},{id:'glm',label:'GLM'}]
+},
+{ id:'gaussian-process', cats:['bayes','reg'], az:'G', name:'Gaussian Process', longname:'Verteilung über glatte Funktionen — gp(x)',
+  def:'Ein Gaussian Process (gp(x) in brms) modelliert wie ein Spline eine unbekannte glatte Kurve statt einer Geraden, aber über einen anderen Mechanismus: statt vieler kleiner Basisfunktionen nimmt ein GP an, dass Beobachtungen mit ähnlichem x-Wert auch ähnliche Effekte haben, und lernt aus den Daten, wie schnell diese Ähnlichkeit mit wachsendem Abstand abnimmt. Zwei Hyperparameter steuern das: die Längenskala (wie weit muss man in x wandern, bevor der Effekt "vergessen" ist) und die Amplitude (wie stark darf die Kurve insgesamt schwanken). Bei wenig Beobachtungen ist ein GP oft robuster als ein Spline; bei großen Datensätzen wird er rechenintensiv, da die Kovarianzmatrix quadratisch mit n wächst.',
+  formula:'f(x) ~ GP(0, k(x,x\'));   z.B. k(x,x\') = σ²·exp(−(x−x\')² / (2ℓ²))',
+  intuition:'Ein GP legt keine feste funktionale Form fest, sondern eine Wahrscheinlichkeitsverteilung über ALLE denkbaren glatten Funktionen — die Daten "wählen" dann, welche davon plausibel sind. Für mehrdimensionale glatte Interaktionen (z.B. gp(x1, x2)) ist ein GP die natürlichere Erweiterung als ein 2D-Spline.',
+  related:[{id:'splines',label:'Splines'},{id:'prior',label:'Prior'}]
+},
+{ id:'monotone-effekte', cats:['glm','reg'], az:'M', name:'Monotone Effekte', longname:'Ordnungserhaltende Effekte ordinaler Prädiktoren — mo(x)',
+  def:'Monotone Effekte (mo(x) in brms) modellieren den Effekt eines ordinalen Prädiktors (z.B. Bildungsabschluss: Hauptschule < Realschule < Abitur < Studium), ohne anzunehmen, dass jeder Kategorie-Schritt gleich viel zählt — wie es eine normale lineare Kodierung (1,2,3,4) implizit unterstellt. Stattdessen wird die Reihenfolge respektiert (höhere Stufe → mindestens so viel Effekt wie niedrigere), aber die relative Größe jedes Schritts wird über einen Dirichlet-verteilten Simplex ζ (ζ₁,…,ζₖ₋₁, alle ≥0, Summe=1) frei geschätzt, zusammen mit einem Gesamteffekt βₘ.',
+  formula:'y ~ mo(x);   Effekt eines Kategorie-Sprungs von a nach b = βₘ · Σᵢ₌ₐᵇ⁻¹ ζᵢ',
+  intuition:'Ein monotoner Effekt erlaubt z.B., dass der Sprung von Hauptschule zu Realschule winzig ist, der von Abitur zu Studium aber riesig — solange die Reihenfolge (höher = mindestens so viel Effekt) gewahrt bleibt. Voraussetzung ist eine klare, inhaltlich begründete Kategorienordnung.',
+  related:[{id:'glm',label:'GLM'}]
+},
+{ id:'messfehler-modell', cats:['glm','reg'], az:'M', name:'Messfehler-Modell', longname:'Modellierung eines fehlerbehafteten Prädiktors — me(x, sd_x)',
+  def:'Ein Messfehler-Modell (me(x, sd_x) in brms) berücksichtigt explizit, dass ein Prädiktor x nicht fehlerfrei gemessen ist, sondern eine verrauschte Version eines latenten wahren Werts mit bekanntem (oder geschätztem) Messfehler sd_x. Ignoriert man Messfehler in einem Prädiktor, wird der geschätzte Effekt systematisch zu klein geschätzt (Attenuation Bias/Regression-Dilution) — und zwar umso stärker, je größer der Messfehler relativ zur wahren Streuung von x ist. Das Modell schätzt den latenten wahren Wert explizit mit und korrigiert den Effekt entsprechend.',
+  formula:'y ~ me(x, sd_x);   x_beob. = x_wahr + ε,  ε ~ Normal(0, sd_x²)',
+  intuition:'Der klassische Fall: ein Fragebogen-Score mit bekannter Messungenauigkeit, oder ein Laborwert mit bekanntem Standardfehler. Ohne me() "verdünnt" der Messfehler den geschätzten Zusammenhang künstlich Richtung Null — mit me() wird dieser Bias korrigiert; sd_x lässt sich z.B. aus der Reliabilität des Instruments berechnen: SEM = SD(x)·√(1−Reliabilität).',
+  related:[{id:'standardmessfehler',label:'Standardmessfehler (SEM)'},{id:'reliabilitaet',label:'Reliabilität'}]
+},
+{ id:'autokorrelation-residuen', cats:['reg','glm'], az:'A', name:'Autokorrelation der Residuen', longname:'Serielle Korrelation zwischen den Restfehlern über Zeit oder Raum',
+  def:'Autokorrelation der Residuen liegt vor, wenn aufeinanderfolgende Beobachtungen derselben Einheit über Zeit (oder Raum) korrelierte Restfehler haben, auch nach Kontrolle für alle Prädiktoren und Random Effects — z.B. weil ein hoher Messwert heute einen hohen Messwert morgen wahrscheinlicher macht. Das ist ein anderes Konzept als die serielle Korrelation von MCMC-Samples (siehe Autokorrelation (MCMC)): hier geht es um Korrelation zwischen den beobachteten DATENPUNKTEN selbst, nicht um Korrelation zwischen aufeinanderfolgenden Ziehungen eines Samplers. In brms wird sie über eigene Formel-Terme modelliert: ar()/ma()/arma() für zeitliche, car() für räumliche Autokorrelation.',
+  formula:'εᵢ = f(εᵢ₋₁, εᵢ₋₂, …)  statt εᵢ ~ i.i.d.',
+  intuition:'Random Effects modellieren Korrelation ZWISCHEN Gruppen (z.B. Personen); Autokorrelation der Residuen modelliert Korrelation INNERHALB einer Gruppe über aufeinanderfolgende Beobachtungen. Ein Wert nahe 0 in der geschätzten Autokorrelation heißt: kaum verbleibende Abhängigkeit nach dem Modell; ein Wert nahe ±1 ist oft ein Hinweis, dass ein wichtiger Zeit-Trend im Modell fehlt.',
+  related:[{id:'ar-modell',label:'AR(p)'},{id:'ma-modell',label:'MA(q)'},{id:'arma-modell',label:'ARMA(p,q)'},{id:'car-modell',label:'CAR'},{id:'autokorrelation',label:'Autokorrelation (MCMC)'}]
+},
+{ id:'ar-modell', cats:['reg','glm'], az:'A', name:'AR(p) — Autoregressiver Term', longname:'Zeitliche Autokorrelation über p vorherige Restfehler',
+  def:'Ein AR(p)-Term (ar() in brms) modelliert den Restfehler εᵢ als abhängig von den p vorherigen Restfehlern: εᵢ = ρ₁·εᵢ₋₁ + … + ρₚ·εᵢ₋ₚ + zᵢ, wobei zᵢ der an jedem Zeitpunkt frisch gezogene, unvorhersehbare Zufallsanteil ist. ρ (zwischen −1 und 1) gibt an, wie stark ein vergangener Fehler nachwirkt. Ein einzelner Schock klingt bei AR(p) graduell/exponentiell ab, statt abrupt zu verschwinden — er spielt theoretisch noch lange (nur immer schwächer werdend) eine Rolle.',
+  formula:'εᵢ = ρ·εᵢ₋₁ + zᵢ  (AR(1)-Fall);   allgemein: εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ',
+  intuition:'Man kann sich z als "das an diesem Zeitpunkt neu Passierte" vorstellen (Tagesform, Messrauschen), ε dagegen als "das, was davon bis heute nachhallt". Bei mehreren Zeitreihen (z.B. mehrere Personen) braucht jede ihre eigene AR-Struktur — sonst würde das Modell fälschlich über Personen hinweg korrelieren.',
+  related:[{id:'ma-modell',label:'MA(q)'},{id:'arma-modell',label:'ARMA(p,q)'},{id:'ar1',label:'AR(1) Kovarianzstruktur'}]
+},
+{ id:'ma-modell', cats:['reg','glm'], az:'M', name:'MA(q) — Moving-Average-Term', longname:'Zeitliche Autokorrelation über q vorherige Zufallsanteile',
+  def:'Ein MA(q)-Term (ma() in brms) modelliert den Restfehler εᵢ als direkt abhängig von den q vorherigen Zufallsanteilen z (nicht von den vorherigen Fehlern ε selbst, wie bei AR): εᵢ = zᵢ + θ·zᵢ₋₁ + …. Der praktische Unterschied zu AR: ein einzelner Ausreißer-Schock wirkt sich bei MA(q) exakt q Zeitpunkte lang aus und ist danach komplett verschwunden — bei AR klingt derselbe Schock stattdessen graduell ab.',
+  formula:'εᵢ = zᵢ + θ·zᵢ₋₁  (MA(1)-Fall);   allgemein: εᵢ = zᵢ + Σₖ θₖ·zᵢ₋ₖ',
+  intuition:'AR = "der Effekt eines Schocks verblasst langsam"; MA = "der Effekt eines Schocks hält exakt q Zeitpunkte an und ist dann schlagartig weg". Welches Muster besser passt, zeigt sich oft erst im Modellvergleich (z.B. via LOO).',
+  related:[{id:'ar-modell',label:'AR(p)'},{id:'arma-modell',label:'ARMA(p,q)'}]
+},
+{ id:'arma-modell', cats:['reg','glm'], az:'A', name:'ARMA(p,q)', longname:'Kombinierter autoregressiver und Moving-Average-Term',
+  def:'Ein ARMA(p,q)-Term (arma() in brms) kombiniert einen AR(p)- und einen MA(q)-Anteil im selben Restfehler-Modell — sinnvoll, wenn weder eine reine AR- noch eine reine MA-Struktur die Autokorrelation der Residuen gut einfängt und beide Mechanismen gleichzeitig vermutet werden.',
+  formula:'εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ + Σₗ θₗ·zᵢ₋ₗ',
+  intuition:'ARMA liefert beide Parametersätze gleichzeitig (ar[1..p] und ma[1..q]); ob die zusätzliche Komplexität gegenüber einem reinen AR- oder MA-Modell wirklich nötig ist, zeigt ein Modellvergleich.',
+  related:[{id:'ar-modell',label:'AR(p)'},{id:'ma-modell',label:'MA(q)'}]
+},
+{ id:'car-modell', cats:['reg','glm'], az:'C', name:'CAR — Conditional Autoregressive', longname:'Räumliche Autokorrelation über eine Nachbarschaftsstruktur',
+  def:'Ein CAR-Term (car() in brms) modelliert räumliche statt zeitliche Autokorrelation: statt einer Zeit-Ordnung wird eine explizite Nachbarschafts-/Adjazenzmatrix benötigt (wer ist Nachbar von wem, z.B. angrenzende Bundesländer). "icar" ist die robuste Standardvariante, bei der der Effekt einer Region nur von seinen direkten Nachbarn abhängt; "bym2" kombiniert das zusätzlich mit einem unstrukturierten, von der Nachbarschaft unabhängigen Zufallsanteil pro Region, für den Fall, dass ein Teil der regionalen Unterschiede nicht räumlich erklärbar ist.',
+  formula:'y ~ x + car(M, gr = region, type = "icar")',
+  intuition:'Benachbarte Regionen mit hoher räumlicher Variationsstärke (sdcar) sollten sich in ihren geschätzten Effekten ähneln — CAR "glättet" Schätzungen über die Nachbarschaftsstruktur, ganz analog dazu, wie AR(1) Schätzungen über die Zeit glättet.',
+  related:[{id:'ar-modell',label:'AR(p)'}]
+},
+{ id:'multi-membership', cats:['glm','bayes'], az:'M', name:'Multi-Membership Random Effects', longname:'Zugehörigkeit zu mehreren Gruppen-Leveln gleichzeitig — mm()',
+  def:'Ein normaler Random Effect nimmt an, dass jede Beobachtung eindeutig zu genau einem Level einer Gruppierung gehört. Multi-Membership (mm() in brms) lockert das: eine Beobachtung darf zu mehreren Leveln gleichzeitig gehören — z.B. eine Schülerin, die ein Halbjahr von zwei Lehrkräften unterrichtet wurde. Mehrere Spalten geben die Mitgliedschafts-Level an, optionale Gewichte bestimmen, wie stark jedes Level zählt (ohne Angabe werden alle gleich gewichtet).',
+  formula:'y ~ x + (1 | mm(g1, g2, weights = cbind(w1, w2)))',
+  intuition:'Es gibt EINEN gemeinsamen Varianzparameter für die Gruppierung, nicht getrennte pro Mitgliedschafts-Spalte — die Gewichte bestimmen nur, wie stark der Effekt jedes konkreten Levels in eine bestimmte Beobachtung einfließt.',
+  related:[{id:'random-effects',label:'Random Effects'}]
+},
+{ id:'zensierung', cats:['reg','glm'], az:'Z', name:'Zensierung', longname:'Beobachtung nur bis zu einer Grenze bekannt — cens()',
+  def:'Zensierung liegt vor, wenn der exakte Wert einer Beobachtung nicht bekannt ist, aber bekannt ist, auf welcher Seite einer Grenze er liegt — klassisch bei Überlebenszeiten ("nach 30 Tagen Studienende lebt die Person noch, der wahre Wert ist ≥30"). In brms markiert cens() jede Beobachtung als exakt bekannt, rechts-, links- oder intervallzensiert; die Likelihood wird entsprechend angepasst, statt den unbekannten Wert einfach zu ignorieren oder abzuschneiden. Ignorierte Zensierung verzerrt Schätzungen systematisch.',
+  formula:'y | cens(censored) ~ x',
+  intuition:'Ein zensierter Wert ist Teil der Daten — man weiß nur nicht exakt, was er ist, sondern nur eine Grenze dafür. Das unterscheidet Zensierung von Trunkierung, wo Werte außerhalb eines Bereichs in der Stichprobe gar nicht erst vorkommen.',
+  related:[{id:'trunkierung',label:'Trunkierung'}]
+},
+{ id:'trunkierung', cats:['reg','glm'], az:'T', name:'Trunkierung', longname:'Werte außerhalb eines Bereichs prinzipiell unmöglich — trunc()',
+  def:'Trunkierung liegt vor, wenn ein Wert prinzipiell gar nicht außerhalb eines bestimmten Bereichs [lb, ub] liegen kann — z.B. ein Messgerät, das nur Werte von 0 bis 100 anzeigen kann. In brms passt trunc() die Wahrscheinlichkeitsverteilung entsprechend an (sie muss sich auf [lb,ub] zu 1 integrieren), statt die Beobachtungen einfach abzuschneiden. Ignorierte Trunkierung verzerrt vor allem die geschätzte Streuung (unterschätzt, da die "Ränder" der wahren Verteilung in der Stichprobe fehlen).',
+  formula:'y | trunc(lb = 0, ub = 100) ~ x',
+  intuition:'Trunkierung beschreibt die Stichprobe selbst (Werte außerhalb kommen gar nicht vor), Zensierung beschreibt einzelne Beobachtungen (der Wert existiert, ist aber nicht exakt bekannt) — eine häufige Verwechslung.',
+  related:[{id:'zensierung',label:'Zensierung'}]
+},
+{ id:'horseshoe-prior', cats:['bayes','reg'], az:'H', name:'Horseshoe-Prior', longname:'Kontinuierlich schrumpfender Prior für viele Kandidaten-Prädiktoren',
+  def:'Der Horseshoe-Prior ist das Bayesianische Analogon zur Lasso-Regression: für den Fall vieler Kandidaten-Prädiktoren, von denen vermutlich nur wenige wirklich einen Effekt haben, bekommt jeder Koeffizient einen eigenen Schrumpfungsgrad statt eines gemeinsamen schwach informativen Priors. Die meisten Koeffizienten werden aggressiv Richtung Null gezogen, einige wenige dürfen groß bleiben, wenn die Daten das hergeben. Anders als Lasso setzt der Horseshoe-Prior keinen Koeffizienten exakt auf Null (kontinuierliche statt harte Schrumpfung) — für eine echte Variablenselektion braucht es einen nachgelagerten Schritt wie projpred.',
+  formula:'βⱼ ~ Normal(0, τ²·λⱼ²),   λⱼ ~ Half-Cauchy(0,1),   τ ~ Half-Cauchy(0, τ₀)',
+  intuition:'Der Name kommt von der U-förmigen ("hufeisenförmigen") Dichte des impliziten Schrumpfungsfaktors: Werte nahe 0 (starke Schrumpfung) und nahe 1 (kaum Schrumpfung) sind beide wahrscheinlich, Werte dazwischen selten — das Modell "entscheidet" pro Koeffizient scharf zwischen beidem.',
+  related:[{id:'variablenselektion',label:'Variablenselektion'},{id:'prior',label:'Prior'}]
+},
+{ id:'variablenselektion', cats:['bayes','reg'], az:'V', name:'Bayesianische Variablenselektion (projpred)', longname:'Projektionsbasierte Auswahl der wichtigsten Prädiktoren',
+  def:'Bayesianische Variablenselektion identifiziert die kleinste Teilmenge von Prädiktoren, die die Vorhersagequalität eines vollen (meist Horseshoe-geschrumpften) Modells noch ausreichend gut reproduziert. Das R-Paket projpred implementiert dies über Projektion: ausgehend vom vollen Modell wird schrittweise die beste Reihenfolge gesucht, Prädiktoren in ein kleineres Modell aufzunehmen (cv_varsel()), wobei jede Modellgröße per Kreuzvalidierung anhand tatsächlicher Vorhersagequalität bewertet wird — nicht nur anhand der Koeffizientengröße.',
+  formula:'cv_varsel(fit) → suggest_size() → ranking()$fulldata',
+  intuition:'Der Horseshoe-Fit allein liefert nur Schrumpfung, keine fertige Auswahl — projpred macht daraus eine konkrete Empfehlung ("nimm diese k Prädiktoren"), validiert über Kreuzvalidierung statt über einen willkürlichen Signifikanz-Cutoff.',
+  related:[{id:'horseshoe-prior',label:'Horseshoe-Prior'},{id:'loo',label:'LOO-CV'}]
+},
+{ id:'mixture-modell', cats:['bayes','dist'], az:'M', name:'Mixture-Modell', longname:'Latente Subgruppen mit jeweils eigener Verteilung',
+  def:'Ein Mixture-Modell nimmt an, dass Beobachtungen aus mehreren unbeobachteten (latenten) Untergruppen stammen, jede mit ihrer eigenen Verteilung — z.B. Reaktionszeiten aus einem "geraten"- und einem "überlegt"-Regime. mixture(gaussian(), gaussian()) in brms sagt: y_i stammt mit Wahrscheinlichkeit θ₁ aus Verteilung 1 und mit θ₂=1−θ₁ aus Verteilung 2; θ wird aus den Daten mitgeschätzt. Hurdle- und Zero-Inflated-Familien sind ein Spezialfall eines 2-Komponenten-Mixtures, bei dem eine Komponente ein Punkt auf exakt Null ist.',
+  formula:'p(y) = Σₖ θₖ · f(y | Komponente k),   Σθₖ = 1',
+  intuition:'Anders als bei einer Gruppierung mit Random Effects ist die Gruppenzugehörigkeit hier nicht beobachtet (z.B. "Proband 3"), sondern latent — für jede Beobachtung unbekannt, nur die Verteilung darüber wird geschätzt. Ein bekanntes technisches Problem ist Label-Switching: die Likelihood ist symmetrisch unter Vertauschen der Komponenten-Bezeichnungen.',
+  related:[{id:'zero-inflation',label:'Zero-Inflation'},{id:'hurdle-modell',label:'Hurdle-Modell'}]
+},
+{ id:'hurdle-modell', cats:['dist','glm'], az:'H', name:'Hurdle-Modell', longname:'Getrennte Modellierung von Nullwerten und positiven Werten',
+  def:'Ein Hurdle-Modell trennt "kommt ein Nullwert vor oder nicht" (ein eigener Bernoulli-Prozess) von "wie groß ist der Wert, wenn er nicht Null ist" (eine bei Null abgeschnittene Verteilung, z.B. Poisson, Negative Binomial oder Gamma). Anders als bei Zero-Inflation gibt es hier keine "strukturellen" Nullen aus der Basisverteilung selbst — jede beobachtete Null kommt ausschließlich aus dem Hurdle-Teil. In brms: family = hurdle_poisson(), hurdle_negbinomial(), hurdle_gamma().',
+  formula:'P(Y=0) = π;   P(Y=k>0) = (1−π) · f(k|θ) / (1 − f(0|θ))',
+  intuition:'Zero-Inflation sagt "es gibt zwei ARTEN von Nullen" (strukturell und zufällig); ein Hurdle-Modell sagt "es gibt nur EINE Art von Null, und danach folgt der Wert einer eigenen, bei Null abgeschnittenen Verteilung" — z.B. Arztbesuche: viele echte Nullen (Hurdle), aber wer überhaupt geht, geht typischerweise mehr als einmal (abgeschnittene Zählverteilung ab 1).',
+  related:[{id:'zero-inflation',label:'Zero-Inflation'},{id:'mixture-modell',label:'Mixture-Modell'},{id:'overdispersion',label:'Overdispersion'}]
+},
+
 ];
 
 // ── Theme Toggle ──
