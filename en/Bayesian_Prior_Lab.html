@@ -403,9 +403,13 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
           <div class="panel-label" id="panel-model-lbl"></div>
           <div id="plot-svg-wrap"></div>
         </div>
-        <div id="plot-panel-response">
+        <div id="plot-panel-response" style="position:relative">
           <div class="panel-label" id="panel-response-lbl"></div>
+          <button class="glm-param-btn" id="btn-logx" onclick="toggleLogX()"
+            style="display:none;position:absolute;top:0;right:0"
+            title="Scale the x-axis logarithmically, symmetric around 1 — useful for odds/rate ratios, whose values quickly run off the chart on a linear scale.">log-x</button>
           <div id="plot-response-wrap"></div>
+          <div id="response-identity-note" style="display:none;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);opacity:.85;text-align:center;line-height:1.55;margin:.4rem auto 0;max-width:100%"></div>
         </div>
       </div>
       <div id="coverage"></div>
@@ -834,6 +838,7 @@ let GLM_ACTIVE = false;
 let GLM_LINK = 'logit';
 let GLM_PARAM = 'intercept'; // 'intercept' | 'slope'
 let glmHelpOpen = false;
+let RESPONSE_LOGX = false;
 let XAXIS_LOCKED = false;
 
 // ── Init ───────────────────────────────────────────────────
@@ -1496,12 +1501,14 @@ function updateGLMInputs() {
   const note  = document.getElementById('glm-note');
   const mLbl  = document.getElementById('panel-model-lbl');
   const rLbl  = document.getElementById('panel-response-lbl');
+  const btnLogX = document.getElementById('btn-logx');
 
   if (!GLM_ACTIVE) {
     loLbl.textContent = 'Lower bound';
     hiLbl.textContent = 'Upper bound';
     loEl.removeAttribute('min'); loEl.removeAttribute('max'); loEl.step = 0.1;
     hiEl.removeAttribute('min'); hiEl.removeAttribute('max'); hiEl.step = 0.1;
+    if (btnLogX) btnLogX.style.display = 'none';
     return;
   }
 
@@ -1560,17 +1567,41 @@ function updateGLMInputs() {
       );
     }
   }
+
+  if (btnLogX) btnLogX.style.display = (isSlope || isLog) ? 'inline-block' : 'none';
+}
+
+function toggleLogX() {
+  RESPONSE_LOGX = !RESPONSE_LOGX;
+  document.getElementById('btn-logx').classList.toggle('active', RESPONSE_LOGX);
+  drawResponsePanel();
+}
+
+// 1-2-5 per decade — standard tick pattern for logarithmic axes (as in forest plots)
+function log125Ticks(lo, hi) {
+  const ticks = [];
+  const kMin = Math.floor(Math.log10(lo));
+  const kMax = Math.ceil(Math.log10(hi));
+  for (let k = kMin; k <= kMax; k++) {
+    [1,2,5].forEach(m => {
+      const v = m * Math.pow(10, k);
+      if (v >= lo*0.999 && v <= hi*1.001) ticks.push(v);
+    });
+  }
+  return ticks;
 }
 
 function drawResponsePanel() {
   const isLog   = GLM_LINK  === 'log';
   const isSlope = GLM_PARAM === 'slope';
+  const respUnit = isSlope ? (isLog ? 'RR' : 'OR') : 'E[Y]';
   const wrap = document.getElementById('plot-response-wrap');
   if (!wrap) return;
 
   const modelLo = parseFloat(document.getElementById('xlo').value) || -5;
   const modelHi = parseFloat(document.getElementById('xhi').value) ||  5;
   const N = 400;
+  const useLogX = RESPONSE_LOGX && (isSlope || isLog);
   let xs, ys, xDomain;
 
   // Slope (both links) and Log-Intercept: exp transformation Y=exp(X)
@@ -1578,12 +1609,32 @@ function drawResponsePanel() {
   if (isSlope || isLog) {
     const xlo_r = Math.max(0.0001, Math.exp(modelLo));
     const xhi_r = Math.exp(modelHi);
-    xDomain = [xlo_r, xhi_r];
-    xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
-    ys = xs.map(y => {
-      if (y <= 0) return 0;
-      try { const v = CUR.pdf(Math.log(y), PARAMS) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
-    });
+    if (useLogX) {
+      // CORE RULE: every axis transform needs the matching density transform with a Jacobian —
+      // otherwise the plotted areas stop being probabilities.
+      // Model scale u = ln(x). Response density f(x) = pdf(u)/x (the default, left-hand panel).
+      // Plotted on a log-x axis against u, we need g(u) = f(exp(u))·exp(u) = pdf(u) — the
+      // Jacobian exp(u) = x exactly cancels the 1/x, leaving the model-scale density itself.
+      // (Same rule would apply if the P(Y=1) panel ever got a logit x-axis.)
+      //
+      // Slope (OR/RR): u-grid symmetric around 0 — a doubling and a halving sit equally far
+      // from center. Log-intercept (E[Y]): no "u=0" reference, so just the real u-range.
+      const uMax = isSlope ? Math.max(Math.abs(modelLo), Math.abs(modelHi), 1e-4) : null;
+      const uLo = isSlope ? -uMax : modelLo;
+      const uHi = isSlope ?  uMax : modelHi;
+      xDomain = [Math.exp(uLo), Math.exp(uHi)];
+      xs = Array.from({length:N}, (_,i) => Math.exp(uLo + i*(uHi-uLo)/(N-1)));
+      ys = xs.map(x => {
+        try { const v = CUR.pdf(Math.log(x), PARAMS); return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+      });
+    } else {
+      xDomain = [xlo_r, xhi_r];
+      xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
+      ys = xs.map(y => {
+        if (y <= 0) return 0;
+        try { const v = CUR.pdf(Math.log(y), PARAMS) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+      });
+    }
   } else {
     xDomain = [0, 1];
     xs = Array.from({length:N}, (_,i) => 0.001 + i*0.998/(N-1));
@@ -1606,7 +1657,7 @@ function drawResponsePanel() {
   const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H).style('overflow','visible');
   const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
 
-  const xSc = d3.scaleLinear().domain(xDomain).range([0, Wp]);
+  const xSc = useLogX ? d3.scaleLog().domain(xDomain).range([0, Wp]) : d3.scaleLinear().domain(xDomain).range([0, Wp]);
   const ySc = d3.scaleLinear().domain([0, yMax]).range([Hp, 0]);
   const grid = cv('--grid'), ink2 = cv('--ink2'), a4 = cv('--a4'), a3 = cv('--a3');
 
@@ -1615,9 +1666,20 @@ function drawResponsePanel() {
      gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
      gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','13px').attr('font-family','DM Mono,monospace');});
 
+  // y-axis unit: changes with the scaling — density per OR unit (linear) is NOT the same
+  // quantity as density per log(OR) unit (log-x); heights are not comparable across views even
+  // though the axis looks the same.
+  if (isSlope || isLog) {
+    g.append('text').attr('x',0).attr('y',-6)
+     .attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace').attr('opacity',.55)
+     .text(useLogX ? `Density / log(${respUnit}) unit` : `Density / ${respUnit} unit`);
+  }
+
   const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
+  const xAxis = d3.axisBottom(xSc).tickFormat(xFmt).tickSize(-Hp);
+  if (useLogX) xAxis.tickValues(log125Ticks(xDomain[0], xDomain[1])); else xAxis.ticks(5);
   g.append('g').attr('transform',`translate(0,${Hp})`)
-   .call(d3.axisBottom(xSc).ticks(5).tickFormat(xFmt).tickSize(-Hp))
+   .call(xAxis)
    .call(gr=>{gr.select('.domain').remove();
      gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
      gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','13px').attr('font-family','DM Mono,monospace');});
@@ -1652,7 +1714,7 @@ function drawResponsePanel() {
              .attr('stroke',a4).attr('stroke-width',1.2).attr('stroke-dasharray','4,3').attr('opacity',.7);
           }
         });
-        const mid = (q025r + q975r) / 2;
+        const mid = useLogX ? Math.sqrt(q025r * q975r) : (q025r + q975r) / 2;
         if (mid >= xDomain[0] && mid <= xDomain[1]) {
           g.append('text').attr('x',xSc(mid)).attr('y',14)
            .attr('text-anchor','middle').attr('fill',a4).attr('font-size','13px').attr('font-family','DM Mono,monospace')
@@ -1671,25 +1733,64 @@ function drawResponsePanel() {
      .text('= 1');
   }
 
-  // Mean line (transformed mean) — stops at density peak
-  const mn = CUR.mean(PARAMS);
-  if (typeof mn === 'number' && isFinite(mn)) {
-    const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
-    if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
-      let mnDensY = 0;
-      try {
-        const v = (isSlope||isLog)
-          ? CUR.pdf(Math.log(mn_r),PARAMS)/mn_r
-          : CUR.pdf(Math.log(mn_r/(1-mn_r)),PARAMS)/(mn_r*(1-mn_r));
-        mnDensY = isFinite(v)&&v>=0 ? Math.min(v,yMax) : 0;
-      } catch(e){}
-      const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
-      const mnLblY  = Math.max(mnTopPx-5, 28);
-      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',mnTopPx).attr('y2',Hp)
-       .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-      g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
-       .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
-       .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+  // Mean line — stops at density peak
+  // In the log view the arithmetic expectation E[OR]/E[Y] is misleading: for lognormal-shaped
+  // response distributions E[OR] = E[1/OR], so it does not measure location (and mn_r=exp(mean(β))
+  // would coincide with the median anyway for a symmetric model-scale prior, but sit mislabeled
+  // as "≈E[OR]"). Use the median instead: exp(model-scale median), robust via findQVal — exact
+  // for every model-scale distribution on offer (including Cauchy, whose mean doesn't exist).
+  // Density height accordingly via g(u)=pdf(u) (see above), not f(x)=pdf(u)/x. Linear view stays
+  // unchanged (E[...] is correct there).
+  if (useLogX) {
+    let uMed = NaN;
+    try { uMed = findQVal(0.5); } catch(e){}
+    if (isFinite(uMed)) {
+      const mn_r = Math.exp(uMed);
+      if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+        let mnDensY = 0;
+        try { const v = CUR.pdf(uMed, PARAMS); mnDensY = isFinite(v)&&v>=0 ? Math.min(v,yMax) : 0; } catch(e){}
+        const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
+        const mnLblY  = Math.max(mnTopPx-5, 28);
+        g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',mnTopPx).attr('y2',Hp)
+         .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+        g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
+         .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
+         .text('Median (= geom. mean)');
+      }
+    }
+  } else {
+    const mn = CUR.mean(PARAMS);
+    if (typeof mn === 'number' && isFinite(mn)) {
+      const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
+      if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+        let mnDensY = 0;
+        try {
+          const v = (isSlope||isLog)
+            ? CUR.pdf(Math.log(mn_r),PARAMS)/mn_r
+            : CUR.pdf(Math.log(mn_r/(1-mn_r)),PARAMS)/(mn_r*(1-mn_r));
+          mnDensY = isFinite(v)&&v>=0 ? Math.min(v,yMax) : 0;
+        } catch(e){}
+        const mnTopPx = mnDensY>0 ? ySc(mnDensY) : 0;
+        const mnLblY  = Math.max(mnTopPx-5, 28);
+        g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',mnTopPx).attr('y2',Hp)
+         .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+        g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
+         .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
+         .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+      }
+    }
+  }
+
+  // Name the identity with the model-scale panel explicitly — otherwise a student seeing two
+  // identical curves is more likely to suspect a bug than to see the actual point of log-x view.
+  const noteEl = document.getElementById('response-identity-note');
+  if (noteEl) {
+    if (useLogX) {
+      noteEl.style.display = 'block';
+      const modelUnitDesc = isSlope ? (isLog ? 'β on the log scale' : 'β on the logit scale') : 'intercept on the log scale';
+      noteEl.textContent = `Identical to the model scale — u is the value there (${modelUnitDesc}), x = ${respUnit} = exp(u). The ${respUnit} view is just a relabeling of the axis, not a different distribution: the Jacobian term exp(u) exactly cancels the 1/x factor, so the curve's shape stays the same.`;
+    } else {
+      noteEl.style.display = 'none';
     }
   }
 }
