@@ -981,7 +981,9 @@ function setParam(id, val) {
 }
 
 // ── Auto range ─────────────────────────────────────────────
-function autoRange() {
+// The distribution's "natural" window, independent of whatever window is currently shown
+// (needed for the y-scaling in drawPlot, see there).
+function computeNaturalRange() {
   const supp = CUR.support(PARAMS);
   let lo, hi;
   if (CUR.id==='beta') { lo=0; hi=1; }
@@ -1000,6 +1002,11 @@ function autoRange() {
   }
   lo = Math.max(lo, isFinite(supp[0]) ? supp[0] : lo);
   hi = Math.min(hi, isFinite(supp[1]) ? supp[1] : hi);
+  return {lo, hi};
+}
+
+function autoRange() {
+  const {lo, hi} = computeNaturalRange();
   const pad = (hi-lo)*0.06;
   if (!XAXIS_LOCKED) {
     document.getElementById('xlo').value = Math.round((lo-pad)*100)/100;
@@ -1033,7 +1040,23 @@ function drawPlot() {
   const ys = xs.map(x => {
     try { const v=effPDF(x,PARAMS); return (isFinite(v)&&v>=0)?v:0; } catch(e){return 0;}
   });
-  const yMax = Math.max(...ys)*1.15||1;
+  // Scale the y-axis to the distribution's actual peak, not just the locally visible max:
+  // with a locked/manually set x-axis that no longer contains the peak (e.g. μ dragged far
+  // past the window), the local max would be a vanishingly small tail value — the y-axis
+  // would still rescale to it, making that tail look like a full bell curve hugging the edge.
+  // Find the peak over the distribution's own natural window (independent of the currently
+  // shown window) and take whichever is larger.
+  let trueMax = 0;
+  try {
+    const nat = computeNaturalRange();
+    const M = 150;
+    for (let i=0;i<M;i++){
+      const x = nat.lo + i*(nat.hi-nat.lo)/(M-1);
+      const v = effPDF(x,PARAMS);
+      if (isFinite(v) && v>trueMax) trueMax = v;
+    }
+  } catch(e){}
+  const yMax = Math.max(...ys, trueMax)*1.15||1;
 
   const wrap = document.getElementById('plot-svg-wrap');
   if (!wrap) return;
@@ -1468,7 +1491,8 @@ function solvCI() {
 function fmtN(v, dec=2) {
   const n = parseFloat(v);
   if (!isFinite(n)) return '—';
-  return n.toFixed(dec).replace(/\.?0+$/, '') || '0';
+  const s = n.toFixed(dec).replace(/\.?0+$/, '') || '0';
+  return s === '-0' ? '0' : s;
 }
 function copyCode() {
   const el = document.getElementById('brms-code');
