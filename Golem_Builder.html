@@ -944,6 +944,7 @@ canvas {
       <button class="btn btn-primary" id="btnGenR">R Simulationscode generieren</button>
       <button class="btn" id="btnGenBrms" style="border-color:var(--a4);color:var(--a4);">brms Code generieren</button>
       <button class="btn" id="btnGenTMB" style="border-color:var(--a6);color:var(--a6);">glmmTMB Code generieren</button>
+      <button class="btn" id="btnGenDagitty" style="border-color:var(--a2);color:var(--a2);" title="DAG als dagitty-Objekt exportieren: Adjustierungssets, testbare Implikationen, Instrumentvariablen, ggdag-Plot">dagitty Code generieren</button>
     </div>
 
     <div id="rCodeWrap" class="code-block-wrap" style="display:none;">
@@ -968,6 +969,14 @@ canvas {
         <button class="btn" id="copyTmb" style="font-size:.7rem;">Kopieren</button>
       </div>
       <pre class="code-area" id="tmbCodeArea"></pre>
+    </div>
+
+    <div id="dagittyCodeWrap" class="code-block-wrap" style="display:none;">
+      <div class="code-block-header">
+        <span class="code-block-label">dagitty Code</span>
+        <button class="btn" id="copyDagitty" style="font-size:.7rem;">Kopieren</button>
+      </div>
+      <pre class="code-area" id="dagittyCodeArea"></pre>
     </div>
   </div>
 
@@ -3059,6 +3068,117 @@ function generateTMBCode() {
 }
 
 // ============================================================
+// DAGITTY EXPORT
+// ============================================================
+function generateDagittyCode() {
+  const X = state.exposure, Y = state.outcome;
+  const xName = X ? getNodeName(X) : 'X';
+  const yName = Y ? getNodeName(Y) : 'Y';
+  const effect = getEffectType(); // 'total' | 'direct'
+
+  // Knotendefinitionen: Name [exposure|outcome|latent][,pos="x,y"]
+  // Position aus den Canvas-Koordinaten übernommen (skaliert; y gespiegelt, weil dagitty
+  // mit y nach oben zeichnet, der Canvas aber mit y nach unten).
+  const nodeLines = state.nodes.map(nd => {
+    const attrs = [];
+    if (nd.id === X) attrs.push('exposure');
+    if (nd.id === Y) attrs.push('outcome');
+    if (nd.latent) attrs.push('latent');
+    const px = (nd.x/100).toFixed(2), py = (-nd.y/100).toFixed(2);
+    attrs.push(`pos="${px},${py}"`);
+    return `  ${nd.name} [${attrs.join(',')}]`;
+  });
+  const edgeLines = state.edges.map(e => `  ${getNodeName(e.from)} -> ${getNodeName(e.to)}`);
+  const dagBlock = ["dag <- dagitty('dag {", ...nodeLines, ...edgeLines, "}')"].join('\n');
+
+  // Eigene Zusammenfassung statt getAdjSetNames(): die dort verwendete Sammelmeldung
+  // "kein Adjustierungsset nötig" gilt fälschlich auch dann, wenn gar KEIN valides Set
+  // existiert (z.B. unblockierbarer Backdoor-Pfad über eine latente Variable, IV-Fall) —
+  // das ist etwas völlig anderes als "keine Konfundierung vorhanden" und hier sicherheits-
+  // halber sauber unterschieden.
+  const minimal = state.analysisResult ? state.analysisResult.minimal : null;
+  let adjComment;
+  if (!minimal || minimal.length === 0) {
+    adjComment = 'kein valides Set — Backdoor-Pfad nur über eine latente Variable blockierbar (nicht identifizierbar per Adjustierung)';
+  } else if (minimal[0].length === 0) {
+    adjComment = '{} (leeres Set — keine Konfundierung, kein Adjustment nötig)';
+  } else {
+    adjComment = '{' + minimal[0].map(id=>getNodeName(id)).join(', ') + '}';
+  }
+
+  const lines = [
+    '# Golem Builder — DAG-Export für dagitty',
+    '# Generiert von Bayes Thinking Lab · Golem Builder',
+    '#',
+    '# dagitty berechnet die Adjustierungssets unabhängig vom Tool neu —',
+    '# guter Cross-Check der Kausalanalyse in der Seitenleiste.',
+    `# Tool-Ergebnis (minimales Set, Effekt=${effect}): ${adjComment}`,
+    '#',
+    '# install.packages(c("dagitty", "ggdag", "ggplot2"))  # ggdag/ggplot2 optional, für schönere Grafik',
+    'library(dagitty)',
+    '',
+    dagBlock,
+    '',
+  ];
+
+  if (X && Y) {
+    lines.push(
+      '# ── Adjustierungssets (Backdoor-Kriterium, Pearl 1995 / Textor et al. 2011) ──',
+      '# Eigene Ausgabe-Hilfsfunktion: die automatische Konsolenausgabe von adjustmentSets()',
+      '# ist leicht zu übersehen, wenn das Set leer ist oder gar keins existiert.',
+      'print_adj_sets <- function(sets, label) {',
+      '  cat(label, ":\\n", sep = "")',
+      '  if (length(sets) == 0) {',
+      '    cat("  KEIN valides Set — Backdoor-Pfad nur über eine latente Variable blockierbar\\n")',
+      '    cat("  (Effekt via Backdoor-Adjustierung nicht identifizierbar).\\n")',
+      '  } else {',
+      '    for (s in sets) cat("  {", if (length(s) == 0) "" else paste(s, collapse = ", "), "}\\n", sep = "")',
+      '  }',
+      '}',
+      '',
+      `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}"),`,
+      `               "Minimale Adjustierungssets (Effekt: ${effect})")`,
+      `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}", type = "all"),`,
+      '               "Alle gültigen Adjustierungssets")',
+      ''
+    );
+  }
+
+  lines.push(
+    '# ── Testbare Implikationen ──────────────────────────────────',
+    '# Bedingte Unabhängigkeiten, die der DAG impliziert — an echten Daten prüfbar',
+    '# (z.B. mit localTests(dag, data)). Werden diese verletzt, ist der DAG falsch spezifiziert.',
+    'print(impliedConditionalIndependencies(dag))',
+    ''
+  );
+
+  if (X && Y) {
+    lines.push(
+      '# ── Instrumentalvariablen (falls vorhanden) ─────────────────',
+      `instrumentalVariables(dag, exposure = "${xName}", outcome = "${yName}")`,
+      ''
+    );
+  }
+
+  lines.push(
+    '# ── Grafische Darstellung ───────────────────────────────────',
+    '# Basis-Plot (immer verfügbar, keine weiteren Pakete nötig):',
+    'plot(dag)',
+    '',
+    '# Schönere Darstellung mit ggdag (empfohlen für Berichte/Präsentationen):',
+    'library(ggdag)',
+    'library(ggplot2)  # nötig für scale_color_manual() — ggdag importiert ggplot2 intern,',
+    '                  # hängt es aber nicht automatisch in den Suchpfad ein',
+    'ggdag_status(dag, text = FALSE, use_labels = "name") +',
+    '  theme_dag() +',
+    '  scale_color_manual(values = c(exposure = "#2a6e8a", outcome = "#7a3a8a"),',
+    '                      na.value = "grey60", guide = "none")'
+  );
+
+  return lines.join('\n');
+}
+
+// ============================================================
 // EXAMPLES
 // ============================================================
 function clearState() {
@@ -3352,6 +3472,13 @@ document.getElementById('btnGenTMB').addEventListener('click', () => {
   document.getElementById('tmbCodeWrap').style.display = 'block';
 });
 
+document.getElementById('btnGenDagitty').addEventListener('click', () => {
+  if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
+  const code = generateDagittyCode();
+  document.getElementById('dagittyCodeArea').innerHTML = highlightR(code);
+  document.getElementById('dagittyCodeWrap').style.display = 'block';
+});
+
 document.getElementById('copyR').addEventListener('click', e => {
   copyToClipboard(document.getElementById('rCodeArea').textContent, e.currentTarget);
 });
@@ -3360,6 +3487,9 @@ document.getElementById('copyBrms').addEventListener('click', e => {
 });
 document.getElementById('copyTmb').addEventListener('click', e => {
   copyToClipboard(document.getElementById('tmbCodeArea').textContent, e.currentTarget);
+});
+document.getElementById('copyDagitty').addEventListener('click', e => {
+  copyToClipboard(document.getElementById('dagittyCodeArea').textContent, e.currentTarget);
 });
 
 document.getElementById('btnOpenGComp').addEventListener('click', () => {
