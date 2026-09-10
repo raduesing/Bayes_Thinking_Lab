@@ -139,9 +139,12 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 
 /* Coverage intervals */
 #coverage{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
+#coverage-response{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.4rem}
 .cov-item{font-family:'DM Mono',monospace;font-size:.75rem;
           background:var(--panel);border:1px solid var(--grid);padding:.28rem .55rem}
 .cov-item b{color:var(--a2)}
+.cov-item.resp{border-color:var(--a4)}
+.cov-item.resp b{color:var(--a4)}
 
 /* ── BRMS CODE ──────────────────────────────────────────── */
 .code-card{background:#090c12;border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow)}
@@ -316,6 +319,8 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
   color:var(--a4);margin-bottom:.3rem;display:none;
   border-bottom:1px solid var(--a4);padding-bottom:.3rem;
 }
+/* Modellskala = blau, Response-Skala/GLM-Modus = lila — konsequent durchgehalten */
+#panel-model-lbl.panel-label{color:var(--a2);border-bottom-color:var(--a2)}
 .plbl-title{
   display:block;font-family:'DM Mono',monospace;font-size:.75rem;
   letter-spacing:.07em;text-transform:uppercase;opacity:.7;
@@ -367,7 +372,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 
     <!-- PP-Check Hinweis -->
     <div id="ppc-hint">
-      <b>💡 Auch im PP-Check:</b> Das Prior Lab ist als kompaktes Modal <b>direkt im <a class="glo-link" href="Glossar.html#gl-prior-predictive-check" target="_blank" title="Der Prior Predictive Check simuliert Daten aus dem Prior (ohne echte Daten zu betrachten) und prüft, ob diese plausibel sind.">Prior Predictive Check</a></b> eingebettet (Button <span class="hl">⬡ Prior Lab light</span>). Priors können dort sofort angewendet werden — ohne diese Seite öffnen zu müssen.
+      <b>💡 Auch im PP-Check:</b> Das Prior Lab ist als kompaktes Modal <b>direkt im <a href="Bayesian_PP_Check.html" target="_blank" style="color:var(--a6);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" title="Zum Prior Predictive Check">Prior Predictive Check</a></b> eingebettet (Button <span class="hl">⬡ Prior Lab light</span>). Priors können dort sofort angewendet werden — ohne diese Seite öffnen zu müssen.
     </div>
 
     <!-- Distribution picker -->
@@ -437,11 +442,12 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
         </div>
       </div>
       <div id="coverage"></div>
+      <div id="coverage-response"></div>
     </div>
 
     <!-- CI Solver (FEATURED) -->
     <div id="solver-card">
-      <div class="solver-hero">⟳ Credible Interval → <em>Parameter berechnen</em></div>
+      <div class="solver-hero">⟳ Prior Credible Interval → <em>Parameter berechnen</em></div>
       <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.65rem;line-height:1.65" id="solver-hint">
         <!-- Filled dynamically per distribution -->
       </div>
@@ -1183,9 +1189,35 @@ function drawPlot() {
       } catch(e){}
     });
   }
+  const covLbl = GLM_ACTIVE ? 'Prior Credible Intervals — Modellskala' : 'Prior Credible Intervals';
   document.getElementById('coverage').innerHTML = covHTML
-    ? `<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;letter-spacing:.1em;text-transform:uppercase;display:block;width:100%;margin-bottom:.2rem">Credible Intervals</span>${covHTML}`
+    ? `<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a2);opacity:.7;letter-spacing:.1em;text-transform:uppercase;display:block;width:100%;margin-bottom:.2rem">${covLbl}</span>${covHTML}`
     : '';
+
+  // Coverage intervals auf der Response-Skala (nur bei aktivem GLM-Modus) — dieselben Quantile
+  // wie oben, nur exp()/sigmoid-transformiert; direkt unter der Modellskala-Box, in Lila (a4)
+  // statt Blau (a2), damit auf einen Blick klar ist, welche Zeile zu welcher Skala gehört.
+  const covRespEl = document.getElementById('coverage-response');
+  if (covRespEl) {
+    let covHTMLResp = '';
+    let respUnit = '';
+    if (GLM_ACTIVE && CUR.cdf) {
+      const isSlopeG = GLM_PARAM === 'slope', isLogG = GLM_LINK === 'log';
+      respUnit = isSlopeG ? (isLogG ? 'RR' : 'OR') : (isLogG ? 'E[Y]' : 'P');
+      const toResp = v => (isSlopeG || isLogG) ? Math.exp(v) : 1/(1+Math.exp(-v));
+      const fmtResp = v => (isSlopeG || isLogG) ? d3.format('.3~g')(v) : d3.format('.1%')(v);
+      [[50,'50%'],[80,'80%'],[95,'95%'],[99,'99%']].forEach(([pct,lbl]) => {
+        try {
+          const qlo = findQVal((1-pct/100)/2);
+          const qhi = findQVal(1-(1-pct/100)/2);
+          covHTMLResp += `<div class="cov-item resp"><b>${lbl}</b> [${fmtResp(toResp(qlo))}, ${fmtResp(toResp(qhi))}]</div>`;
+        } catch(e){}
+      });
+    }
+    covRespEl.innerHTML = covHTMLResp
+      ? `<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a4);opacity:.75;letter-spacing:.1em;text-transform:uppercase;display:block;width:100%;margin-bottom:.2rem">Prior Credible Intervals — Response-Skala (${respUnit})</span>${covHTMLResp}`
+      : '';
+  }
 
   // brms code
   const brmsHtml = CUR.brmsLine ? CUR.brmsLine(PARAMS) : `prior(${CUR.brms}, class = b)`;
@@ -1780,7 +1812,7 @@ function drawResponsePanel() {
          .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
         g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
          .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
-         .text('Median (= geom. Mittel)');
+         .text(`Median = ${xFmt(mn_r)} (= geom. Mittel)`);
       }
     }
   } else {
@@ -1801,7 +1833,7 @@ function drawResponsePanel() {
          .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
         g.append('text').attr('x',xSc(mn_r)+4).attr('y',mnLblY)
          .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace')
-         .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+         .text(`${isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]')} = ${xFmt(mn_r)}`);
       }
     }
   }
@@ -1881,7 +1913,7 @@ document.addEventListener('click', e => {
     <a class="glo-link" href="Glossar.html#gl-posterior" target="_blank" title="Der Posterior p(θ|D) ist die Wahrscheinlichkeitsverteilung über die Modellparameter θ nach Betrachtung der Daten D.">Posterior</a> ∝ <a class="glo-link" href="Glossar.html#gl-likelihood" target="_blank" title="Die Likelihood-Funktion L(θ; D) beschreibt, wie wahrscheinlich die beobachteten Daten D unter verschiedenen Parameterwerten θ wären.">Likelihood</a> × <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Der Prior p(θ) ist die Wahrscheinlichkeitsverteilung über Modellparameter θ, die unser Vorwissen vor Betrachtung der Daten ausdrückt.">Prior</a>. Ein zu enger Prior dominiert das Modell,
     ein zu vager verlangsamt den Sampler. Der CI-Solver hilft, Prior-Parameter
     inhaltlich zu begründen statt willkürlich zu wählen.
-    <div class="hp-next">Weiter → <strong><a class="glo-link" href="Glossar.html#gl-prior-predictive-check" target="_blank" title="Der Prior Predictive Check simuliert Daten aus dem Prior (ohne echte Daten zu betrachten) und prüft, ob diese plausibel sind." style="color:inherit">Prior Predictive Check</a></strong>: überprüfe ob die gewählten Priors
+    <div class="hp-next">Weiter → <strong><a href="Bayesian_PP_Check.html" target="_blank" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" title="Zum Prior Predictive Check">Prior Predictive Check</a></strong>: überprüfe ob die gewählten Priors
     sinnvolle Vorhersagen implizieren — bevor du die Daten siehst</div>
   </div>
 </div>
