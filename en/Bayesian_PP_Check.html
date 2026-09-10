@@ -3517,7 +3517,12 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
 #pl-canvas::-webkit-scrollbar-thumb{background:#1e2a40}
 /* main plot */
 #pl-plot-wrap{
-  flex:1;min-height:300px;position:relative;
+  /* flex-shrink:0 (via the "0" in the shorthand) matters: with the GLM response panel as an
+     extra flex sibling in #pl-canvas, a shrinkable flex:1 would squeeze this container below
+     its actual content height (title+desc+axis controls+300px SVG) — the SVG inside would then
+     overflow the container and overlap the response panel below it. flex-basis:auto gives its
+     natural height as the floor, grow:1 still lets it expand when there's spare room. */
+  flex:1 0 auto;position:relative;
 }
 #pl-plot-title{
   font-family:'Fraunces',Georgia,serif;font-size:1.12rem;font-weight:300;
@@ -3573,6 +3578,8 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
 /* response panel */
 #pl-response-panel{
   border-top:1px solid #1e2a40;padding-top:.8rem;margin-top:.2rem;
+  flex-shrink:0; /* same safeguard as #pl-plot-wrap — also contains a fixed-height SVG that
+    could otherwise overflow its container when space is tight. */
 }
 #pl-response-panel-lbl{
   font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.09em;
@@ -3644,16 +3651,22 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
       </div>
       <!-- ── GLM response panel ── -->
       <div id="pl-response-panel" style="display:none">
-        <div id="pl-response-panel-lbl">Response Scale</div>
+        <div style="position:relative">
+          <div id="pl-response-panel-lbl">Response Scale</div>
+          <button id="pl-btn-logx" class="pl-gpb" onclick="plToggleLogX()"
+            style="display:none;position:absolute;top:0;right:0;flex:none;padding:.2rem .55rem"
+            title="Scale the x-axis logarithmically, symmetric around 1 — useful for odds/rate ratios, whose values quickly run off the chart on a linear scale.">log-x</button>
+        </div>
         <div id="pl-response-panel-sub">Jacobian-transformed density — mathematically exact, not an approximation.</div>
         <div id="pl-response-title" style="font-family:'DM Mono',monospace;font-size:.75rem;color:#c87ad8;margin-bottom:.55rem;opacity:.75"></div>
         <div id="pl-response-svg-wrap"></div>
+        <div id="pl-response-identity-note" style="display:none;font-family:'DM Mono',monospace;font-size:.68rem;color:#556080;text-align:center;line-height:1.5;margin-top:.35rem"></div>
       </div>
       <div id="pl-coverage"></div>
       <!-- ── Reverse CI solver ── -->
       <div id="pl-reverse" style="margin-top:.8rem;background:#0a0e16;border:1.5px solid #1e2a40;padding:.9rem 1.1rem">
-        <div style="font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#2a3550;padding-bottom:.35rem;border-bottom:1px solid #1e2a40;margin-bottom:.65rem">⟳ Credible-Interval → Parameter</div>
-        <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.6rem;line-height:1.65">Specify the desired Credible Interval — the solver automatically finds the matching parameters.</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#2a3550;padding-bottom:.35rem;border-bottom:1px solid #1e2a40;margin-bottom:.65rem">⟳ Prior Credible Interval → Parameters</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.6rem;line-height:1.65">Specify the desired Prior Credible Interval — the solver automatically finds the matching parameters.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;align-items:end;margin-bottom:.55rem">
           <div>
             <div id="pl-ci-lo-lbl" style="font-family:'DM Mono',monospace;font-size:.75rem;color:#556080;margin-bottom:.2rem">Lower bound</div>
@@ -3693,7 +3706,7 @@ const DISTS = [
     desc:'Symmetric bell curve. Standard choice for intercept and coefficients with z-standardized variables. Light tails → occasional extreme values possible.',
     params:[
       {id:'mu',  label:'μ (Location)',   min:-20, max:20,  step:0.1,  val:0},
-      {id:'sig', label:'σ (Scale)',  min:0.01,max:20,  step:0.1,  val:1},
+      {id:'sig', label:'σ (Scale)',  min:0.1,max:20,  step:0.1,  val:1},
     ],
     pdf:(x,p)=>{const z=(x-p.mu)/p.sig;return Math.exp(-.5*z*z)/(p.sig*Math.sqrt(2*Math.PI));},
     cdf:(x,p)=>jStat.normal.cdf(x,p.mu,p.sig),
@@ -3706,7 +3719,7 @@ const DISTS = [
     params:[
       {id:'nu',  label:'ν (Degrees of freedom)', min:1,   max:50,   step:0.5, val:3},
       {id:'mu',  label:'μ (Location)',            min:-20, max:20,   step:0.1, val:0},
-      {id:'sig', label:'σ (Scale)',           min:0.01,max:20,   step:0.1, val:1},
+      {id:'sig', label:'σ (Scale)',           min:0.1,max:20,   step:0.1, val:1},
     ],
     pdf:(x,p)=>jStat.studentt.pdf((x-p.mu)/p.sig,p.nu)/p.sig,
     cdf:(x,p)=>jStat.studentt.cdf((x-p.mu)/p.sig,p.nu),
@@ -3718,7 +3731,7 @@ const DISTS = [
     desc:'Extremely heavy-tailed. No finite mean or variance. Useful as a very vague prior that gives much weight to rare extreme values. Equivalent to Student-t with ν=1.',
     params:[
       {id:'mu',  label:'μ (Location)',  min:-20, max:20, step:0.1, val:0},
-      {id:'sig', label:'σ (Scale)',min:0.01,max:20, step:0.1, val:1},
+      {id:'sig', label:'σ (Scale)',min:0.1,max:20, step:0.1, val:1},
     ],
     pdf:(x,p)=>1/(Math.PI*p.sig*(1+((x-p.mu)/p.sig)**2)),
     cdf:(x,p)=>.5+Math.atan((x-p.mu)/p.sig)/Math.PI,
@@ -3729,7 +3742,7 @@ const DISTS = [
     id:'half_normal', name:'Half-Normal', brms:'half_normal(0, σ)',
     desc:'Normal(0,σ) with x≥0. Classic weakly-informative prior for standard deviations σ and random-effect SDs τ. E[x] = σ√(2/π) ≈ 0.8σ.',
     params:[
-      {id:'sig', label:'σ (Scale)', min:0.01,max:20, step:0.1, val:1},
+      {id:'sig', label:'σ (Scale)', min:0.1,max:20, step:0.1, val:1},
     ],
     pdf:(x,p)=>(x<0?0:Math.sqrt(2/Math.PI)/p.sig*Math.exp(-.5*(x/p.sig)**2)),
     cdf:(x,p)=>(x<0?0:jStat.normal.cdf(x,0,p.sig)*2-1),
@@ -3742,7 +3755,7 @@ const DISTS = [
     desc:'Student-t with x≥0. Heavier tails than Half-Normal — allows occasionally large SDs. Good compromise between Half-Normal and Half-Cauchy.',
     params:[
       {id:'nu',  label:'ν (Degrees of freedom)', min:1,   max:50,  step:0.5, val:3},
-      {id:'sig', label:'σ (Scale)',          min:0.01,max:20,  step:0.1, val:1},
+      {id:'sig', label:'σ (Scale)',          min:0.1,max:20,  step:0.1, val:1},
     ],
     pdf:(x,p)=>(x<0?0:2*jStat.studentt.pdf(x/p.sig,p.nu)/p.sig),
     cdf:(x,p)=>(x<0?0:2*jStat.studentt.cdf(x/p.sig,p.nu)-1),
@@ -3754,7 +3767,7 @@ const DISTS = [
     id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
     desc:'Cauchy with x≥0. Very heavy tails — allows large SDs. Formerly popular for σ priors, now often replaced by Half-Normal or Exponential.',
     params:[
-      {id:'sig', label:'σ (Scale)', min:0.01,max:20, step:0.1, val:1},
+      {id:'sig', label:'σ (Scale)', min:0.1,max:20, step:0.1, val:1},
     ],
     pdf:(x,p)=>(x<0?0:2/(Math.PI*p.sig*(1+(x/p.sig)**2))),
     cdf:(x,p)=>(x<0?0:2*Math.atan(x/p.sig)/Math.PI),
@@ -3791,7 +3804,7 @@ const DISTS = [
     desc:'Normal with skewness. α>0: right-skewed, α<0: left-skewed, α=0: Normal. Useful when the prior should be asymmetric.',
     params:[
       {id:'mu',    label:'μ (Location)',    min:-20, max:20, step:0.1, val:0},
-      {id:'sig',   label:'σ (Scale)',  min:0.01,max:20, step:0.1, val:1},
+      {id:'sig',   label:'σ (Scale)',  min:0.1,max:20, step:0.1, val:1},
       {id:'skew',  label:'α (Skewness)',min:-10, max:10, step:0.2, val:3},
     ],
     pdf:(x,p)=>{
@@ -3879,6 +3892,27 @@ let plParams = {};
 let PL_GLM_ACTIVE = false;
 let PL_GLM_LINK   = 'logit';
 let PL_GLM_PARAM  = 'intercept'; // 'intercept' | 'slope'
+let PL_RESPONSE_LOGX = false;
+
+function plFmtN(v, dec=2) {
+  const n = parseFloat(v);
+  if (!isFinite(n)) return '—';
+  const s = n.toFixed(dec).replace(/\.?0+$/, '') || '0';
+  return s === '-0' ? '0' : s;
+}
+// 1-2-5 per decade — standard tick pattern for logarithmic axes
+function plLog125Ticks(lo, hi) {
+  const ticks = [];
+  const kMin = Math.floor(Math.log10(lo));
+  const kMax = Math.ceil(Math.log10(hi));
+  for (let k = kMin; k <= kMax; k++) {
+    [1,2,5].forEach(m => {
+      const v = m * Math.pow(10, k);
+      if (v >= lo*0.999 && v <= hi*1.001) ticks.push(v);
+    });
+  }
+  return ticks;
+}
 
 // ── GLM functions ────────────────────────────────────────
 window.plToggleGLM = function() {
@@ -3916,12 +3950,14 @@ function plUpdateGLMInputs() {
   const hiEl  = document.getElementById('pl-ci-hi');
   const note  = document.getElementById('pl-glm-note');
   const rTitle= document.getElementById('pl-response-title');
+  const btnLogX = document.getElementById('pl-btn-logx');
 
   if (!PL_GLM_ACTIVE) {
     if(loLbl) loLbl.textContent = 'Lower bound';
     if(hiLbl) hiLbl.textContent = 'Upper bound';
     loEl.removeAttribute('min'); loEl.removeAttribute('max'); loEl.step = 0.1;
     hiEl.removeAttribute('min'); hiEl.removeAttribute('max'); hiEl.step = 0.1;
+    if (btnLogX) btnLogX.style.display = 'none';
     return;
   }
 
@@ -3962,29 +3998,53 @@ function plUpdateGLMInputs() {
       if(rTitle) rTitle.textContent = 'Response Scale — Probability P(Y=1)';
     }
   }
+
+  if (btnLogX) btnLogX.style.display = (isSlope || isLog) ? 'inline-block' : 'none';
 }
+
+window.plToggleLogX = function() {
+  PL_RESPONSE_LOGX = !PL_RESPONSE_LOGX;
+  const btn = document.getElementById('pl-btn-logx');
+  if (btn) btn.classList.toggle('active', PL_RESPONSE_LOGX);
+  plDrawResponsePanel();
+};
 
 function plDrawResponsePanel() {
   if (!PL_GLM_ACTIVE) return;
   const isLog   = PL_GLM_LINK  === 'log';
   const isSlope = PL_GLM_PARAM === 'slope';
+  const respUnit = isSlope ? (isLog ? 'RR' : 'OR') : (isLog ? 'E[Y]' : 'P');
   const wrap = document.getElementById('pl-response-svg-wrap');
   if (!wrap) return;
 
   const modelLo = parseFloat(document.getElementById('pl-xlo').value) || -5;
   const modelHi = parseFloat(document.getElementById('pl-xhi').value) ||  5;
   const N = 400;
+  const useLogX = PL_RESPONSE_LOGX && (isSlope || isLog);
   let xs, ys, xDomain;
 
   if (isSlope || isLog) {
     const xlo_r = Math.max(0.0001, Math.exp(modelLo));
     const xhi_r = Math.exp(modelHi);
-    xDomain = [xlo_r, xhi_r];
-    xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
-    ys = xs.map(y => {
-      if (y <= 0) return 0;
-      try { const v = plDist.pdf(Math.log(y), plParams) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
-    });
+    if (useLogX) {
+      // Every axis transform needs the matching density transform with a Jacobian:
+      // g(u) = f(exp(u))·exp(u) = pdf(u) — the Jacobian exp(u)=x exactly cancels the 1/x.
+      const uMax = isSlope ? Math.max(Math.abs(modelLo), Math.abs(modelHi), 1e-4) : null;
+      const uLo = isSlope ? -uMax : modelLo;
+      const uHi = isSlope ?  uMax : modelHi;
+      xDomain = [Math.exp(uLo), Math.exp(uHi)];
+      xs = Array.from({length:N}, (_,i) => Math.exp(uLo + i*(uHi-uLo)/(N-1)));
+      ys = xs.map(x => {
+        try { const v = plDist.pdf(Math.log(x), plParams); return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+      });
+    } else {
+      xDomain = [xlo_r, xhi_r];
+      xs = Array.from({length:N}, (_,i) => xlo_r + i*(xhi_r - xlo_r)/(N-1));
+      ys = xs.map(y => {
+        if (y <= 0) return 0;
+        try { const v = plDist.pdf(Math.log(y), plParams) / y; return (isFinite(v) && v >= 0) ? v : 0; } catch(e){ return 0; }
+      });
+    }
   } else {
     xDomain = [0, 1];
     xs = Array.from({length:N}, (_,i) => 0.001 + i*0.998/(N-1));
@@ -4000,14 +4060,14 @@ function plDrawResponsePanel() {
   const yMax = Math.max(...ys)*1.15 || 1;
   const W = wrap.clientWidth || 500;
   const H = 240;
-  const m = {l:50,r:20,t:12,b:34};
+  const m = {l:50,r:20,t:18,b:34};
   const Wp = W-m.l-m.r, Hp = H-m.t-m.b;
 
   d3.select(wrap).selectAll('*').remove();
   const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H).style('overflow','visible');
   const g = svg.append('g').attr('transform',`translate(${m.l},${m.t})`);
 
-  const xSc = d3.scaleLinear().domain(xDomain).range([0, Wp]);
+  const xSc = useLogX ? d3.scaleLog().domain(xDomain).range([0, Wp]) : d3.scaleLinear().domain(xDomain).range([0, Wp]);
   const ySc = d3.scaleLinear().domain([0, yMax]).range([Hp, 0]);
   const a4  = '#c87ad8';
   const a3  = '#7ec850';
@@ -4019,9 +4079,17 @@ function plDrawResponsePanel() {
      gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
      gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
 
+  if (isSlope || isLog) {
+    g.append('text').attr('x',0).attr('y',-6)
+     .attr('fill',ink2).attr('font-size','9px').attr('font-family','DM Mono,monospace').attr('opacity',.6)
+     .text(useLogX ? `Density / log(${respUnit})` : `Density / ${respUnit}`);
+  }
+
   const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
+  const xAxis = d3.axisBottom(xSc).tickFormat(xFmt).tickSize(-Hp);
+  if (useLogX) xAxis.tickValues(plLog125Ticks(xDomain[0], xDomain[1])); else xAxis.ticks(5);
   g.append('g').attr('transform',`translate(0,${Hp})`)
-   .call(d3.axisBottom(xSc).ticks(5).tickFormat(xFmt).tickSize(-Hp))
+   .call(xAxis)
    .call(gr=>{gr.select('.domain').remove();
      gr.selectAll('.tick line').attr('stroke',grid).attr('stroke-dasharray','2,4');
      gr.selectAll('.tick text').attr('fill',ink2).attr('font-size','10px').attr('font-family','DM Mono,monospace');});
@@ -4048,16 +4116,42 @@ function plDrawResponsePanel() {
      .text('= 1');
   }
 
-  // Mean line (transformed)
-  const mn = plDist.mean(plParams);
-  if (typeof mn === 'number' && isFinite(mn)) {
-    const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
-    if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
-      g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
-       .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
-      g.append('text').attr('x',xSc(mn_r)+4).attr('y',11)
-       .attr('fill',a3).attr('font-size','10px').attr('font-family','DM Mono,monospace')
-       .text(isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]'));
+  // Mean/Median line
+  if (useLogX) {
+    let uMed = NaN;
+    try { uMed = findQuantileVal(0.5); } catch(e){}
+    if (isFinite(uMed)) {
+      const mn_r = Math.exp(uMed);
+      if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+        g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
+         .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+        g.append('text').attr('x',xSc(mn_r)+4).attr('y',11)
+         .attr('fill',a3).attr('font-size','10px').attr('font-family','DM Mono,monospace')
+         .text(`Median = ${xFmt(mn_r)}`);
+      }
+    }
+  } else {
+    const mn = plDist.mean(plParams);
+    if (typeof mn === 'number' && isFinite(mn)) {
+      const mn_r = (isSlope || isLog) ? Math.exp(mn) : 1/(1+Math.exp(-mn));
+      if (mn_r >= xDomain[0] && mn_r <= xDomain[1]) {
+        g.append('line').attr('x1',xSc(mn_r)).attr('x2',xSc(mn_r)).attr('y1',0).attr('y2',Hp)
+         .attr('stroke',a3).attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
+        g.append('text').attr('x',xSc(mn_r)+4).attr('y',11)
+         .attr('fill',a3).attr('font-size','10px').attr('font-family','DM Mono,monospace')
+         .text(`${isSlope ? (isLog ? '≈E[RR]' : '≈E[OR]') : (isLog ? '≈E[Y]' : '≈E[P]')} = ${xFmt(mn_r)}`);
+      }
+    }
+  }
+
+  // Name the identity with the model-scale panel (only relevant in log-x)
+  const noteEl = document.getElementById('pl-response-identity-note');
+  if (noteEl) {
+    if (useLogX) {
+      noteEl.style.display = 'block';
+      noteEl.textContent = `Identical to the model scale — only the axis is relabeled (x = exp(u)), not a different distribution.`;
+    } else {
+      noteEl.style.display = 'none';
     }
   }
 }
@@ -4114,19 +4208,19 @@ function renderPlParams(){
 window.plSetParam=function(pid,val){
   plParams[pid]=val;
   const vd=document.getElementById('plv-'+pid); if(vd) vd.textContent=val.toFixed(2);
-  plUpdatePlot();
+  plAutoRange();
 };
 
-window.plAutoRange=function(){
+// The distribution's "natural" window, independent of whatever window pl-xlo/pl-xhi
+// currently show (needed for y-scaling safety net in plUpdatePlot, see there).
+function plComputeNaturalRange(){
   const supp=plDist.support(plParams);
   let lo,hi;
   if(plDist.id==='beta'){lo=0;hi=1;}
   else if(plDist.id==='lkj'){lo=-1;hi=1;}
   else{
-    // use quantile-based auto-range
     try{
       if(plDist.cdf){
-        // find 0.001 and 0.999 quantile by bisection
         lo=findQuantile(0.005); hi=findQuantile(0.995);
       } else {
         const mu=typeof plDist.mean(plParams)==='number'?plDist.mean(plParams):0;
@@ -4138,7 +4232,11 @@ window.plAutoRange=function(){
   }
   lo=Math.max(lo, supp[0]===-Infinity?lo:supp[0]);
   hi=Math.min(hi, supp[1]=== Infinity?hi:supp[1]);
-  // nice round
+  return {lo,hi};
+}
+
+window.plAutoRange=function(){
+  const {lo,hi}=plComputeNaturalRange();
   const rnd=v=>Math.round(v*100)/100;
   document.getElementById('pl-xlo').value=rnd(lo- (hi-lo)*0.05);
   document.getElementById('pl-xhi').value=rnd(hi+ (hi-lo)*0.05);
@@ -4167,7 +4265,21 @@ window.plUpdatePlot=function(){
     try{ const v=plDist.pdf(x,plParams); return (isFinite(v)&&v>=0)?v:0; }
     catch(e){return 0;}
   });
-  const yMax=Math.max(...ys)*1.15||1;
+  // Safety net: scale the y-axis to the distribution's real peak, not just the locally
+  // visible max — otherwise a window that no longer contains the peak (manually typed
+  // pl-xlo/pl-xhi) would rescale onto a vanishing tail value and look like a false peak
+  // hugging the edge.
+  let plTrueMax=0;
+  try{
+    const nat=plComputeNaturalRange();
+    const M=150;
+    for(let i=0;i<M;i++){
+      const x=nat.lo+i*(nat.hi-nat.lo)/(M-1);
+      const v=plDist.pdf(x,plParams);
+      if(isFinite(v)&&v>plTrueMax) plTrueMax=v;
+    }
+  }catch(e){}
+  const yMax=Math.max(...ys,plTrueMax)*1.15||1;
 
   // ── SVG via D3 ──
   const wrap=document.getElementById('pl-svg-wrap');
@@ -4219,15 +4331,29 @@ window.plUpdatePlot=function(){
   g.append('path').datum(pts).attr('fill','none')
    .attr('stroke','#4ab0d8').attr('stroke-width',2.5).attr('d',line);
 
-  // mean line (if finite)
+  // mean + median lines (if finite) — mirrors real Prior Lab: shows both when they differ,
+  // and still shows the median for distributions with no finite mean (e.g. Cauchy)
   const mn=plDist.mean(plParams);
+  let md=null;
+  try { if (plDist.cdf) md=findQuantileVal(0.5); } catch(e){}
+  const thresh=(hi-lo)*0.005;
+  const sameVal=(typeof mn==='number'&&isFinite(mn)&&md!==null&&isFinite(md)&&Math.abs(mn-md)<thresh);
+
   if(typeof mn==='number'&&isFinite(mn)&&mn>=lo&&mn<=hi){
     const xm=xSc(mn);
     g.append('line').attr('x1',xm).attr('x2',xm).attr('y1',0).attr('y2',Hp)
      .attr('stroke','#7ec850').attr('stroke-width',1.8).attr('stroke-dasharray','4,3').attr('opacity',.9);
     g.append('text').attr('x',xm+4).attr('y',12)
      .attr('fill','#7ec850').attr('font-size','10px').attr('font-family','DM Mono,monospace')
-     .text('μ');
+     .text(sameVal ? `μ = Med. = ${plFmtN(mn,3)}` : `μ = ${plFmtN(mn,3)}`);
+  }
+  if(!sameVal && md!==null && isFinite(md) && md>=lo && md<=hi){
+    const xmd=xSc(md);
+    g.append('line').attr('x1',xmd).attr('x2',xmd).attr('y1',0).attr('y2',Hp)
+     .attr('stroke','#e8614a').attr('stroke-width',1.5).attr('stroke-dasharray','2,4').attr('opacity',.85);
+    g.append('text').attr('x',xmd+4).attr('y',24)
+     .attr('fill','#e8614a').attr('font-size','10px').attr('font-family','DM Mono,monospace')
+     .text(`Med. = ${plFmtN(md,3)}`);
   }
 
   // title
@@ -4255,7 +4381,7 @@ window.plUpdatePlot=function(){
     });
   }
   document.getElementById('pl-coverage').innerHTML=covHTML
-    ? '<span style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:#2a3550;display:block;width:100%;margin-bottom:.3rem;letter-spacing:.1em;text-transform:uppercase">Credible Intervals</span>'+covHTML
+    ? '<span style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:#2a3550;display:block;width:100%;margin-bottom:.3rem;letter-spacing:.1em;text-transform:uppercase">Prior Credible Intervals</span>'+covHTML
     : '';
 
   // GLM response panel
