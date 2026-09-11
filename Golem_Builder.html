@@ -945,6 +945,7 @@ canvas {
       <button class="btn" id="btnGenBrms" style="border-color:var(--a4);color:var(--a4);">brms Code generieren</button>
       <button class="btn" id="btnGenTMB" style="border-color:var(--a6);color:var(--a6);">glmmTMB Code generieren</button>
       <button class="btn" id="btnGenDagitty" style="border-color:var(--a2);color:var(--a2);" title="DAG als dagitty-Objekt exportieren: Adjustierungssets, testbare Implikationen, Instrumentvariablen, ggdag-Plot">dagitty Code generieren</button>
+      <button class="btn" id="btnGenPower" style="border-color:var(--a5);color:var(--a5);" title="Monte-Carlo-Poweranalyse für den totalen/direkten Effekt der Exposition sowie (bei vorhandenen Mediatoren) den indirekten Effekt">Power-Analyse generieren</button>
     </div>
 
     <div id="rCodeWrap" class="code-block-wrap" style="display:none;">
@@ -977,6 +978,14 @@ canvas {
         <button class="btn" id="copyDagitty" style="font-size:.7rem;">Kopieren</button>
       </div>
       <pre class="code-area" id="dagittyCodeArea"></pre>
+    </div>
+
+    <div id="powerCodeWrap" class="code-block-wrap" style="display:none;">
+      <div class="code-block-header">
+        <span class="code-block-label">Power-Analyse Code</span>
+        <button class="btn" id="copyPower" style="font-size:.7rem;">Kopieren</button>
+      </div>
+      <pre class="code-area" id="powerCodeArea"></pre>
     </div>
   </div>
 
@@ -2484,9 +2493,6 @@ function getNonRootIntercept(nodeId) {
 function generateRCode() {
   const n = document.getElementById('simN').value || 200;
   const seed = document.getElementById('simSeed').value || 42;
-  const order = topoSort();
-  const roots = state.nodes.filter(nd=>getParents(nd.id).length===0);
-  const latentIds = new Set(state.nodes.filter(nd=>nd.latent).map(nd=>nd.id));
 
   // Detect special patterns for comment header
   const instruments = state.exposure && state.outcome ? detectInstruments() : [];
@@ -2554,6 +2560,23 @@ function generateRCode() {
     `n <- ${n}`,
     '',
   );
+
+  lines.push(...buildNodeSimLines());
+
+  return lines.join('\n');
+}
+
+// Shared node-simulation logic — used by generateRCode() (main data-sim preview) AND
+// generatePowerCode() (Monte-Carlo power simulation), so the two never drift apart
+// (the exact class of bug found/fixed in Data_Creator.html: two independently
+// maintained copies of the same data-generating logic silently diverging).
+// Assumes `n` is already defined in the calling R scope (either the top-level `n <- ...`
+// in generateRCode()'s output, or the closure `n` in generatePowerCode()'s sim_data_one()).
+function buildNodeSimLines() {
+  const order = topoSort();
+  const roots = state.nodes.filter(nd=>getParents(nd.id).length===0);
+  const latentIds = new Set(state.nodes.filter(nd=>nd.latent).map(nd=>nd.id));
+  const lines = [];
 
   // Separate latent roots and observed roots
   const latentRoots = roots.filter(nd => latentIds.has(nd.id));
@@ -2690,7 +2713,7 @@ function generateRCode() {
     }
   }
 
-  return lines.join('\n');
+  return lines;
 }
 
 function getAdjSetNames() {
@@ -3065,6 +3088,212 @@ function generateTMBCode() {
   }
 
   return baseCode.join('\n');
+}
+
+// glmmTMB family string for ANY node (root or non-root) — generalizes the family
+// map already used by generateTMBCode()/generateBrmsCode() (there hardcoded to the
+// outcome only) so generatePowerCode() can build one glmmTMB call per mediator too.
+function nodeGlmmFamily(nodeId) {
+  const isRoot = getParents(nodeId).length === 0;
+  const dist = isRoot ? getRootDist(nodeId).dist : getNonRootDist(nodeId);
+  return { Normal: 'gaussian()', Bernoulli: 'binomial(link="logit")', Poisson: 'poisson(link="log")', Gamma: 'Gamma(link="log")' }[dist] || 'gaussian()';
+}
+
+// ============================================================
+// POWER SIMULATION
+// ============================================================
+// Monte-Carlo power analysis for the exposure's TOTAL or DIRECT effect (whichever
+// radio button is currently selected — same convention buildFormulaRHS()/
+// getAdjSetNames() already follow), plus — if the DAG has at least one mediator —
+// the INDIRECT (mediated) effect via a joint-significance test (MacKinnon, Lockwood,
+// Hoffman, West & Sheets 2002; Fritz & MacKinnon 2007): a mediated path counts as
+// "detected" in a given simulated dataset only if EVERY edge along that path is
+// individually significant (Wald test). This avoids needing a bootstrap CI for the
+// a×b product inside a Monte-Carlo loop (computationally infeasible at N_sim=500)
+// while still being a standard, well-studied method for mediation power analysis.
+// Not supported (v1): instrumental-variable or front-door designs — flagged below
+// instead of silently producing a misleading power estimate for those.
+function generatePowerCode() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return '# Bitte zuerst Exposition und Outcome festlegen.';
+
+  const instruments = detectInstruments();
+  const { mediators: frontDoorMediators } = detectFrontDoor();
+  if (instruments.length > 0 || frontDoorMediators.length > 0) {
+    return [
+      '# Power-Simulation für Instrumentalvariablen- oder Front-Door-Designs wird',
+      '# aktuell nicht unterstützt — nur für Standard-Backdoor-Adjustierung (totaler',
+      '# oder direkter Effekt) und Mediation (indirekter Effekt) über einfache',
+      '# Backdoor-Pfade. Dieser DAG braucht eine IV- bzw. Front-Door-Identifikation',
+      '# (siehe brms-/glmmTMB-Code-Generatoren) — die Poweranalyse dafür ist nicht',
+      '# implementiert, da die zugehörigen Schätzer (2SLS, Front-Door-Produkt) andere',
+      '# Signifikanztests brauchen als der einfache Wald-/LRT-/Joint-Significance-Ansatz',
+      '# unten.',
+    ].join('\n');
+  }
+
+  const xName = getNodeName(X), yName = getNodeName(Y);
+  const n = document.getElementById('simN').value || 200;
+  const effectType = getEffectType();
+  const effectLabel = effectType === 'direct' ? 'direkt' : 'total';
+  const adjNames = getAdjSetNames();
+  const rhs = buildFormulaRHS(Y);
+  const family = nodeGlmmFamily(Y);
+
+  // Null-model RHS for the LRT: drop X and any X-moderator interaction it feeds into
+  // Y with, but keep the moderator itself (a legitimate covariate on its own).
+  const yIntPairs = state.edges.filter(e => e.to === Y).flatMap(e => {
+    const mod = getEdgeModerator(e.id);
+    return mod ? [{ a: getNodeName(e.from), b: mod }] : [];
+  });
+  const xModerators = yIntPairs.filter(p => p.a === xName).map(p => p.b);
+  const hasXInteraction = xModerators.length > 0;
+  const nullTerms = [...new Set([...adjNames.filter(a => a !== xName), ...xModerators])];
+  const nullRhs = nullTerms.length > 0 ? nullTerms.join(' + ') : '1';
+
+  const lines = [];
+  lines.push('# ============================================================');
+  lines.push('# POWER-SIMULATION (Golem Builder) — Monte-Carlo-Poweranalyse');
+  lines.push(`# Effekt: ${effectLabel.toUpperCase()} (${xName} → ${yName})`);
+  lines.push(`# Adjustiert für: ${adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)'}`);
+  lines.push('# Hinweis: N_sim=500 Wiederholungen können je nach Modellkomplexität einige');
+  lines.push('# Minuten dauern (mehrere glmmTMB-Fits pro Wiederholung).');
+  lines.push('# ============================================================');
+  lines.push('');
+  lines.push('library(glmmTMB)');
+  lines.push('library(car)');
+  lines.push('');
+  lines.push('N_sim <- 500   # Anzahl Simulations-Durchläufe (500–1000 empfohlen)');
+  lines.push('alpha <- 0.05');
+  lines.push(`n <- ${n}`);
+  lines.push('');
+  lines.push('sim_data_one <- function(sim_seed) {');
+  lines.push('  set.seed(sim_seed)');
+  buildNodeSimLines().forEach(l => lines.push(l ? '  ' + l : ''));
+  lines.push('  return(dat)');
+  lines.push('}');
+  lines.push('');
+  lines.push(`# ── ${effectLabel === 'direkt' ? 'Direkter' : 'Totaler'} Effekt ${xName} → ${yName}: Wald-Test (car::Anova) ──`);
+  if (hasXInteraction) {
+    lines.push(`# ${xName} ist über einen Moderator (${xModerators.join(', ')}) interagiert — ein einzelner`);
+    lines.push(`# Wald-Koeffizient für "${xName}" wäre hier nicht aussagekräftig (der Effekt hängt von`);
+    lines.push(`# ${xModerators.join(', ')} ab). Nur der LRT unten wird für diesen Fall berechnet.`);
+  } else {
+    lines.push('fit_and_test <- function(sim_seed) {');
+    lines.push('  d <- sim_data_one(sim_seed)');
+    lines.push('  tryCatch({');
+    lines.push(`    fit <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
+    lines.push('    wald <- car::Anova(fit, type = "II")');
+    lines.push(`    return(wald["${xName}", "Pr(>Chisq)"] < alpha)`);
+    lines.push('  }, error = function(e) NA)');
+    lines.push('}');
+    lines.push('power_wald <- mean(sapply(seq_len(N_sim), fit_and_test), na.rm = TRUE)');
+    lines.push(`cat(sprintf("Power (Wald, %s-Effekt): %.1f%%\\n", "${effectLabel}", power_wald * 100))`);
+  }
+  lines.push('');
+  lines.push(`# ── ${effectLabel === 'direkt' ? 'Direkter' : 'Totaler'} Effekt ${xName} → ${yName}: Likelihood-Ratio-Test ──`);
+  lines.push('# (genauer als Wald, v.a. bei kleinem n oder Nicht-Gauß-Verteilungen; funktioniert');
+  lines.push('# auch bei Interaktionstermen, da hier das gesamte X-Bündel nested verglichen wird)');
+  lines.push('fit_and_test_lrt <- function(sim_seed) {');
+  lines.push('  d <- sim_data_one(sim_seed)');
+  lines.push('  tryCatch({');
+  lines.push(`    fit_full <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
+  lines.push(`    fit_null <- glmmTMB(${yName} ~ ${nullRhs}, data = d, family = ${family})`);
+  lines.push('    return(anova(fit_full, fit_null)$`Pr(>Chisq)`[2] < alpha)');
+  lines.push('  }, error = function(e) NA)');
+  lines.push('}');
+  lines.push('power_lrt <- mean(sapply(seq_len(N_sim), fit_and_test_lrt), na.rm = TRUE)');
+  lines.push(`cat(sprintf("Power (LRT, %s-Effekt): %.1f%%\\n", "${effectLabel}", power_lrt * 100))`);
+
+  // ── Indirect (mediated) effect ──
+  const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
+  if (mediators.length > 0) {
+    const medAncestorsOf = node => mediators.filter(m => m !== node && hasDirectedPath(m, node));
+    const adjIds = (state.analysisResult?.minimal?.[0] || []);
+    const pathAllowed = new Set([X, ...mediators, Y]);
+    const nodesNeedingFit = [...mediators, Y];
+
+    // Enumerate every real causal path X -> ... -> Y through the allowed subgraph —
+    // identical enumeration to generateMediationCode(), so path labels/topology match
+    // what the (Bayesian) mediation analysis elsewhere in this tool already reports.
+    const realPaths = [];
+    (function walk(node, path) {
+      if (node === Y) { realPaths.push([...path]); return; }
+      getChildren(node).filter(c => pathAllowed.has(c) && !path.includes(c)).forEach(c => walk(c, [...path, c]));
+    })(X, [X]);
+
+    lines.push('');
+    lines.push('# ============================================================');
+    lines.push(`# INDIREKTER (mediierter) EFFEKT ${xName} → … → ${yName}`);
+    lines.push(`# Mediator(en): ${mediators.map(getNodeName).join(', ')}`);
+    lines.push('# Joint-Significance-Test (MacKinnon et al. 2002; Fritz & MacKinnon 2007):');
+    lines.push('# ein Pfad gilt in einer gegebenen Simulation als "erkannt", wenn JEDE Kante');
+    lines.push('# entlang des Pfades einzeln (Wald-Test) signifikant ist. Konservativer als ein');
+    lines.push('# Bootstrap-KI des Produkts a×b, aber ohne Resampling schnell genug für eine');
+    lines.push('# Monte-Carlo-Poweranalyse mit mehreren hundert Wiederholungen.');
+    lines.push('# ============================================================');
+    lines.push('');
+    lines.push('fit_and_test_paths <- function(sim_seed) {');
+    lines.push('  d <- sim_data_one(sim_seed)');
+    lines.push('  tryCatch({');
+
+    const edgeVarNames = {};
+    nodesNeedingFit.forEach(targetId => {
+      const targetName = getNodeName(targetId);
+      const adjParents = getParents(targetId).filter(p => adjIds.includes(p)).map(getNodeName);
+      const preds = [xName, ...medAncestorsOf(targetId).map(getNodeName), ...adjParents];
+      const uniquePreds = [...new Set(preds)];
+      const targetFamily = nodeGlmmFamily(targetId);
+      lines.push(`    fit_${targetName} <- glmmTMB(${targetName} ~ ${uniquePreds.join(' + ')}, data = d, family = ${targetFamily})`);
+      lines.push(`    wald_${targetName} <- car::Anova(fit_${targetName}, type = "II")`);
+    });
+    lines.push('');
+
+    const seenEdges = new Set();
+    realPaths.forEach(path => {
+      for (let i = 0; i < path.length - 1; i++) {
+        const predId = path[i], targetId = path[i+1];
+        const key = predId + '->' + targetId;
+        if (seenEdges.has(key)) continue;
+        seenEdges.add(key);
+        const predName = getNodeName(predId), targetName = getNodeName(targetId);
+        const varName = `sig_${predName}_${targetName}`;
+        edgeVarNames[key] = varName;
+        lines.push(`    ${varName} <- wald_${targetName}["${predName}", "Pr(>Chisq)"] < alpha`);
+      }
+    });
+    lines.push('');
+    lines.push('    return(c(');
+    const pathResultLines = realPaths.map((path, pi) => {
+      const edgeVars = [];
+      for (let i = 0; i < path.length - 1; i++) edgeVars.push(edgeVarNames[path[i] + '->' + path[i+1]]);
+      const label = path.length === 2 ? 'direct_edge' : 'indirect_via_' + path.slice(1, -1).map(getNodeName).join('_');
+      return `      ${label} = ${edgeVars.join(' & ')}${pi < realPaths.length - 1 ? ',' : ''}`;
+    });
+    lines.push(...pathResultLines);
+    lines.push('    ))');
+    lines.push('  }, error = function(e) NA)');
+    lines.push('}');
+    lines.push('raw_paths <- sapply(seq_len(N_sim), fit_and_test_paths, simplify = "array")');
+    lines.push('# Bei genau EINEM Pfad (z.B. ein einzelner serieller Mediator) liefert sapply()');
+    lines.push('# einen bloßen Vektor statt einer Matrix — hier zurückformen, sonst crasht rowMeans():');
+    lines.push('if (is.null(dim(raw_paths))) raw_paths <- matrix(raw_paths, nrow = 1, dimnames = list(unique(names(raw_paths)), NULL))');
+    lines.push('power_paths <- rowMeans(raw_paths, na.rm = TRUE)');
+    lines.push('print(data.frame(Path = names(power_paths), Power_pct = round(power_paths * 100, 1)))');
+
+    const indirectLabels = realPaths.filter(p => p.length > 2).map(path => 'indirect_via_' + path.slice(1, -1).map(getNodeName).join('_'));
+    if (indirectLabels.length > 1) {
+      lines.push('');
+      lines.push('# Power für "mindestens ein indirekter Pfad signifikant":');
+      lines.push(`power_any_indirect <- mean(apply(raw_paths[c(${indirectLabels.map(l => `"${l}"`).join(', ')}), , drop = FALSE], 2, any), na.rm = TRUE)`);
+      lines.push('cat(sprintf("Power (mind. 1 indirekter Pfad signifikant): %.1f%%\\n", power_any_indirect * 100))');
+    }
+  } else {
+    lines.push('');
+    lines.push(`# Kein Mediator zwischen ${xName} und ${yName} gefunden — kein indirekter Effekt zu testen.`);
+  }
+
+  return lines.join('\n');
 }
 
 // ============================================================
@@ -3479,6 +3708,13 @@ document.getElementById('btnGenDagitty').addEventListener('click', () => {
   document.getElementById('dagittyCodeWrap').style.display = 'block';
 });
 
+document.getElementById('btnGenPower').addEventListener('click', () => {
+  if (!state.exposure || !state.outcome) { showToast('Bitte Exposition und Outcome festlegen.'); return; }
+  const code = generatePowerCode();
+  document.getElementById('powerCodeArea').innerHTML = highlightR(code);
+  document.getElementById('powerCodeWrap').style.display = 'block';
+});
+
 document.getElementById('copyR').addEventListener('click', e => {
   copyToClipboard(document.getElementById('rCodeArea').textContent, e.currentTarget);
 });
@@ -3490,6 +3726,9 @@ document.getElementById('copyTmb').addEventListener('click', e => {
 });
 document.getElementById('copyDagitty').addEventListener('click', e => {
   copyToClipboard(document.getElementById('dagittyCodeArea').textContent, e.currentTarget);
+});
+document.getElementById('copyPower').addEventListener('click', e => {
+  copyToClipboard(document.getElementById('powerCodeArea').textContent, e.currentTarget);
 });
 
 document.getElementById('btnOpenGComp').addEventListener('click', () => {
