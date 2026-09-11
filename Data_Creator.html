@@ -417,9 +417,13 @@ select.inp option{background:var(--paper);color:var(--ink)}
     <div id="withinNote" class="info-box" style="display:none;margin-top:.3rem">v1: max. 1 Within-Faktor</div>
     <div id="withinSlopeRow" style="display:none;margin-top:.4rem">
       <label style="cursor:pointer;display:flex;align-items:center;gap:.35rem">
-        <input type="checkbox" id="withinSlopeOnId" onchange="updateFormula()" style="accent-color:var(--a5)">
+        <input type="checkbox" id="withinSlopeOnId" onchange="toggleWithinSlopeIdRow();updateFormula()" style="accent-color:var(--a5)">
         <span style="font-family:'DM Mono',monospace;font-size:.73rem">Random Slope auf id: <code style="font-size:.71rem">(1 + … | id)</code></span>
       </label>
+      <div class="row" id="withinSlopeIdTau1Row" style="display:none;margin-top:.3rem">
+        <label>τ₁_id (Slope-SD)</label>
+        <input type="number" id="withinSlopeIdTau1" class="inp inp-sm" value="0.3" step="0.1" min="0" oninput="updateFormula()">
+      </div>
     </div>
   </div>
 
@@ -831,6 +835,13 @@ function renderFactors(){
     const cb=document.getElementById('withinSlopeOnId');
     if(cb) cb.checked=false;
   }
+  toggleWithinSlopeIdRow();
+}
+
+function toggleWithinSlopeIdRow(){
+  const row=document.getElementById('withinSlopeIdTau1Row');
+  const cb=document.getElementById('withinSlopeOnId');
+  if(row) row.style.display=(cb&&cb.checked)?'flex':'none';
 }
 
 function renderFactorList(kind,el){
@@ -1366,6 +1377,15 @@ function generateAndRender(){
   const extra=getExtra();
   const bCells=getBetweenCells(), wCells=getWithinCells();
   const hasB=ST.between.length>0, hasW=ST.within.length>0;
+  // Subject-level random slope on the within factor: each subject gets an independent
+  // N(0, idTau1²) deviation per non-reference within-level, layered on top of the
+  // within-factor mean/SD/correlation structure — analogous to the cluster random-slope
+  // mechanism below, but per subject instead of per cluster group, and slope-only (no
+  // separate subject intercept term, since sim_design()'s r= already covers subject-level
+  // baseline correlation across levels).
+  const idSlopeOn=hasW&&!!document.getElementById('withinSlopeOnId')?.checked;
+  const idTau1=+(document.getElementById('withinSlopeIdTau1')?.value||0);
+  const hasIdSlope=idSlopeOn&&idTau1>0;
   const clActive=ST.cluster.active;
   const clName=document.getElementById('clusterName')?.value||'school';
   const clK=+(document.getElementById('clusterK')?.value||20);
@@ -1515,6 +1535,10 @@ function generateAndRender(){
         ST.between.forEach((f,fi)=>row[cleanR(f.name)]=bc[fi]);
         const re=clActive?(grpEffects[grpCounter]||0):0;
         const u1=hasSlopes?(slopeEffects[grpCounter]||0):0;
+        // Independent per-subject slope deviation per non-reference within-level
+        // (reference level 0 gets none) — the actual data-generating counterpart to
+        // the "(1 + … | id)" formula shown when "Random Slope auf id" is checked.
+        const idDev=hasIdSlope?wf.levels.map((_,wi)=>wi===0?0:rNorm()*idTau1):null;
 
         if(lik==='gaussian'){
           // RE on η, correlation preserved via pre-computed Cholesky L
@@ -1522,7 +1546,7 @@ function generateAndRender(){
           rowsW.push(row);
           reslopeBufW.push(wf.levels.map((_,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            return re+u1*slopeCode;
+            return re+u1*slopeCode+(idDev?idDev[wi]:0);
           }));
           wf.levels.forEach((lv,wi)=>{
             let innov=0;
@@ -1534,7 +1558,7 @@ function generateAndRender(){
           rowsW.push(row);
           reslopeBufW.push(wf.levels.map((_,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            return re+u1*slopeCode;
+            return re+u1*slopeCode+(idDev?idDev[wi]:0);
           }));
           wf.levels.forEach((lv,wi)=>{
             const noise=lik==='student'?rStudentT(extra.nu||4)*sds[wi]:rNorm()*sds[wi];
@@ -1544,7 +1568,7 @@ function generateAndRender(){
           // Non-additive (GLM-style): RE on η before inverse link — independent per within-level
           wf.levels.forEach((lv,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            row[lv]=samplePoint(means[wi]+re+u1*slopeCode, lik, extra, sds[wi]);
+            row[lv]=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0), lik, extra, sds[wi]);
           });
         }
         ST.covariates.forEach((cov,ci)=>{
@@ -2205,6 +2229,24 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push('# )');
     }
 
+    // ── Random Slope auf id im Wide Format (BEFORE pivot_longer) ─
+    const idSlopeOnR=document.getElementById('withinSlopeOnId')?.checked;
+    const idTau1R=+(document.getElementById('withinSlopeIdTau1')?.value||0);
+    const hasIdSlopeR=idSlopeOnR&&idTau1R>0;
+    if(hasIdSlopeR){
+      lines.push('');
+      lines.push('# ── Random Slope auf id im Wide Format (vor pivot_longer!) ─────');
+      lines.push('# Jede Person bekommt eine unabhängige Abweichung pro Nicht-Referenz-Level —');
+      lines.push(`# die tatsächliche Datengrundlage für die Formel "(1 + ${wfNameR} | id)".`);
+      lines.push(`tau1_id <- ${idTau1R}   # Random-Slope-SD pro Person (Slope auf: ${wf.name})`);
+      wNames.forEach((lv,wi)=>{ if(wi>0) lines.push(`id_slope_${lv} <- rnorm(nrow(dat_wide), 0, tau1_id)`); });
+      lines.push(`dat_wide <- dat_wide |>`);
+      lines.push(`  mutate(`);
+      const idRows=wNames.map((lv,wi)=>wi===0?null:`\`${lv}\` = \`${lv}\` + id_slope_${lv}`).filter(Boolean);
+      idRows.forEach((r,i)=>lines.push(`    ${r}${i<idRows.length-1?',':''}`));
+      lines.push(`  )`);
+    }
+
     // ── Likelihood-Transformation: η → Zielverteilung ────────
     // sim_design() erzeugt immer normalverteilte η-Werte (Gauß-Approximation).
     // Cluster-REs wurden bereits auf η addiert.
@@ -2595,6 +2637,9 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   const lme4Formula=(document.getElementById('formulaLme4')?.textContent||'Y ~ 1')
     .replace(/^[a-z][a-z_]*\s*~/, 'Y ~');
   const hasSlopes=clActive&&clTau1>0&&clSlopeFactor!=null;
+  const idSlopeOnR=document.getElementById('withinSlopeOnId')?.checked;
+  const idTau1R=+(document.getElementById('withinSlopeIdTau1')?.value||0);
+  const hasIdSlopeR=idSlopeOnR&&idTau1R>0;
   const pwSlopeIsWithin=clSlopeFactor?.kind==='within';
   const pwSlopeIsBetween=clSlopeFactor?.kind==='between';
 
@@ -2792,6 +2837,15 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       }
     }
 
+    if(hasIdSlopeR){
+      L.push(`#   tau1_id <- ${idTau1R}   # Random-Slope-SD pro Person (Slope auf: ${wf.name})`);
+      wNames.forEach((lv,wi)=>{ if(wi>0) L.push(`#   id_slope_${lv} <- rnorm(nrow(d), 0, tau1_id)`); });
+      L.push(`#   d <- d |> mutate(`);
+      const idRowsPw=wNames.map((lv,wi)=>wi===0?null:`\`${lv}\` = \`${lv}\` + id_slope_${lv}`).filter(Boolean);
+      idRowsPw.forEach((r,i)=>L.push(`#     ${r}${i<idRowsPw.length-1?',':''}`));
+      L.push('#   )');
+    }
+
     // Likelihood-Transformation (wie in buildRCode)
     if(lik==='student'){
       const lambda=rTransformLambda('student',extra);
@@ -2921,6 +2975,9 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   L.push('# # ── Simulation starten ─────────────────────────────────');
   L.push('# results <- sapply(seq_len(N_sim), fit_and_test, simplify = "array")');
   L.push('# # results: Matrix — Zeilen = Terme, Spalten = Sims (NA-Spalten = nicht-konvergierte Draws)');
+  L.push('# # Bei GENAU EINEM Term (z.B. nur ein Faktor, kein Faktor) liefert sapply() einen');
+  L.push('# # bloßen Vektor statt einer Matrix — hier auf 1×N_sim zurückformen, sonst crasht apply():');
+  L.push('# if (is.null(dim(results))) results <- matrix(results, nrow = 1, dimnames = list(unique(names(results)), NULL))');
   L.push('# n_ok <- sum(apply(results, 2, function(x) !any(is.na(x))))');
   L.push('# cat(sprintf("Konvergiert: %d / %d Sims (%.0f%%)\\n", n_ok, N_sim, 100*n_ok/N_sim))');
   L.push('# power_per_term <- rowMeans(results, na.rm = TRUE)');
@@ -3043,6 +3100,10 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     L.push('#');
     L.push('# # ── LRT-Simulation starten ──────────────────────────────');
     L.push('# results_lrt <- sapply(seq_len(N_sim), fit_and_test_lrt, simplify = "array")');
+    L.push('# # Bei GENAU EINEM getesteten Faktor liefert sapply() einen bloßen Vektor statt einer');
+    L.push('# # Matrix (Kovariablen zählen hier nicht mit, da sie nie per LRT getestet werden) —');
+    L.push('# # hier auf 1×N_sim zurückformen, sonst crasht apply():');
+    L.push('# if (is.null(dim(results_lrt))) results_lrt <- matrix(results_lrt, nrow = 1, dimnames = list(unique(names(results_lrt)), NULL))');
     L.push('# n_ok_lrt <- sum(apply(results_lrt, 2, function(x) !any(is.na(x))))');
     L.push('# cat(sprintf("Konvergiert: %d / %d\\n", n_ok_lrt, N_sim))');
     L.push('# power_lrt <- rowMeans(results_lrt, na.rm = TRUE)');
