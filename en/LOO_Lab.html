@@ -108,8 +108,8 @@ canvas{display:block;width:100%;max-width:420px;height:auto}
 .leg-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .paste-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.8rem}
 .paste-block label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-  display:block;margin-bottom:.3rem;letter-spacing:.04em}
-textarea{width:100%;height:114px;font-family:'DM Mono',monospace;font-size:.75rem;
+  display:block;margin-bottom:.3rem;letter-spacing:.04em;line-height:1.4;min-height:2.8em}
+textarea{width:100%;height:260px;font-family:'DM Mono',monospace;font-size:.75rem;
   background:var(--panel);border:1.5px solid var(--border);color:var(--ink);
   padding:.5rem .65rem;resize:vertical;outline:none;line-height:1.58}
 textarea:focus{border-color:var(--accent)}
@@ -117,7 +117,7 @@ textarea::placeholder{color:var(--ink3);font-size:.7rem}
 .btn-row{display:flex;gap:.45rem;margin-top:.6rem;flex-wrap:wrap}
 .parse-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.36rem 1.05rem;
   border:1.5px solid var(--accent);background:var(--accent);cursor:pointer;
-  color:white;transition:all .15s;letter-spacing:.05em}
+  color:#12130f;font-weight:600;transition:all .15s;letter-spacing:.05em}
 .parse-btn:hover{filter:brightness(1.1)}
 .ex-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.36rem .9rem;
   border:1.5px solid var(--border);background:transparent;cursor:pointer;
@@ -438,7 +438,11 @@ svg.plot{display:block;width:100%;overflow:visible}
 
   <div class="sec-lbl">brms code for the LOO workflow</div>
   <div class="rcode">
-<span class="rc"># 1. Fit models (save_pars required for LOO/WAIC)</span><br>
+<span class="rc"># 1. Fit models</span><br>
+<span class="rc">#    save_pars(all=TRUE) is NOT needed for plain loo()/waic() or for</span><br>
+<span class="rc">#    reloo() (step 6 — fully refits anyway, works fine with default parameters).</span><br>
+<span class="rc">#    It's only needed for loo_moment_match() — the faster alternative to reloo()</span><br>
+<span class="rc">#    that skips refitting but needs access to all (incl. internal) parameters.</span><br>
 model.1 &lt;- <span class="rf">brm</span>(y ~ x,         data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
 model.2 &lt;- <span class="rf">brm</span>(y ~ x + z,     data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
 model.3 &lt;- <span class="rf">brm</span>(y ~ x + z + w, data = d, <span class="rs">save_pars = save_pars(all = TRUE)</span>)<br>
@@ -460,7 +464,16 @@ model.3 &lt;- <span class="rf">add_criterion</span>(model.3, <span class="rs">c(
 <span class="rf">loo_model_weights</span>(model.1, model.2, model.3)  <span class="rc"># → e.g. model.1=0.12, model.2=0.73, model.3=0.15</span><br>
 <br>
 <span class="rc"># 6. For high k values: reloo() directly into the object</span><br>
-model.1 &lt;- <span class="rf">add_criterion</span>(model.1, <span class="rs">c("loo")</span>, reloo = <span class="rs">TRUE</span>, k_threshold = <span class="rs">0.7</span>)
+<span class="rc">#    Exact, but expensive — refits the model once per flagged observation.</span><br>
+model.1 &lt;- <span class="rf">add_criterion</span>(model.1, <span class="rs">c("loo")</span>, reloo = <span class="rs">TRUE</span>, k_threshold = <span class="rs">0.7</span>)<br>
+<br>
+<span class="rc"># 6b. Alternative: loo_moment_match() — approximate, but no refit needed</span><br>
+<span class="rc">#    Useful when reloo() is too expensive: large/complex models, long sampling time,</span><br>
+<span class="rc">#    many observations with k &gt; 0.7. Works directly on the existing posterior draws —</span><br>
+<span class="rc">#    that's why it needs save_pars(all = TRUE) at fitting time (step 1).</span><br>
+<span class="rc">#    For very extreme k values (k &gt; 1), reloo() remains the more reliable choice,</span><br>
+<span class="rc">#    since the moment-matching approximation holds up less well there.</span><br>
+model.1 &lt;- <span class="rf">add_criterion</span>(model.1, <span class="rs">c("loo")</span>, moment_match = <span class="rs">TRUE</span>, k_threshold = <span class="rs">0.7</span>)
   </div>
 
   <div class="learn-card" style="border-left:3px solid var(--accent3)">
