@@ -404,18 +404,18 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
       <div class="pg"><span class="lbl">Cores</span><input type="number" id="cores" value="4" oninput="update()"></div>
     </div>
     <div class="pg" style="margin-top:.3rem">
-      <span class="lbl">Backend</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-backend" target="_blank" rel="noopener" title="The backend determines which R interface brms uses to compile the Stan code: rstan (CRAN default) or cmdstanr (standalone CmdStan, usually more up to date/faster, supports threading).">Backend</a>
       <select id="backend" onchange="update()">
         <option value="rstan">rstan</option>
         <option value="cmdstanr">cmdstanr</option>
       </select>
     </div>
     <div class="pg" style="margin-top:.3rem">
-      <span class="lbl" title="adapt_delta: Target acceptance rate (default 0.80). Increase to 0.90–0.99 for divergences.">adapt_delta</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-adapt-delta" target="_blank" rel="noopener" title="adapt_delta is the target acceptance rate of the NUTS step-size adaptation (default 0.80). Higher values (0.90–0.99) reduce divergent transitions but slow sampling down.">adapt_delta</a>
       <input type="number" id="adapt-delta" value="0.80" min="0.5" max="0.999" step="0.01" oninput="update()">
     </div>
     <div class="pg">
-      <span class="lbl" title="max_treedepth: Maximum NUTS tree depth. Default 10. Increase to 12–15 for warnings.">max_treedepth</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-max-treedepth" target="_blank" rel="noopener" title="max_treedepth caps how many times the NUTS sampler may double per iteration (default 10). Warnings indicate inefficiency, not bias.">max_treedepth</a>
       <input type="number" id="max-tree" value="10" min="5" max="20" step="1" oninput="update()">
     </div>
     <div class="pg" style="margin-top:.3rem">
@@ -425,6 +425,24 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
     <div class="pg">
       <span class="lbl">Fit Object</span>
       <input type="text" id="fit-name" value="fit" placeholder="fit" oninput="update()" style="font-family:'DM Mono',monospace;font-size:.75rem">
+    </div>
+    <div class="pg" style="margin-top:.5rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="save-pars-all" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-save-pars" target="_blank" rel="noopener" title="save_pars(all = TRUE) additionally saves internal/non-centered Stan parameters. NOT needed for plain loo()/waic() or reloo() — but a prerequisite for loo_moment_match() and bridge_sampler() (Bayes factors, marginal likelihood).">save_pars(all = TRUE)</a>
+      </label>
+    </div>
+    <div class="pg">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="sample-prior-yes" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-sample-prior" target="_blank" rel="noopener" title="sample_prior = 'yes' samples prior and posterior in parallel within the same fit — needed for hypothesis() with Bayes factors (Savage-Dickey) and prior-posterior overlay plots.">sample_prior = "yes"</a>
+      </label>
+    </div>
+    <div class="pg">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="normalize-false" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-normalize" target="_blank" rel="noopener" title="normalize = FALSE saves compute time when fitting if the model will later be used with bridge_sampler() for a Bayes factor — a pure efficiency option, it changes nothing about priors or posterior.">normalize = FALSE</a>
+      </label>
     </div>
   </div>
 
@@ -915,6 +933,18 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   const fileRaw = (document.getElementById('fit-file')?.value || '').trim();
   const fitName = (document.getElementById('fit-name')?.value || 'fit').trim() || 'fit';
   const fileLine = fileRaw ? `\n  <span class="nm">file</span>   = <span class="str">"${fileRaw}"</span>,` : '';
+  const savePAll = !!document.getElementById('save-pars-all')?.checked;
+  const savePLine = savePAll
+    ? `\n  <span class="nm">save_pars</span> = <span class="fn">save_pars</span>(<span class="nm">all</span> = <span class="kw">TRUE</span>),`
+    : '';
+  const samplePriorYes = !!document.getElementById('sample-prior-yes')?.checked;
+  const samplePriorLine = samplePriorYes
+    ? `\n  <span class="nm">sample_prior</span> = <span class="str">"yes"</span>,`
+    : '';
+  const normalizeFalse = !!document.getElementById('normalize-false')?.checked;
+  const normalizeLine = normalizeFalse
+    ? `\n  <span class="nm">normalize</span> = <span class="kw">FALSE</span>,`
+    : '';
   const needsControl = (parseFloat(delta) !== 0.80 || tree !== 10);
   const controlLine  = needsControl
     ? `\n  <span class="nm">control</span> = <span class="fn">list</span>(<span class="nm">adapt_delta</span> = <span class="num">${delta}</span>, <span class="nm">max_treedepth</span> = <span class="num">${tree}</span>),`
@@ -1016,7 +1046,7 @@ ${pArr.join(',\n')}
   <span class="nm">warmup</span>  = <span class="num">${warm}</span>,
   <span class="nm">chains</span>  = <span class="num">${ch}</span>,
   <span class="nm">cores</span>   = <span class="num">${co}</span>,
-  <span class="nm">backend</span> = <span class="str">"${back}"</span>,${fileLine}${controlLine}
+  <span class="nm">backend</span> = <span class="str">"${back}"</span>,${samplePriorLine}${normalizeLine}${savePLine}${fileLine}${controlLine}
   <span class="nm">seed</span>    = <span class="num">42</span>
 )
 
@@ -1766,7 +1796,7 @@ const BRMS_HELP_HTML = `
   <li><strong>4 · Distributional</strong> — Model σ, ν or zi as a function of a predictor (optional)</li>
   <li><strong>5 · Random Effects</strong> — Grouping variable + structure (Intercept / Intercept + Slope)</li>
   <li><strong>6 · Priors</strong> — Set individually for each parameter; link-aware defaults are suggested</li>
-  <li><strong>7 · Sampling</strong> — Chains, Iterations, Adapt-Delta, Backend</li>
+  <li><strong>7 · Sampling</strong> — Chains, Iterations, <a class="glo-link" href="Glossar.html#gl-adapt-delta" target="_blank" title="adapt_delta is the target acceptance rate of the NUTS step-size adaptation (default 0.80). Higher values (0.90–0.99) reduce divergent transitions but slow sampling down.">Adapt-Delta</a>, <a class="glo-link" href="Glossar.html#gl-backend" target="_blank" title="The backend determines which R interface brms uses to compile the Stan code: rstan (CRAN default) or cmdstanr (standalone CmdStan, usually more up to date/faster, supports threading).">Backend</a>; optional: <a class="glo-link" href="Glossar.html#gl-save-pars" target="_blank" title="save_pars(all = TRUE) additionally saves internal/non-centered Stan parameters. NOT needed for plain loo()/waic() or reloo() — but a prerequisite for loo_moment_match() and bridge_sampler().">save_pars(all=TRUE)</a>, <a class="glo-link" href="Glossar.html#gl-sample-prior" target="_blank" title="sample_prior = 'yes' samples prior and posterior in parallel within the same fit — needed for hypothesis() with Bayes factors (Savage-Dickey) and prior-posterior overlay plots.">sample_prior="yes"</a>, <a class="glo-link" href="Glossar.html#gl-normalize" target="_blank" title="normalize = FALSE saves compute time when fitting if the model will later be used with bridge_sampler() for a Bayes factor.">normalize=FALSE</a> — prepare the model for a later <a class="glo-link" href="Glossar.html#gl-reloo" target="_blank" title="reloo() corrects LOO estimates for observations with problematic Pareto-k by fully refitting without that observation — exact, but compute-intensive.">reloo()</a>/<a class="glo-link" href="Glossar.html#gl-loo-moment-match" target="_blank" title="loo_moment_match() corrects problematic Pareto-k estimates without refitting, directly from the existing posterior draws — requires save_pars(all=TRUE).">loo_moment_match()</a> or <a class="glo-link" href="Glossar.html#gl-bridge-sampler" target="_blank" title="bridge_sampler() estimates a model's marginal likelihood from the MCMC samples — the basis for the Bayes factor between two models.">bridge_sampler()</a> (<a class="glo-link" href="Glossar.html#gl-bayes-faktor" target="_blank" title="The Bayes factor is the ratio of the marginal likelihoods of two models: BF₁₂ = p(D|M₁) / p(D|M₂).">Bayes Factor</a>)</li>
   <li><strong>→ Output</strong> — Copy R code, download LaTeX, send model</li>
 </ul>
 

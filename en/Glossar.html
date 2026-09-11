@@ -10,13 +10,13 @@
 /* ── Design Tokens ── */
 :root {
   --bg:#f0ead8; --paper:#f8f3e8; --ink:#18130e; --ink2:#5a4f42; --ink3:#8a7f72;
-  --a1:#c94a2a; --a2:#2a6e8a; --a3:#5a8a2a; --a4:#7a3a8a; --a5:#b85c00; --a6:#0e7c7b;
+  --a1:#c94a2a; --a2:#2a6e8a; --a3:#5a8a2a; --a4:#7a3a8a; --a5:#b85c00; --a6:#0e7c7b; --a7:#a8265a;
   --grid:#ddd5c5; --panel:#e8e0ce; --border:#c8bfaa; --warm:#c8a96e;
   --topbar-h:54px;
 }
 [data-theme="dark"] {
   --bg:#0c0f14; --paper:#111520; --ink:#ece6d8; --ink2:#8a8070; --ink3:#5a5448;
-  --a1:#e8614a; --a2:#4ab0d8; --a3:#80cb52; --a4:#c87ad8; --a5:#e07830; --a6:#2bc7c4;
+  --a1:#e8614a; --a2:#4ab0d8; --a3:#80cb52; --a4:#c87ad8; --a5:#e07830; --a6:#2bc7c4; --a7:#ef5da0;
   --grid:#1e242e; --panel:#171d28; --border:#2a3040; --warm:#c8a96e;
 }
 
@@ -93,6 +93,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 .cat-btn[data-cat="all"].active   { background:var(--ink2); }
 .cat-btn[data-cat="reg"].active   { background:var(--a2); }
 .cat-btn[data-cat="bayes"].active { background:var(--a4); }
+.cat-btn[data-cat="brms"].active  { background:var(--a7); }
 .cat-btn[data-cat="dist"].active  { background:var(--a6); }
 .cat-btn[data-cat="mcmc"].active  { background:var(--a5); }
 .cat-btn[data-cat="glm"].active   { background:var(--a3); }
@@ -166,6 +167,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 }
 .gl-tag-reg   { background:var(--a2); color:#fff; }
 .gl-tag-bayes { background:var(--a4); color:#fff; }
+.gl-tag-brms  { background:var(--a7); color:#fff; }
 .gl-tag-dist  { background:var(--a6); color:#fff; }
 .gl-tag-mcmc  { background:var(--a5); color:#fff; }
 .gl-tag-glm   { background:var(--a3); color:#fff; }
@@ -270,6 +272,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <div class="cat-filters">
         <button class="cat-btn active" data-cat="all">All</button>
         <button class="cat-btn" data-cat="bayes">Bayes</button>
+        <button class="cat-btn" data-cat="brms">brms</button>
         <button class="cat-btn" data-cat="causal">Causality</button>
         <button class="cat-btn" data-cat="diag">Diagnostics</button>
         <button class="cat-btn" data-cat="dist">Distributions</button>
@@ -373,7 +376,7 @@ const TERMS = [
   def:'The Bayes Factor (BF) quantifies the relative evidence for two models M₁ and M₂: BF₁₂ = p(Data|M₁) / p(Data|M₂). BF > 1 favors M₁; BF < 1 favors M₂. Common interpretation benchmarks (Jeffreys, 1961): BF = 1–3 weak, 3–10 moderate, 10–30 strong, > 100 decisive evidence for M₁. The Bayes Factor is the Bayesian analogue of the likelihood ratio test but compares entire models rather than point estimates. It automatically penalizes model complexity because more complex models must spread their prior probability mass over a larger parameter space (Occam\'s razor effect).',
   formula:'BF₁₂ = p(Data | M₁) / p(Data | M₂)',
   intuition:'The Bayes Factor answers: "By what factor have the data changed my relative credence for M₁ over M₂?" A BF = 10 means the data are 10 times more probable under M₁ than under M₂. An important caveat: the Bayes Factor is very sensitive to prior specification — diffuse, uninformative priors can systematically distort it (Lindley\'s Paradox). In practice, it is therefore often supplemented or replaced by LOO comparisons, which are more robust to prior choice.',
-  related:[{id:'loo',label:'LOO-CV'},{id:'waic',label:'WAIC'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'},{id:'elpd',label:'ELPD'},{id:'lindleys-paradox',label:'Lindley\'s Paradox'}]
+  related:[{id:'loo',label:'LOO-CV'},{id:'waic',label:'WAIC'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'},{id:'elpd',label:'ELPD'},{id:'lindleys-paradox',label:'Lindley\'s Paradox'},{id:'bridge-sampler',label:'bridge_sampler()'}]
 },
 { id:'bayes-theorem', cats:['bayes'], az:'B', name:'Bayes\' Theorem', longname:'Foundation of Bayesian Inference',
   def:'Bayes\' Theorem describes how to update prior beliefs about a parameter θ in light of observed data D: p(θ|D) = p(D|θ)·p(θ) / p(D). The four components: p(θ) is the prior (belief about θ before seeing the data); p(D|θ) is the likelihood (how probable are the data given θ?); p(D) is the marginal likelihood or evidence (a normalizing constant); and p(θ|D) is the posterior (updated belief after seeing the data). In modern Bayesian computation (MCMC), p(D) is not calculated directly — the posterior is proportional to likelihood × prior: p(θ|D) ∝ p(D|θ)·p(θ). By counting MCMC samples, the same information is obtained without ever computing the computationally intractable p(D).',
@@ -397,17 +400,17 @@ const TERMS = [
   intuition:'Imagine two psychologists independently diagnosing 100 patients as "depressed" or "not depressed." Simple percentage agreement (e.g. 90%) looks good — but if 80% of patients are not depressed, even two raters who always say "not depressed" would agree 80% of the time. Chance-corrected measures such as Kappa make this visible. The choice of agreement measure depends on the scale level (nominal, ordinal, continuous), the number of raters, and whether the categories are balanced.',
   related:[{id:'cohens-kappa',label:'Cohen\'s Kappa'},{id:'fleiss-kappa',label:'Fleiss Kappa'},{id:'icc',label:'ICC'},{id:'krippendorff',label:'Krippendorff\'s Alpha'},{id:'gwet',label:'Gwet AC1/AC2'},{id:'reliabilitaet',label:'Reliability'},{id:'icc-reliabilitaet',label:'ICC (Reliability)'},{id:'kendall-w',label:'Kendall\'s W'},{id:'bland-altman',label:'Bland-Altman Method'}]
 },
-{ id:'brms', cats:['bayes','mcmc'], az:'B', name:'brms', longname:'Bayesian Regression Models using Stan',
+{ id:'brms', cats:['bayes','mcmc','brms'], az:'B', name:'brms', longname:'Bayesian Regression Models using Stan',
   def:'brms (Bürkner, 2017) is an R package that provides a flexible high-level interface for fitting Bayesian regression models via Stan. It supports a wide range of model families (Gaussian, Binomial, Poisson, Negative Binomial, Beta, Student-t, ordinal, zero-inflated, mixture models and many more), multivariate models, random effects (GLMM), non-linear models, and splines. brms automatically generates optimized Stan code from an R formula syntax (similar to lme4), runs NUTS/HMC sampling, and provides comprehensive output including posterior summaries, LOO-CV, and posterior predictive checks. The BTL standard: chains = 4, cores = 4, warmup = 2000, iter = 4000.',
   intuition:'brms is to Bayesian modeling what lme4 is to frequentist mixed models — a powerful engine behind a user-friendly formula interface. Instead of writing Stan code by hand, you write: brm(y ~ x + (1|group), data = d, family = gaussian()). brms translates this into Stan, runs the sampler, and returns a comprehensive fitted model object. For beginners, brms is the most accessible entry point into Bayesian regression; for experts, it offers fine-grained control over priors, custom families, and Stan-level extensions.',
   related:[{id:'mcmc',label:'MCMC'},{id:'nuts',label:'NUTS'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'},{id:'ppc',label:'PPC'},{id:'random-effects',label:'Random Effects'}]
 },
 
 /* ── C ── */
-{ id:'chains', cats:['mcmc'], az:'C', name:'Chains', longname:'Parallel MCMC Chains',
-  def:'MCMC chains are independent sequences of samples from the posterior distribution. Each chain starts from a different random initial value and explores parameter space via a Markov process. Running multiple chains in parallel (BTL standard: 4 chains) serves two purposes: first, it allows convergence diagnostics — if all chains converge to the same distribution, this is strong evidence that the sampler has correctly found the posterior (assessed via R-hat). Second, multiple chains increase the effective number of independent samples. If chains differ substantially after warmup, this indicates non-convergence and unreliable posterior estimates.',
+{ id:'chains', cats:['mcmc','brms'], az:'C', name:'Chains', longname:'Parallel MCMC Chains — chains argument in brm()',
+  def:'MCMC chains are independent sequences of samples from the posterior distribution. Each chain starts from a different random initial value and explores parameter space via a Markov process. Running multiple chains in parallel (BTL standard: 4 chains) serves two purposes: first, it allows convergence diagnostics — if all chains converge to the same distribution, this is strong evidence that the sampler has correctly found the posterior (assessed via R-hat). Second, multiple chains increase the effective number of independent samples. If chains differ substantially after warmup, this indicates non-convergence and unreliable posterior estimates. In brms: brm(..., chains = 4).',
   intuition:'Running 4 chains is like sending 4 independent hikers from different starting points into an unknown mountain landscape, each with the task of mapping the terrain. If after sufficient time all four have produced the same map (similar distribution of samples), you can trust that the map is correct. If they describe completely different landscapes, something has gone wrong — possibly multimodality, poor priors, or model misspecification. The R-hat statistic formalizes this comparison.',
-  related:[{id:'mcmc',label:'MCMC'},{id:'r-hat',label:'R-hat'},{id:'ess',label:'ESS'},{id:'warmup',label:'Warmup'},{id:'traceplot',label:'Traceplot'},{id:'nuts',label:'NUTS'}]
+  related:[{id:'mcmc',label:'MCMC'},{id:'r-hat',label:'R-hat'},{id:'iter',label:'iter'},{id:'cores',label:'cores'},{id:'ess',label:'ESS'},{id:'warmup',label:'Warmup'},{id:'traceplot',label:'Traceplot'},{id:'nuts',label:'NUTS'}]
 },
 { id:'cles', cats:['eff'], az:'C', name:'CLES', longname:'Common Language Effect Size / Probability of Superiority',
   def:'CLES (Common Language Effect Size; McGraw & Wong, 1992) gives the probability that a randomly drawn person from group A has a higher value than a randomly drawn person from group B: CLES = P(X_A > X_B). Under normality with equal variances, CLES is a simple function of Cohen\'s d: CLES = Φ(d/√2). CLES ranges from 0 to 1 (0.5 = no difference; 1.0 = group A always higher). Its key advantage over Cohen\'s d: CLES is directly expressible in probability language and substantially more interpretable for non-experts. It is also formally identical to the AUC in the diagnostic context. Not to be confused with Cohen\'s U3 (Φ(d), without the √2 factor), which answers a related but distinct question.',
@@ -747,7 +750,7 @@ const TERMS = [
 { id:'loo', cats:['check','bayes'], az:'L', name:'LOO-CV', longname:'Leave-One-Out Cross-Validation',
   def:'LOO-CV estimates out-of-sample predictive quality by computing for each data point i how well the model predicts it when it was left out during fitting: log p(yᵢ | y₋ᵢ). The sum of these values gives the ELPD (Expected Log Pointwise Predictive Density). True LOO requires n refits of the model, which is computationally expensive — in Bayesian practice it is efficiently approximated via Pareto-smoothed importance sampling (PSIS-LOO) without a single refit. Implemented in the R package loo; accessible in brms via loo(fit).',
   intuition:'LOO asks for each data point: "Would the model, if it had not seen this point, still have been able to predict it well?" That is the most direct measurement of generalizability rather than fit. A model overfitted to the training data will perform poorly on LOO — it has memorized the peculiarities of the data but has no real predictive power. LOO is more robust than WAIC for influential observations; these are identified via the Pareto-k value (k > 0.7 is problematic).',
-  related:[{id:'elpd',label:'ELPD'},{id:'waic',label:'WAIC'},{id:'pareto-k',label:'Pareto-k'},{id:'deviance',label:'Deviance'},{id:'bayes-faktor',label:'Bayes Factor'}]
+  related:[{id:'elpd',label:'ELPD'},{id:'waic',label:'WAIC'},{id:'pareto-k',label:'Pareto-k'},{id:'deviance',label:'Deviance'},{id:'bayes-faktor',label:'Bayes Factor'},{id:'reloo',label:'reloo()'},{id:'loo-moment-match',label:'loo_moment_match()'}]
 },
 { id:'lords-paradox', cats:['causal','reg'], az:'L', name:'Lord\'s Paradox', longname:'Apparent Contradiction from Choice of Statistical Model',
   def:'Lord\'s Paradox (Frederick Lord, 1967) refers to an apparent contradiction that arises when two researchers analyze the same data with different, statistically valid methods and arrive at opposite conclusions. In Lord\'s original example, two statisticians analyze weight changes of male and female students over a semester: Statistician 1 uses difference scores (Δ = post − pre) and finds no sex difference. Statistician 2 uses ANCOVA (with pretest score as covariate) and finds a significant difference favoring men. Both analyses are computationally correct — but they answer different causal questions. The resolution: the "correct" analysis depends on which causal effect is actually sought (which estimand). ANCOVA estimates the conditional effect controlling for the baseline; difference scores estimate the marginal effect. Without an explicit estimand, neither analysis is "wrong" — they are incommensurable.',
@@ -958,12 +961,6 @@ const TERMS = [
   intuition:'The question "Which variables should I control for?" is one of the most important in empirical research — and it cannot be answered purely statistically. A variable can be appropriate as a covariate (confounder), harmful (collider, mediator), or irrelevant, depending on the causal structure. Only the DAG shows which variables should be included as covariates. More covariates do not automatically mean better causal estimation.',
   related:[{id:'confounder',label:'Confounding'},{id:'collider',label:'Collider'},{id:'mediator',label:'Mediator'},{id:'dag',label:'DAG'},{id:'ols',label:'OLS'}]
 },
-{ id:'kumulatives-logit', cats:['glm','dist'], az:'C', name:'Cumulative Logit Model', longname:'Proportional Odds Model / Ordinal Logistic Regression',
-  def:'The cumulative logit model (also: Proportional Odds Model, McCullagh 1980) is the standard model for ordinal outcomes (e.g. Likert scales, grades, pain scales). It models cumulative probabilities: log[P(Y≤k) / P(Y>k)] = τ_k − η, where τ_k are category-specific threshold values and η = Σβⱼxⱼ is the linear predictor without intercept. The proportional odds assumption states that the effect η is identical for all transition thresholds — the cumulative probability curves run in parallel. The cumulative probit approach is formally identical but uses Φ(·) (the normal distribution CDF) instead of the logistic function as the inverse link: P(Y≤k) = Φ(τ_k − η). In brms: family = cumulative(link = "logit") or family = cumulative(link = "probit").',
-  formula:'log[P(Y≤k)/P(Y>k)] = τ_k − η  (logit);  P(Y≤k) = Φ(τ_k − η)  (probit)',
-  intuition:'The cumulative logit model asks for each response category: "How probable is it to choose at most this category?" — and models how predictors shift these cumulative probabilities. The "proportional" in Proportional Odds means: regardless of which threshold one considers, the effect of a predictor is the same. This greatly simplifies interpretation — but the assumption should be tested (Brant test). The difference between logit and probit link is small in practice: logit yields odds ratios (exp(β)), probit is more closely connected to the latent normal distribution model and the GRM (IRT) — in ordinal SEM, probit (DWLS) is typically used.',
-  related:[{id:'grm',label:'Graded Response Model'},{id:'threshold',label:'Threshold Parameter'},{id:'link-funktion',label:'Link Function'},{id:'logistische-regression',label:'Logistic Regression'},{id:'zero-inflation',label:'Zero-Inflation'},{id:'glm',label:'GLM'}]
-},
 
 /* ── L (supplement) ── */
 { id:'log-normal', cats:['dist','glm'], az:'L', name:'Log-Normal Distribution', longname:'LogNormal(μ, σ) — Right-Skewed Positive Distribution',
@@ -977,7 +974,7 @@ const TERMS = [
 { id:'pareto-k', cats:['check','mcmc'], az:'P', name:'Pareto-k', longname:'Pareto-k Diagnostic (LOO)',
   def:'The Pareto-k value is a diagnostic measure for PSIS-LOO (Pareto-Smoothed Importance Sampling Leave-One-Out). For each data point i it estimates how "influential" this observation is for the posterior distribution — simplified: how strongly the posterior would change if point i were left out. Rule of thumb: k < 0.5 is unproblematic; 0.5 ≤ k < 0.7 is acceptable; k ≥ 0.7 means the LOO estimate for this point is unreliable and the model may not fit these data well. Very high k-values indicate outliers or model misspecification.',
   intuition:'Imagine a single data point has so much influence on the posterior that the model would look completely different without it — that is a high Pareto-k. In such cases the importance-sampling approximation of LOO is unreliable, and the model would actually need to be refit for that point. Practically, k ≥ 0.7 means: this data point deserves special attention — is it an outlier, a data error, or does it show that the model is unsuitable for certain regions of the data space?',
-  related:[{id:'loo',label:'LOO-CV'},{id:'elpd',label:'ELPD'},{id:'waic',label:'WAIC'}]
+  related:[{id:'loo',label:'LOO-CV'},{id:'elpd',label:'ELPD'},{id:'waic',label:'WAIC'},{id:'reloo',label:'reloo()'},{id:'loo-moment-match',label:'loo_moment_match()'}]
 },
 { id:'partial-pooling', cats:['glm','bayes'], az:'P', name:'Partial Pooling', longname:'Partial Pooling / Adaptive Regularization',
   def:'Partial pooling is the estimation strategy in hierarchical/mixed models: group-specific parameters are estimated neither completely separately (no pooling) nor completely aggregated (complete pooling), but modeled as coming from a shared superordinate distribution. This allows groups to borrow strength from each other: groups with little data are pulled more strongly toward the overall mean (shrinkage/regularization); groups with much data largely retain their own estimate. In the Bayesian framework, partial pooling arises naturally through the hierarchical prior structure on the random effects.',
@@ -1231,10 +1228,10 @@ const TERMS = [
   intuition:'WAIC is the Bayesian extension of AIC: it automatically penalizes model complexity through the p_WAIC term — the effective number of parameters, estimated from the variance of the pointwise log-likelihoods. Lower WAIC means better prediction. Compared to LOO, WAIC is faster to compute but more susceptible to instability with outliers — PSIS-LOO is more robust and simultaneously provides through Pareto-k values a diagnostic for problematic data points.',
   related:[{id:'loo',label:'LOO-CV'},{id:'elpd',label:'ELPD'},{id:'deviance',label:'Deviance'},{id:'pareto-k',label:'Pareto-k'}]
 },
-{ id:'warmup', cats:['mcmc'], az:'W', name:'Warmup', longname:'Warmup Phase / Burn-in',
-  def:'Warmup (also: burn-in) designates the initial phase of MCMC sampling in which the chain moves from its arbitrary starting point toward the stationary posterior distribution and algorithm parameters (step size, mass matrix for HMC/NUTS) are automatically calibrated. Warmup samples are discarded and do not enter the posterior estimation. The BTL standard in brms is warmup = 2000 of a total iter = 4000 iterations — i.e. 50% of samples serve calibration. Too short a warmup leads to poor sampler calibration, inefficient sampling, and potentially biased estimates.',
-  intuition:'Imagine a hiker starting from a random point in an unknown mountain landscape. At first they feel their way — sometimes uphill, sometimes downhill, searching the path. After a while they know the main regions (the posterior) and move only there. The warmup phase is this orientation time — one does not want to count the early wanderings as posterior samples. For HMC/NUTS warmup is especially important, because during it the step size and mass matrix of the sampler are tuned for the specific geometry of the posterior.',
-  related:[{id:'mcmc',label:'MCMC'},{id:'chains',label:'Chains'},{id:'nuts',label:'NUTS'},{id:'traceplot',label:'Traceplot'},{id:'r-hat',label:'R-hat'}]
+{ id:'warmup', cats:['mcmc','brms'], az:'W', name:'Warmup', longname:'Warmup phase in Stan/NUTS — warmup argument in brm()',
+  def:'Warmup designates the initial phase of MCMC sampling in which the chain moves from its arbitrary starting point toward the stationary posterior distribution and algorithm parameters (step size/adapt_delta, mass matrix for HMC/NUTS) are automatically calibrated. Warmup samples are discarded and do not enter the posterior estimation. The BTL standard in brms is warmup = 2000 of a total iter = 4000 iterations — i.e. 50% of samples serve calibration. Too short a warmup leads to poor sampler calibration, inefficient sampling, and potentially biased estimates.',
+  intuition:'Imagine a hiker starting from a random point in an unknown mountain landscape. At first they feel their way — sometimes uphill, sometimes downhill, searching the path. After a while they know the main regions (the posterior) and move only there. The warmup phase is this orientation time — one does not want to count the early wanderings as posterior samples. Distinction from the classic burn-in term (Gibbs sampling, JAGS, WinBUGS): burn-in only discards the dependence on the starting value under an UNCHANGED sampling algorithm. Warmup in Stan/NUTS additionally does something plain burn-in does not — it actively tunes the sampler\'s step size and mass matrix to the geometry of the specific posterior while it runs. Warmup is therefore closer to "burn-in plus sampler calibration" than to plain burn-in; brms/Stan deliberately use their own term to mark that difference.',
+  related:[{id:'mcmc',label:'MCMC'},{id:'burn-in',label:'Burn-in'},{id:'chains',label:'Chains'},{id:'iter',label:'iter'},{id:'nuts',label:'NUTS'},{id:'traceplot',label:'Traceplot'},{id:'r-hat',label:'R-hat'}]
 },
 { id:'weighted-kappa', cats:['rel','diag'], az:'W', name:'Weighted Kappa', longname:'Weighted Kappa Coefficient — Ordinal Rater Agreement',
   def:'The weighted kappa coefficient (κ_w) by Cohen (1968) measures the agreement of two raters for ordinal categories while accounting for the degree of disagreement. Unlike unweighted Cohen\'s κ, disagreements are weighted according to their severity — adjacent categories constitute a less serious error than widely separated ones. Common weightings: linear weighting (w_ij = 1 − |i−j|/(k−1)) and quadratic weighting (w_ij = 1 − (i−j)²/(k−1)²). With quadratic weighting, κ_w is mathematically equivalent to the Intraclass Correlation Coefficient (ICC, consistency).',
@@ -1848,11 +1845,11 @@ const TERMS = [
   intuition:'On Likert scales, the distances between categories are usually not equal — "strongly agree" to "agree" is not necessarily the same jump as "neutral" to "agree". The cumulative probit model estimates the thresholds τ directly from the data. At K=2 categories it reduces to an ordinary probit regression.',
   related:[{id:'cumlogit',label:'Cumulative Logit Model'},{id:'logit',label:'Logit / Log-Odds'}]
 },
-{ id:'cumlogit', cats:['dist','glm'], az:'C', name:'Cumulative Logit Model', longname:'OrderedLogit(η,τ,K) — proportional-odds model for ordinal data',
-  def:'The cumulative logit model (proportional-odds model) is structurally identical to the cumulative probit model, but uses a logistic instead of a normal distribution for the latent variable Y*. This makes the coefficients β directly interpretable as log-odds-ratios for a "higher category".',
-  formula:'P(Y=k) = F(τₖ−η) − F(τₖ₋₁−η), F = logistic CDF',
-  intuition:'The cumulative logit model is the gold standard for ordinal regression in the social sciences, because it offers the same direct odds-ratio interpretation as logistic regression: one more unit of X multiplies the cumulative odds of a higher category by exp(β). At K=2 categories it reduces to ordinary binary logistic regression.',
-  related:[{id:'cumprobit',label:'Cumulative Probit Model'},{id:'logit',label:'Logit / Log-Odds'},{id:'odds-ratio',label:'Odds Ratio'}]
+{ id:'cumlogit', cats:['dist','glm'], az:'C', name:'Cumulative Logit Model', longname:'OrderedLogit(η,τ,K) — proportional-odds model for ordinal data (McCullagh 1980)',
+  def:'The cumulative logit model (also: Proportional Odds Model) is the standard approach for ordinal outcomes (e.g. Likert scales, grades, pain scales). Two equivalent views: (1) it models cumulative probabilities log[P(Y≤k)/P(Y>k)] = τ_k − η, where τ_k are category-specific thresholds and η is the linear predictor without intercept; (2) a latent variable Y*~Logistic(η,1) is cut by the thresholds τ into K observed categories — structurally identical to the cumulative probit model, only with a logistic instead of a normal distribution for Y*. The proportional odds assumption states that η is identical across all transition thresholds — the cumulative probability curves run in parallel; this should be tested (Brant test). In brms: family = cumulative(link = "logit").',
+  formula:'P(Y=k) = F(τₖ−η) − F(τₖ₋₁−η), F = logistic CDF   ·   log[P(Y≤k)/P(Y>k)] = τ_k − η',
+  intuition:'The cumulative logit model is the gold standard for ordinal regression in the social sciences, because β is directly interpretable as a log-odds-ratio for a "higher category": one more unit of X multiplies the cumulative odds by exp(β). At K=2 categories it reduces to ordinary binary logistic regression. The difference from the cumulative probit model (Φ instead of the logistic CDF) is small in practice — probit is more closely connected to the latent normal model and the GRM (IRT), so ordinal SEM typically uses probit (DWLS) instead.',
+  related:[{id:'cumprobit',label:'Cumulative Probit Model'},{id:'grm',label:'Graded Response Model'},{id:'threshold',label:'Threshold Parameter'},{id:'logistische-regression',label:'Logistic Regression'},{id:'odds-ratio',label:'Odds Ratio'},{id:'glm',label:'GLM'}]
 },
 
 /* ── Addendum: MCMC algorithms ── */
@@ -1888,37 +1885,37 @@ const TERMS = [
 },
 
 /* ── Addendum: Advanced Model Builder — advanced brms building blocks ── */
-{ id:'multivariates-modell', cats:['bayes','glm'], az:'M', name:'Multivariate Model', longname:'Jointly fitting multiple response variables',
+{ id:'multivariates-modell', cats:['bayes','glm','brms'], az:'M', name:'Multivariate Model', longname:'Jointly fitting multiple response variables',
   def:'In a multivariate model, several response variables are fitted jointly in a single model instead of being analyzed separately. In brms this is done via mvbf(bf(y1~...), bf(y2~...)) — each response gets its own formula, predictors, family and priors, but all of them are estimated together in one Stan model. The advantage over separate models: uncertainty propagates correctly, and a genuine correlation between the responses can be estimated as well — either through the residuals (residual correlation, only possible for Gaussian/Student) or through correlated random effects sharing a grouping tag (works for any combination of families).',
   formula:'mvbf(bf(y1 ~ x), bf(y2 ~ x))',
   intuition:'You could fit y1 and y2 in two separate brm() calls — but then any possible connection between them stays invisible. A multivariate model makes that connection explicitly estimable: does a surprisingly high value of y1 (after controlling for the predictors) systematically go along with a surprisingly high value of y2? That is typically the actual research reason for a multivariate rather than two separate models.',
   related:[{id:'residualkorrelation',label:'Residual Correlation'},{id:'random-effects',label:'Random Effects'},{id:'brms',label:'brms'}]
 },
-{ id:'residualkorrelation', cats:['bayes','glm'], az:'R', name:'Residual Correlation (rescor)', longname:'Estimated correlation between the residuals of several responses',
+{ id:'residualkorrelation', cats:['bayes','glm','brms'], az:'R', name:'Residual Correlation (rescor)', longname:'Estimated correlation between the residuals of several responses',
   def:'Residual correlation (rescor) is the estimated correlation between the residuals of several jointly fitted response variables in a multivariate model. It captures whatever shared, unexplained variation remains between the responses after accounting for all predictors — e.g. due to a shared unobserved cause. In brms, rescor only works for families with a genuine, continuous residual term (Gaussian, Student-t); for Poisson, Bernoulli and similar families the variance is tied to the mean, so this degree of freedom does not exist — there, correlated random effects on a shared observation ID serve as a substitute.',
   formula:'Ω_res[i,j] = Cor(εᵢ, εⱼ) for responses i, j',
   intuition:'A positive residual correlation between y1 and y2 means: an observation that turns out surprisingly high on y1 (after controlling for the predictors) also tends to turn out surprisingly high on y2 — not because x explains that, but because of some third thing affecting both responses jointly.',
   related:[{id:'multivariates-modell',label:'Multivariate Model'},{id:'random-effects',label:'Random Effects'}]
 },
-{ id:'splines', cats:['glm','reg'], az:'S', name:'Splines / Smooth Terms', longname:'Smooth, nonlinear effects — s(x)',
+{ id:'splines', cats:['glm','reg','brms'], az:'S', name:'Splines / Smooth Terms', longname:'Smooth, nonlinear effects — s(x)',
   def:'A spline (smooth term, s(x) in brms/mgcv) replaces the assumption that the effect of a predictor x is a straight line with the weaker assumption that it is some smooth curve. Technically, a basis of many small, overlapping curve pieces (typically thin-plate splines) is constructed, and the model estimates how strongly each piece is weighted. The "wiggliness" of the resulting curve is not fixed in advance but is itself estimated via its own hyperparameter (regularization strength): small value = very smooth/nearly linear, large value = follows the data more closely.',
   formula:'y ~ s(x)   (brms/mgcv syntax)',
   intuition:'Splines are the choice when you suspect a relationship is nonlinear but do not want to (or cannot) postulate a concrete functional form (quadratic, logarithmic, …). The individual basis coefficients are not interpretable on their own — only the resulting curve as a whole matters, usually visualized rather than reported as a single number.',
   related:[{id:'gaussian-process',label:'Gaussian Process'},{id:'glm',label:'GLM'}]
 },
-{ id:'gaussian-process', cats:['bayes','reg'], az:'G', name:'Gaussian Process', longname:'A distribution over smooth functions — gp(x)',
+{ id:'gaussian-process', cats:['bayes','reg','brms'], az:'G', name:'Gaussian Process', longname:'A distribution over smooth functions — gp(x)',
   def:'A Gaussian Process (gp(x) in brms), like a spline, models an unknown smooth curve instead of a straight line, but through a different mechanism: instead of many small basis functions, a GP assumes that observations with similar x values also have similar effects, and learns from the data how quickly that similarity decays with growing distance. Two hyperparameters control this: the length scale (how far must you travel in x before the effect is "forgotten") and the amplitude (how much the curve is allowed to vary overall). With few observations, a GP is often more robust than a spline; for large datasets it becomes computationally expensive, since the covariance matrix grows quadratically with n.',
   formula:'f(x) ~ GP(0, k(x,x\'));   e.g. k(x,x\') = σ²·exp(−(x−x\')² / (2ℓ²))',
   intuition:'A GP does not fix a specific functional form, but rather a probability distribution over ALL conceivable smooth functions — the data then "choose" which of them are plausible. For multidimensional smooth interactions (e.g. gp(x1, x2)), a GP is the more natural extension than a 2D spline.',
   related:[{id:'splines',label:'Splines'},{id:'prior',label:'Prior'}]
 },
-{ id:'monotone-effekte', cats:['glm','reg'], az:'M', name:'Monotonic Effects', longname:'Order-preserving effects of ordinal predictors — mo(x)',
+{ id:'monotone-effekte', cats:['glm','reg','brms'], az:'M', name:'Monotonic Effects', longname:'Order-preserving effects of ordinal predictors — mo(x)',
   def:'Monotonic effects (mo(x) in brms) model the effect of an ordinal predictor (e.g. education level: primary school < secondary school < high school < university) without assuming that every category step counts equally — as a plain linear coding (1,2,3,4) implicitly does. Instead, the order is respected (a higher level → at least as much effect as a lower one), but the relative size of each step is freely estimated via a Dirichlet-distributed simplex ζ (ζ₁,…,ζₖ₋₁, all ≥0, summing to 1), together with an overall effect βₘ.',
   formula:'y ~ mo(x);   effect of a category jump from a to b = βₘ · Σᵢ₌ₐᵇ⁻¹ ζᵢ',
   intuition:'A monotonic effect allows, for instance, the jump from primary to secondary school to be tiny while the jump from high school to university is huge — as long as the order (higher = at least as much effect) is preserved. This requires a clear, substantively justified ordering of the categories.',
   related:[{id:'glm',label:'GLM'}]
 },
-{ id:'messfehler-modell', cats:['glm','reg'], az:'M', name:'Measurement Error Model', longname:'Modeling a predictor with known measurement error — me(x, sd_x)',
+{ id:'messfehler-modell', cats:['glm','reg','brms'], az:'M', name:'Measurement Error Model', longname:'Modeling a predictor with known measurement error — me(x, sd_x)',
   def:'A measurement error model (me(x, sd_x) in brms) explicitly accounts for the fact that a predictor x is not measured without error, but is a noisy version of a latent true value with a known (or estimated) measurement error sd_x. Ignoring measurement error in a predictor systematically biases the estimated effect toward zero (attenuation bias / regression dilution) — more strongly the larger the measurement error is relative to the true spread of x. The model explicitly estimates the latent true value and corrects the effect accordingly.',
   formula:'y ~ me(x, sd_x);   x_observed = x_true + ε,  ε ~ Normal(0, sd_x²)',
   intuition:'The classic case: a questionnaire score with known imprecision, or a lab value with a known standard error. Without me(), measurement error artificially "dilutes" the estimated relationship toward zero — me() corrects this bias; sd_x can, for instance, be computed from the instrument\'s reliability: SEM = SD(x)·√(1−reliability).',
@@ -1930,31 +1927,31 @@ const TERMS = [
   intuition:'Random effects model correlation BETWEEN groups (e.g. persons); autocorrelation of residuals models correlation WITHIN a group across consecutive observations. A value near 0 in the estimated autocorrelation means: little remaining dependence after the model; a value near ±1 is often a sign that an important time trend is missing from the model.',
   related:[{id:'ar-modell',label:'AR(p)'},{id:'ma-modell',label:'MA(q)'},{id:'arma-modell',label:'ARMA(p,q)'},{id:'car-modell',label:'CAR'},{id:'autokorrelation',label:'Autocorrelation (MCMC)'}]
 },
-{ id:'ar-modell', cats:['reg','glm'], az:'A', name:'AR(p) — Autoregressive Term', longname:'Temporal autocorrelation over p previous residuals',
+{ id:'ar-modell', cats:['reg','glm','brms'], az:'A', name:'AR(p) — Autoregressive Term', longname:'Temporal autocorrelation over p previous residuals',
   def:'An AR(p) term (ar() in brms) models the residual εᵢ as depending on the p previous residuals: εᵢ = ρ₁·εᵢ₋₁ + … + ρₚ·εᵢ₋ₚ + zᵢ, where zᵢ is the freshly drawn, unpredictable random component at each time point. ρ (between −1 and 1) indicates how strongly a past error carries over. A single shock decays gradually/exponentially under AR(p) rather than vanishing abruptly — it theoretically plays a role for a long time (just an ever weaker one).',
   formula:'εᵢ = ρ·εᵢ₋₁ + zᵢ  (AR(1) case);   generally: εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ',
   intuition:'You can think of z as "what newly happened at this time point" (day-to-day form, measurement noise), while ε is "what still echoes from that up to today". With several time series (e.g. several persons), each needs its own AR structure — otherwise the model would wrongly try to correlate across persons.',
   related:[{id:'ma-modell',label:'MA(q)'},{id:'arma-modell',label:'ARMA(p,q)'},{id:'ar1',label:'AR(1) Covariance Structure'}]
 },
-{ id:'ma-modell', cats:['reg','glm'], az:'M', name:'MA(q) — Moving-Average Term', longname:'Temporal autocorrelation over q previous random components',
+{ id:'ma-modell', cats:['reg','glm','brms'], az:'M', name:'MA(q) — Moving-Average Term', longname:'Temporal autocorrelation over q previous random components',
   def:'An MA(q) term (ma() in brms) models the residual εᵢ as directly depending on the q previous random components z (not on the previous residuals ε themselves, as in AR): εᵢ = zᵢ + θ·zᵢ₋₁ + …. The practical difference from AR: a single outlier shock affects exactly q time points under MA(q) and then vanishes completely — under AR the same shock instead decays gradually.',
   formula:'εᵢ = zᵢ + θ·zᵢ₋₁  (MA(1) case);   generally: εᵢ = zᵢ + Σₖ θₖ·zᵢ₋ₖ',
   intuition:'AR = "the effect of a shock fades slowly"; MA = "the effect of a shock lasts exactly q time points and is then gone abruptly". Which pattern fits better often only becomes clear through model comparison (e.g. via LOO).',
   related:[{id:'ar-modell',label:'AR(p)'},{id:'arma-modell',label:'ARMA(p,q)'}]
 },
-{ id:'arma-modell', cats:['reg','glm'], az:'A', name:'ARMA(p,q)', longname:'Combined autoregressive and moving-average term',
+{ id:'arma-modell', cats:['reg','glm','brms'], az:'A', name:'ARMA(p,q)', longname:'Combined autoregressive and moving-average term',
   def:'An ARMA(p,q) term (arma() in brms) combines an AR(p) and an MA(q) component within the same residual model — useful when neither a pure AR nor a pure MA structure captures the autocorrelation of the residuals well and both mechanisms are suspected at once.',
   formula:'εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ + Σₗ θₗ·zᵢ₋ₗ',
   intuition:'ARMA gives you both parameter sets at once (ar[1..p] and ma[1..q]); whether the extra complexity relative to a pure AR or MA model is really needed is shown by a model comparison.',
   related:[{id:'ar-modell',label:'AR(p)'},{id:'ma-modell',label:'MA(q)'}]
 },
-{ id:'car-modell', cats:['reg','glm'], az:'C', name:'CAR — Conditional Autoregressive', longname:'Spatial autocorrelation via a neighborhood structure',
+{ id:'car-modell', cats:['reg','glm','brms'], az:'C', name:'CAR — Conditional Autoregressive', longname:'Spatial autocorrelation via a neighborhood structure',
   def:'A CAR term (car() in brms) models spatial rather than temporal autocorrelation: instead of a time ordering, an explicit neighborhood/adjacency matrix is needed (who is a neighbor of whom, e.g. adjoining states). "icar" is the robust default variant, in which a region\'s effect depends only on its direct neighbors; "bym2" additionally combines this with an unstructured random component per region, independent of the neighborhood, for cases where part of the regional differences is not spatially explainable.',
   formula:'y ~ x + car(M, gr = region, type = "icar")',
   intuition:'Neighboring regions with a high spatial variation strength (sdcar) should resemble each other in their estimated effects — CAR "smooths" estimates across the neighborhood structure, quite analogous to how AR(1) smooths estimates across time.',
   related:[{id:'ar-modell',label:'AR(p)'}]
 },
-{ id:'multi-membership', cats:['glm','bayes'], az:'M', name:'Multi-Membership Random Effects', longname:'Belonging to multiple group levels at once — mm()',
+{ id:'multi-membership', cats:['glm','bayes','brms'], az:'M', name:'Multi-Membership Random Effects', longname:'Belonging to multiple group levels at once — mm()',
   def:'A normal random effect assumes that every observation belongs uniquely to exactly one level of a grouping. Multi-membership (mm() in brms) relaxes this: an observation may belong to several levels at once — e.g. a student taught by two teachers during one semester. Several columns specify the membership levels, optional weights determine how strongly each level counts (without weights, all are weighted equally).',
   formula:'y ~ x + (1 | mm(g1, g2, weights = cbind(w1, w2)))',
   intuition:'There is ONE shared variance parameter for the grouping, not separate ones per membership column — the weights only determine how strongly the effect of each concrete level flows into a given observation.',
@@ -1976,7 +1973,7 @@ const TERMS = [
   def:'The horseshoe prior is the Bayesian analogue of Lasso regression: for the case of many candidate predictors, of which presumably only a few really have an effect, every coefficient gets its own degree of shrinkage instead of a shared weakly informative prior. Most coefficients are pulled aggressively toward zero, while a few are allowed to remain large if the data support it. Unlike Lasso, the horseshoe prior does not set any coefficient exactly to zero (continuous rather than hard shrinkage) — genuine variable selection requires a downstream step such as projpred.',
   formula:'βⱼ ~ Normal(0, τ²·λⱼ²),   λⱼ ~ Half-Cauchy(0,1),   τ ~ Half-Cauchy(0, τ₀)',
   intuition:'The name comes from the U-shaped ("horseshoe-shaped") density of the implied shrinkage factor: values near 0 (strong shrinkage) and near 1 (little shrinkage) are both likely, values in between are rare — the model "decides" sharply between the two for each coefficient.',
-  related:[{id:'variablenselektion',label:'Variable Selection'},{id:'prior',label:'Prior'}]
+  related:[{id:'variablenselektion',label:'Variable Selection'},{id:'prior',label:'Prior'},{id:'adapt-delta',label:'adapt_delta'},{id:'max-treedepth',label:'max_treedepth'}]
 },
 { id:'variablenselektion', cats:['bayes','reg'], az:'V', name:'Variable Selection (Bayesian, projpred)', longname:'Projection-based selection of the most important predictors',
   def:'Bayesian variable selection identifies the smallest subset of predictors that still reproduces the predictive quality of a full (usually horseshoe-shrunk) model sufficiently well. The R package projpred implements this via projection: starting from the full model, it searches step by step for the best order in which to add predictors to a smaller model (cv_varsel()), evaluating every model size by cross-validation on actual predictive quality — not merely by coefficient size.',
@@ -2270,6 +2267,81 @@ const TERMS = [
   related:[{id:'beurteileruebereinstimmung',label:'Inter-Rater Agreement'},{id:'icc-reliabilitaet',label:'ICC (Reliability)'},{id:'reliabilitaet',label:'Reliability'}]
 },
 
+/* ── Addition: brms Model Builder / Prior Predictive Check / LOO Lab — Sampling & Marginal Likelihood ── */
+{ id:'backend', cats:['mcmc','brms'], az:'B', name:'Backend (rstan/cmdstanr)', longname:'Stan interface used by brms',
+  def:'The backend determines which R interface brms uses to compile the Stan code and run sampling. rstan is the older interface, embedded directly in R (CRAN default, no separate Stan installation needed). cmdstanr instead binds to the standalone CmdStan command-line version — usually more up to date, often faster to compile, and with extra features (e.g. within-chain parallelization via threading, better support for new Stan versions). Both give identical statistical results for the same model and seed; the difference is purely technical.',
+  intuition:'For most analyses, the choice of backend is content-wise irrelevant — it changes nothing about priors, likelihood, or results, only compute time and setup. rstan is fine for a quick start (often already installed); cmdstanr pays off for computationally heavy models, when you want to benefit from the newest Stan optimizations, or when within-chain parallelization is needed, since rstan does not support it.',
+  related:[{id:'brms',label:'brms'},{id:'hmc',label:'HMC'},{id:'nuts',label:'NUTS'}]
+},
+{ id:'adapt-delta', cats:['mcmc','brms'], az:'A', name:'adapt_delta', longname:'Target acceptance rate of the NUTS step-size adaptation',
+  def:'adapt_delta is a tuning parameter of the NUTS sampler (default: 0.80 in brms/Stan) that sets the target acceptance rate for Metropolis steps during warmup. A higher value (e.g. 0.95, 0.99, 0.999) forces the sampler to take smaller steps, reducing divergent transitions but slowing sampling down. In brms it is set via control = list(adapt_delta = 0.95).',
+  intuition:'adapt_delta is the first lever to pull when Stan reports "divergent transitions" — a warning sign that the sampler is failing to properly explore regions of high curvature in the posterior geometry. Typical situations where raising it (step by step: 0.90 → 0.95 → 0.99 → 0.999) helps: hierarchical models with few groups or small random-effects variance ("funnel" geometry); horseshoe and other strongly peaked/sparse shrinkage priors (the global shrinkage parameter\'s proximity to zero creates an especially tight funnel — Stan/brms documentation often recommends adapt_delta ≥ 0.99 plus a higher max_treedepth here directly); models with little data relative to their complexity; strongly correlated predictors; and distribution families with extreme/skewed parameters (e.g. very small residual variance, lognormal with large σ). Raising adapt_delta fixes many, but not all, divergences — if they persist even at 0.999, it usually signals a structural geometry problem that only a reparameterization (non-centered parameterization) or a more informative prior choice can fix.',
+  related:[{id:'nuts',label:'NUTS'},{id:'hmc',label:'HMC'},{id:'max-treedepth',label:'max_treedepth'},{id:'horseshoe-prior',label:'Horseshoe Prior'}]
+},
+{ id:'max-treedepth', cats:['mcmc','brms'], az:'M', name:'max_treedepth', longname:'Maximum tree depth of the NUTS sampler',
+  def:'max_treedepth caps how many times the NUTS sampler may double the "no-U-turn" tree per iteration when proposing a new point (default: 10, i.e. up to 2¹⁰ = 1024 gradient evaluations per step). If the sampler hits this limit before finding a natural stopping criterion (U-turn), the iteration is cut off ("maximum treedepth exceeded") — the result stays valid but is inefficient. In brms: control = list(max_treedepth = 12).',
+  intuition:'Unlike divergent transitions, a treedepth warning is not a sign of a biased result but of inefficiency: the sampler would need more steps to move freely, typically because the posterior has strongly correlated or poorly scaled parameters (e.g. random-effects models with many groups, horseshoe/sparse priors, or predictors on very different scales). Pragmatic approach: first check the share of affected iterations — a handful of isolated warnings (<1%) can usually be left as is. For systematic warnings, raise the limit step by step (10 → 12 → 15); because of the exponential cost (each +1 doubles the maximum compute per iteration), do this judiciously rather than pre-emptively jumping to a high value. If warnings occur on nearly every iteration, or runtime stays high even at treedepth=15, the underlying parameterization is usually the real problem (e.g. centered instead of non-centered random effects, unstandardized predictors) — better fixed there than by ever-increasing tree depth.',
+  related:[{id:'nuts',label:'NUTS'},{id:'hmc',label:'HMC'},{id:'adapt-delta',label:'adapt_delta'},{id:'horseshoe-prior',label:'Horseshoe Prior'}]
+},
+{ id:'save-pars', cats:['bayes','check','brms'], az:'S', name:'save_pars(all = TRUE)', longname:'Saving internal Stan parameters in brms',
+  def:'save_pars() controls which internal parameters brm() keeps in the fitted model object. By default (save_pars(group = TRUE)), brms already saves the group-level effects (r_...), which is enough for plain loo()/waic() and for reloo() (full refits). save_pars(all = TRUE) additionally saves internal, non-centered Stan parameterizations (z_, L_ Cholesky factors, threshold reparameterizations, etc.) that are not themselves interpretable but are required directly by loo_moment_match() and bridge_sampler().',
+  intuition:'save_pars(all = TRUE) costs extra memory at fitting time, but "insures" the model against later needing parameters it does not have — e.g. for high Pareto-k values or a Bayes factor via bridge_sampler(). Models fitted without all=TRUE cannot be patched up afterwards for these purposes; you would have to refit from scratch. Rule of thumb: if fitting time is not a bottleneck, all=TRUE is cheap insurance.',
+  related:[{id:'loo-moment-match',label:'loo_moment_match()'},{id:'bridge-sampler',label:'bridge_sampler()'},{id:'reloo',label:'reloo()'}]
+},
+{ id:'sample-prior', cats:['bayes','brms'], az:'S', name:'sample_prior', longname:'brm() argument for prior sampling ("no" / "yes" / "only")',
+  def:'sample_prior controls in brm() whether and how brms also samples from the prior in addition to the posterior. sample_prior = "no" (default) samples only the posterior. sample_prior = "only" ignores the likelihood entirely and samples exclusively from the prior — the basis for the Prior Predictive Check. sample_prior = "yes" samples prior and posterior in parallel within the same fit — needed for hypothesis() with Bayes factors (Savage-Dickey density ratio) and for prior-posterior overlay plots.',
+  intuition:'The three modes answer different questions: "only" asks "what does my prior alone consider plausible, before seeing any data?" (Prior Predictive Check). "yes" additionally asks "how has my belief shifted from prior to posterior?" — a prerequisite for quantifying that shift directly (e.g. via a Bayes factor). "no" is the standard case for plain posterior inference when neither is needed.',
+  related:[{id:'prior-predictive-check',label:'Prior Predictive Check'},{id:'bayes-faktor',label:'Bayes Factor'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'}]
+},
+{ id:'bridge-sampler', cats:['bayes','check','brms'], az:'B', name:'bridge_sampler()', longname:'Bridge sampling to estimate the marginal likelihood',
+  def:'bridge_sampler() (R package bridgesampling, usable in brms via bridge_sampler(fit)) estimates the marginal likelihood p(D) of a fitted model from its MCMC samples — the normalizing constant needed for the Bayes factor between two models: BF₁₂ = p(D|M₁) / p(D|M₂). The method "bridges" the posterior and an auxiliary distribution through iterative reweighting and is numerically more stable than naive Monte Carlo integration. Requirement in brms: the model must have been fitted with save_pars(all = TRUE).',
+  intuition:'While LOO/WAIC compare predictive accuracy, bridge_sampler() answers a stricter question: how much evidence do the data provide overall for model A versus model B, when integrating across the entire prior distribution? This makes it more sensitive to the choice of prior than LOO (see Lindley\'s Paradox), but it is the only method that yields a genuine Bayes factor rather than an approximation of out-of-sample predictive accuracy.',
+  related:[{id:'bayes-faktor',label:'Bayes Factor'},{id:'save-pars',label:'save_pars(all = TRUE)'},{id:'loo',label:'LOO-CV'},{id:'normalize',label:'normalize'}]
+},
+{ id:'normalize', cats:['bayes','brms'], az:'N', name:'normalize', longname:'brm() argument to prepare for bridge_sampler()',
+  def:'normalize controls in brm() whether Stan carries the normalizing constants of the log densities through its internal log-likelihood computations (default: TRUE). For bridge_sampler(), brms explicitly recommends normalize = FALSE when fitting — this saves compute time, since these constants are not needed for the later bridge sampling estimate and would otherwise be computed unnecessarily.',
+  intuition:'normalize = FALSE is a pure efficiency option, not a substantive modeling decision — it changes nothing about priors, posterior, or parameter estimates, it only saves computation time during sampling when you already plan to call bridge_sampler() later for a Bayes factor. Without that plan, brms\' default (TRUE) remains the right choice.',
+  related:[{id:'bridge-sampler',label:'bridge_sampler()'},{id:'bayes-faktor',label:'Bayes Factor'}]
+},
+{ id:'reloo', cats:['bayes','check','brms'], az:'R', name:'reloo()', longname:'Refit-based Pareto-k correction for LOO',
+  def:'reloo() (R package loo, usable in brms as add_criterion(fit, "loo", reloo = TRUE)) corrects LOO estimates for observations with a problematic Pareto-k value (default threshold 0.7), where the PSIS approximation is unreliable. For each affected observation, the model is fully refitted once — excluding that observation — and the exact log-likelihood is computed directly from the refitted model. This is exact, but correspondingly compute-intensive when many points are affected or the model is expensive to fit.',
+  intuition:'reloo() is the gold standard for high Pareto-k values: no approximation error, because the model is actually refitted. The cost is compute time — 20 problematic observations mean 20 full MCMC runs. If that is too expensive, loo_moment_match() offers a faster, approximate alternative without refitting.',
+  related:[{id:'pareto-k',label:'Pareto-k'},{id:'loo',label:'LOO-CV'},{id:'loo-moment-match',label:'loo_moment_match()'}]
+},
+{ id:'loo-moment-match', cats:['bayes','check','brms'], az:'L', name:'loo_moment_match()', longname:'Refit-free alternative to reloo() via moment matching',
+  def:'loo_moment_match() (in brms via add_criterion(fit, "loo", moment_match = TRUE)) corrects problematic Pareto-k estimates without refitting the model: it adjusts the existing posterior draws directly through moment-matching transformations to approximate the leave-one-out distribution. This requires access to all (including internal, non-centered) Stan parameters — so the model must have been fitted with save_pars(all = TRUE).',
+  intuition:'loo_moment_match() is the pragmatic choice when reloo() would be too expensive: large/complex models, long sampling times, or many affected observations. The approximation is usually good enough for moderately high k values (0.7–1); for very extreme k values (k > 1), reloo() remains the more reliable, exact choice.',
+  related:[{id:'reloo',label:'reloo()'},{id:'pareto-k',label:'Pareto-k'},{id:'save-pars',label:'save_pars(all = TRUE)'}]
+},
+
+/* ── Addition: brm() core arguments (iter/cores/family/formula) & burn-in distinction ── */
+{ id:'burn-in', cats:['mcmc'], az:'B', name:'Burn-in', longname:'Classic MCMC term for the discarded warm-up phase (Gibbs sampling, JAGS, WinBUGS)',
+  def:'Burn-in, in the classic MCMC literature (Metropolis-Hastings, Gibbs sampling, software like JAGS or WinBUGS), refers to the first n iterations of a chain that are discarded because the chain has not yet "forgotten" its arbitrary starting point and is therefore not yet sampling from the stationary target distribution. Unlike warmup in Stan/NUTS, NO adaptation of the sampling algorithm itself happens during burn-in — the transition kernel (e.g. the Gibbs update rules or a fixed Metropolis proposal distribution) stays identical throughout the entire chain; burn-in exists purely to give the influence of the starting value time to disappear.',
+  intuition:'The difference is often overlooked but is substantively real: plain burn-in is "wait until the initial value is forgotten" under an unchanged sampler; warmup in Stan additionally means "tune the sampler itself" (step size, mass matrix). You therefore cannot treat Stan\'s warmup samples like classic burn-in and, say, shorten them without also risking the quality of that adaptation — brms/Stan deliberately use their own term "warmup" instead of "burn-in" to mark this difference.',
+  related:[{id:'warmup',label:'Warmup'},{id:'mcmc',label:'MCMC'},{id:'chains',label:'Chains'}]
+},
+{ id:'iter', cats:['mcmc','brms'], az:'I', name:'iter', longname:'brm() argument: total number of iterations per chain (including warmup)',
+  def:'iter sets in brm() the total number of MCMC iterations PER CHAIN — including the warmup phase. The number of samples per chain usable for posterior estimation is iter − warmup; across all chains, chains × (iter − warmup). BTL standard: iter = 4000 with warmup = 2000, i.e. 2000 post-warmup samples per chain, 8000 total with 4 chains.',
+  intuition:'iter is NOT a synonym for "number of usable posterior samples" — the warmup share is automatically subtracted. A common beginner mistake: raising iter assuming it yields more posterior samples, without considering that with warmup held fixed, only the usable share grows. Raising iter helps mainly with low ESS (heavy autocorrelation) or when narrow credible intervals are needed for rare events.',
+  related:[{id:'warmup',label:'Warmup'},{id:'chains',label:'Chains'},{id:'ess',label:'ESS'}]
+},
+{ id:'cores', cats:['mcmc','brms'], az:'C', name:'cores', longname:'brm() argument: number of parallel CPU cores for sampling',
+  def:'cores sets in brm() how many CPU cores are used in parallel to sample the chains. It is common to set cores = chains, so each chain gets its own core and all chains run simultaneously instead of one after another. cores has NO effect on the statistical result — purely a question of compute time (wall-clock), not of the number of iterations or model quality.',
+  intuition:'cores greater than the available physical cores usually brings no further speed benefit (more likely overhead from context switching); cores greater than chains is pointless, since no more chains can ever run simultaneously than there are chains. With cmdstanr as the backend, within-chain parallelization (threads_per_chain) is also available — a separate mechanism that splits the compute load INSIDE a single chain, not across chains.',
+  related:[{id:'chains',label:'Chains'},{id:'backend',label:'Backend (rstan/cmdstanr)'}]
+},
+{ id:'family', cats:['bayes','glm','brms'], az:'F', name:'family', longname:'brm() argument: response distribution + link function',
+  def:'family sets in brm() which probability distribution the response variable has and via which link function the linear predictor is connected to the expected value — e.g. family = gaussian() (link: identity), family = bernoulli(link="logit"), family = poisson(link="log"), family = Beta(), family = cumulative(link="probit") for ordinal data. brms supports far more families than the classic GLM, including Student-t for robust regression as well as zero-inflated and hurdle variants.',
+  intuition:'family is the central switch that determines how the model handles the response\'s range and variance structure — choosing it wrong (e.g. gaussian() for count data with many zeros) leads to systematically wrong predictive intervals even when the mean is still estimated reasonably. A pp_check() after fitting is the most direct way to spot a poorly chosen family.',
+  related:[{id:'glm',label:'GLM'},{id:'link-funktion',label:'Link Function'},{id:'ppc',label:'PPC'},{id:'bf-formula',label:'bf() — brms formula'},{id:'brms',label:'brms'}]
+},
+{ id:'bf-formula', cats:['bayes','glm','brms'], az:'B', name:'bf() — brms formula', longname:'brmsformula() — formula object for brm(); the basis for distributional, non-linear, and multivariate models',
+  def:'bf() (short for brmsformula()) creates the formula object that tells brm() what to model. In its simplest form, bf(y ~ x) is equivalent to passing y ~ x directly as the formula argument. Its real usefulness shows up in more complex models: distributional models let you model additional parameters of the family (not just the expected value) as a function of predictors themselves, e.g. bf(y ~ x, sigma ~ z) for heterogeneous residual variance. With nl = TRUE, bf() enables non-linear models with a freely defined functional form and its own formula per parameter. Multiple bf() objects can be combined into multivariate models via mvbf().',
+  formula:'bf(y ~ x, sigma ~ z)   ·   bf(y ~ a - b^x, a ~ 1, b ~ 1, nl = TRUE)   ·   mvbf(bf(y1 ~ x), bf(y2 ~ x))',
+  intuition:'You can think of the plain formula y ~ x as shorthand for bf(y ~ x) — for standard models it makes no difference whether bf() is written explicitly. bf() only becomes necessary once you go beyond the single linear predictor for μ: for distributional models (also modeling sigma/nu/zi), non-linear models (nl=TRUE), or when combining multiple bf() objects into a multivariate model.',
+  related:[{id:'family',label:'family'},{id:'multivariates-modell',label:'Multivariate Model'},{id:'link-funktion',label:'Link Function'},{id:'brms',label:'brms'}]
+},
+
 ];
 
 // ── Theme Toggle ──
@@ -2363,7 +2435,8 @@ function buildCard(t) {
   const _tagLabels = {
     reg:'Regression', bayes:'Bayes', dist:'Distribution', mcmc:'MCMC',
     glm:'GLM/GLMM', causal:'Causality', check:'Model Checking', mle:'MLE',
-    diag:'Diagnostics', rel:'Reliability', irt:'IRT/Test Theory', eff:'Effect Size'
+    diag:'Diagnostics', rel:'Reliability', irt:'IRT/Test Theory', eff:'Effect Size',
+    brms:'brms'
   };
   const tagsHTML = `<div class="gl-tags">${t.cats.map(c =>
     `<span class="gl-tag gl-tag-${c}">${_tagLabels[c] || c}</span>`

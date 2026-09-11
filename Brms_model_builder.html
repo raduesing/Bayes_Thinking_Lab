@@ -404,18 +404,18 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
       <div class="pg"><span class="lbl">Cores</span><input type="number" id="cores" value="4" oninput="update()"></div>
     </div>
     <div class="pg" style="margin-top:.3rem">
-      <span class="lbl">Backend</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-backend" target="_blank" rel="noopener" title="Das Backend bestimmt, über welche R-Schnittstelle brms den Stan-Code kompiliert: rstan (CRAN-Standard) oder cmdstanr (eigenständiges CmdStan, meist aktueller/schneller, unterstützt Threading).">Backend</a>
       <select id="backend" onchange="update()">
         <option value="rstan">rstan</option>
         <option value="cmdstanr">cmdstanr</option>
       </select>
     </div>
     <div class="pg" style="margin-top:.3rem">
-      <span class="lbl" title="adapt_delta: Ziel-Akzeptanzrate (Standard 0.80). Bei Divergenzen auf 0.90–0.99 erhöhen.">adapt_delta</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-adapt-delta" target="_blank" rel="noopener" title="adapt_delta ist die Ziel-Akzeptanzrate der NUTS-Schrittweitenanpassung (Standard 0.80). Höhere Werte (0.90–0.99) reduzieren Divergent Transitions, verlangsamen aber das Sampling.">adapt_delta</a>
       <input type="number" id="adapt-delta" value="0.80" min="0.5" max="0.999" step="0.01" oninput="update()">
     </div>
     <div class="pg">
-      <span class="lbl" title="max_treedepth: Maximale NUTS-Baumtiefe. Standard 10. Bei Warnungen auf 12–15 erhöhen.">max_treedepth</span>
+      <a class="lbl glo-link" href="Glossar.html#gl-max-treedepth" target="_blank" rel="noopener" title="max_treedepth begrenzt, wie oft der NUTS-Sampler pro Iteration verdoppeln darf (Standard 10). Warnungen zeigen Ineffizienz an, keine Verzerrung.">max_treedepth</a>
       <input type="number" id="max-tree" value="10" min="5" max="20" step="1" oninput="update()">
     </div>
     <div class="pg" style="margin-top:.3rem">
@@ -425,6 +425,24 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
     <div class="pg">
       <span class="lbl">Fit-Objekt</span>
       <input type="text" id="fit-name" value="fit" placeholder="fit" oninput="update()" style="font-family:'DM Mono',monospace;font-size:.75rem">
+    </div>
+    <div class="pg" style="margin-top:.5rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="save-pars-all" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-save-pars" target="_blank" rel="noopener" title="save_pars(all = TRUE) speichert zusätzlich interne/nicht-zentrierte Stan-Parameter. Für einfaches loo()/waic() oder reloo() NICHT nötig — aber Voraussetzung für loo_moment_match() und bridge_sampler() (Bayes-Faktoren, Marginal Likelihood).">save_pars(all = TRUE)</a>
+      </label>
+    </div>
+    <div class="pg">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="sample-prior-yes" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-sample-prior" target="_blank" rel="noopener" title="sample_prior = 'yes' sampelt Prior und Posterior parallel im selben Fit — nötig für hypothesis() mit Bayes-Faktoren (Savage-Dickey) und Prior-Posterior-Overlay-Plots.">sample_prior = "yes"</a>
+      </label>
+    </div>
+    <div class="pg">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem">
+        <input type="checkbox" id="normalize-false" onchange="update()">
+        <a class="glo-link" href="Glossar.html#gl-normalize" target="_blank" rel="noopener" title="normalize = FALSE spart beim Fitten Rechenzeit, wenn das Modell danach mit bridge_sampler() für einen Bayes-Faktor verwendet werden soll — reine Effizienzoption, ändert nichts an Priors oder Posterior.">normalize = FALSE</a>
+      </label>
     </div>
   </div>
 
@@ -916,6 +934,18 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   const fileRaw = (document.getElementById('fit-file')?.value || '').trim();
   const fitName = (document.getElementById('fit-name')?.value || 'fit').trim() || 'fit';
   const fileLine = fileRaw ? `\n  <span class="nm">file</span>   = <span class="str">"${fileRaw}"</span>,` : '';
+  const savePAll = !!document.getElementById('save-pars-all')?.checked;
+  const savePLine = savePAll
+    ? `\n  <span class="nm">save_pars</span> = <span class="fn">save_pars</span>(<span class="nm">all</span> = <span class="kw">TRUE</span>),`
+    : '';
+  const samplePriorYes = !!document.getElementById('sample-prior-yes')?.checked;
+  const samplePriorLine = samplePriorYes
+    ? `\n  <span class="nm">sample_prior</span> = <span class="str">"yes"</span>,`
+    : '';
+  const normalizeFalse = !!document.getElementById('normalize-false')?.checked;
+  const normalizeLine = normalizeFalse
+    ? `\n  <span class="nm">normalize</span> = <span class="kw">FALSE</span>,`
+    : '';
   const needsControl = (parseFloat(delta) !== 0.80 || tree !== 10);
   const controlLine  = needsControl
     ? `\n  <span class="nm">control</span> = <span class="fn">list</span>(<span class="nm">adapt_delta</span> = <span class="num">${delta}</span>, <span class="nm">max_treedepth</span> = <span class="num">${tree}</span>),`
@@ -1018,7 +1048,7 @@ ${pArr.join(',\n')}
   <span class="nm">warmup</span>  = <span class="num">${warm}</span>,
   <span class="nm">chains</span>  = <span class="num">${ch}</span>,
   <span class="nm">cores</span>   = <span class="num">${co}</span>,
-  <span class="nm">backend</span> = <span class="str">"${back}"</span>,${fileLine}${controlLine}
+  <span class="nm">backend</span> = <span class="str">"${back}"</span>,${samplePriorLine}${normalizeLine}${savePLine}${fileLine}${controlLine}
   <span class="nm">seed</span>    = <span class="num">42</span>
 )
 
@@ -1767,7 +1797,7 @@ const BRMS_HELP_HTML = `
   <li><strong>4 · Distributional</strong> — σ, ν oder zi selbst als Funktion eines Prädiktors modellieren (optional)</li>
   <li><strong>5 · Random Effects</strong> — Gruppierungsvariable + Struktur (Intercept / Intercept + Slope)</li>
   <li><strong>6 · Priors</strong> — Für jeden Parameter individuell; Link-aware Defaults werden vorgeschlagen</li>
-  <li><strong>7 · Sampling</strong> — Chains, Iterations, Adapt-Delta, Backend</li>
+  <li><strong>7 · Sampling</strong> — Chains, Iterations, <a class="glo-link" href="Glossar.html#gl-adapt-delta" target="_blank" title="adapt_delta ist die Ziel-Akzeptanzrate der NUTS-Schrittweitenanpassung (Standard 0.80). Höhere Werte (0.90–0.99) reduzieren Divergent Transitions, verlangsamen aber das Sampling.">Adapt-Delta</a>, <a class="glo-link" href="Glossar.html#gl-backend" target="_blank" title="Das Backend bestimmt, über welche R-Schnittstelle brms den Stan-Code kompiliert: rstan (CRAN-Standard) oder cmdstanr (eigenständiges CmdStan, meist aktueller/schneller, unterstützt Threading).">Backend</a>; optional: <a class="glo-link" href="Glossar.html#gl-save-pars" target="_blank" title="save_pars(all = TRUE) speichert zusätzlich interne/nicht-zentrierte Stan-Parameter. Für einfaches loo()/waic() oder reloo() NICHT nötig — aber Voraussetzung für loo_moment_match() und bridge_sampler().">save_pars(all=TRUE)</a>, <a class="glo-link" href="Glossar.html#gl-sample-prior" target="_blank" title="sample_prior = 'yes' sampelt Prior und Posterior parallel im selben Fit — nötig für hypothesis() mit Bayes-Faktoren (Savage-Dickey) und Prior-Posterior-Overlay-Plots.">sample_prior="yes"</a>, <a class="glo-link" href="Glossar.html#gl-normalize" target="_blank" title="normalize = FALSE spart beim Fitten Rechenzeit, wenn das Modell danach mit bridge_sampler() für einen Bayes-Faktor verwendet werden soll.">normalize=FALSE</a> — bereiten das Modell auf spätere <a class="glo-link" href="Glossar.html#gl-reloo" target="_blank" title="reloo() korrigiert LOO-Schätzungen für Beobachtungen mit problematischem Pareto-k durch vollständigen Refit ohne diese Beobachtung — exakt, aber rechenintensiv.">reloo()</a>/<a class="glo-link" href="Glossar.html#gl-loo-moment-match" target="_blank" title="loo_moment_match() korrigiert problematische Pareto-k-Schätzungen ohne Refit, direkt über die vorhandenen Posterior-Draws — braucht dafür save_pars(all=TRUE).">loo_moment_match()</a> oder <a class="glo-link" href="Glossar.html#gl-bridge-sampler" target="_blank" title="bridge_sampler() schätzt die marginale Likelihood eines Modells aus den MCMC-Samples — die Grundlage für den Bayes-Faktor zwischen zwei Modellen.">bridge_sampler()</a> (<a class="glo-link" href="Glossar.html#gl-bayes-faktor" target="_blank" title="Der Bayes-Faktor ist das Verhältnis der marginalen Likelihoods zweier Modelle: BF₁₂ = p(D|M₁) / p(D|M₂).">Bayes-Faktor</a>) vor</li>
   <li><strong>→ Output</strong> — R-Code kopieren, LaTeX herunterladen, Modell senden</li>
 </ul>
 
