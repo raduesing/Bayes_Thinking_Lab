@@ -527,8 +527,10 @@ canvas {
   white-space: pre;
   overflow-x: auto;
   min-height: 3rem;
-  max-height: 320px;
+  height: 320px;
+  max-height: 80vh;
   overflow-y: auto;
+  resize: vertical;
 }
 .cm{color:var(--ink2)}.fn{color:var(--a2)}.str{color:var(--a3)}.kw{color:var(--a5)}.nm{color:#9a7a20}.num{color:var(--a4)}
 [data-theme="dark"] .nm{color:#c8a840}
@@ -909,10 +911,16 @@ canvas {
       <div id="stdModeNote" style="display:none;font-family:'DM Mono',monospace;font-size:.72rem;
            color:var(--ink2);line-height:1.72;margin-top:.35rem;
            border-left:2px solid var(--a4);padding:.4rem .65rem;background:var(--panel)">
-        All variances = 1. σ_residual is computed automatically as <b>√(1 − Σβᵢ²)</b>.<br>
+        All variances = 1. σ_residual is computed automatically as <b>√(1 − Var(predictor))</b>,
+        where Var(predictor) is determined from the <em>actual</em> covariance of all ancestors
+        in the DAG (Wright path tracing) — not just Σβᵢ² of the direct parents. This also
+        accounts for correlations induced by shared ancestors (e.g. a confounder acting via
+        two paths).<br>
         β is directly the standardized path coefficient (Wright 1921, lavaan, dagitty).<br>
-        Root nodes are fixed to <b>μ=0, SD=1</b>.
-        <span id="stdModeGlobalWarn" style="display:none;color:var(--a1)"><br>⚠ One or more nodes: Σβᵢ² ≥ 1 — σ_residual² would be negative. Reduce β values.</span>
+        Root nodes are fixed to <b>μ=0, SD=1</b>. Non-normally distributed ancestors
+        (Bernoulli/Poisson/Gamma) are approximated as Var=1/uncorrelated in this calculation
+        (<b>≈</b> marker) — their variance can't be linearly decomposed the same way.
+        <span id="stdModeGlobalWarn" style="display:none;color:var(--a1)"><br>⚠ One or more nodes: Var(predictor) ≥ 1 — σ_residual² would be negative. Reduce β values.</span>
       </div>
     </div>
 
@@ -995,9 +1003,9 @@ canvas {
     <div class="cards-grid">
       <div class="card">
         <div class="card-tag tag-dag">DAG</div>
-        <div class="card-title">What is a DAG?</div>
+        <div class="card-title">What is a <a class="glo-link" href="Glossar.html#gl-dag" target="_blank" title="A DAG is a directed graph without cycles that makes causal assumptions about a system of variables explicit and testable." style="color:inherit">DAG</a>?</div>
         <div class="card-body">
-          A <em><a class="glo-link" href="Glossar.html#gl-dag" target="_blank" title="A DAG is a directed graph without cycles that makes causal assumptions about a system of variables explicit and testable.">Directed Acyclic Graph</a></em> encodes causal assumptions
+          A <em>Directed Acyclic Graph</em> encodes causal assumptions
           explicitly. Arrows show the direction of causal influences – no path may loop back to itself.
           DAGs force us to make our assumptions explicit before building models
           (McElreath 2020, Ch. 5–6).
@@ -1014,9 +1022,9 @@ canvas {
       </div>
       <div class="card">
         <div class="card-tag tag-collider">Collider</div>
-        <div class="card-title">Collider</div>
+        <div class="card-title"><a class="glo-link" href="Glossar.html#gl-collider" target="_blank" title="A collider is a variable C in a DAG that has arrows from two or more other variables pointing into it: A → C ← B." style="color:inherit">Collider</a></div>
         <div class="card-body">
-          When X → C ← Y, C is a <em><a class="glo-link" href="Glossar.html#gl-collider" target="_blank" title="A collider is a variable C in a DAG that has arrows from two or more other variables pointing into it: A → C ← B.">Collider</a></em>. The path X – C – Y is normally
+          When X → C ← Y, C is a <em>Collider</em>. The path X – C – Y is normally
           <strong>blocked</strong>. When we condition on C (control or restrict it),
           we open this path and create an artificial association
           between X and Y – <em>Berkson's Bias</em>. Colliders must NOT be controlled.
@@ -1024,9 +1032,9 @@ canvas {
       </div>
       <div class="card">
         <div class="card-tag tag-mediator">Mediator</div>
-        <div class="card-title">Mediator (Chain)</div>
+        <div class="card-title"><a class="glo-link" href="Glossar.html#gl-mediator" target="_blank" title="A mediator M is a variable on the causal path between treatment T and outcome Y: T → M → Y." style="color:inherit">Mediator</a> (Chain)</div>
         <div class="card-body">
-          In a chain X → M → Y, M is a <em><a class="glo-link" href="Glossar.html#gl-mediator" target="_blank" title="A mediator M is a variable on the causal path between treatment T and outcome Y: T → M → Y.">Mediator</a></em>. Controlling for M blocks
+          In a chain X → M → Y, M is a <em>Mediator</em>. Controlling for M blocks
           the causal path from X to Y – we would underestimate the total causal effect.
           Mediators are usually <em>not</em> controlled unless one explicitly wants to
           estimate the direct effect.
@@ -1034,9 +1042,9 @@ canvas {
       </div>
       <div class="card">
         <div class="card-tag tag-backdoor">Backdoor</div>
-        <div class="card-title">Backdoor Criterion (Pearl)</div>
+        <div class="card-title"><a class="glo-link" href="Glossar.html#gl-backdoor" target="_blank" title="The backdoor criterion is a sufficient condition for identifying the causal effect of X on Y by adjusting for a measured set of variables Z." style="color:inherit">Backdoor Criterion</a> (Pearl)</div>
         <div class="card-body">
-          An adjustment set Z satisfies the <a class="glo-link" href="Glossar.html#gl-backdoor" target="_blank" title="The backdoor criterion is a sufficient condition for identifying the causal effect of X on Y by adjusting for a measured set of variables Z.">backdoor criterion</a> for X → Y if Z (1) blocks all
+          An adjustment set Z satisfies the backdoor criterion for X → Y if Z (1) blocks all
           backdoor paths from X to Y and (2) contains no descendants of X.
           A backdoor path begins with an arrow pointing into X.
           This criterion is the formal basis for valid causal estimation from observational data.
@@ -1161,6 +1169,14 @@ function isPathActive(path, Z) {
   }
   return true;
 }
+
+// findAdjustmentSets() is brute-force over all 2^n subsets of candidate nodes — fine for
+// typical teaching-sized DAGs, but it doubles with every additional candidate (measured:
+// 10 candidates ≈ 12ms, 15 ≈ 100ms, 18 ≈ 1s, 20 ≈ 4s — and climbing from there). This
+// threshold is where runAnalysis() starts warning the user, chosen so the warning appears
+// while things are still fast (~0.1s at 15) but before the multi-second freezes that start
+// around 18-20 candidates.
+const ADJSET_CANDIDATE_WARN_THRESHOLD = 15;
 
 function findAdjustmentSets() {
   const X = state.exposure, Y = state.outcome;
@@ -2016,6 +2032,9 @@ function runAnalysis() {
   document.getElementById('sidebarAnalysisWrap').style.display = 'block';
   const summaryEl = document.getElementById('sidebarAnalysisSummary');
   let summaryHtml = '';
+  if (result.candidates.length > ADJSET_CANDIDATE_WARN_THRESHOLD) {
+    summaryHtml += `<div class="msg-warn">⚠ ${result.candidates.length} possible adjustment variables — the search for adjustment sets checks all 2^n subsets and gets noticeably slower from here (about 4 seconds at 20 variables, potentially several minutes at 25+). If things feel sluggish: reduce the number of independent candidate nodes.</div>`;
+  }
   if (instruments.length > 0) {
     summaryHtml += `<div class="msg-ok">Instrument found: ${instruments.map(id=>escHtml(getNodeName(id))).join(', ')} → IV estimator possible</div>`;
   }
@@ -2175,21 +2194,143 @@ function toggleStdMode() {
   applyStdMode();
 }
 
-// σ_residual for a node in standardization mode (assumes Var(parent)=1)
+// σ_residual for a node in standardization mode — via DAG-wide covariance propagation
+// (Wright 1921 path tracing / SEM reduced form: Cov = (I-B)^{-1} Ψ (I-B)^{-T}, built here
+// iteratively in topological order instead of matrix inversion). This corrects the naive
+// "parents are uncorrelated" assumption — e.g. with Z→X, Z→Y, X→M→Y, two of Y's parents
+// (Z and M) share a common ancestor and are NOT uncorrelated, even with no direct edge
+// between them. Var(linear predictor) = β'·Cov(parents)·β instead of Σβᵢ² — the latter is
+// only the special case of a diagonal covariance matrix (independent parents).
+//
+// Non-Normal nodes (Bernoulli/Poisson/Gamma) are still not auto-standardized (their variance
+// depends nonlinearly on the mean, not a free parameter like σ) — they only enter the
+// propagation as a Var=1/Cov=0 approximation, which flags every downstream node as
+// "approximated" (see `approxNodes`) instead of silently computing a wrong value.
+function computeStdCovariances() {
+  const order = topoSort();
+  const cov = {};
+  const sigmaInfo = {};
+  const approxNodes = new Set();
+  const processed = []; // prefix of `order` already handled — topoSort() guarantees every
+                         // node's parents appear here before the node itself, so any two
+                         // already-processed nodes always have a defined cov[a][b] by now.
+
+  order.forEach(nodeId => {
+    cov[nodeId] = {};
+    const isRoot = getParents(nodeId).length === 0;
+    const dist = isRoot ? getRootDist(nodeId).dist : getNonRootDist(nodeId);
+
+    if (isRoot) {
+      // A root can only be independent of nodes processed so far: topological order
+      // guarantees nothing already processed can be a not-yet-created descendant of this
+      // root, and roots have no parents, so nothing already processed can be its ancestor
+      // either — hence zero covariance with every already-processed node.
+      processed.forEach(other => { cov[nodeId][other] = 0; cov[other][nodeId] = 0; });
+      // A Normal root's variance is exactly 1 under standardization mode (its SD input is
+      // forced to 1). A Bernoulli/Poisson root is NOT forced to anything by the mode (forcing
+      // "μ=0" would zero out its p/rate and collapse it to a constant) — but its variance is
+      // still exactly known in closed form from its own fixed parameter, since roots have a
+      // constant p/rate (no row-varying mean the way an endogenous GLM node would have):
+      //   Bernoulli(p): Var = p(1-p)      Poisson(rate λ): Var = λ
+      // So this is exact, not an approximation — only endogenous non-Normal nodes (mean varies
+      // per row via the linear predictor) get flagged as approximate, further down.
+      if (dist === 'Bernoulli') {
+        const p = getRootDist(nodeId).mean;
+        cov[nodeId][nodeId] = p * (1 - p);
+      } else if (dist === 'Poisson') {
+        cov[nodeId][nodeId] = getRootDist(nodeId).mean;
+      } else {
+        cov[nodeId][nodeId] = 1; // Normal
+      }
+      processed.push(nodeId);
+      return;
+    }
+
+    const parents = getParents(nodeId);
+    const betas = parents.map(pid => {
+      const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
+      return { pid, beta: edge ? getEdgeCoef(edge.id) : 0.5 };
+    });
+    // Moderator/interaction terms: bint · P · W for edges with a moderator set. A node's
+    // linear predictor can include both the plain beta·P term AND this product term for the
+    // same P (see buildNodeSimLines' intTerms) — the two are additive, not exclusive.
+    const intTerms = parents.flatMap(pid => {
+      const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
+      if (!edge) return [];
+      const modName = getEdgeModerator(edge.id);
+      const bint = getEdgeIntCoef(edge.id);
+      if (!modName || bint === 0) return [];
+      const wNode = state.nodes.find(n => n.name === modName);
+      return wNode ? [{ pid, wid: wNode.id, bint }] : [];
+    });
+
+    // Both pi and pj are ancestors of nodeId, so — by the topological-order invariant above —
+    // they are already in `processed` and cov[pi][pj] is guaranteed to be defined.
+    let varLp = 0;
+    let anyApproxParent = false;
+    betas.forEach(({ pid: pi, beta: bi }) => {
+      if (approxNodes.has(pi)) anyApproxParent = true;
+      betas.forEach(({ pid: pj, beta: bj }) => { varLp += bi * bj * cov[pi][pj]; });
+    });
+    // Interaction-term variance, added on top of the plain-beta variance above:
+    //   Var(Σ bintₖ·Pₖ·Wₖ) = Σₖ,ₗ bintₖ·bintₗ·(Cov(Pₖ,Pₗ)·Cov(Wₖ,Wₗ) + Cov(Pₖ,Wₗ)·Cov(Wₖ,Pₗ))
+    // — exact for jointly (multivariate-)normal Pₖ,Wₖ, via Isserlis'/Wick's theorem for the
+    // 4th moment of a zero-mean normal vector. The cross-covariance between the plain-beta
+    // part and this interaction part is exactly 0 for the same reason (a linear combination
+    // of zero-mean normals has zero third moment with any other zero-mean-normal-built
+    // product term), so no cross term is needed between the two loops. A node that has any
+    // interaction term is itself no longer exactly normal (a product of normals isn't
+    // normal), so it — and everything downstream of it — is flagged approximate for any
+    // FURTHER propagation, even though ITS OWN variance here is computed exactly under the
+    // assumption that its immediate parents/moderators are (still) jointly normal.
+    if (intTerms.length > 0) anyApproxParent = true;
+    intTerms.forEach(({ pid: pk, wid: wk, bint: bk }) => {
+      if (approxNodes.has(pk) || approxNodes.has(wk)) anyApproxParent = true;
+      intTerms.forEach(({ pid: pl, wid: wl, bint: bl }) => {
+        const cov_pk_pl = cov[pk]?.[pl] ?? 0, cov_wk_wl = cov[wk]?.[wl] ?? 0;
+        const cov_pk_wl = cov[pk]?.[wl] ?? 0, cov_wk_pl = cov[wk]?.[pl] ?? 0;
+        varLp += bk * bl * (cov_pk_pl * cov_wk_wl + cov_pk_wl * cov_wk_pl);
+      });
+    });
+
+    if (dist === 'Normal') {
+      if (anyApproxParent) approxNodes.add(nodeId);
+      const sigma2 = 1 - varLp;
+      sigmaInfo[nodeId] = { sigma: sigma2 > 0 ? Math.sqrt(sigma2) : 0, varLp, invalid: sigma2 <= 0, approx: anyApproxParent };
+      // Cov(nodeId, other) = Σᵢ βᵢ · Cov(parentᵢ, other) for every already-processed `other`.
+      processed.forEach(other => {
+        let c = 0;
+        betas.forEach(({ pid, beta }) => { c += beta * cov[pid][other]; });
+        cov[nodeId][other] = c;
+        cov[other][nodeId] = c;
+      });
+      cov[nodeId][nodeId] = sigma2 > 0 ? 1 : varLp; // if invalid: best-effort value for downstream nodes
+    } else {
+      // Non-Normal: no auto-sigma (unchanged), but pass through as a Var=1/Cov=0 approximation
+      // so downstream nodes still get a (flagged-as-approximate) computation.
+      approxNodes.add(nodeId);
+      processed.forEach(other => { cov[nodeId][other] = 0; cov[other][nodeId] = 0; });
+      cov[nodeId][nodeId] = 1;
+    }
+    processed.push(nodeId);
+  });
+
+  return { cov, sigmaInfo, approxNodes };
+}
+
 function computeStdSigma(nodeId) {
-  const parents = getParents(nodeId);
-  const sumB2 = parents.reduce((s, pid) => {
-    const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
-    const beta = edge ? getEdgeCoef(edge.id) : 0.5;
-    return s + beta * beta;
-  }, 0);
-  const sigma2 = 1 - sumB2;
-  return { sigma: sigma2 > 0 ? Math.sqrt(sigma2) : 0, sumB2, invalid: sigma2 <= 0 };
+  const { sigmaInfo } = computeStdCovariances();
+  return sigmaInfo[nodeId] || { sigma: 0, varLp: 0, invalid: true, approx: false };
 }
 
 function applyStdMode() {
-  // ── Root nodes: mean=0, sd=1 (read-only when active) ──
+  // ── Root nodes: μ=0, SD=1 (read-only when active) — Normal roots ONLY.
+  // Bernoulli-p / Poisson-rate are not "means" on the standardization scale and must not be
+  // forced to 0 (that would collapse the node to a constant with no spread at all) — they
+  // stay untouched by standardization mode.
   document.querySelectorAll('[data-root-mean]').forEach(inp => {
+    const nodeId = inp.dataset.rootMean;
+    if (getRootDist(nodeId).dist !== 'Normal') { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; return; }
     if (STD_MODE) { inp.value = '0'; inp.readOnly = true; inp.style.opacity = '.4'; inp.style.cursor = 'not-allowed'; }
     else          { inp.readOnly = false; inp.style.opacity = ''; inp.style.cursor = ''; }
   });
@@ -2200,13 +2341,14 @@ function applyStdMode() {
     }
   });
 
-  // ── Endogenous nodes: auto-compute σ_residual ──
+  // ── Endogenous nodes: auto-compute σ_residual (once for the whole DAG, not per node) ──
   let anyInvalid = false;
+  const stdInfo = STD_MODE ? computeStdCovariances() : null;
   document.querySelectorAll('[data-nonroot-sd]').forEach(inp => {
     const nodeId = inp.dataset.nonrootSd;
     if (getNonRootDist(nodeId) !== 'Normal') return; // no σ_residual auto-compute for non-Normal nodes
     if (STD_MODE) {
-      const { sigma, sumB2, invalid } = computeStdSigma(nodeId);
+      const { sigma, varLp, invalid, approx } = stdInfo.sigmaInfo[nodeId] || { sigma: 0, varLp: 0, invalid: true, approx: false };
       if (invalid) anyInvalid = true;
       inp.value    = invalid ? '0' : sigma.toFixed(4);
       inp.readOnly = true;
@@ -2223,8 +2365,12 @@ function applyStdMode() {
           badge.style.cssText = 'font-family:"DM Mono",monospace;font-size:.65rem;margin-left:.35rem;';
           td.appendChild(badge);
         }
-        badge.textContent = invalid ? '⚠ Σβ²≥1' : `(√${(1-sumB2).toFixed(3)})`;
+        const approxMark = approx ? '≈' : '';
+        badge.textContent = invalid ? '⚠ Var(parents)≥1' : `(√${approxMark}${(1-varLp).toFixed(3)})`;
         badge.style.color = invalid ? 'var(--a1)' : 'var(--ink3)';
+        badge.title = approx
+          ? 'At least one ancestor is not normally distributed (Bernoulli/Poisson/Gamma) — its variance/correlation is approximated as Var=1, Cov=0, since it cannot be cleanly separated linearly from its mean. This value may therefore deviate somewhat from the true variance.'
+          : 'Computed exactly from the actual covariance of all ancestors in the DAG (Wright path tracing), not just the direct parents.';
       }
     } else {
       inp.readOnly = false;
@@ -2520,8 +2666,12 @@ function generateRCode() {
       '# SIMULATION LOGIC (Approach B — standardized path coefficients, dagitty-style):',
       '#   All variables standardized: Var(X) = 1, mean = 0.',
       '#   beta = direct path coefficient (Wright 1921, lavaan, dagitty).',
-      '#   sigma_residual = sqrt(1 - sum(beta_i²))  [auto-computed]',
-      '#   Requirement: sum(beta_i²) < 1 — otherwise Var(Y) > 1 (unphysical).',
+      '#   sigma_residual = sqrt(1 - Var(linear predictor))  [auto-computed]',
+      '#   Var(linear predictor) = beta\' * Cov(parents) * beta — using the ACTUAL covariance',
+      '#   of all ancestors in the DAG (Wright path tracing), not just sum(beta_i²) of the',
+      '#   direct parents. This also captures correlations induced by shared ancestors',
+      '#   (e.g. a confounder acting on a node via two paths).',
+      '#   Requirement: Var(linear predictor) < 1 — otherwise Var(Y) > 1 (unphysical).',
       '#   Literature: Wright (1921) Genetics; Rosseel (2012) lavaan, J Stat Software;',
       '#              dagitty.net/learn; McElreath (2020) Ch. 5-6.',
     );
@@ -2593,14 +2743,18 @@ function buildNodeSimLines() {
     lines.push('# Root nodes (exogenous observable variables, no parents)');
     observedRoots.forEach(nd => {
       const { dist, mean, sd } = getRootDist(nd.id);
-      if (STD_MODE) {
+      if (STD_MODE && dist === 'Normal') {
+        // Only Normal roots are forced to μ=0/SD=1 — Bernoulli-p / Poisson-rate are not
+        // "means" on this scale and would collapse to a constant if forced to 0/1; they
+        // keep their configured values (see computeStdCovariances() for the exact variance
+        // p(1-p) / λ used for them in the covariance propagation).
         lines.push(`${nd.name} <- rnorm(n, 0, 1)  # standardized: μ=0, SD=1`);
       } else if (dist === 'Normal') {
         lines.push(`${nd.name} <- rnorm(n, ${mean}, ${sd})`);
       } else if (dist === 'Bernoulli') {
-        lines.push(`${nd.name} <- rbinom(n, 1, ${mean})`);
+        lines.push(`${nd.name} <- rbinom(n, 1, ${mean})${STD_MODE ? `  # p=${mean} (not standardized, see above)` : ''}`);
       } else if (dist === 'Poisson') {
-        lines.push(`${nd.name} <- rpois(n, ${mean})`);
+        lines.push(`${nd.name} <- rpois(n, ${mean})${STD_MODE ? `  # λ=${mean} (not standardized, see above)` : ''}`);
       }
     });
   }
@@ -2614,7 +2768,8 @@ function buildNodeSimLines() {
       lines.push('', '# Latent endogenous nodes (unobservable)');
       latentNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
-        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
+        const stdSig = STD_MODE ? computeStdSigma(nd.id) : null;
+        const sigma = STD_MODE ? stdSig.sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2628,7 +2783,7 @@ function buildNodeSimLines() {
           const coef = edge ? getEdgeCoef(edge.id) : 0.5;
           commentParts.push(`beta(${getNodeName(pid)})=${coef}`);
         });
-        commentParts.push(STD_MODE ? `sigma=${sigma} [auto]` : `sigma=${sigma}`);
+        commentParts.push(STD_MODE ? `sigma=${sigma} [auto${stdSig.approx ? ', ≈ (non-normal ancestor)' : ''}]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # latent — not in dataset! ${commentParts.join(', ')}`);
       });
     }
@@ -2638,7 +2793,8 @@ function buildNodeSimLines() {
       observedNonRoots.forEach(nd => {
         const parents = getParents(nd.id);
         const dist  = getNonRootDist(nd.id);
-        const sigma = STD_MODE ? computeStdSigma(nd.id).sigma.toFixed(4) : getNonRootSd(nd.id);
+        const stdSig = STD_MODE ? computeStdSigma(nd.id) : null;
+        const sigma = STD_MODE ? stdSig.sigma.toFixed(4) : getNonRootSd(nd.id);
         const alpha = getNonRootIntercept(nd.id);
         const betaTerms = parents.map(pid => {
           const edge = state.edges.find(e=>e.from===pid&&e.to===nd.id);
@@ -2673,7 +2829,7 @@ function buildNodeSimLines() {
           commentParts.push(`shape=φ=${shapeVal}`);
           lines.push(`${nd.name} <- rgamma(n, shape = ${shapeVal}, rate = ${shapeVal} / exp(${muExpr}))  # ${commentParts.join(', ')}`);
         } else {
-          commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Σβ²)]` : `sigma=${sigma}`);
+          commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Var(predictor))${stdSig.approx ? ', ≈' : ''}]` : `sigma=${sigma}`);
           lines.push(`${nd.name} <- rnorm(n, ${muExpr}, ${sigma})  # ${commentParts.join(', ')}`);
         }
       });
@@ -3096,8 +3252,14 @@ function generatePowerCode() {
   if (!X || !Y) return '# Please set exposure and outcome first.';
 
   const instruments = detectInstruments();
-  const { mediators: frontDoorMediators } = detectFrontDoor();
-  if (instruments.length > 0 || frontDoorMediators.length > 0) {
+  // Front-door *eligibility* (detectFrontDoor()) is a purely graph-theoretic property
+  // that holds for almost any pure mediation DAG, even ones with no unobserved
+  // confounding at all — it does NOT mean backdoor adjustment is unavailable. Only
+  // exclude here when backdoor adjustment is genuinely impossible, i.e. a latent
+  // confounder blocks every backdoor path (findAdjustmentSets().unblockableLatentPaths).
+  const adjInfo = findAdjustmentSets();
+  const needsIVorFrontDoor = instruments.length > 0 || (adjInfo && adjInfo.unblockableLatentPaths.length > 0);
+  if (needsIVorFrontDoor) {
     return [
       '# Power simulation for instrumental-variable or front-door designs is not',
       '# currently supported — only for standard backdoor adjustment (total or',
@@ -3111,28 +3273,68 @@ function generatePowerCode() {
 
   const xName = getNodeName(X), yName = getNodeName(Y);
   const n = document.getElementById('simN').value || 200;
-  const effectType = getEffectType();
-  const effectLabel = effectType === 'direct' ? 'direct' : 'total';
-  const adjNames = getAdjSetNames();
-  const rhs = buildFormulaRHS(Y);
   const family = nodeGlmmFamily(Y);
 
-  // Null-model RHS for the LRT: drop X and any X-moderator interaction it feeds into
-  // Y with, but keep the moderator itself (a legitimate covariate on its own).
+  // buildNodeSimLines() auto-converts a Bernoulli EXPOSURE to as.factor() (to get a sane
+  // reference-level regression instead of treating 0/1 as continuous) — which renames its
+  // regression coefficient from "X" to "X1" (R's default dummy-coding scheme: reference
+  // level "0" dropped, dummy for level "1" named <var><level>). car::Anova (term-based) is
+  // unaffected and still reports the row as "X", but fixef()/summary() coefficient lookups
+  // are NOT — they need the "X1" name, or they silently return NA (not an error!) instead of
+  // throwing, which would quietly corrupt the Sobel/Aroian product test below. Only the
+  // EXPOSURE gets this treatment (see buildNodeSimLines) — mediators keep their plain 0/1
+  // numeric coding even if Bernoulli, so only lookups of X as a predictor need this.
+  const xIsRoot = getParents(X).length === 0;
+  const xIsBernoulli = (xIsRoot ? getRootDist(X).dist : getNonRootDist(X)) === 'Bernoulli';
+  const coefName = (predName) => (predName === xName && xIsBernoulli) ? `${xName}1` : predName;
+
+  // Power analysis always reports the total, direct AND indirect effect together,
+  // regardless of the "Total/Direct Effect" radio selection above — that selector only
+  // controls what MUST be adjusted for in the DAG analysis panel, but for a power
+  // analysis you typically want every effect's power available at once without having
+  // to flip the selector and regenerate. So the adjustment sets below are built
+  // directly, independent of getEffectType()/getAdjSetNames().
+  const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
+  const mediatorNames = mediators.map(getNodeName);
+  const baseAdjNames = (state.analysisResult?.minimal?.[0] || []).map(getNodeName); // backdoor set only
+  const directAdjNames = [...new Set([...baseAdjNames, ...mediatorNames])]; // backdoor set + mediators
+
+  // Moderator interaction on X's edge into Y (independent of which adjustment set is used):
   const yIntPairs = state.edges.filter(e => e.to === Y).flatMap(e => {
     const mod = getEdgeModerator(e.id);
     return mod ? [{ a: getNodeName(e.from), b: mod }] : [];
   });
   const xModerators = yIntPairs.filter(p => p.a === xName).map(p => p.b);
   const hasXInteraction = xModerators.length > 0;
-  const nullTerms = [...new Set([...adjNames.filter(a => a !== xName), ...xModerators])];
-  const nullRhs = nullTerms.length > 0 ? nullTerms.join(' + ') : '1';
+
+  function buildRHS(adjNames) {
+    const baseTerms = [xName, ...adjNames];
+    if (xModerators.length === 0) return baseTerms.join(' + ');
+    const processed = [...baseTerms];
+    for (const mod of xModerators) {
+      const ai = processed.indexOf(xName); if (ai >= 0) processed.splice(ai, 1);
+      const bi = processed.indexOf(mod); if (bi >= 0) processed.splice(bi, 1);
+      processed.push(`${xName} * ${mod}`);
+    }
+    return processed.join(' + ');
+  }
+  function buildNullRHS(adjNames) {
+    const nullTerms = [...new Set([...adjNames.filter(a => a !== xName), ...xModerators])];
+    return nullTerms.length > 0 ? nullTerms.join(' + ') : '1';
+  }
+
+  const totalRhs = buildRHS(baseAdjNames), totalNullRhs = buildNullRHS(baseAdjNames);
+  const directRhs = buildRHS(directAdjNames), directNullRhs = buildNullRHS(directAdjNames);
 
   const lines = [];
   lines.push('# ============================================================');
   lines.push('# POWER SIMULATION (Golem Builder) — Monte Carlo power analysis');
-  lines.push(`# Effect: ${effectLabel.toUpperCase()} (${xName} → ${yName})`);
-  lines.push(`# Adjusted for: ${adjNames.length > 0 ? adjNames.join(', ') : '(no adjustment set needed)'}`);
+  lines.push(`# ${xName} → ${yName}: TOTAL, DIRECT and INDIRECT effect (always all three —`);
+  lines.push('# independent of whatever is selected above under "Effect of interest").');
+  lines.push(`# Adjusted for total effect: ${baseAdjNames.length > 0 ? baseAdjNames.join(', ') : '(no adjustment set needed)'}`);
+  if (mediators.length > 0) {
+    lines.push(`# Adjusted for direct effect (mediator(s) additionally controlled): ${directAdjNames.join(', ')}`);
+  }
   lines.push('# Note: N_sim=500 replicates can take a few minutes depending on model');
   lines.push('# complexity (several glmmTMB fits per replicate).');
   lines.push('# ============================================================');
@@ -3150,40 +3352,52 @@ function generatePowerCode() {
   lines.push('  return(dat)');
   lines.push('}');
   lines.push('');
-  lines.push(`# ── ${effectLabel === 'direct' ? 'Direct' : 'Total'} effect ${xName} → ${yName}: Wald test (car::Anova) ──`);
-  if (hasXInteraction) {
-    lines.push(`# ${xName} interacts with a moderator (${xModerators.join(', ')}) — a single Wald`);
-    lines.push(`# coefficient for "${xName}" would not be meaningful here (the effect depends on`);
-    lines.push(`# ${xModerators.join(', ')}). Only the LRT below is computed for this case.`);
-  } else {
-    lines.push('fit_and_test <- function(sim_seed) {');
+
+  function emitEffectBlock(label, rhs, nullRhs, waldVar, lrtVar) {
+    lines.push(`# ── ${label} effect ${xName} → ${yName}: Wald test (car::Anova) ──`);
+    if (hasXInteraction) {
+      lines.push(`# ${xName} interacts with a moderator (${xModerators.join(', ')}) — a single Wald`);
+      lines.push(`# coefficient for "${xName}" would not be meaningful here (the effect depends on`);
+      lines.push(`# ${xModerators.join(', ')}). Only the LRT below is computed for this case.`);
+    } else {
+      lines.push(`fit_and_test_${waldVar} <- function(sim_seed) {`);
+      lines.push('  d <- sim_data_one(sim_seed)');
+      lines.push('  tryCatch({');
+      lines.push(`    fit <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
+      lines.push('    wald <- car::Anova(fit, type = "II")');
+      lines.push(`    return(wald["${xName}", "Pr(>Chisq)"] < alpha)`);
+      lines.push('  }, error = function(e) NA)');
+      lines.push('}');
+      lines.push(`power_wald_${waldVar} <- mean(sapply(seq_len(N_sim), fit_and_test_${waldVar}), na.rm = TRUE)`);
+      lines.push(`cat(sprintf("Power (Wald, ${label} effect): %.1f%%\\n", power_wald_${waldVar} * 100))`);
+    }
+    lines.push('');
+    lines.push(`# ── ${label} effect ${xName} → ${yName}: Likelihood-ratio test ──`);
+    lines.push('# (more accurate than Wald, especially for small n or non-Gaussian families;');
+    lines.push('# also works with interaction terms, since the whole X bundle is compared nested)');
+    lines.push(`fit_and_test_${lrtVar} <- function(sim_seed) {`);
     lines.push('  d <- sim_data_one(sim_seed)');
     lines.push('  tryCatch({');
-    lines.push(`    fit <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
-    lines.push('    wald <- car::Anova(fit, type = "II")');
-    lines.push(`    return(wald["${xName}", "Pr(>Chisq)"] < alpha)`);
+    lines.push(`    fit_full <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
+    lines.push(`    fit_null <- glmmTMB(${yName} ~ ${nullRhs}, data = d, family = ${family})`);
+    lines.push('    return(anova(fit_full, fit_null)$`Pr(>Chisq)`[2] < alpha)');
     lines.push('  }, error = function(e) NA)');
     lines.push('}');
-    lines.push('power_wald <- mean(sapply(seq_len(N_sim), fit_and_test), na.rm = TRUE)');
-    lines.push(`cat(sprintf("Power (Wald, %s effect): %.1f%%\\n", "${effectLabel}", power_wald * 100))`);
+    lines.push(`power_lrt_${lrtVar} <- mean(sapply(seq_len(N_sim), fit_and_test_${lrtVar}), na.rm = TRUE)`);
+    lines.push(`cat(sprintf("Power (LRT, ${label} effect): %.1f%%\\n", power_lrt_${lrtVar} * 100))`);
   }
+
+  emitEffectBlock('total', totalRhs, totalNullRhs, 'total', 'total');
+
   lines.push('');
-  lines.push(`# ── ${effectLabel === 'direct' ? 'Direct' : 'Total'} effect ${xName} → ${yName}: Likelihood-ratio test ──`);
-  lines.push('# (more accurate than Wald, especially for small n or non-Gaussian families;');
-  lines.push('# also works with interaction terms, since the whole X bundle is compared nested)');
-  lines.push('fit_and_test_lrt <- function(sim_seed) {');
-  lines.push('  d <- sim_data_one(sim_seed)');
-  lines.push('  tryCatch({');
-  lines.push(`    fit_full <- glmmTMB(${yName} ~ ${rhs}, data = d, family = ${family})`);
-  lines.push(`    fit_null <- glmmTMB(${yName} ~ ${nullRhs}, data = d, family = ${family})`);
-  lines.push('    return(anova(fit_full, fit_null)$`Pr(>Chisq)`[2] < alpha)');
-  lines.push('  }, error = function(e) NA)');
-  lines.push('}');
-  lines.push('power_lrt <- mean(sapply(seq_len(N_sim), fit_and_test_lrt), na.rm = TRUE)');
-  lines.push(`cat(sprintf("Power (LRT, %s effect): %.1f%%\\n", "${effectLabel}", power_lrt * 100))`);
+  if (mediators.length > 0) {
+    emitEffectBlock('direct', directRhs, directNullRhs, 'direct', 'direct');
+  } else {
+    lines.push(`# No mediator found between ${xName} and ${yName} — direct effect = total effect`);
+    lines.push('# (see above), not computed separately here.');
+  }
 
   // ── Indirect (mediated) effect ──
-  const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
   if (mediators.length > 0) {
     const medAncestorsOf = node => mediators.filter(m => m !== node && hasDirectedPath(m, node));
     const adjIds = (state.analysisResult?.minimal?.[0] || []);
@@ -3193,21 +3407,31 @@ function generatePowerCode() {
     // Enumerate every real causal path X -> ... -> Y through the allowed subgraph —
     // identical enumeration to generateMediationCode(), so path labels/topology match
     // what the (Bayesian) mediation analysis elsewhere in this tool already reports.
-    const realPaths = [];
+    const allRealPaths = [];
     (function walk(node, path) {
-      if (node === Y) { realPaths.push([...path]); return; }
+      if (node === Y) { allRealPaths.push([...path]); return; }
       getChildren(node).filter(c => pathAllowed.has(c) && !path.includes(c)).forEach(c => walk(c, [...path, c]));
     })(X, [X]);
+    // Drop the literal direct edge X→Y (path length 2, if one exists alongside the
+    // mediated paths) — that effect is already tested above in the direct-effect block.
+    const realPaths = allRealPaths.filter(p => p.length > 2);
 
     lines.push('');
     lines.push('# ============================================================');
     lines.push(`# INDIRECT (mediated) EFFECT ${xName} → … → ${yName}`);
     lines.push(`# Mediator(s): ${mediators.map(getNodeName).join(', ')}`);
-    lines.push('# Joint-significance test (MacKinnon et al. 2002; Fritz & MacKinnon 2007):');
-    lines.push('# a path counts as "detected" in a given simulation if EVERY edge along the');
-    lines.push('# path is individually (Wald test) significant. More conservative than a');
-    lines.push('# bootstrap CI of the product a×b, but fast enough without resampling for a');
-    lines.push('# Monte Carlo power analysis with several hundred replicates.');
+    lines.push('# Three approaches per path, all testing the same null H0: a×b = 0:');
+    lines.push('#  1) Joint significance (MacKinnon et al. 2002; Fritz & MacKinnon 2007): "detected"');
+    lines.push('#     if EVERY edge along the path is individually (Wald test) significant. This');
+    lines.push('#     correctly tests H0 (a×b=0 iff a=0 or b=0) without assuming the skewed sampling');
+    lines.push('#     distribution of a×b under H0 — hence the default here.');
+    lines.push('#  2) Sobel/Aroian test: classic Wald test directly on the product a×b via delta-');
+    lines.push('#     method SE. Essentially free to compute (reuses the same model fits), but known');
+    lines.push('#     to be unreliable at small n/weak paths (a×b is not normally distributed under');
+    lines.push('#     H0) — shown here only for comparison, not as a replacement for 1).');
+    lines.push('#  3) Bootstrap percentile CI of a×b: the methodologically cleanest test, but only');
+    lines.push('#     included below as commented-out code, since it needs B resamples PER Monte');
+    lines.push('#     Carlo replicate (see warning there) — hence not the default.');
     lines.push('# ============================================================');
     lines.push('');
     lines.push('fit_and_test_paths <- function(sim_seed) {');
@@ -3215,12 +3439,14 @@ function generatePowerCode() {
     lines.push('  tryCatch({');
 
     const edgeVarNames = {};
+    const targetFormulas = {}; // reused below for the commented-out bootstrap block
     nodesNeedingFit.forEach(targetId => {
       const targetName = getNodeName(targetId);
       const adjParents = getParents(targetId).filter(p => adjIds.includes(p)).map(getNodeName);
       const preds = [xName, ...medAncestorsOf(targetId).map(getNodeName), ...adjParents];
       const uniquePreds = [...new Set(preds)];
       const targetFamily = nodeGlmmFamily(targetId);
+      targetFormulas[targetId] = { targetName, uniquePreds, targetFamily };
       lines.push(`    fit_${targetName} <- glmmTMB(${targetName} ~ ${uniquePreds.join(' + ')}, data = d, family = ${targetFamily})`);
       lines.push(`    wald_${targetName} <- car::Anova(fit_${targetName}, type = "II")`);
     });
@@ -3237,17 +3463,45 @@ function generatePowerCode() {
         const varName = `sig_${predName}_${targetName}`;
         edgeVarNames[key] = varName;
         lines.push(`    ${varName} <- wald_${targetName}["${predName}", "Pr(>Chisq)"] < alpha`);
+        lines.push(`    est_${predName}_${targetName} <- fixef(fit_${targetName})$cond["${coefName(predName)}"]`);
+        lines.push(`    se_${predName}_${targetName} <- summary(fit_${targetName})$coefficients$cond["${coefName(predName)}", "Std. Error"]`);
       }
+    });
+
+    // Sobel/Aroian test of the product term per indirect path (delta method, generalized
+    // to >1 mediator via Var[prod X_i] for independent normal variables X_i ~ N(est_i, se_i^2)):
+    //   Sobel:  Var ≈ Σ_i (Π_{j≠i} est_j)^2 · se_i^2               (first-order linear approx.)
+    //   Aroian: Var  = Π_i (est_i^2 + se_i^2) − Π_i est_i^2         (exact for indep. normals)
+    const sobelSuffixes = [];
+    realPaths.filter(p => p.length > 2).forEach(path => {
+      const suffix = path.slice(1, -1).map(getNodeName).join('_');
+      sobelSuffixes.push(suffix);
+      const estVars = [], seVars = [];
+      for (let i = 0; i < path.length - 1; i++) {
+        const predName = getNodeName(path[i]), targetName = getNodeName(path[i+1]);
+        estVars.push(`est_${predName}_${targetName}`);
+        seVars.push(`se_${predName}_${targetName}`);
+      }
+      lines.push(`    ests_${suffix} <- c(${estVars.join(', ')})`);
+      lines.push(`    ses_${suffix} <- c(${seVars.join(', ')})`);
+      lines.push(`    prod_est_${suffix} <- prod(ests_${suffix})`);
+      lines.push(`    var_sobel_${suffix} <- sum(sapply(seq_along(ests_${suffix}), function(i) (prod(ests_${suffix}[-i]))^2 * ses_${suffix}[i]^2))`);
+      lines.push(`    var_aroian_${suffix} <- prod(ests_${suffix}^2 + ses_${suffix}^2) - prod(ests_${suffix}^2)`);
+      lines.push(`    z_sobel_${suffix} <- prod_est_${suffix} / sqrt(var_sobel_${suffix})`);
+      lines.push(`    z_aroian_${suffix} <- prod_est_${suffix} / sqrt(var_aroian_${suffix})`);
     });
     lines.push('');
     lines.push('    return(c(');
-    const pathResultLines = realPaths.map((path, pi) => {
+    const pathResultLines = [];
+    realPaths.forEach(path => {
       const edgeVars = [];
       for (let i = 0; i < path.length - 1; i++) edgeVars.push(edgeVarNames[path[i] + '->' + path[i+1]]);
-      const label = path.length === 2 ? 'direct_edge' : 'indirect_via_' + path.slice(1, -1).map(getNodeName).join('_');
-      return `      ${label} = ${edgeVars.join(' & ')}${pi < realPaths.length - 1 ? ',' : ''}`;
+      const suffix = path.slice(1, -1).map(getNodeName).join('_');
+      pathResultLines.push(`      indirect_via_${suffix} = ${edgeVars.join(' & ')}`);
+      pathResultLines.push(`      sobel_via_${suffix} = abs(z_sobel_${suffix}) > qnorm(1 - alpha / 2)`);
+      pathResultLines.push(`      aroian_via_${suffix} = abs(z_aroian_${suffix}) > qnorm(1 - alpha / 2)`);
     });
-    lines.push(...pathResultLines);
+    lines.push(pathResultLines.join(',\n'));
     lines.push('    ))');
     lines.push('  }, error = function(e) NA)');
     lines.push('}');
@@ -3256,14 +3510,57 @@ function generatePowerCode() {
     lines.push('# plain vector instead of a matrix — reshape it here, otherwise rowMeans() crashes:');
     lines.push('if (is.null(dim(raw_paths))) raw_paths <- matrix(raw_paths, nrow = 1, dimnames = list(unique(names(raw_paths)), NULL))');
     lines.push('power_paths <- rowMeans(raw_paths, na.rm = TRUE)');
+    lines.push('# Table has three rows per indirect path: joint significance (indirect_via_...),');
+    lines.push('# Sobel (sobel_via_...), and Aroian (aroian_via_...) — see the comment above.');
     lines.push('print(data.frame(Path = names(power_paths), Power_pct = round(power_paths * 100, 1)))');
 
     const indirectLabels = realPaths.filter(p => p.length > 2).map(path => 'indirect_via_' + path.slice(1, -1).map(getNodeName).join('_'));
     if (indirectLabels.length > 1) {
       lines.push('');
-      lines.push('# Power for "at least one indirect path significant":');
+      lines.push('# Power for "at least one indirect path significant" (joint significance):');
       lines.push(`power_any_indirect <- mean(apply(raw_paths[c(${indirectLabels.map(l => `"${l}"`).join(', ')}), , drop = FALSE], 2, any), na.rm = TRUE)`);
       lines.push('cat(sprintf("Power (at least 1 indirect path significant): %.1f%%\\n", power_any_indirect * 100))');
+    }
+
+    if (sobelSuffixes.length > 0) {
+      lines.push('');
+      lines.push('# ============================================================');
+      lines.push('# ALTERNATIVE (commented out, NOT the default): bootstrap percentile CI of a×b');
+      lines.push('# The methodologically cleanest test of the product term (no normality assumption');
+      lines.push('# for a×b needed), but expensive: B resamples are drawn WITHIN EACH of the N_sim=500');
+      lines.push('# Monte Carlo replicates (nested bootstrap). At B=1000 that is 500 × 1000 =');
+      lines.push('# 500,000 extra glmmTMB fits PER path — depending on the model this can take');
+      lines.push('# several hours. Reduce N_sim and B drastically first (e.g. N_sim <- 20; B <- 200)');
+      lines.push('# to estimate runtime before starting the full run. To enable: remove the "# "');
+      lines.push('# comment markers.');
+      lines.push('# ============================================================');
+      realPaths.filter(p => p.length > 2).forEach(path => {
+        const suffix = path.slice(1, -1).map(getNodeName).join('_');
+        const pathTargets = path.slice(1); // mediators + Y, in path order
+        lines.push('#');
+        lines.push(`# boot_indirect_${suffix} <- function(d, B = 1000) {`);
+        lines.push('#   boot_prods <- replicate(B, {');
+        lines.push('#     d_star <- d[sample(nrow(d), replace = TRUE), ]');
+        lines.push('#     tryCatch({');
+        pathTargets.forEach(targetId => {
+          const { targetName, uniquePreds, targetFamily } = targetFormulas[targetId];
+          lines.push(`#       b_fit_${targetName} <- glmmTMB(${targetName} ~ ${uniquePreds.join(' + ')}, data = d_star, family = ${targetFamily})`);
+        });
+        const coefTerms = [];
+        for (let i = 0; i < path.length - 1; i++) {
+          const predName = getNodeName(path[i]), targetName = getNodeName(path[i+1]);
+          coefTerms.push(`fixef(b_fit_${targetName})$cond["${coefName(predName)}"]`);
+        }
+        lines.push(`#       ${coefTerms.join(' * ')}`);
+        lines.push('#     }, error = function(e) NA)');
+        lines.push('#   })');
+        lines.push('#   ci <- quantile(boot_prods, c(alpha / 2, 1 - alpha / 2), na.rm = TRUE)');
+        lines.push('#   !(ci[1] <= 0 && ci[2] >= 0)');
+        lines.push('# }');
+        lines.push(`# fit_and_test_boot_${suffix} <- function(sim_seed) boot_indirect_${suffix}(sim_data_one(sim_seed), B = 1000)`);
+        lines.push(`# power_boot_${suffix} <- mean(sapply(seq_len(N_sim), fit_and_test_boot_${suffix}), na.rm = TRUE)`);
+        lines.push(`# cat(sprintf("Power (bootstrap CI, indirect via ${suffix}): %.1f%%\\n", power_boot_${suffix} * 100))`);
+      });
     }
   } else {
     lines.push('');
