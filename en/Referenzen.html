@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTL References – Bayes Thinking Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+/* ── Design Tokens (identical to Glossar.html) ── */
+:root {
+  --bg:#f0ead8; --paper:#f8f3e8; --ink:#18130e; --ink2:#5a4f42; --ink3:#8a7f72;
+  --a1:#c94a2a; --a2:#2a6e8a; --a3:#5a8a2a; --a4:#7a3a8a; --a5:#b85c00; --a6:#0e7c7b; --a7:#a8265a;
+  --grid:#ddd5c5; --panel:#e8e0ce; --border:#c8bfaa; --warm:#c8a96e;
+  --topbar-h:54px;
+}
+[data-theme="dark"] {
+  --bg:#0c0f14; --paper:#111520; --ink:#ece6d8; --ink2:#8a8070; --ink3:#5a5448;
+  --a1:#e8614a; --a2:#4ab0d8; --a3:#80cb52; --a4:#c87ad8; --a5:#e07830; --a6:#2bc7c4; --a7:#ef5da0;
+  --grid:#1e242e; --panel:#171d28; --border:#2a3040; --warm:#c8a96e;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,serif; min-height:100vh; }
+
+/* ── Topbar ── */
+#topbar {
+  position:sticky; top:0; z-index:100;
+  background:var(--paper); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:.75rem; padding:.55rem 1.1rem;
+  height:var(--topbar-h);
+}
+#topbar h1 { font-size:1.05rem; font-weight:600; letter-spacing:.01em; flex:1; }
+#topbar h1 span { color:var(--a6); }
+.tb-btn {
+  font-family:'DM Mono',monospace; font-size:.75rem; padding:.3rem .7rem;
+  border:1px solid var(--border); border-radius:4px; cursor:pointer;
+  background:var(--panel); color:var(--ink2); transition:background .15s;
+}
+.tb-btn:hover { background:var(--border); }
+.tb-btn.help-btn { border-color:var(--a1); color:var(--a1); }
+.tb-btn.help-btn:hover { background:var(--a1); color:#fff; }
+.back-link {
+  font-family:'DM Mono',monospace; font-size:.75rem; color:var(--ink3);
+  text-decoration:none; padding:.3rem .6rem; border:1px solid var(--border);
+  border-radius:4px; transition:background .15s;
+}
+.back-link:hover { background:var(--panel); color:var(--ink); }
+
+/* ── Layout ── */
+#app {
+  display:grid;
+  grid-template-columns:270px 1fr;
+  height:calc(100vh - var(--topbar-h));
+}
+
+/* ── Sidebar ── */
+#sidebar {
+  background:var(--panel); border-right:1px solid var(--border);
+  overflow-y:scroll; padding:1rem .85rem;
+  display:flex; flex-direction:column; gap:1rem;
+}
+#sidebar::-webkit-scrollbar { width:5px; }
+#sidebar::-webkit-scrollbar-track { background:var(--bg); }
+#sidebar::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+.sb-label {
+  font-family:'DM Mono',monospace; font-size:.7rem; text-transform:uppercase;
+  letter-spacing:.08em; color:var(--ink3); margin-bottom:.3rem;
+}
+#rf-search {
+  width:100%; padding:.45rem .65rem; border:1px solid var(--border);
+  border-radius:4px; background:var(--bg); color:var(--ink);
+  font-family:'DM Mono',monospace; font-size:.8rem;
+  outline:none; transition:border-color .15s;
+}
+#rf-search:focus { border-color:var(--a6); }
+#rf-search::placeholder { color:var(--ink3); }
+
+.cat-filters { display:flex; flex-wrap:wrap; gap:.35rem; }
+.cat-btn {
+  font-family:'DM Mono',monospace; font-size:.68rem; padding:.22rem .5rem;
+  border:1px solid var(--border); border-radius:3px; cursor:pointer;
+  background:var(--bg); color:var(--ink2); transition:all .15s;
+}
+.cat-btn:hover, .cat-btn.active { color:#fff; border-color:transparent; }
+.cat-btn[data-cat="all"].active     { background:var(--ink2); }
+.cat-btn[data-cat="bayes"].active   { background:var(--a4); }
+.cat-btn[data-cat="causal"].active  { background:var(--a1); }
+.cat-btn[data-cat="reg"].active     { background:var(--a2); }
+.cat-btn[data-cat="glm"].active     { background:var(--a3); }
+.cat-btn[data-cat="dist"].active    { background:var(--a6); }
+.cat-btn[data-cat="software"].active{ background:var(--a7); }
+.cat-btn[data-cat="irt"].active     { border-color:var(--a4); color:var(--a4); background:transparent; }
+.cat-btn[data-cat="rel"].active     { border-color:var(--a6); color:var(--a6); background:transparent; }
+.cat-btn[data-cat="curios"].active  { border-color:var(--warm); color:var(--warm); background:transparent; }
+
+.az-nav { display:flex; flex-wrap:wrap; gap:.2rem; }
+.az-link {
+  font-family:'DM Mono',monospace; font-size:.72rem; padding:.18rem .32rem;
+  border-radius:3px; color:var(--ink3); cursor:pointer; text-decoration:none;
+  transition:background .12s, color .12s;
+}
+.az-link:hover { background:var(--grid); color:var(--ink); }
+.az-link.has-entry { color:var(--a6); font-weight:500; }
+.az-link.disabled { opacity:.3; pointer-events:none; }
+
+#rf-count { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--ink3); }
+
+/* ── Main ── */
+#rf-main { overflow-y:scroll; padding:1.5rem 1.8rem; }
+#rf-main::-webkit-scrollbar { width:5px; }
+#rf-main::-webkit-scrollbar-track { background:var(--bg); }
+#rf-main::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+.rf-letter-group { margin-bottom:1.8rem; }
+.rf-letter-head {
+  font-family:'DM Mono',monospace; font-size:.7rem; text-transform:uppercase;
+  letter-spacing:.12em; color:var(--ink3); border-bottom:1px solid var(--border);
+  padding-bottom:.3rem; margin-bottom:.8rem;
+}
+
+/* Reference card */
+.rf-card {
+  background:var(--paper); border:1px solid var(--border); border-radius:6px;
+  padding:1rem 1.15rem; margin-bottom:.75rem; transition:border-color .15s;
+}
+.rf-card:hover { border-color:var(--warm); }
+.rf-card-head {
+  display:flex; align-items:baseline; flex-wrap:wrap; gap:.5rem; margin-bottom:.4rem;
+}
+.rf-name { font-size:1.02rem; font-weight:600; letter-spacing:.01em; }
+.rf-tags { margin-left:auto; display:flex; gap:.3rem; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0; }
+.rf-tag {
+  font-family:'DM Mono',monospace; font-size:.65rem; text-transform:uppercase;
+  letter-spacing:.07em; padding:.15rem .45rem; border-radius:3px; white-space:nowrap;
+}
+.rf-tag-bayes    { background:var(--a4); color:#fff; }
+.rf-tag-causal   { background:var(--a1); color:#fff; }
+.rf-tag-reg      { background:var(--a2); color:#fff; }
+.rf-tag-glm      { background:var(--a3); color:#fff; }
+.rf-tag-dist     { background:var(--a6); color:#fff; }
+.rf-tag-software { background:var(--a7); color:#fff; }
+.rf-tag-irt      { background:transparent; border:1px solid var(--a4); color:var(--a4); }
+.rf-tag-rel      { background:transparent; border:1px solid var(--a6); color:var(--a6); }
+.rf-tag-curios   { background:transparent; border:1px solid var(--warm); color:var(--warm); }
+
+.rf-cite { font-size:.88rem; line-height:1.65; color:var(--ink); margin-bottom:.5rem; }
+.rf-cite em { font-style:italic; }
+.rf-note {
+  font-family:'DM Mono',monospace; font-size:.76rem; color:var(--ink2);
+  background:var(--panel); border-left:3px solid var(--warm);
+  padding:.4rem .7rem; border-radius:0 4px 4px 0; margin-bottom:.5rem; line-height:1.6;
+}
+.rf-usedin { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--ink3); margin-bottom:.4rem; }
+.rf-usedin strong { color:var(--ink2); font-weight:500; }
+.rf-url {
+  font-family:'DM Mono',monospace; font-size:.72rem; color:var(--a6);
+  text-decoration:none; border-bottom:1px dotted var(--a6);
+}
+.rf-url:hover { opacity:.75; }
+
+#rf-empty {
+  display:none; text-align:center; padding:3rem 1rem; color:var(--ink3);
+  font-family:'DM Mono',monospace; font-size:.85rem;
+}
+
+/* ── Help Panel ── */
+#help-panel {
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.5); backdrop-filter:blur(3px);
+}
+#help-panel.open { display:flex; align-items:center; justify-content:center; }
+.hp-box {
+  background:var(--paper); border:1px solid var(--border); border-radius:8px;
+  max-width:560px; width:90%; max-height:80vh; overflow-y:auto; padding:1.5rem;
+}
+.hp-box h2 { font-size:1.05rem; font-weight:600; margin-bottom:.9rem; padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+.hp-box p, .hp-box li { font-size:.88rem; line-height:1.75; color:var(--ink2); margin-bottom:.5rem; }
+.hp-box ul { padding-left:1.1rem; }
+.hp-close {
+  display:block; margin-top:1rem; font-family:'DM Mono',monospace;
+  font-size:.75rem; text-align:right; color:var(--ink3); cursor:pointer;
+  border:none; background:none; padding:.3rem 0;
+}
+.hp-close:hover { color:var(--a1); }
+</style>
+</head>
+<body>
+
+<!-- ══ Topbar ══ -->
+<div id="topbar">
+  <h1>BTL <span>References</span></h1>
+  <a class="back-link" href="../index.html">← Overview</a>
+  <a class="back-link" href="Glossar.html">📖 Glossary</a>
+  <button class="tb-btn" id="theme-btn">☀ Light</button>
+  <button class="tb-btn help-btn" id="help-btn">? Help</button>
+</div>
+
+<!-- ══ App ══ -->
+<div id="app">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+
+    <div>
+      <div class="sb-label">Search</div>
+      <input id="rf-search" type="search" placeholder="Author, title, keyword…" autocomplete="off">
+    </div>
+
+    <div>
+      <div class="sb-label">Category</div>
+      <div class="cat-filters">
+        <button class="cat-btn active" data-cat="all">All</button>
+        <button class="cat-btn" data-cat="bayes">Bayes</button>
+        <button class="cat-btn" data-cat="causal">Causality</button>
+        <button class="cat-btn" data-cat="reg">Regression</button>
+        <button class="cat-btn" data-cat="glm">GLM/Multilevel</button>
+        <button class="cat-btn" data-cat="irt">IRT/Test Theory</button>
+        <button class="cat-btn" data-cat="rel">Reliability</button>
+        <button class="cat-btn" data-cat="dist">Distributions</button>
+        <button class="cat-btn" data-cat="software">Software</button>
+        <button class="cat-btn" data-cat="curios">Curiosities</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sb-label">A–Z (by author)</div>
+      <div class="az-nav" id="az-nav"></div>
+    </div>
+
+    <div id="rf-count"></div>
+
+  </aside>
+
+  <!-- ── Main ── -->
+  <main id="rf-main">
+    <div id="rf-empty">No reference found.</div>
+    <!-- References are rendered here from the dataset via JS -->
+  </main>
+
+</div><!-- #app -->
+
+<!-- ══ Help Panel ══ -->
+<div id="help-panel">
+  <div class="hp-box">
+    <h2>📚 How do I use the reference list?</h2>
+    <p>This page collects all the books, articles, websites, and software packages referenced across the Bayes Thinking Lab tools — from textbooks (McElreath, Kruschke) to individual papers (e.g. on mediation analysis or IRT models).</p>
+    <ul>
+      <li><strong>Search</strong> – Type an author, title, or keyword into the search field. Cards are filtered live.</li>
+      <li><strong>Category</strong> – Click a category button to see only references from that area (e.g. Causality only).</li>
+      <li><strong>A–Z</strong> – Jump directly to the first entry with the chosen initial letter (sorted by author).</li>
+    </ul>
+    <p>Each entry shows: the full <strong>citation</strong>, a short framing note, <strong>where</strong> in the Lab the source is used, and — where freely available — a <strong>link</strong> to the original source.</p>
+    <button class="hp-close" id="help-close">Close ✕</button>
+  </div>
+</div>
+
+<script>
+// ── Data ──
+const REFS = [
+
+/* ── A ── */
+{ id:'angrist-pischke-2009', cats:['causal','reg'], az:'A',
+  authors:'Angrist, J. D. & Pischke, J.-S.', year:'2009',
+  title:'Mostly Harmless Econometrics: An Empiricist\'s Companion',
+  venue:'Princeton University Press',
+  note:'Standard reference for instrumental variables (2SLS) and quasi-experimental designs in econometrics.',
+  usedIn:'Golem Builder (instrumental-variable power analysis)'
+},
+{ id:'azzalini-1985', cats:['dist'], az:'A',
+  authors:'Azzalini, A.', year:'1985',
+  title:'A class of distributions which includes the normal ones',
+  venue:'Scandinavian Journal of Statistics, 12(2)',
+  note:'Introduces the skew-normal distribution — an extra shape parameter allows asymmetry while staying analytically tractable.',
+  usedIn:'Glossary (skew-normal distribution)'
+},
+
+/* ── B ── */
+{ id:'baron-kenny-1986', cats:['causal','reg'], az:'B',
+  authors:'Baron, R. M. & Kenny, D. A.', year:'1986',
+  title:'The moderator-mediator variable distinction in social psychological research: Conceptual, strategic, and statistical considerations',
+  venue:'Journal of Personality and Social Psychology, 51(6)',
+  note:'The classic approach to mediation analysis via sequential regressions (a-path, b-path, c-path) — still the most-cited reference for mediation analysis, even though modern methods (bootstrapping, causal mediation analysis) are methodologically preferable.',
+  usedIn:'Glossary (Mediation Analysis)'
+},
+{ id:'bockting-2024', cats:['bayes','software'], az:'B',
+  authors:'Bockting, F., Radev, S. T. & Bürkner, P.-C.', year:'2024',
+  title:'Simulation-Based Prior Knowledge Elicitation for Parametric Bayesian Models',
+  venue:'arXiv:2308.11672',
+  note:'A method for deriving priors from expert judgments about observable quantities rather than parameters directly — the basis for the Prior Elicitor.',
+  url:'https://arxiv.org/abs/2308.11672', urlLabel:'arxiv.org/abs/2308.11672',
+  usedIn:'The Prior Elicitor'
+},
+{ id:'buerkner-2017', cats:['bayes','software','glm'], az:'B',
+  authors:'Bürkner, P.-C.', year:'2017',
+  title:'brms: An R Package for Bayesian Multilevel Models Using Stan',
+  venue:'Journal of Statistical Software, 80(1), doi:10.18637/jss.v080.i01',
+  note:'The brms package itself, whose syntax nearly all Bayesian code generated in this Lab targets.',
+  url:'https://paul-buerkner.github.io/brms/', urlLabel:'paul-buerkner.github.io/brms',
+  usedIn:'virtually all tools with a brms code generator'
+},
+{ id:'buerkner-2018', cats:['bayes','software','glm'], az:'B',
+  authors:'Bürkner, P.-C.', year:'2018',
+  title:'Advanced Bayesian Multilevel Modeling with the R Package brms',
+  venue:'The R Journal, doi:10.32614/RJ-2018-017',
+  note:'In-depth coverage of advanced multilevel features in brms: distributional models, non-linear formulas, measurement-error models, multivariate models.',
+  usedIn:'Brms Model Builder, Bayesian Model Architect'
+},
+{ id:'buerkner-2021', cats:['bayes','software','irt'], az:'B',
+  authors:'Bürkner, P.-C.', year:'2021',
+  title:'Bayesian Item Response Modelling in R with brms and Stan',
+  venue:'Journal of Statistical Software, doi:10.18637/jss.v100.i05',
+  note:'Shows how IRT models (Rasch, 2PL, GRM, etc.) can be fit as special cases of Bayesian multilevel models in brms.',
+  usedIn:'Brms Model Builder'
+},
+{ id:'buerkner-brms-book', cats:['bayes','software'], az:'B',
+  authors:'Bürkner, P.-C.', year:'ongoing',
+  title:'The brms Book (Online Documentation & Example Collection)',
+  venue:'paulbuerkner.com',
+  note:'Continuously maintained, more extensive documentation and example collection around brms, going beyond the JSS articles.',
+  url:'https://paulbuerkner.com/software/brms-book/', urlLabel:'paulbuerkner.com/software/brms-book',
+  usedIn:'Brms Model Builder'
+},
+
+/* ── C ── */
+{ id:'cleary-1968', cats:['rel'], az:'C',
+  authors:'Cleary, T. A.', year:'1968',
+  title:'Test bias: Prediction of grades of Negro and white students in integrated colleges',
+  venue:'Journal of Educational Measurement, 5(2)',
+  note:'The Cleary model of differential test fairness — compares regression lines across groups to detect over-/under-prediction.',
+  usedIn:'Glossary (Fairness/Bias); see also MethodsLab Test_Bias'
+},
+{ id:'cohen-1988', cats:['reg'], az:'C',
+  authors:'Cohen, J.', year:'1988',
+  title:'Statistical Power Analysis for the Behavioral Sciences',
+  venue:'2nd ed., Lawrence Erlbaum Associates',
+  note:'Conventions for effect sizes (d, f², U3: small/medium/large) — the most widely cited reference point for interpreting effect magnitudes.',
+  usedIn:'LM Interactive, Glossary (Cohen\'s f², Cohen\'s U3)'
+},
+{ id:'conger-1974', cats:['reg','curios'], az:'C',
+  authors:'Conger, A. J.', year:'1974',
+  title:'A revised definition for suppressor variables: a guide to their identification and interpretation',
+  venue:'Educational and Psychological Measurement, 34(1)',
+  note:'Classification of suppressor variables, including reciprocal suppression — one predictor can boost another\'s effect while barely correlating with the outcome itself.',
+  usedIn:'Glossary (Reciprocal Suppression)'
+},
+{ id:'cunningham-2021', cats:['causal','reg'], az:'C',
+  authors:'Cunningham, S.', year:'2021',
+  title:'Causal Inference: The Mixtape',
+  venue:'Yale University Press',
+  note:'Accessible overview of causal inference (DAGs, IV, DiD, RDD, matching) — the full text is freely available online.',
+  url:'https://mixtape.scunning.com/', urlLabel:'mixtape.scunning.com',
+  usedIn:'Causal Estimands'
+},
+
+/* ── D ── */
+{ id:'darlington-hayes-2016', cats:['reg'], az:'D',
+  authors:'Darlington, R. B. & Hayes, A. F.', year:'2016',
+  title:'Regression Analysis and Linear Models: Concepts, Applications, and Implementation',
+  venue:'Guilford Publications',
+  note:'Comprehensive textbook on regression and linear models — from the basics to multicollinearity, interactions, and model diagnostics.',
+  usedIn:'LM Interactive'
+},
+{ id:'debruine-barr-2021', cats:['software'], az:'D',
+  authors:'DeBruine, L. M. & Barr, D. J.', year:'2021',
+  title:'Understanding Mixed-Effects Models Through Data Simulation',
+  venue:'Advances in Methods and Practices in Psychological Science / faux R package, JOSS 6(61)',
+  note:'The faux package for simulating datasets with a specified factorial structure and correlation matrix.',
+  usedIn:'Data Creator'
+},
+{ id:'dunn-smyth-2018', cats:['glm','dist'], az:'D',
+  authors:'Dunn, P. K. & Smyth, G. K.', year:'2018',
+  title:'Generalized Linear Models with Examples in R',
+  venue:'Springer',
+  note:'Systematic introduction to GLMs (exponential family, link functions, residual diagnostics) with worked R examples across the major distribution families.',
+  usedIn:'GLM Conditional Distributions, GLM Transition, Brms Model Builder'
+},
+
+/* ── E ── */
+{ id:'enders-tofighi-2007', cats:['glm'], az:'E',
+  authors:'Enders, C. K. & Tofighi, D.', year:'2007',
+  title:'Centering predictor variables in cross-sectional multilevel models: A new look at an old issue',
+  venue:'Psychological Methods, 12(2)',
+  note:'Clarifies the difference between grand-mean and group-mean centering (CWC) in multilevel models and how to interpret each.',
+  usedIn:'Glossary (Group-Mean-Centering / CWC)'
+},
+
+/* ── F ── */
+{ id:'feld-1991', cats:['curios'], az:'F',
+  authors:'Feld, S. L.', year:'1991',
+  title:'Why your friends have more friends than you do',
+  venue:'American Journal of Sociology, 96(6)',
+  note:'The friendship paradox: in expectation, a person\'s friends have more friends than the person does — a consequence of how sampling works across network edges.',
+  usedIn:'Glossary (Friendship Paradox)'
+},
+{ id:'finch-bolin-2024', cats:['glm'], az:'F',
+  authors:'Finch, W. H. & Bolin, J. E.', year:'2024',
+  title:'Multilevel Modeling using R',
+  venue:'3rd ed., CRC Press',
+  note:'Practice-oriented textbook on multilevel models in R — from random intercepts to growth models and cross-classified designs.',
+  usedIn:'Bayesian Model Architect'
+},
+{ id:'freedman-1983', cats:['reg','curios'], az:'F',
+  authors:'Freedman, D. A.', year:'1983',
+  title:'A note on screening regression equations',
+  venue:'The American Statistician, 37(2)',
+  note:'Freedman\'s paradox: selecting variables on the same data later used to test them produces apparently significant effects by chance alone.',
+  usedIn:'Glossary (Freedman\'s Paradox)'
+},
+{ id:'fritz-mackinnon-2007', cats:['causal','reg'], az:'F',
+  authors:'Fritz, M. S. & MacKinnon, D. P.', year:'2007',
+  title:'Required sample size to detect the mediated effect',
+  venue:'Psychological Science, 18(3)',
+  note:'Sample-size recommendations specifically for mediation analyses — the basis for power considerations on indirect effects.',
+  usedIn:'Golem Builder (indirect-effect power analysis)'
+},
+
+/* ── G ── */
+{ id:'gelman-2006', cats:['bayes','glm'], az:'G',
+  authors:'Gelman, A.', year:'2006',
+  title:'Prior distributions for variance parameters in hierarchical models',
+  venue:'Bayesian Analysis, 1(3)',
+  note:'Establishes the half-Cauchy distribution as a robust, weakly informative prior choice for dispersion parameters in multilevel models.',
+  usedIn:'Glossary (Cauchy distribution as prior)'
+},
+{ id:'gelman-2008', cats:['bayes'], az:'G',
+  authors:'Gelman, A., Jakulin, A., Pittau, M. G. & Su, Y.-S.', year:'2008',
+  title:'A weakly informative default prior distribution for logistic and other regression models',
+  venue:'Annals of Applied Statistics, 2(4)',
+  note:'Origin of the widely used Normal(0, 2.5) recommendation for intercepts and Normal(0, 1) for standardized predictors as weakly informative default priors.',
+  usedIn:'Bayesian PP Check, Bayesian Prior Lab'
+},
+{ id:'gelman-hill-vehtari-2020', cats:['reg'], az:'G',
+  authors:'Gelman, A., Hill, J. & Vehtari, A.', year:'2020',
+  title:'Regression and Other Stories',
+  venue:'Cambridge University Press (Analytical Methods for Social Research)',
+  note:'A modern, applied regression textbook — from linear regression through GLMs to causal estimation strategies, throughout with R examples.',
+  usedIn:'LM Interactive, Brms Model Builder'
+},
+{ id:'gelman-2020-workflow', cats:['bayes'], az:'G',
+  authors:'Gelman, A., Vehtari, A., Simpson, D., Margossian, C. C., Carpenter, B., Yao, Y., Kennedy, L., Gabry, J., Bürkner, P.-C. & Modrák, M.', year:'2020',
+  title:'Bayesian Workflow',
+  venue:'arXiv:2011.01808',
+  note:'Defines the iterative Bayesian workflow (prior choice, prior/posterior predictive checks, model comparison, troubleshooting) as a whole process, not isolated steps.',
+  url:'https://arxiv.org/abs/2011.01808', urlLabel:'arxiv.org/abs/2011.01808',
+  usedIn:'Bayesian Model Architect, LOO Lab'
+},
+
+/* ── H ── */
+{ id:'holland-1986', cats:['causal'], az:'H',
+  authors:'Holland, P. W.', year:'1986',
+  title:'Statistics and Causal Inference',
+  venue:'Journal of the American Statistical Association, 81(396)',
+  note:'States the "fundamental problem of causal inference": for any unit, only one of the two potential outcomes is ever observable.',
+  usedIn:'Glossary (Potential Outcomes)'
+},
+{ id:'holland-thayer-1988', cats:['irt'], az:'H',
+  authors:'Holland, P. W. & Thayer, D. T.', year:'1988',
+  title:'Differential item performance and the Mantel-Haenszel procedure',
+  venue:'In H. Wainer & H. I. Braun (Eds.), Test Validity, Erlbaum',
+  note:'Adapts the Mantel-Haenszel test for DIF detection and introduces the ΔMH scale (ETS A/B/C classification).',
+  usedIn:'Glossary (Mantel-Haenszel Test)'
+},
+{ id:'horn-1965', cats:['irt'], az:'H',
+  authors:'Horn, J. L.', year:'1965',
+  title:'A rationale and test for the number of factors in factor analysis',
+  venue:'Psychometrika, 30(2)',
+  note:'Parallel analysis — compares eigenvalues from the real data to those of randomly simulated data of the same size to determine the number of "real" factors.',
+  usedIn:'Glossary (Parallel Analysis)'
+},
+{ id:'hayes-2022', cats:['causal','reg'], az:'H',
+  authors:'Hayes, A. F.', year:'2022',
+  title:'Introduction to Mediation, Moderation, and Conditional Process Analysis: A Regression-Based Approach',
+  venue:'3rd ed., Guilford Press',
+  note:'The standard reference for regression-based mediation and moderation analysis (PROCESS macro) — covers simple and moderated mediation, index of moderated mediation, and more.',
+  usedIn:'Golem Builder (Mediation/Moderation), Glossary (Mediation Analysis)'
+},
+
+/* ── I ── */
+{ id:'imai-2010', cats:['causal'], az:'I',
+  authors:'Imai, K., Keele, L. & Yamamoto, T.', year:'2010',
+  title:'Identification, Inference, and Sensitivity Analysis for Causal Mediation Effects',
+  venue:'Statistical Science, 25(1)',
+  note:'Formalizes sensitivity analyses for mediation models under possible unobserved confounding between mediator and outcome.',
+  usedIn:'Golem Builder (Help, mediation-analysis caveats)'
+},
+
+/* ── K ── */
+{ id:'kazdin-2017', cats:['reg'], az:'K',
+  authors:'Kazdin, A. E.', year:'2017',
+  title:'Single-Case Experimental Designs: Characteristics, Changes, and Challenges',
+  venue:'Journal of the Experimental Analysis of Behavior, 108(1)',
+  note:'Overview of single-case experimental designs (ABAB, multiple baseline) as an alternative to group designs.',
+  usedIn:'Glossary (Single-Case Designs)'
+},
+{ id:'kerr-1998', cats:['curios'], az:'K',
+  authors:'Kerr, N. L.', year:'1998',
+  title:'HARKing: Hypothesizing after the results are known',
+  venue:'Personality and Social Psychology Review, 2(3)',
+  note:'Coins the term HARKing — presenting post-hoc hypotheses as if they had been formulated in advance, inflating false-positive rates.',
+  usedIn:'Glossary (HARKing)'
+},
+{ id:'kruschke-2014', cats:['bayes'], az:'K',
+  authors:'Kruschke, J. K.', year:'2014',
+  title:'Doing Bayesian Data Analysis: A Tutorial with R, JAGS, and Stan',
+  venue:'2nd ed., Academic Press',
+  note:'Template for the visual model diagrams ("Kruschke diagrams") and the HDI/ROPE-based decision logic used throughout the Lab.',
+  url:'https://doingbayesiandataanalysis.blogspot.com/', urlLabel:'doingbayesiandataanalysis.blogspot.com',
+  usedIn:'Bayes Interactive, Bayesian Model Architect, Decision Lab, Decision Maker'
+},
+{ id:'kurz', cats:['bayes','software'], az:'K',
+  authors:'Kurz, A. S.', year:'ongoing',
+  title:'Comprehensive brms/tidyverse translations of standard texts (incl. Statistical Rethinking, Doing Bayesian Data Analysis) + blog',
+  venue:'solomonkurz.netlify.app',
+  note:'An invaluable resource for applied Bayesian modeling in brms — among other things, the template for the G-computation example code.',
+  url:'https://solomonkurz.netlify.app/blog/2023-04-12-boost-your-power-with-baseline-covariates/', urlLabel:'Blog: Boost your power with baseline covariates',
+  usedIn:'Causal Estimands, and an inspiration for the Lab as a whole'
+},
+
+/* ── L ── */
+{ id:'lambert-2018', cats:['bayes'], az:'L',
+  authors:'Lambert, B.', year:'2018',
+  title:"A Student's Guide to Bayesian Statistics",
+  venue:'Sage Publications',
+  note:'An accessible, formula-focused introduction to Bayesian thinking — from Bayes\' theorem through MCMC to Stan/brms, with a focus on intuition over formalism.',
+  usedIn:'Bayes Interactive, MCMC Visualizer'
+},
+{ id:'lakens-2018', cats:['reg'], az:'L',
+  authors:'Lakens, D., Scheel, A. M. & Isager, P. M.', year:'2018',
+  title:'Equivalence Testing for Psychological Research: A Tutorial',
+  venue:'Advances in Methods and Practices in Psychological Science, 1(2)',
+  note:'Practical rules of thumb for choosing equivalence bounds (e.g. ±0.1 for Cohen\'s d) — the basis for the ROPE-bounds recommendation and for determining the SESOI.',
+  usedIn:'Decision Lab, Decision Maker'
+},
+{ id:'lindley-1957', cats:['bayes','curios'], az:'L',
+  authors:'Lindley, D. V.', year:'1957',
+  title:'A statistical paradox',
+  venue:'Biometrika, 44(1–2)',
+  note:'Lindley\'s paradox: with very large samples, a frequentist p-value and a Bayes factor can point to contradictory conclusions — illustrates the prior-sensitivity of Bayes factors.',
+  usedIn:'Glossary (Lindley\'s Paradox, Bayes Factor)'
+},
+
+/* ── M ── */
+{ id:'mackinnon-2002', cats:['causal','reg'], az:'M',
+  authors:'MacKinnon, D. P., Lockwood, C. M., Hoffman, J. M., West, S. G. & Sheets, V.', year:'2002',
+  title:'A comparison of methods to test mediation and other intervening variable effects',
+  venue:'Psychological Methods, 7(1)',
+  note:'Compares tests for mediation effects and establishes the joint-significance test as today\'s standard approach.',
+  usedIn:'Golem Builder (indirect-effect power analysis)'
+},
+{ id:'makowski-2019', cats:['bayes','reg','software'], az:'M',
+  authors:'Makowski, D., Ben-Shachar, M. S., Chen, S. H. A. & Lüdecke, D.', year:'2019',
+  title:'Indices of Effect Existence and Significance in the Bayesian Framework',
+  venue:'Frontiers in Psychology, 10:2767 (bayestestR R package)',
+  note:'Formalizes the Full-ROPE decision rule and other Bayesian indices of effect existence/significance.',
+  usedIn:'Decision Lab'
+},
+{ id:'mantel-haenszel-1959', cats:['irt'], az:'M',
+  authors:'Mantel, N. & Haenszel, W.', year:'1959',
+  title:'Statistical aspects of the analysis of data from retrospective studies of disease',
+  venue:'Journal of the National Cancer Institute, 22(4)',
+  note:'Originally an epidemiological method for summarizing stratified odds ratios — the basis for the Mantel-Haenszel test used for DIF detection in test theory.',
+  usedIn:'Glossary (Mantel-Haenszel Test)'
+},
+{ id:'mauchly-1940', cats:['glm'], az:'M',
+  authors:'Mauchly, J. W.', year:'1940',
+  title:'Significance test for sphericity of a normal n-variate distribution',
+  venue:'The Annals of Mathematical Statistics, 11(2)',
+  note:'Establishes the test for sphericity of the covariance matrix in repeated-measures designs — a precondition for the classical repeated-measures ANOVA F-test.',
+  usedIn:'Glossary (Mauchly Test)'
+},
+{ id:'masters-1982', cats:['irt'], az:'M',
+  authors:'Masters, G. N.', year:'1982',
+  title:'A Rasch model for partial credit scoring',
+  venue:'Psychometrika, 47(2)',
+  note:'The Partial Credit Model — extends the Rasch model to ordered response categories with item-specific threshold parameters.',
+  usedIn:'Glossary (Partial Credit Model)'
+},
+{ id:'mcelreath-2020', cats:['bayes','causal'], az:'M',
+  authors:'McElreath, R.', year:'2020',
+  title:'Statistical Rethinking: A Bayesian Course with Examples in R and Stan',
+  venue:'2nd ed., CRC Press',
+  note:'Shapes model notation, DAG-based causal analysis (Ch. 5–6), prior predictive checks (Ch. 4), and the Bayesian workflow followed throughout this Lab.',
+  url:'https://xcelab.net/rm/statistical-rethinking/', urlLabel:'xcelab.net/rm/statistical-rethinking',
+  usedIn:'Golem Builder, Bayes Interactive, Bayesian Prior Lab, Decision Lab, Decision Maker, Bayesian Model Architect, LOO Lab'
+},
+{ id:'mikkola-2024', cats:['bayes'], az:'M',
+  authors:'Mikkola, P., Martin, O. A., Chandramouli, S. et al.', year:'2024',
+  title:'Prior Knowledge Elicitation: The Past, Present, and Future',
+  venue:'Bayesian Analysis',
+  note:'A systematic overview of prior-elicitation methods — the methodological framework for simulation-based approaches.',
+  usedIn:'The Prior Elicitor'
+},
+{ id:'morgan-winship-2007', cats:['causal'], az:'M',
+  authors:'Morgan, S. L. & Winship, C.', year:'2007',
+  title:'Counterfactuals and Causal Inference: Methods and Principles for Social Research',
+  venue:'Cambridge University Press',
+  note:'A systematic comparison of the counterfactual framework and graphical models; includes the Heckman decomposition of selection bias.',
+  usedIn:'Causal Estimands'
+},
+{ id:'mundlak-1978', cats:['glm'], az:'M',
+  authors:'Mundlak, Y.', year:'1978',
+  title:'On the pooling of time series and cross section data',
+  venue:'Econometrica, 46(1)',
+  note:'The within-between model — the origin of decomposing a predictor into a between and a within component (related to group-mean centering).',
+  usedIn:'Glossary (Group-Mean-Centering / CWC)'
+},
+{ id:'muraki-1992', cats:['irt'], az:'M',
+  authors:'Muraki, E.', year:'1992',
+  title:'A generalized partial credit model: Application of an EM algorithm',
+  venue:'Applied Psychological Measurement, 16(2)',
+  note:'The Generalized Partial Credit Model — additionally allows discrimination parameters to vary across items.',
+  usedIn:'Glossary (Generalized Partial Credit Model)'
+},
+
+/* ── P ── */
+{ id:'pearl-1995', cats:['causal'], az:'P',
+  authors:'Pearl, J.', year:'1995',
+  title:'Causal diagrams for empirical research',
+  venue:'Biometrika, 82(4)',
+  note:'Formalizes the backdoor and front-door criteria — the formal basis for the automatic adjustment-set search in Golem Builder.',
+  usedIn:'Golem Builder, Glossary (Backdoor/Front-Door Criterion)'
+},
+{ id:'pearl-2009', cats:['causal'], az:'P',
+  authors:'Pearl, J.', year:'2009',
+  title:'Causality: Models, Reasoning, and Inference',
+  venue:'2nd ed., Cambridge University Press',
+  note:'The standard reference on causal graph theory (do-calculus, backdoor/front-door criterion, Ch. 3.3).',
+  usedIn:'Golem Builder'
+},
+{ id:'pearl-glymour-jewell-2016', cats:['causal'], az:'P',
+  authors:'Pearl, J., Glymour, M. & Jewell, N. P.', year:'2016',
+  title:'Causal Inference in Statistics: A Primer',
+  venue:'Wiley',
+  note:'A compact, textbook-style introduction to DAGs and causal inference — a more accessible entry point than "Causality".',
+  usedIn:'Golem Builder'
+},
+
+/* ── R ── */
+{ id:'raju-1988', cats:['irt'], az:'R',
+  authors:'Raju, N. S.', year:'1988',
+  title:'The area between two item characteristic curves',
+  venue:'Psychometrika, 53(4)',
+  note:'The Raju area index — quantifies differential item functioning (DIF) as the area between two groups\' ICCs.',
+  usedIn:'Glossary (Raju Index / DIF)'
+},
+{ id:'robinson-1950', cats:['curios'], az:'R',
+  authors:'Robinson, W. S.', year:'1950',
+  title:'Ecological correlations and the behavior of individuals',
+  venue:'American Sociological Review, 15(3)',
+  note:'The classic demonstration of the ecological fallacy: group-level correlations say nothing reliable about individual-level correlations.',
+  usedIn:'Glossary (Ecological Fallacy)'
+},
+{ id:'rosseel-2012', cats:['causal','software'], az:'R',
+  authors:'Rosseel, Y.', year:'2012',
+  title:'lavaan: An R Package for Structural Equation Modeling',
+  venue:'Journal of Statistical Software, 48(2)',
+  note:'The lavaan convention for standardized path coefficients — the reference point for standardization mode in Golem Builder.',
+  usedIn:'Golem Builder (standardization mode)'
+},
+
+/* ── S ── */
+{ id:'samejima-1969', cats:['irt'], az:'S',
+  authors:'Samejima, F.', year:'1969',
+  title:'Estimation of latent ability using a response pattern of graded scores',
+  venue:'Psychometrika Monograph Supplement, No. 17',
+  note:'The Graded Response Model — an IRT model for ordered, polytomous response categories (e.g. Likert scales).',
+  usedIn:'Glossary (Graded Response Model)'
+},
+
+/* ── T ── */
+{ id:'taylor-russell-1939', cats:['rel','curios'], az:'T',
+  authors:'Taylor, H. C. & Russell, J. T.', year:'1939',
+  title:'The relationship of validity coefficients to the practical effectiveness of tests in selection',
+  venue:'Journal of Applied Psychology, 23(5)',
+  note:'The Taylor-Russell tables — relate a validity coefficient, selection ratio, and base rate to the practical utility of a selection procedure.',
+  usedIn:'Glossary (Taylor-Russell Tables)'
+},
+{ id:'textor-2011', cats:['causal','software'], az:'T',
+  authors:'Textor, J., Hardt, J. & Knüppel, S.', year:'2011',
+  title:'DAGitty: A graphical tool for analyzing causal diagrams',
+  venue:'Epidemiology, 22(5)',
+  note:'The dagitty tool and its algorithms for automatically finding valid adjustment sets — the model for the equivalent feature in Golem Builder.',
+  url:'http://www.dagitty.net/', urlLabel:'dagitty.net',
+  usedIn:'Golem Builder (adjustment-set search, dagitty export)'
+},
+
+/* ── V ── */
+{ id:'vehtari-2017', cats:['bayes'], az:'V',
+  authors:'Vehtari, A., Gelman, A. & Gabry, J.', year:'2017',
+  title:'Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC',
+  venue:'Statistics and Computing, 27(5)',
+  note:'Establishes PSIS-LOO as the more robust, now-standard alternative to WAIC for Bayesian model comparison.',
+  usedIn:'LOO Lab'
+},
+{ id:'vehtari-2021-loo', cats:['bayes','software'], az:'V',
+  authors:'Vehtari, A., Gelman, A., Gabry, J. & Yao, Y.', year:'2021',
+  title:"Package 'loo': Efficient Leave-One-Out Cross-Validation and WAIC for Bayesian Models",
+  venue:'R package documentation, CRAN',
+  note:"The loo R package's own documentation — implements PSIS-LOO, WAIC, and model stacking for brms/rstanarm/Stan models.",
+  usedIn:'LOO Lab'
+},
+{ id:'velicer-1976', cats:['irt'], az:'V',
+  authors:'Velicer, W. F.', year:'1976',
+  title:'Determining the number of components from the matrix of partial correlations',
+  venue:'Psychometrika, 41(3)',
+  note:'The MAP criterion (Minimum Average Partial) for determining the number of extracted factors/components.',
+  usedIn:'Glossary (MAP Criterion)'
+},
+
+/* ── W ── */
+{ id:'wright-1921', cats:['causal'], az:'W',
+  authors:'Wright, S.', year:'1921',
+  title:'Correlation and causation',
+  venue:'Journal of Agricultural Research, 20',
+  note:'Establishes path analysis (path tracing rules) — the basis for Wright path tracing and standardized path coefficients.',
+  usedIn:'Golem Builder (standardization mode)'
+},
+
+/* ── Y ── */
+{ id:'yao-2018', cats:['bayes'], az:'Y',
+  authors:'Yao, Y., Vehtari, A., Simpson, D. & Gelman, A.', year:'2018',
+  title:'Using stacking to average Bayesian predictive distributions',
+  venue:'Bayesian Analysis, 13(3)',
+  note:'Bayesian stacking — combines several models weighted by their LOO predictive performance, instead of selecting a single one.',
+  usedIn:'LOO Lab'
+},
+{ id:'yen-1984', cats:['irt'], az:'Y',
+  authors:'Yen, W. M.', year:'1984',
+  title:'Effects of local item dependence on the fit and equating performance of the three-parameter logistic model',
+  venue:'Applied Psychological Measurement, 8(2)',
+  note:'The Q₃ statistic for checking local stochastic independence — a core assumption of all IRT models.',
+  usedIn:'Glossary (Q₃ Statistic, Local Independence)'
+}
+
+];
+
+// ── Theme Toggle ──
+const themeBtn = document.getElementById('theme-btn');
+const html = document.documentElement;
+(function initTheme() {
+  const saved = localStorage.getItem('btl-theme') || 'dark';
+  html.setAttribute('data-theme', saved);
+  themeBtn.textContent = saved === 'dark' ? '☀ Light' : '☾ Dark';
+})();
+themeBtn.addEventListener('click', () => {
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('btl-theme', next);
+  themeBtn.textContent = next === 'dark' ? '☀ Light' : '☾ Dark';
+});
+
+// ── Help Panel ──
+document.getElementById('help-btn').addEventListener('click', () =>
+  document.getElementById('help-panel').classList.add('open'));
+document.getElementById('help-close').addEventListener('click', () =>
+  document.getElementById('help-panel').classList.remove('open'));
+document.getElementById('help-panel').addEventListener('click', e => {
+  if (e.target === document.getElementById('help-panel'))
+    document.getElementById('help-panel').classList.remove('open');
+});
+
+// ── State ──
+let activeCat = 'all';
+let searchQ = '';
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function render() {
+  const main = document.getElementById('rf-main');
+  const empty = document.getElementById('rf-empty');
+
+  const q = searchQ.toLowerCase().trim();
+  const filtered = REFS.filter(r => {
+    const catOk = activeCat === 'all' || r.cats.includes(activeCat);
+    const searchOk = !q || r.authors.toLowerCase().includes(q)
+      || r.title.toLowerCase().includes(q)
+      || (r.note||'').toLowerCase().includes(q)
+      || (r.usedIn||'').toLowerCase().includes(q);
+    return catOk && searchOk;
+  });
+
+  document.getElementById('rf-count').textContent =
+    `${filtered.length} of ${REFS.length} references`;
+
+  const groups = {};
+  filtered.forEach(r => {
+    if (!groups[r.az]) groups[r.az] = [];
+    groups[r.az].push(r);
+  });
+
+  [...main.querySelectorAll('.rf-letter-group')].forEach(el => el.remove());
+
+  if (filtered.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  Object.keys(groups).sort().forEach(letter => {
+    const grp = document.createElement('div');
+    grp.className = 'rf-letter-group';
+    grp.id = 'az-' + letter;
+    grp.innerHTML = `<div class="rf-letter-head">${letter}</div>`;
+    groups[letter].sort((a,b) => a.authors.localeCompare(b.authors, 'en')).forEach(r => {
+      grp.appendChild(buildCard(r));
+    });
+    main.appendChild(grp);
+  });
+
+  updateAZNav(groups);
+}
+
+const _tagLabels = {
+  bayes:'Bayes', causal:'Causality', reg:'Regression', glm:'GLM/Multilevel',
+  irt:'IRT/Test Theory', rel:'Reliability', dist:'Distributions',
+  software:'Software', curios:'Curiosities'
+};
+
+function buildCard(r) {
+  const art = document.createElement('article');
+  art.className = 'rf-card';
+  art.id = 'ref-' + r.id;
+  art.dataset.cat = r.cats.join(' ');
+
+  const tagsHTML = `<div class="rf-tags">${r.cats.map(c =>
+    `<span class="rf-tag rf-tag-${c}">${_tagLabels[c] || c}</span>`
+  ).join('')}</div>`;
+
+  const usedInHTML = r.usedIn
+    ? `<div class="rf-usedin">Used in: <strong>${escHtml(r.usedIn)}</strong></div>` : '';
+
+  const urlHTML = r.url
+    ? `<a class="rf-url" href="${escHtml(r.url)}" target="_blank" rel="noopener">${escHtml(r.urlLabel || r.url)} ↗</a>` : '';
+
+  art.innerHTML = `
+    <div class="rf-card-head">
+      <h2 class="rf-name">${escHtml(r.authors)} (${escHtml(r.year)})</h2>
+      ${tagsHTML}
+    </div>
+    <p class="rf-cite"><em>${escHtml(r.title)}</em>. ${escHtml(r.venue)}.</p>
+    <div class="rf-note">${escHtml(r.note)}</div>
+    ${usedInHTML}
+    ${urlHTML}
+  `;
+  return art;
+}
+
+// ── A-Z Nav ──
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+function buildAZNav() {
+  const nav = document.getElementById('az-nav');
+  ALPHABET.forEach(l => {
+    const a = document.createElement('a');
+    a.className = 'az-link disabled';
+    a.textContent = l;
+    a.dataset.letter = l;
+    a.addEventListener('click', () => {
+      const el = document.getElementById('az-' + l);
+      if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+    nav.appendChild(a);
+  });
+}
+function updateAZNav(groups) {
+  document.querySelectorAll('.az-link').forEach(a => {
+    const l = a.dataset.letter;
+    if (groups[l]) { a.classList.remove('disabled'); a.classList.add('has-entry'); }
+    else { a.classList.add('disabled'); a.classList.remove('has-entry'); }
+  });
+}
+
+// ── Filter Buttons ──
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeCat = btn.dataset.cat;
+    render();
+  });
+});
+
+// ── Search ──
+document.getElementById('rf-search').addEventListener('input', e => {
+  searchQ = e.target.value;
+  render();
+});
+
+// ── Init ──
+buildAZNav();
+render();
+
+// Dynamic topbar height
+document.documentElement.style.setProperty('--topbar-h',
+  document.getElementById('topbar').offsetHeight + 'px');
+</script>
+</body>
+</html>
