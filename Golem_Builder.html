@@ -640,20 +640,28 @@ canvas {
 }
 
 /* ── FLOATING HELP PANEL ─────────────────────────── */
-@keyframes gb-slideIn { from { opacity:0; transform:translateX(10px); } to { opacity:1; transform:translateX(0); } }
+@keyframes gb-fadeIn { from { opacity:0; } to { opacity:1; } }
+@keyframes gb-scaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(.97); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
 /* .gb-help-btn dient nur noch als JS-Hook (Click-Outside); Styling kommt von .hbtn */
+#gb-help-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 499;
+  background: rgba(0,0,0,.45);
+  animation: gb-fadeIn .15s ease-out;
+}
+#gb-help-backdrop.open { display: block; }
 #gb-help-panel {
-  display: none; position: fixed; right: 1.5rem; top: 50%;
-  transform: translateY(-50%); width: 320px; z-index: 500;
+  display: none; position: fixed; left: 50%; top: 50%;
+  transform: translate(-50%,-50%); width: min(760px, 92vw); max-height: 86vh;
+  z-index: 500; flex-direction: column;
   background: var(--paper); border: 1.5px solid var(--border);
   box-shadow: 4px 4px 0 rgba(0,0,0,.14);
-  animation: gb-slideIn .18s ease-out;
+  animation: gb-scaleIn .18s ease-out;
 }
-#gb-help-panel.open { display: block; }
+#gb-help-panel.open { display: flex; }
 .gb-hp-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: .55rem .9rem; border-bottom: 1px solid var(--grid);
-  background: rgba(43,199,196,.08);
+  background: rgba(43,199,196,.08); flex: none;
 }
 .gb-hp-label {
   font-family: 'DM Mono', monospace; font-size: .6rem;
@@ -666,9 +674,9 @@ canvas {
 }
 .gb-hp-close:hover { color: var(--ink); }
 .gb-hp-body {
-  padding: .85rem .9rem; font-family: 'DM Mono', monospace;
-  font-size: .68rem; line-height: 1.8; color: var(--ink2);
-  max-height: 75vh; overflow-y: auto;
+  padding: 1rem 1.4rem 1.3rem; font-family: 'DM Mono', monospace;
+  font-size: .74rem; line-height: 1.75; color: var(--ink2);
+  flex: 1; min-height: 0; overflow-y: auto;
 }
 .gb-hp-sect {
   font-size: .52rem; letter-spacing: .1em; text-transform: uppercase;
@@ -910,9 +918,9 @@ canvas {
     </div>
 
     <div id="edgeCoefSection">
-      <div class="section-title">Kantengewichte (β)</div>
+      <div class="section-title">Kantengewichte (<span style="text-transform:none">β</span>)</div>
       <table class="coef-table">
-        <thead><tr><th>Von</th><th>→ Nach</th><th>β</th><th>×W (Moderator)</th><th>β_int</th></tr></thead>
+        <thead><tr><th>Von</th><th>→ Nach</th><th><span style="text-transform:none">β</span></th><th>×W (Moderator)</th><th><span style="text-transform:none">β_int</span></th></tr></thead>
         <tbody id="edgeCoefBody"></tbody>
       </table>
     </div>
@@ -928,7 +936,7 @@ canvas {
     <div id="nonRootSdSection" style="display:none">
       <div class="section-title">Endogene Knoten — Intercept &amp; Residual-SD</div>
       <table class="node-dist-table">
-        <thead><tr><th>Variable</th><th>Typ</th><th>Intercept α</th><th>σ / φ</th></tr></thead>
+        <thead><tr><th>Variable</th><th>Typ</th><th>Intercept <span style="text-transform:none">α</span></th><th title="Residualstreuung: wie stark Y bei gleichen Elternwerten noch zufällig streut (NICHT die Gesamtstreuung von Y). Normal/Gamma: σ bzw. φ hier eintragen. Bernoulli/Poisson: automatisch aus dem Mittelwert bestimmt, Feld deaktiviert. Siehe Hilfe → Schritt 3 → Residualstreuung für Schätzansätze."><span style="text-transform:none">σ / φ</span> ⓘ</th></tr></thead>
         <tbody id="nonRootSdBody"></tbody>
       </table>
     </div>
@@ -2514,11 +2522,16 @@ function applyStdMode() {
   const section = document.getElementById('nonRootSdSection');
   if (section) {
     const title = section.querySelector('.section-title');
-    if (title) title.textContent = STD_MODE
-      ? 'Endogene Knoten — Intercept & σ_residual (auto · Ansatz B)'
+    if (title) title.innerHTML = STD_MODE
+      ? 'Endogene Knoten — Intercept & <span style="text-transform:none">σ_residual</span> (auto · Ansatz B)'
       : 'Endogene Knoten — Intercept & Residual-SD';
     const th = section.querySelector('thead th:last-child');
-    if (th) th.textContent = STD_MODE ? 'σ (auto)' : 'σ / φ';
+    if (th) {
+      th.innerHTML = (STD_MODE ? '<span style="text-transform:none">σ</span> (auto)' : '<span style="text-transform:none">σ / φ</span>') + ' ⓘ';
+      th.title = STD_MODE
+        ? 'Residualstreuung: wie stark Y bei gleichen Elternwerten noch zufällig streut. Wird im Standardisierungsmodus automatisch aus der Kovarianz der Vorfahren berechnet (siehe Hilfe → Standardisierungsmodus).'
+        : 'Residualstreuung: wie stark Y bei gleichen Elternwerten noch zufällig streut (NICHT die Gesamtstreuung von Y). Normal/Gamma: σ bzw. φ hier eintragen. Bernoulli/Poisson: automatisch aus dem Mittelwert bestimmt, Feld deaktiviert. Siehe Hilfe → Schritt 3 → Residualstreuung für Schätzansätze.';
+    }
   }
 }
 
@@ -2682,6 +2695,16 @@ function updateRootDist(sel, nodeId) {
   }
 }
 
+function nonRootSdTitle(distVal) {
+  if (distVal === 'Gamma') {
+    return 'φ = Shape-Parameter (Präzision) · größer φ = geringere relative Streuung · CV = 1/√φ · Rate = φ/E[Y] wird automatisch berechnet · entspricht konzeptionell der Residualstreuung: Schätzansätze siehe Hilfe → Schritt 3 → Residualstreuung.';
+  }
+  if (distVal === 'Normal') {
+    return 'σ = Residualstreuung: die SD von Y, nachdem der Effekt der Eltern (Intercept + β·Eltern) bereits abgezogen ist — NICHT die Gesamtstreuung von Y. Schätzansätze: aus Vorstudien/Pilotdaten, aus einem angenommenen R² (σ = SD(Y)·√(1−R²)), oder den Standardisierungsmodus nutzen (σ wird dann automatisch berechnet). Details: Hilfe → Schritt 3 → Residualstreuung.';
+  }
+  return 'Deaktiviert: bei Bernoulli/Poisson ist die Streuung durch den Mittelwert festgelegt (Var = p·(1−p) bzw. λ) — kein separater Streuungsparameter nötig.';
+}
+
 function updateNonRootSdTable() {
   const section = document.getElementById('nonRootSdSection');
   const tbody = document.getElementById('nonRootSdBody');
@@ -2699,7 +2722,7 @@ function updateNonRootSdTable() {
     const distVal = existingDist[n.id] !== undefined ? existingDist[n.id] : 'Normal';
     const needsSigma = distVal === 'Normal' || distVal === 'Gamma';
     const sdDisabled = !needsSigma ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
-    const sdTitle    = distVal === 'Gamma' ? ' title="φ = Shape-Parameter (Präzision) · größer φ = geringere relative Streuung · CV = 1/√φ · Rate = φ/E[Y] wird automatisch berechnet"' : '';
+    const sdTitle    = ` title="${escHtml(nonRootSdTitle(distVal))}"`;
     return `<tr>
       <td>${escHtml(n.name)}</td>
       <td>
@@ -2725,7 +2748,7 @@ function updateNonRootSdTable() {
         sdInp.disabled      = !needs;
         sdInp.style.opacity = !needs ? '.35' : '';
         sdInp.style.cursor  = !needs ? 'not-allowed' : '';
-        sdInp.title = sel.value === 'Gamma' ? 'φ = Shape-Parameter (Präzision) · größer φ = geringere relative Streuung · CV = 1/√φ · Rate = φ/E[Y] wird automatisch berechnet' : 'σ_residual';
+        sdInp.title = nonRootSdTitle(sel.value);
       }
       updatePartB();
       generateRCode && document.getElementById('rCodeOutput') && (document.getElementById('rCodeOutput').textContent = generateRCode());
@@ -4597,6 +4620,21 @@ const GB_HELP_HTML = `
     <li><strong>R:</strong> Datensimulation · <strong>brms:</strong> Bayesianisches Modell · <strong>glmmTMB:</strong> Frequentistisch · <strong>dagitty:</strong> DAG-Export für Cross-Check der Adjustierungssets · <strong>Power-Analyse:</strong> Monte-Carlo-Poweranalyse (siehe eigener Abschnitt unten)</li>
   </ul>
 
+  <div class="gb-hp-sub">Residualstreuung (<span style="text-transform:none">σ / φ</span>)</div>
+  Die Spalte <strong><span style="text-transform:none">σ / φ</span></strong> bei den endogenen Knoten ist <em>nicht</em> die Gesamtstreuung der Variablen Y, sondern die <strong>Residualstreuung</strong> — wie stark Y noch zufällig streut, <em>nachdem</em> der durch Intercept + β·Eltern erklärte Teil bereits abgezogen ist (im Simulationscode: <code>Y &lt;- rnorm(n, alpha + beta*X, sigma)</code>, <span style="text-transform:none">σ</span> ist das dritte Argument).
+  <ul>
+    <li><strong>Normal:</strong> <span style="text-transform:none">σ</span> = Residual-SD direkt eintragen.</li>
+    <li><strong>Gamma:</strong> <span style="text-transform:none">φ</span> = Shape-/Präzisionsparameter (kein SD-Wert) — größer <span style="text-transform:none">φ</span> bedeutet geringere relative Streuung, CV = 1/√<span style="text-transform:none">φ</span>.</li>
+    <li><strong>Bernoulli/Poisson:</strong> Feld deaktiviert — die Streuung ist durch den Mittelwert festgelegt (Var = p·(1−p) bzw. λ), kein separater Parameter nötig.</li>
+    <li><strong>Standardisierungsmodus:</strong> <span style="text-transform:none">σ</span> wird automatisch berechnet (siehe eigener Abschnitt unten) — hier nichts einzutragen.</li>
+  </ul>
+  Praktische Schätzansätze für <span style="text-transform:none">σ</span>, wenn kein Standardisierungsmodus verwendet wird:
+  <ul>
+    <li>Residual-SD aus einer Vorstudie/Pilotstudie mit vergleichbarem Modell übernehmen (steht oft direkt im Modell-Output).</li>
+    <li>Aus einem angenommenen Bestimmtheitsmaß R² ableiten: <span style="text-transform:none">σ</span> = SD(Y) · √(1 − R²) — SD(Y) aus Literatur/Pilotdaten, R² als plausible Annahme für die Modellgüte.</li>
+    <li>Wenn nur die marginale/totale SD von Y bekannt ist (nicht die Residual-SD): diese ist immer eine <em>obere</em> Schranke für die Residual-SD (Var(Y) = erklärte Var + Residual-Var) — als konservative Näherung verwendbar, überschätzt aber tendenziell die Streuung und unterschätzt damit die Power.</li>
+  </ul>
+
   <div class="gb-hp-sub">Poweranalyse</div>
   Button <strong>"Power-Analyse generieren"</strong> erzeugt eine Monte-Carlo-Poweranalyse (R, glmmTMB/car bzw. AER), passend zur DAG-Struktur:
   <ul>
@@ -4641,20 +4679,25 @@ const GB_HELP_HTML = `
 let gbHelpOpen = false;
 function toggleGbHelp() {
   gbHelpOpen = !gbHelpOpen;
-  const panel = document.getElementById('gb-help-panel');
-  panel.classList.toggle('open', gbHelpOpen);
+  document.getElementById('gb-help-panel').classList.toggle('open', gbHelpOpen);
+  document.getElementById('gb-help-backdrop').classList.toggle('open', gbHelpOpen);
 }
 function closeGbHelp() {
   gbHelpOpen = false;
   document.getElementById('gb-help-panel').classList.remove('open');
+  document.getElementById('gb-help-backdrop').classList.remove('open');
 }
 document.addEventListener('click', e => {
   if (gbHelpOpen && !e.target.closest('#gb-help-panel') && !e.target.classList.contains('gb-help-btn')) {
     closeGbHelp();
   }
 });
+document.addEventListener('keydown', e => {
+  if (gbHelpOpen && e.key === 'Escape') closeGbHelp();
+});
 </script>
 
+<div id="gb-help-backdrop"></div>
 <div id="gb-help-panel">
   <div class="gb-hp-head">
     <span class="gb-hp-label">Golem Builder — Hilfe</span>
