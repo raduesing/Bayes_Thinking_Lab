@@ -161,7 +161,21 @@ main { padding: 1.2rem 1.2rem 2rem; max-width: 1400px; margin: 0 auto; }
   font-size: .8rem;
   flex: 1;
   min-width: 30px;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
+}
+.node-name-input {
+  font-family: 'DM Mono', monospace;
+  font-size: .8rem;
+  font-weight: 500;
+  padding: 0 .15rem;
+  border: 1px solid var(--a2);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
 }
 .badge {
   font-family: 'DM Mono', monospace;
@@ -1529,6 +1543,17 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function truncateCanvasLabel(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (ctx.measureText(text.slice(0, mid) + '…').width <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? text.slice(0, lo) + '…' : '…';
+}
+
 function drawArrow(ctx, x1, y1, x2, y2, color) {
   const dx = x2-x1, dy = y2-y1;
   const len = Math.sqrt(dx*dx+dy*dy);
@@ -1694,7 +1719,8 @@ function drawCanvas() {
     ctx.fillStyle = isLatent ? ink3 : ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(node.name, x + NODE_W/2, y + NODE_H/2);
+    const label = truncateCanvasLabel(ctx, node.name, NODE_W - 12);
+    ctx.fillText(label, x + NODE_W/2, y + NODE_H/2);
 
     // Badge
     if (isExposure) {
@@ -1809,6 +1835,7 @@ canvas.addEventListener('mousemove', e => {
   const prevHover = state.hoveredEdge;
   state.hoveredEdge = overEdge ? overEdge.id : null;
   canvas.style.cursor = overNode ? 'grab' : overEdge ? 'pointer' : 'default';
+  canvas.title = overNode ? overNode.name : '';
   if (state.hoveredEdge !== prevHover) drawCanvas();
 });
 
@@ -1884,6 +1911,61 @@ function addNode(name, forceLatent) {
   updatePartB();
 }
 
+function beginRenameNode(nodeId) {
+  const span = document.querySelector(`[data-name-id="${nodeId}"]`);
+  const node = state.nodes.find(n=>n.id===nodeId);
+  if (!span || !node) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = node.name;
+  input.className = 'node-name-input';
+  input.style.cssText = 'font:inherit;width:6.5rem;';
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+  let cancelled = false;
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { input.blur(); }
+    else if (ev.key === 'Escape') { cancelled = true; input.blur(); }
+  });
+  input.addEventListener('blur', () => {
+    if (cancelled) { renderSidebar(); return; }
+    commitRenameNode(nodeId, input.value);
+  });
+}
+
+function commitRenameNode(nodeId, rawName) {
+  const node = state.nodes.find(n=>n.id===nodeId);
+  if (!node) return;
+  const newName = rawName.trim();
+  if (!newName || newName === node.name) { renderSidebar(); return; }
+  if (state.nodes.some(n=>n.id!==nodeId && n.name===newName)) {
+    showToast(`Knoten "${newName}" existiert bereits.`);
+    renderSidebar();
+    return;
+  }
+  const oldName = node.name;
+  // Der Moderator-<select> jeder Kante wird über den NAMEN (nicht die ID) des Zielknotens
+  // referenziert — vor der Umbenennung merken, welche Kanten das betrifft, danach reparieren.
+  const modEdgesToFix = state.edges
+    .filter(e => getEdgeModerator(e.id) === oldName)
+    .map(e => e.id);
+  node.name = newName;
+  renderSidebar();
+  drawCanvas();
+  runAnalysis();
+  updatePartB();
+  updateOverlay();
+  modEdgesToFix.forEach(edgeId => {
+    const modSel = document.querySelector(`[data-edge-mod="${edgeId}"]`);
+    if (modSel) {
+      modSel.value = newName;
+      toggleIntInput(modSel, edgeId);
+    }
+  });
+  showToast(`"${oldName}" umbenannt in "${newName}".`);
+}
+
 function removeNode(nodeId) {
   state.nodes = state.nodes.filter(n=>n.id!==nodeId);
   state.edges = state.edges.filter(e=>e.from!==nodeId&&e.to!==nodeId);
@@ -1950,7 +2032,7 @@ function renderSidebar() {
     const isOut = state.outcome === node.id;
 
     item.innerHTML = `
-      <span class="node-name">${escHtml(node.name)}</span>
+      <span class="node-name" data-name-id="${node.id}" title="${escHtml(node.name)} (klicken zum Umbenennen)" style="cursor:text;text-decoration:underline dotted;text-underline-offset:3px;">${escHtml(node.name)}</span>
       ${isExp ? '<span class="badge badge-x">X</span>' : ''}
       ${isOut ? '<span class="badge badge-y">Y</span>' : ''}
       ${node.latent ? '<span class="badge badge-u">U</span>' : ''}
@@ -1971,6 +2053,9 @@ function renderSidebar() {
   });
   list.querySelectorAll('[data-action="del"]').forEach(btn => {
     btn.addEventListener('click', () => removeNode(btn.dataset.id));
+  });
+  list.querySelectorAll('[data-name-id]').forEach(span => {
+    span.addEventListener('click', () => beginRenameNode(span.dataset.nameId));
   });
 }
 
