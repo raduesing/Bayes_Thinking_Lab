@@ -13,7 +13,7 @@
 
 ### 🌐 [www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)
 
-**21 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
+**23 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -39,9 +39,9 @@ The lab is organized into five sections that build on each other. Work through t
 | :--- | :--- | :--- |
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | Distribution Lab · GLM Conditional Distributions · GLM 3D · Interactive GLMM |
-| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
+| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Why Bayes? · Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
 | **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
-| **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Prior & Posterior PC · LOO Lab |
+| **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Advanced Model Builder · Prior & Posterior PC · LOO Lab |
 | **V · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · G-Comp Builder · Decision Lab · Decision Maker |
 
 > **⬡ Workflow tip:** Use the **Golem Builder** (Section III — Small Worlds) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. Transfer everything to the **G-Comp Builder** (Section V) at the click of a button — it generates ready-to-run `marginaleffects` R code for ATE, ATT, and ATU, and exports MCMC draws directly to the **Decision Maker**.
@@ -76,6 +76,7 @@ The lab is organized into five sections that build on each other. Work through t
 ### II. Bayesian Intuition
 *Learn to think in probability distributions.*
 
+* **Why Bayes?** — What can a Bayesian posterior tell you that a p-value can't? A two-act comparison: frequentist output first, then an interactive posterior with a movable effect threshold and a live prior-update — no R required. Makes concrete why a credible interval is not a confidence interval.
 * **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
 * **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode** (new in v1.0): enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios) — via a **mathematically exact Jacobian transformation** (change-of-variables theorem), not an approximation.
 
@@ -106,6 +107,7 @@ The lab is organized into five sections that build on each other. Work through t
 
 * **Bayesian Model Architect** — Build hierarchical Bayesian model structures visually in Kruschke-diagram style. See how priors, hyperpriors, and random effects (intercepts and slopes: u₀ⱼ, u₁ⱼ, τ₀, τ₁) connect in a live diagram — then generate R simulation code for prior predictive checking.
 * **brms Model Builder** — Specify complex hierarchical models step by step across 15+ likelihood families, polynomial terms, interactions, and distributional parameters. Export production-ready `brms` code for R. The generated code includes a commented-out `posterior_predict()` export block — ready to load into the Posterior Predictive Check app.
+* **Advanced Model Builder** — Companion to the brms Model Builder for rare/advanced building blocks it doesn't cover: multivariate models, random-effects correlation structures (`||`, `|ID|`), splines, monotonic effects, measurement-error models, and missing-data handling.
 * **Prior Predictive Check** — Import your brms model specification, explore the prior predictive distribution, and validate that your priors generate plausible data before fitting.
 * **Posterior Predictive Check** — Evaluate model fit and posterior behavior via a dedicated Shiny app (R/bayesplot). Upload a saved `brms` object (`saveRDS(fit, "model.rds")`), walk through KDE overlay, summary statistics, error structure, and prediction intervals with guided evaluation.
 * **LOO Lab** — Compare models after fitting. Paste `loo_compare()` output directly from R and receive an annotated forest plot, Pareto-k diagnostics, and a traffic-light decision rule. Includes an animated LOO walkthrough (Stage 1) that requires no R.
