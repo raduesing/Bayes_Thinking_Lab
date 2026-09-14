@@ -215,7 +215,7 @@ canvas#dist-canvas{display:block;width:100%}
 
 <div class="intro-strip">
   <strong>Distribution Lab</strong> — Wahrscheinlichkeitsverteilungen interaktiv erkunden.
-  &nbsp;·&nbsp; <em>21 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Rollen &amp; Parametrisierung · X-Achse fixierbar · Ordinalmodelle
+  &nbsp;·&nbsp; <em>28 Verteilungen</em> · Parameter verschieben · Momente einblenden · brms-Rollen &amp; Parametrisierung · X-Achse fixierbar · Ordinalmodelle
 </div>
 
 <div id="cat-tabs"></div>
@@ -495,7 +495,7 @@ canvas#dist-canvas{display:block;width:100%}
   </div>
   <div class="hp-body">
     <div class="hp-sect">Überblick</div>
-    <strong>Distribution Lab</strong> zeigt 21 Wahrscheinlichkeitsverteilungen interaktiv — als Vorbereitung auf <a class="glo-link" href="Glossar.html#gl-glm" target="_blank" title="Das Generalisierte Lineare Modell erweitert die gewöhnliche lineare Regression auf nicht-normalverteilte Outcomes.">GLMs</a> und bayesianische Modelle in <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms ist ein R-Paket, das eine vertraute Formelschnittstelle für Bayesianische Regressionsmodelle bietet — intern kompiliert in Stan.">brms</a>. Welche Verteilung passt zu welchen Daten? Für jede Verteilung: Beschreibung, Einsatzszenarien, Parameter-Erklärung, brms-Verwendung und Technische Details.
+    <strong>Distribution Lab</strong> zeigt 28 Wahrscheinlichkeitsverteilungen interaktiv — als Vorbereitung auf <a class="glo-link" href="Glossar.html#gl-glm" target="_blank" title="Das Generalisierte Lineare Modell erweitert die gewöhnliche lineare Regression auf nicht-normalverteilte Outcomes.">GLMs</a> und bayesianische Modelle in <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms ist ein R-Paket, das eine vertraute Formelschnittstelle für Bayesianische Regressionsmodelle bietet — intern kompiliert in Stan.">brms</a>. Welche Verteilung passt zu welchen Daten? Für jede Verteilung: Beschreibung, Einsatzszenarien, Parameter-Erklärung, brms-Verwendung und Technische Details.
     <div class="hp-sect">Navigation</div>
     <strong>Kategorie-Tabs</strong> (oben) wählen die Verteilungsgruppe.<br>
     <strong>Verteilungs-Buttons</strong> darunter wählen die konkrete Verteilung.<br>
@@ -510,7 +510,7 @@ canvas#dist-canvas{display:block;width:100%}
     Für <strong><a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="Die Gamma-Verteilung ist eine stetige Verteilung für positive reelle Werte, parametrisiert durch Formparameter α (shape) und Ratenparameter β (rate).">Gamma</a></strong> und <strong><a class="glo-link" href="Glossar.html#gl-beta-verteilung" target="_blank" title="Die Betaverteilung ist eine stetige Wahrscheinlichkeitsverteilung auf [0,1], parametrisiert durch zwei Formparameter α und β.">Beta</a></strong>: Toggle zwischen brms (μ, φ) und klassisch (α, β). Automatische Umrechnung. brms-Parametrisierung ist intuitiver: man setzt direkt den Mittelwert.<br><br>
     Der Abschnitt <strong>"Verwendung in brms"</strong> zeigt für jede Verteilung: Als Likelihood (family-Syntax, Link) und als <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Der Prior p(θ) ist die Wahrscheinlichkeitsverteilung über Modellparameter θ, die unser Vorwissen vor Betrachtung der Daten ausdrückt.">Prior</a> (prior()-Syntax) — inkl. typischer Parametrisierungen.
     <div class="hp-sect">Gemischte Verteilungen</div>
-    <strong>ZI-Beta</strong> und <strong>ZOIB</strong>: Punktmassen bei 0/1 als rote Balken, Beta-Anteil als Kurve.
+    <strong>ZI-Beta</strong> und <strong>ZOIB</strong>: Punktmassen bei 0/1 als rote Balken, Beta-Anteil als Kurve. <strong>Hurdle-Gamma</strong> und <strong>Hurdle-Lognormal</strong>: Punktmasse bei 0 als roter Balken, positiver Anteil als Kurve auf (0, ∞) statt auf [0,1].
     <div class="hp-sect">Diskrete Verteilungen</div>
     Balkendiagramm der PMF. Modus = höchster Balken.
   </div>
@@ -604,6 +604,18 @@ function betaBinomPMF(k,n,a,b){
   return Math.exp(logGamma(n+1)-logGamma(k+1)-logGamma(n-k+1)
     +logGamma(k+a)+logGamma(n-k+b)-logGamma(n+a+b)+logGamma(a+b)-logGamma(a)-logGamma(b));
 }
+// Für ein Hurdle-Modell (P(Y=0)=hu, P(Y=k>0)=(1-hu)·f(k)/(1-f(0))) gilt allgemein:
+// der k=0-Term jeder Basisverteilung trägt 0 zu Σk·f(k) und Σk²·f(k) bei — daher
+// lassen sich Erwartungswert/Varianz der Nicht-Null-gestutzten Basisverteilung direkt
+// aus deren eigenem (ungestutztem) Mittelwert/Varianz herleiten, unabhängig davon,
+// welche Zähldichte f konkret verwendet wird.
+function hurdleDiscreteMoments(baseMean,baseVar,f0,hu){
+  const surv=1-f0;
+  const meanTrunc=baseMean/surv;
+  const m2Trunc=(baseVar+baseMean*baseMean)/surv;
+  const meanY=(1-hu)*meanTrunc;
+  return {mean:meanY, variance:(1-hu)*m2Trunc-meanY*meanY};
+}
 
 // ── Distributions Config ───────────────────────────────────────
 // params: array of {id, label, min, max, step, val, fmt}
@@ -617,9 +629,9 @@ function betaBinomPMF(k,n,a,b){
 
 const CATS = [
   {label:'Kontinuierlich\nunbegrenzt', dists:['normal','student_t','skew_normal']},
-  {label:'Kontinuierlich\npositiv', dists:['lognormal','shifted_lognormal','gamma','exponential','exgaussian','inv_gaussian','chi_sq','f_dist']},
+  {label:'Kontinuierlich\npositiv', dists:['lognormal','shifted_lognormal','gamma','exponential','exgaussian','inv_gaussian','chi_sq','f_dist','hurdle_gamma','hurdle_lognormal']},
   {label:'Begrenzt [0,1]', dists:['beta','bernoulli','zi_beta','zoib']},
-  {label:'Zähldaten', dists:['poisson','negbin','binomial','beta_binomial']},
+  {label:'Zähldaten', dists:['poisson','negbin','binomial','beta_binomial','zero_inflated_poisson','zero_inflated_negbinomial','zero_inflated_binomial','hurdle_poisson','hurdle_negbinomial']},
   {label:'Ordinal', dists:['cumprobit','cumlogit']},
 ];
 
@@ -759,7 +771,7 @@ const DISTS = {
     info:{
       was:'Die <strong>Gamma-Verteilung</strong> beschreibt positive, rechtsschiefe Daten und ist sehr flexibel: Bei kleinem Shape fast wie eine absteigende Kurve mit Maximum nahe 0, bei großem Shape fast symmetrisch — aber immer auf positive Werte begrenzt.',
       einsatz:'<strong>Wartezeiten:</strong> Zeit bis zur nächsten Arztvisite, Zeit bis zur Genesung, Zeit bis zum nächsten technischen Ausfall. <strong>Klinische Studien:</strong> Behandlungsdauer, Krankenhausverweildauer. <strong>Biologie:</strong> Hormonkonzentrationen im Blut (immer positiv, oft rechtsschief). <strong>Kosten:</strong> Kosten pro Patient, Behandlungskosten — immer positiv, nie negativ. <strong>Kernmerkmal:</strong> Die Gamma-Verteilung passt immer wenn Daten positiv und rechtsschief sind — und ist dabei flexibler als die Lognormal, weil der Shape-Parameter die Form fundamental ändert.',
-      parameter:'<strong>Zwei verschiedene Schreibweisen — je nach Verwendung:</strong><br><br><strong>① Als Likelihood (Schieberegler: μ, φ):</strong> Die brms-Likelihood-Parametrisierung.<br>• <strong>μ (Mittelwert):</strong> Direkt der erwartete Outcome-Wert. <em>Beispiel:</em> μ = 3 → mittlere Wartezeit 3 Stunden. Dieser Wert wird über den log-Link modelliert.<br>• <strong>φ (Shape):</strong> Steuert die Form. φ = 1 → Exponential-ähnlich. φ = 2–3 → erkennbar glockenförmig. φ = 10+ → fast symmetrisch um μ. Var(Y) = μ²/φ — je größer φ, desto weniger Streuung.<br>→ Intern rechnet brms um: shape = φ, rate = φ/μ.<br><br><strong>② Als Prior — klassische Notation <code>gamma(α, β)</code>:</strong> Wenn Gamma als Prior für einen anderen Parameter genutzt wird (z.B. für ν oder σ), lautet die Syntax <code>prior(gamma(α, β), ...)</code> mit <strong>α = shape</strong> und <strong>β = rate</strong> — <em>nicht</em> μ und φ!<br>• Mittelwert = α/β, also: <code>gamma(2, 0.1)</code> → Mittelwert = 2/0.1 = 20.<br>• <em>Merkhilfe:</em> Im <code>prior()</code>-Befehl immer klassisch (shape, rate); in der <code>family = Gamma()</code>-Likelihood modelliert brms μ via log-Link.<br><br><strong>Klassische Parametrisierung (Schieberegler: α, β):</strong> α = Shape (= φ), β = Rate (= φ/μ).',
+      parameter:'<strong>Zwei verschiedene Schreibweisen — je nach Verwendung:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> Als Likelihood (Schieberegler: μ, φ):</strong> Die brms-Likelihood-Parametrisierung.<br>• <strong>μ (Mittelwert):</strong> Direkt der erwartete Outcome-Wert. <em>Beispiel:</em> μ = 3 → mittlere Wartezeit 3 Stunden. Dieser Wert wird über den log-Link modelliert.<br>• <strong>φ (Shape):</strong> Steuert die Form. φ = 1 → Exponential-ähnlich. φ = 2–3 → erkennbar glockenförmig. φ = 10+ → fast symmetrisch um μ. Var(Y) = μ²/φ — je größer φ, desto weniger Streuung.<br>→ Intern rechnet brms um: shape = φ, rate = φ/μ.<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Als Prior — klassische Notation <code>gamma(α, β)</code>:</strong> Wenn Gamma als Prior für einen anderen Parameter genutzt wird (z.B. für ν oder σ), lautet die Syntax <code>prior(gamma(α, β), ...)</code> mit <strong>α = shape</strong> und <strong>β = rate</strong> — <em>nicht</em> μ und φ!<br>• Mittelwert = α/β, also: <code>gamma(2, 0.1)</code> → Mittelwert = 2/0.1 = 20.<br>• <em>Merkhilfe:</em> Im <code>prior()</code>-Befehl immer klassisch (shape, rate); in der <code>family = Gamma()</code>-Likelihood modelliert brms μ via log-Link.<br><br><strong>Klassische Parametrisierung (Schieberegler: α, β):</strong> α = Shape (= φ), β = Rate (= φ/μ).',
       brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für positive, rechtsschiefe Outcomes:<br><code>brm(y ~ x, data = d, family = Gamma(link = "log"))</code><br>→ brms modelliert den Mittelwert μ über den log-Link: log(μ) = Xβ.<br>→ Der Shape-Parameter φ wird automatisch geschätzt — Prior: <code>prior(exponential(1), class = shape)</code><br>→ Koeffizienteninterpretation: exp(β) = multiplikativer Effekt auf μ.<br>→ <em>Achtung:</em> Stan arbeitet intern mit shape und rate = shape/μ — das ist implementierungsintern, nicht der User-API.</div><div class="brms-role"><strong>Als Prior</strong> — Notation <code>gamma(shape, rate)</code>, d.h. klassisch:<br><code>prior(gamma(2, 0.1), class = nu)</code> → Prior für ν in Student-t (Mittelwert = 20, erlaubt kleine bis große ν)<br><code>prior(gamma(0.01, 0.01), class = shape)</code> → sehr diffuser Prior für Shape-Parameter<br>→ <em>Wichtig:</em> In <code>prior(gamma(α, β), ...)</code> ist α = shape, β = rate. Das ist eine <strong>andere Notation</strong> als die Likelihood-Parametrisierung (μ, φ)!</div>',
       technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ = α/β². Modus = (α−1)/β = μ·(φ−1)/φ für φ > 1. Spezialfälle: Exponential = Gamma(α=1, β=λ); Chi²(k) = Gamma(α=k/2, β=1/2). <strong>Intern in Stan/brms:</strong> shape = φ (= α), rate = φ/μ (= β) — das ist die Stan-Notation; die brms-Likelihood-API zeigt dem User μ und shape.'
     }
@@ -861,6 +873,56 @@ const DISTS = {
       parameter:'<strong>d₁ (Zähler-Freiheitsgrade):</strong> Entspricht der Anzahl getesteter Parameter-Einschränkungen. <em>Beispiel:</em> Vergleich von 3 Gruppen → d₁ = 2 (3 − 1 = 2 freie Gruppenunterschiede).<br><br><strong>d₂ (Nenner-Freiheitsgrade):</strong> Entspricht den Residuen (Beobachtungen − geschätzte Parameter). <em>Beispiel:</em> n = 60, 3 Gruppen → d₂ = 57.<br><br><strong>Zusammen:</strong> F(2, 57) ist der klassische F-Test für 3-Gruppen-ANOVA mit n = 60. Kritischer Wert für α = .05 ≈ 3.16. Wenn F > 3.16, wäre das Ergebnis "signifikant".<br><br><strong>Spezialfall:</strong> F(1, d₂) = t²(d₂) — ein t-Test ist ein F-Test mit d₁ = 1.',
       brms:'<div class="brms-role"><strong>Nicht als brms-Likelihood verfügbar.</strong> Nur theoretisches Hilfsmittel für klassische Inferenz.<br><br>In Stan direkt: <code>target += f_lpdf(y | d1, d2);</code> — sehr selten benötigt.</div><div class="brms-role"><strong>Als Prior:</strong> Nicht üblich.<br><br>In der Bayesianischen Statistik: Modellvergleiche über <code>loo()</code> und <code>loo_compare()</code> statt F-Tests (→ LOO Lab).</div>',
       technik:'E[Y] = d₂/(d₂−2) für d₂ > 2. F(d₁,d₂) = [Chi²(d₁)/d₁] / [Chi²(d₂)/d₂]. Für d₂ → ∞: F(d₁, ∞) → Chi²(d₁)/d₁. 1/F(d₁,d₂) ~ F(d₂,d₁).'
+    }
+  },
+
+  hurdle_gamma:{
+    name:'Hurdle-Gamma', group:1, notation:'Y ~ HurdleGamma(μ, φ, hu)',
+    mixed:true,
+    params:[
+      {id:'mu',  label:'μ (Mittelwert, Y&gt;0)', min:0.1, max:10,   step:0.1,  val:2,   fmt:v=>v.toFixed(1)},
+      {id:'phi', label:'φ (Shape/Präzision)',    min:0.1, max:20,   step:0.1,  val:3,   fmt:v=>v.toFixed(1)},
+      {id:'hu',  label:'hu (P(Hürde, Y=0))',     min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pdf:(x,p)=>{ if(x<=0) return 0; return (1-p.hu)*gammaPDF(x,p.phi,p.phi/p.mu); },
+    pointMasses:p=>({0:p.hu}),
+    mixedDomainFn:p=>{const mu=p.mu,sig=mu/Math.sqrt(p.phi); return [0,Math.max(0.5,mu+5*sig)];},
+    meanFn:p=>(1-p.hu)*p.mu,
+    varianceFn:p=>(1-p.hu)*(p.mu*p.mu/p.phi)+p.hu*(1-p.hu)*p.mu*p.mu,
+    modeFn:p=>p.hu>0.5?0:(p.phi>1?p.mu*(p.phi-1)/p.phi:0),
+    info:{
+      was:'Ein <strong>Zwei-Stufen-Modell für positive, stetige Daten mit strukturellen Nullen</strong>: Mit Wahrscheinlichkeit hu ist Y exakt 0 (die „Hürde" wurde nicht genommen); mit Wahrscheinlichkeit 1−hu ist Y positiv und folgt einer Gamma-Verteilung. Anders als bei ZI-Beta (die auf [0,1] begrenzt ist) ist der stetige Anteil hier auf (0, ∞) unbegrenzt — typisch für Kosten, Dauern oder Mengen.',
+      einsatz:'<strong>Kosten- und Ausgabendaten:</strong> Gesundheitsausgaben pro Person und Jahr (viele Personen mit 0€ Ausgaben, alle anderen mit stetig-positiven, rechtsschiefen Beträgen), Versicherungsschäden (kein Schaden = 0, sonst Gamma-verteilte Schadenshöhe), Konsumausgaben in Kategorien, die nicht jeder nutzt (0 wenn nie gekauft, sonst positiver Betrag).',
+      parameter:'<strong>μ, φ:</strong> Mittelwert und Shape der Gamma-Komponente, gültig für die Fälle mit Y &gt; 0 — wie bei gewöhnlicher Gamma (brms-Parametrisierung).<br><br><strong>hu (Hurdle-Wahrscheinlichkeit):</strong> P(Y=0) — direkt und exakt. <em>Beispiel:</em> hu = 0.30 → 30% der Beobachtungen haben exakt 0€ Ausgaben, 70% haben positive, Gamma-verteilte Ausgaben mit Mittelwert μ.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — positive Mengen/Kosten mit echten Nullen:<br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_gamma())</code><br>→ hu kann eigene Prädiktoren bekommen — z.B. sagt x2 vorher, WER überhaupt Ausgaben hat, x1 WIE HOCH sie sind, wenn ja.</div><div class="brms-role"><strong>Prior für hu:</strong><br><code>prior(beta(1, 1), class = hu)</code></div>',
+      technik:'E[Y] = (1−hu)·μ. Var(Y) = (1−hu)·μ²/φ + hu·(1−hu)·μ². Für x &gt; 0: Dichte = (1−hu)·Gamma(x|shape=φ, rate=φ/μ). Balken im Plot = hu; Kurve = (1−hu)·GammaPDF. <em>brms:</em> <code>hurdle_gamma(mu, phi, hu)</code>.'
+    }
+  },
+
+  hurdle_lognormal:{
+    name:'Hurdle-Lognormal', group:1, notation:'Y ~ HurdleLogNormal(μ, σ, hu)',
+    mixed:true,
+    params:[
+      {id:'mu',    label:'μ (log-Mittelwert, Y&gt;0)', min:-3,  max:3,    step:0.1,  val:0,   fmt:v=>v.toFixed(1)},
+      {id:'sigma', label:'σ (log-SD)',                  min:0.1, max:3,    step:0.1,  val:0.5, fmt:v=>v.toFixed(1)},
+      {id:'hu',    label:'hu (P(Hürde, Y=0))',          min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pdf:(x,p)=>{ if(x<=0) return 0; return (1-p.hu)*lognormPDF(x,p.mu,p.sigma); },
+    pointMasses:p=>({0:p.hu}),
+    mixedDomainFn:p=>{const hi=Math.exp(p.mu+4*p.sigma); return [0, hi];},
+    meanFn:p=>(1-p.hu)*Math.exp(p.mu+0.5*p.sigma*p.sigma),
+    varianceFn:p=>{
+      const m2=Math.exp(2*p.mu+2*p.sigma*p.sigma); // E[LogNormal²]
+      const meanY=(1-p.hu)*Math.exp(p.mu+0.5*p.sigma*p.sigma);
+      return (1-p.hu)*m2-meanY*meanY;
+    },
+    modeFn:p=>p.hu>0.5?0:Math.exp(p.mu-p.sigma*p.sigma),
+    info:{
+      was:'Wie Hurdle-Gamma, aber mit einer Lognormal- statt Gamma-Komponente für die positiven Werte — Y = 0 mit Wahrscheinlichkeit hu, sonst lognormalverteilt. Passend, wenn log(Y) unter den positiven Fällen annähernd normalverteilt ist.',
+      einsatz:'<strong>Reaktionszeiten mit „kein Versuch"-Option:</strong> Zeit bis zur Reaktion, wobei manche Durchgänge komplett ausgelassen werden (Y=0 kodiert „keine Reaktion", nicht „sehr schnelle Reaktion"). <strong>Ausgaben-/Nutzungsdaten:</strong> Analog zu Hurdle-Gamma, aber wenn log(Ausgaben) unter den Zahlenden normalverteilt aussieht statt Gamma-verteilt.',
+      parameter:'<strong>μ, σ:</strong> Parameter der Lognormal-Komponente, gültig für Y &gt; 0 — wie bei gewöhnlicher Lognormal.<br><br><strong>hu:</strong> P(Y=0) — direkt und exakt, wie bei allen Hurdle-Modellen.',
+      brms:'<div class="brms-role"><strong>Als Likelihood:</strong><br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_lognormal())</code><br>→ hu kann eigene Prädiktoren bekommen.</div><div class="brms-role"><strong>Prior für hu:</strong><br><code>prior(beta(1, 1), class = hu)</code></div>',
+      technik:'E[Y] = (1−hu)·e^(μ+σ²/2). Für x &gt; 0: Dichte = (1−hu)·LogNormalPDF(x|μ,σ). Balken im Plot = hu; Kurve = (1−hu)·LogNormalPDF. <em>brms:</em> <code>hurdle_lognormal(mu, sigma, hu)</code>.'
     }
   },
 
@@ -1044,6 +1106,122 @@ const DISTS = {
       parameter:'<strong>n (Anzahl Versuche):</strong> Wie bei Binomial.<br><br><strong>μ (mittlere Wahrscheinlichkeit):</strong> Der Durchschnitt von p über alle Personen. <em>Beispiel:</em> μ = 0.6 → im Schnitt 60% richtig.<br><br><strong>φ (Konzentration):</strong> Wie stark variiert p zwischen Personen?<br>• φ = 0.5 → extreme Variation: manche fast immer falsch, manche fast immer richtig<br>• φ = 2 → deutliche Person-zu-Person-Unterschiede<br>• φ = 10 → moderate Unterschiede<br>• φ = 100 → kaum Unterschiede, fast wie Binomial<br>• φ → ∞ → identisch mit Binomial(n, μ)<br><br><strong>Intuition:</strong> Stellen Sie sich vor, jede Person hat ihr eigenes p, gezogen aus einer Beta(μ·φ, (1−μ)·φ)-Verteilung. Die Beta-Binomial ist das Ergebnis dieser Mischung.',
       brms:'<div class="brms-role"><strong>Als Likelihood</strong> — überdispergierte Binomialdaten:<br><code>brm(k | trials(n) ~ x1, data = d, family = beta_binomial(link = "logit"))</code><br>→ φ (Präzision der Beta-Verteilung für p) wird automatisch geschätzt.<br>→ Standard-Prior für φ: <code>prior(exponential(1), class = phi)</code></div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> für Koeffizienten<br><code>prior(exponential(1), class = phi)</code> für Überdispersionsparameter<br>→ Kleines φ (starke Überdispersion) und großes φ (fast Binomial) beide a priori plausibel.</div>',
       technik:'Intern: α = μ·φ, β = (1−μ)·φ. E[Y] = n·μ, Var > n·μ·(1−μ). Grenzfall φ→∞: → Binomial(n, μ). <em>brms:</em> <code>beta_binomial(n, mu, phi)</code>.'
+    }
+  },
+
+  zero_inflated_poisson:{
+    name:'ZI-Poisson', group:3, notation:'Y ~ ZIPoisson(λ, zi)',
+    discrete:true,
+    params:[
+      {id:'lambda', label:'λ (Rate, Nicht-Null-Fälle)', min:0.1, max:20,   step:0.1,  val:4,   fmt:v=>v.toFixed(1)},
+      {id:'zi',     label:'zi (P(strukturelle 0))',     min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pmf:(k,p)=>k===0 ? p.zi+(1-p.zi)*poissonPMF(0,p.lambda) : (1-p.zi)*poissonPMF(k,p.lambda),
+    kRangeFn:p=>{const hi=Math.ceil(p.lambda+5*Math.sqrt(p.lambda))+1; return [0,Math.min(hi,60)];},
+    meanFn:p=>(1-p.zi)*p.lambda,
+    varianceFn:p=>(1-p.zi)*p.lambda*(1+p.zi*p.lambda),
+    modeFn:null, // numerical
+    info:{
+      was:'Eine <strong>Poisson-Verteilung mit zusätzlichen strukturellen Nullen</strong>: Mit Wahrscheinlichkeit zi ist die Beobachtung eine „echte" Null (kommt gar nicht erst zum Zählprozess), mit Wahrscheinlichkeit 1−zi folgt sie ganz normal einer Poisson(λ)-Verteilung — die dabei selbst auch eine Null ergeben kann (eine „zufällige" Null). Zwei verschiedene Nullen-Quellen vermischen sich also in Y = 0.',
+      einsatz:'<strong>Zähldaten mit Nullen-Überschuss:</strong> Anzahl Arztbesuche pro Jahr (manche Personen sind grundsätzlich nie krank → strukturelle 0; andere gehen gelegentlich, könnten dabei aber auch zufällig 0 Besuche haben), Anzahl Zigaretten pro Tag (Nichtraucher = strukturelle 0, Raucher folgen einer Zähldichte, die auch mal 0 an einem rauchfreien Tag ergibt), Fehlzeiten am Arbeitsplatz. <strong>Diagnose:</strong> Deutlich mehr Nullen in den Daten als eine reine Poisson(λ) mit demselben Mittelwert vorhersagen würde.',
+      parameter:'<strong>λ (Rate):</strong> Der Poisson-Parameter für die Nicht-strukturell-Null-Gruppe — wie bei gewöhnlicher Poisson. <em>Beispiel:</em> λ = 4 → wer überhaupt zählt, zählt im Schnitt 4 Ereignisse (kann dabei aber auch 0 sein).<br><br><strong>zi (Zero-Inflation):</strong> Der Anteil strukturell garantierter Nullen. <em>Beispiel:</em> zi = 0.30 → 30% der Beobachtungen sind garantierte Nullen, die übrigen 70% folgen Poisson(λ) — deren eigene P(Y=0) kommt <em>zusätzlich</em> oben drauf.<br><br><strong>Gesamt-P(Y=0) = zi + (1−zi)·e^(−λ)</strong> — immer größer als bei reiner Poisson.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — Zähldaten mit mehr Nullen als Poisson erklären kann:<br><code>brm(bf(y ~ x1, zi ~ x2), data = d, family = zero_inflated_poisson())</code><br>→ zi kann eigene Prädiktoren bekommen — z.B. kann x2 vorhersagen, wer strukturell nie zählt.<br>→ zi wird intern auf logit-Skala modelliert.</div><div class="brms-role"><strong>Prior für zi:</strong><br><code>prior(beta(1, 1), class = zi)</code> → uniformer Prior<br><code>prior(normal(-1, 1), class = zi, dpar = "zi")</code> → auf logit-Skala, Null-Inflation eher klein</div>',
+      technik:'P(Y=0) = zi + (1−zi)·e^(−λ). P(Y=k&gt;0) = (1−zi)·λ^k·e^(−λ)/k!. E[Y] = (1−zi)·λ. Var(Y) = (1−zi)·λ·(1+zi·λ) — immer größer als Var(Poisson) = λ. <em>brms:</em> <code>zero_inflated_poisson(lambda, zi)</code>. Grenzfall zi→0: reine Poisson(λ).'
+    }
+  },
+
+  zero_inflated_negbinomial:{
+    name:'ZI-NegBinomial', group:3, notation:'Y ~ ZINegBin(μ, φ, zi)',
+    discrete:true,
+    params:[
+      {id:'mu',  label:'μ (Mittelwert, Nicht-Null-Fälle)', min:0.1, max:20,   step:0.1,  val:4,   fmt:v=>v.toFixed(1)},
+      {id:'phi', label:'φ (Überdispersion)',               min:0.1, max:20,   step:0.1,  val:2,   fmt:v=>v.toFixed(1)},
+      {id:'zi',  label:'zi (P(strukturelle 0))',           min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pmf:(k,p)=>k===0 ? p.zi+(1-p.zi)*negbinPMF(0,p.mu,p.phi) : (1-p.zi)*negbinPMF(k,p.mu,p.phi),
+    kRangeFn:p=>{const v=p.mu+p.mu*p.mu/p.phi; const hi=Math.ceil(p.mu+5*Math.sqrt(v))+1; return [0,Math.min(hi,80)];},
+    meanFn:p=>(1-p.zi)*p.mu,
+    varianceFn:p=>(1-p.zi)*(p.mu+p.mu*p.mu/p.phi+p.zi*p.mu*p.mu),
+    modeFn:null, // numerical
+    info:{
+      was:'Wie ZI-Poisson, aber mit einer Negativ-Binomial- statt Poisson-Komponente für die Nicht-strukturell-Null-Fälle — erlaubt zusätzlich Überdispersion <em>innerhalb</em> der Zählkomponente. Zwei getrennte Ursachen für „viele Nullen": strukturelle Nullen (zi) UND eine überdisperse Zähldichte, die selbst viele zufällige Nullen produziert.',
+      einsatz:'<strong>Der robustere Standard, wenn ZI-Poisson nicht ausreicht:</strong> Krankheitstage pro Jahr (Nie-Kranke = strukturelle 0, aber auch unter den „potenziell Kranken" stark variierende Häufigkeit → Überdispersion), Anzahl aggressiver Vorfälle in klinischen Studien, Social-Media-Aktivität. <strong>Faustregel:</strong> Wenn nach Anpassung von ZI-Poisson die Residuen immer noch überdispers wirken (Var ≫ E), auf ZI-NegBinomial wechseln.',
+      parameter:'<strong>μ, φ:</strong> Wie bei gewöhnlicher Negative Binomial — μ ist der Mittelwert der Nicht-strukturell-Null-Gruppe, φ steuert deren Überdispersion (kleines φ = stark überdispers).<br><br><strong>zi:</strong> Anteil strukturell garantierter Nullen, wie bei ZI-Poisson. Gesamt-P(Y=0) = zi + (1−zi)·P(NegBin=0), wobei P(NegBin=0) = (φ/(μ+φ))^φ.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — überdisperse Zähldaten mit Nullen-Überschuss:<br><code>brm(bf(y ~ x1, zi ~ x2), data = d, family = zero_inflated_negbinomial())</code><br>→ φ (shape) wird automatisch mitgeschätzt; zi kann eigene Prädiktoren bekommen.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(exponential(1), class = shape)</code><br><code>prior(beta(1, 1), class = zi)</code></div>',
+      technik:'P(Y=0) = zi + (1−zi)·(φ/(μ+φ))^φ. E[Y] = (1−zi)·μ. Var(Y) = (1−zi)·[μ + μ²/φ + zi·μ²]. <em>brms:</em> <code>zero_inflated_negbinomial(mu, phi, zi)</code>. Grenzfall φ→∞: ZI-Poisson(μ, zi).'
+    }
+  },
+
+  zero_inflated_binomial:{
+    name:'ZI-Binomial', group:3, notation:'Y ~ ZIBinomial(n, p, zi)',
+    discrete:true,
+    params:[
+      {id:'n',  label:'n (Versuche)',           min:1, max:50,   step:1,    val:20,  fmt:v=>String(Math.round(v))},
+      {id:'p',  label:'p (Erfolgswahrsch.)',    min:0, max:1,    step:0.01, val:0.4, fmt:v=>v.toFixed(2)},
+      {id:'zi', label:'zi (P(strukturelle 0))', min:0, max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pmf:(k,p)=>{const n=Math.round(p.n); return k===0 ? p.zi+(1-p.zi)*binomPMF(0,n,p.p) : (1-p.zi)*binomPMF(k,n,p.p);},
+    kRangeFn:p=>[0,Math.round(p.n)],
+    meanFn:p=>(1-p.zi)*Math.round(p.n)*p.p,
+    varianceFn:p=>{const n=Math.round(p.n); return (1-p.zi)*n*p.p*(1-p.p)+p.zi*(1-p.zi)*n*n*p.p*p.p;},
+    modeFn:null, // numerical
+    info:{
+      was:'Eine Binomialverteilung mit zusätzlichen strukturellen Nullen: Mit Wahrscheinlichkeit zi ist die Beobachtung garantiert 0 Erfolge (unabhängig von n Versuchen), mit Wahrscheinlichkeit 1−zi folgt sie ganz normal Binomial(n, p) — die dabei selbst auch 0 Erfolge ergeben kann.',
+      einsatz:'<strong>Wenn eine Teilgruppe strukturell nie „antreten" kann:</strong> Anzahl richtig gelöster Aufgaben von n = 20 (manche Personen haben den Test gar nicht bearbeitet → strukturelle 0, andere haben teilgenommen und dabei zufällig auch 0 richtig haben können), Anzahl Klicks von n Anzeigen-Impressionen (manche Nutzer sehen die Anzeige gar nicht wirklich → strukturelle 0-Klicks).',
+      parameter:'<strong>n, p:</strong> Wie bei gewöhnlicher Binomial für die Nicht-strukturell-Null-Gruppe.<br><br><strong>zi:</strong> Anteil strukturell garantierter Nullen. Gesamt-P(Y=0) = zi + (1−zi)·(1−p)^n — immer größer als bei reiner Binomial.',
+      brms:'<div class="brms-role"><strong>Als Likelihood:</strong><br><code>brm(bf(y | trials(n) ~ x1, zi ~ x2), data = d, family = zero_inflated_binomial())</code><br>→ n als <code>trials(n)</code>, zi kann eigene Prädiktoren bekommen.</div><div class="brms-role"><strong>Prior für zi:</strong><br><code>prior(beta(1, 1), class = zi)</code></div>',
+      technik:'P(Y=0) = zi + (1−zi)·(1−p)^n. E[Y] = (1−zi)·n·p. Var(Y) = (1−zi)·n·p·(1−p) + zi·(1−zi)·(n·p)². <em>brms:</em> <code>zero_inflated_binomial(p, zi)</code> mit n via <code>trials()</code>.'
+    }
+  },
+
+  hurdle_poisson:{
+    name:'Hurdle-Poisson', group:3, notation:'Y ~ HurdlePoisson(λ, hu)',
+    discrete:true,
+    params:[
+      {id:'lambda', label:'λ (Rate, gestutzt &gt; 0)', min:0.1, max:20,   step:0.1,  val:4,   fmt:v=>v.toFixed(1)},
+      {id:'hu',     label:'hu (P(Hürde, Y=0))',        min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pmf:(k,p)=>{
+      if(k===0) return p.hu;
+      const f0=poissonPMF(0,p.lambda);
+      return (1-p.hu)*poissonPMF(k,p.lambda)/(1-f0);
+    },
+    kRangeFn:p=>{const hi=Math.ceil(p.lambda+5*Math.sqrt(p.lambda))+1; return [0,Math.min(hi,60)];},
+    meanFn:p=>hurdleDiscreteMoments(p.lambda,p.lambda,poissonPMF(0,p.lambda),p.hu).mean,
+    varianceFn:p=>hurdleDiscreteMoments(p.lambda,p.lambda,poissonPMF(0,p.lambda),p.hu).variance,
+    modeFn:null, // numerical
+    info:{
+      was:'Ein <strong>Zwei-Stufen-Modell</strong>: Erst entscheidet ein „Hürden"-Prozess, ob überhaupt ein Ereignis stattfindet (P(Y=0) = hu direkt); findet eines statt (Wahrscheinlichkeit 1−hu), folgt die Anzahl einer bei 0 <strong>abgeschnittenen</strong> Poisson-Verteilung — Y kann dann nur noch 1, 2, 3, ... sein, niemals 0. Im Unterschied zu ZI-Poisson gibt es hier nur EINE Quelle für Nullen, nicht zwei.',
+      einsatz:'<strong>Wenn "Teilnahme" und "Menge" zwei getrennte Entscheidungen sind:</strong> Alkoholkonsum-Tage pro Monat (Hürde: trinkt die Person überhaupt? Danach: wie oft, wenn ja — niemals zufällig 0, weil „0" per Definition schon in der Hürde entschieden wurde), Arztbesuche (Hürde: sucht die Person überhaupt einen Arzt auf?). <strong>Abgrenzung zu ZI-Poisson:</strong> Bei Hurdle sind ALLE Nullen strukturell (kommen ausschließlich aus der Hürde) — bei ZI-Poisson können Nullen auch „zufällig" aus der Zähldichte selbst entstehen.',
+      parameter:'<strong>λ (Rate):</strong> Parameter der bei 0 abgeschnittenen Poisson-Komponente — gilt nur für die Fälle, die die Hürde überwunden haben (Y ≥ 1). <em>Beispiel:</em> λ = 4 → unter denen, die überhaupt Ereignisse haben, im Schnitt etwas mehr als 4 (weil die 0 weggeschnitten und die Wahrscheinlichkeitsmasse auf 1, 2, 3, ... umverteilt wird).<br><br><strong>hu (Hurdle-Wahrscheinlichkeit):</strong> P(Y=0) — direkt und exakt, nicht wie bei ZI eine Mischung. <em>Beispiel:</em> hu = 0.30 → 30% der Beobachtungen sind 0, 70% liegen bei 1 oder mehr.',
+      brms:'<div class="brms-role"><strong>Als Likelihood</strong> — getrennte "Ob überhaupt"- und "Wie viel, wenn ja"-Modellierung:<br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_poisson())</code><br>→ hu (die Hürde) kann eigene, andere Prädiktoren bekommen als λ — z.B. sagt x2 vorher, WER überhaupt teilnimmt, x1 WIE VIEL bei Teilnahme.</div><div class="brms-role"><strong>Prior für hu:</strong><br><code>prior(beta(1, 1), class = hu)</code> → uniformer Prior auf der Hürden-Wahrscheinlichkeit</div>',
+      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·λ^k·e^(−λ)/(k!·(1−e^(−λ))) — Poisson-PMF geteilt durch die Überlebenswahrscheinlichkeit 1−P(Poisson=0), damit die verbleibende Masse wieder zu 1−hu aufsummiert. <em>brms:</em> <code>hurdle_poisson(lambda, hu)</code>.'
+    }
+  },
+
+  hurdle_negbinomial:{
+    name:'Hurdle-NegBinomial', group:3, notation:'Y ~ HurdleNegBin(μ, φ, hu)',
+    discrete:true,
+    params:[
+      {id:'mu',  label:'μ (Mittelwert, gestutzt &gt; 0)', min:0.1, max:20,   step:0.1,  val:4,   fmt:v=>v.toFixed(1)},
+      {id:'phi', label:'φ (Überdispersion)',              min:0.1, max:20,   step:0.1,  val:2,   fmt:v=>v.toFixed(1)},
+      {id:'hu',  label:'hu (P(Hürde, Y=0))',              min:0,   max:0.99, step:0.01, val:0.3, fmt:v=>v.toFixed(2)},
+    ],
+    pmf:(k,p)=>{
+      if(k===0) return p.hu;
+      const f0=negbinPMF(0,p.mu,p.phi);
+      return (1-p.hu)*negbinPMF(k,p.mu,p.phi)/(1-f0);
+    },
+    kRangeFn:p=>{const v=p.mu+p.mu*p.mu/p.phi; const hi=Math.ceil(p.mu+5*Math.sqrt(v))+1; return [0,Math.min(hi,80)];},
+    meanFn:p=>hurdleDiscreteMoments(p.mu,p.mu+p.mu*p.mu/p.phi,negbinPMF(0,p.mu,p.phi),p.hu).mean,
+    varianceFn:p=>hurdleDiscreteMoments(p.mu,p.mu+p.mu*p.mu/p.phi,negbinPMF(0,p.mu,p.phi),p.hu).variance,
+    modeFn:null, // numerical
+    info:{
+      was:'Wie Hurdle-Poisson, aber mit einer bei 0 abgeschnittenen Negative-Binomial- statt Poisson-Komponente — erlaubt zusätzlich Überdispersion unter den Fällen, die die Hürde überwunden haben.',
+      einsatz:'<strong>Der robustere Standard, wenn Hurdle-Poisson nicht ausreicht:</strong> Anzahl Symptome bei Erkrankten (Hürde: krank ja/nein; Menge bei Krankheit stark variierend → Überdispersion), Anzahl Fehlzeiten (Hürde: überhaupt gefehlt; Anzahl bei Fehlen sehr heterogen).',
+      parameter:'<strong>μ, φ:</strong> Parameter der bei 0 abgeschnittenen Negative-Binomial-Komponente, gültig für Y ≥ 1. φ steuert wie bei gewöhnlicher NegBin die Überdispersion innerhalb dieser Gruppe.<br><br><strong>hu:</strong> P(Y=0) direkt, wie bei Hurdle-Poisson.',
+      brms:'<div class="brms-role"><strong>Als Likelihood:</strong><br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_negbinomial())</code><br>→ φ wird automatisch mitgeschätzt; hu kann eigene Prädiktoren bekommen.</div><div class="brms-role"><strong>Typische Priors:</strong><br><code>prior(exponential(1), class = shape)</code><br><code>prior(beta(1, 1), class = hu)</code></div>',
+      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·NegBin(k|μ,φ)/(1−NegBin(0|μ,φ)). <em>brms:</em> <code>hurdle_negbinomial(mu, phi, hu)</code>. Grenzfall φ→∞: Hurdle-Poisson(μ, hu).'
     }
   },
 
@@ -1558,13 +1736,16 @@ function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
 
 // ── Mixed (ZI-Beta, ZOIB) ────────────────────────────────────
 function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
-  // x range: [0, 1] conceptually; show as [-impulseW, 1+impulseW]
+  // Continuous part's domain: [0,1] for ZI-Beta/ZOIB (default), or the
+  // distribution's own mixedDomainFn for e.g. Hurdle-Gamma/Lognormal on (0,∞).
+  const [domLo,domHi]=d.mixedDomainFn?d.mixedDomainFn(PARAMS):[0,1];
+  const domSpan=domHi-domLo;
   const masses=d.pointMasses(PARAMS); // {0: prob, [1: prob]}
-  const impulseW=0.065; // width on data scale for impulse bars
-  const xlo=-impulseW*1.5, xhi=1+impulseW*1.5;
+  const impulseW=domSpan*0.065; // width on data scale for impulse bars
+  const xlo=domLo-impulseW*1.5, xhi=domHi+impulseW*1.5;
 
   const N=200;
-  const bxlo=0.001, bxhi=0.999;
+  const bxlo=domLo+domSpan*0.001, bxhi=domHi-domSpan*0.001;
   const xs=[], ys=[];
   for(let i=0;i<=N;i++){
     const x=bxlo+i*(bxhi-bxlo)/N;
@@ -1587,15 +1768,17 @@ function drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const y=i*ymax/5;
     ctx.beginPath(); ctx.moveTo(m.l,toY(y)); ctx.lineTo(W-m.r,toY(y)); ctx.stroke();
   }
-  // x gridlines at 0, 0.25, 0.5, 0.75, 1
-  [0,0.25,0.5,0.75,1].forEach(v=>{
+  // x gridlines at 5 evenly spaced ticks across the domain
+  const xTicks=[0,0.25,0.5,0.75,1].map(t=>domLo+t*domSpan);
+  xTicks.forEach(v=>{
     ctx.beginPath(); ctx.moveTo(toX(v),m.t); ctx.lineTo(toX(v),H-m.b); ctx.stroke();
   });
 
   // Axis labels
   ctx.fillStyle=DARK?'#a8c4d8':'#5a5248';
   ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
-  [0,0.25,0.5,0.75,1].forEach(v=>ctx.fillText(v.toFixed(2),toX(v),H-m.b+15));
+  const xFmt=v=>domSpan>20?v.toFixed(0):domSpan>3?v.toFixed(1):v.toFixed(2);
+  xTicks.forEach(v=>ctx.fillText(xFmt(v),toX(v),H-m.b+15));
   ctx.textAlign='right';
   for(let i=1;i<=4;i++){
     const v=i*ymax/4;
