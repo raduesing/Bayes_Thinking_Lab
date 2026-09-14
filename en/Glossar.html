@@ -145,6 +145,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
   padding:1rem 1.15rem; margin-bottom:.75rem; transition:border-color .15s;
 }
 .gl-card:hover { border-color:var(--warm); }
+.gl-card-brms { border-left:3px solid var(--a7); }
 .gl-card-head {
   display:flex; align-items:baseline; flex-wrap:wrap; gap:.5rem; margin-bottom:.55rem;
 }
@@ -192,6 +193,36 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
   font-family:'Georgia','Cambria',serif; font-size:.82rem; background:var(--grid);
   padding:.35rem .7rem; border-radius:4px; margin-bottom:.5rem; overflow-x:auto;
   color:var(--a4);
+}
+.gl-formula-code {
+  font-family:'DM Mono','Consolas',monospace; color:var(--a7);
+}
+.gl-usage {
+  margin-bottom:.5rem;
+}
+.gl-usage-toggle {
+  font-family:'DM Mono',monospace; font-size:.72rem; color:var(--a7);
+  background:transparent; border:1px solid var(--a7); border-radius:4px;
+  padding:.25rem .6rem; cursor:pointer; display:inline-flex; align-items:center; gap:.35rem;
+  transition:background .15s, color .15s;
+}
+.gl-usage-toggle:hover { background:var(--a7); color:#fff; }
+.gl-usage-toggle .gl-usage-arrow { display:inline-block; transition:transform .15s; }
+.gl-usage-toggle.open .gl-usage-arrow { transform:rotate(90deg); }
+.gl-usage-body {
+  display:none; font-size:.84rem; line-height:1.7; color:var(--ink);
+  background:var(--panel); border-left:3px solid var(--a7); border-radius:0 4px 4px 0;
+  padding:.6rem .8rem; margin-top:.4rem;
+}
+.gl-usage-body.open { display:block; }
+.gl-usage-body b { color:var(--a7); }
+.gl-usage-body code {
+  font-family:'DM Mono',monospace; font-size:.82rem; background:var(--grid);
+  padding:.05rem .35rem; border-radius:3px;
+}
+.gl-usage-body pre {
+  font-family:'DM Mono',monospace; font-size:.78rem; background:var(--grid);
+  padding:.5rem .7rem; border-radius:4px; overflow-x:auto; margin:.4rem 0; line-height:1.55;
 }
 .gl-hat, .gl-bar { position:relative; display:inline-block; line-height:1; }
 .gl-hat::before {
@@ -404,6 +435,7 @@ const TERMS = [
 },
 { id:'brms', cats:['bayes','mcmc','brms'], az:'B', name:'brms', longname:'Bayesian Regression Models using Stan',
   def:'brms (Bürkner, 2017) is an R package that provides a flexible high-level interface for fitting Bayesian regression models via Stan. It supports a wide range of model families (Gaussian, Binomial, Poisson, Negative Binomial, Beta, Student-t, ordinal, zero-inflated, mixture models and many more), multivariate models, random effects (GLMM), non-linear models, and splines. brms automatically generates optimized Stan code from an R formula syntax (similar to lme4), runs NUTS/HMC sampling, and provides comprehensive output including posterior summaries, LOO-CV, and posterior predictive checks. The BTL standard: chains = 4, cores = 4, warmup = 2000, iter = 4000.',
+  usage:'<b>Basic structure:</b> Every Bayesian model fit in the BTL starts with a <code>brm()</code> call: <code>fit &lt;- brm(formula, data, family, prior, chains, iter, warmup, cores)</code>. Every other glossary entry tagged brms is a building block or argument of exactly this one call.<br><br><b>Typical workflow:</b> specify the model with <code>bf()</code> → set priors with <code>set_prior()</code> → call <code>brm()</code> and let it sample → check convergence (<code>summary()</code>, <code>plot()</code>, R-hat) → model criticism (<code>pp_check()</code>, <code>loo()</code>).<br><br><b>Watch out for:</b> brms recompiles the Stan code for every new model — this costs noticeable time on the first fit (compilation), not during sampling itself.',
   intuition:'brms is to Bayesian modeling what lme4 is to frequentist mixed models — a powerful engine behind a user-friendly formula interface. Instead of writing Stan code by hand, you write: brm(y ~ x + (1|group), data = d, family = gaussian()). brms translates this into Stan, runs the sampler, and returns a comprehensive fitted model object. For beginners, brms is the most accessible entry point into Bayesian regression; for experts, it offers fine-grained control over priors, custom families, and Stan-level extensions.',
   related:[{id:'mcmc',label:'MCMC'},{id:'nuts',label:'NUTS'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'},{id:'ppc',label:'PPC'},{id:'random-effects',label:'Random Effects'}]
 },
@@ -411,6 +443,7 @@ const TERMS = [
 /* ── C ── */
 { id:'chains', cats:['mcmc','brms'], az:'C', name:'Chains', longname:'Parallel MCMC Chains — chains argument in brm()',
   def:'MCMC chains are independent sequences of samples from the posterior distribution. Each chain starts from a different random initial value and explores parameter space via a Markov process. Running multiple chains in parallel (BTL standard: 4 chains) serves two purposes: first, it allows convergence diagnostics — if all chains converge to the same distribution, this is strong evidence that the sampler has correctly found the posterior (assessed via R-hat). Second, multiple chains increase the effective number of independent samples. If chains differ substantially after warmup, this indicates non-convergence and unreliable posterior estimates. In brms: brm(..., chains = 4).',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., chains = 4)</code>.<br><br><b>Meaning:</b> Sets how many independent MCMC chains are started in parallel.<br><br><b>Watch out for:</b> Fewer than 4 chains makes convergence diagnostics via R-hat harder (too little basis for comparison); more than the available <code>cores</code> brings no speed benefit, only a longer wait per core.',
   intuition:'Running 4 chains is like sending 4 independent hikers from different starting points into an unknown mountain landscape, each with the task of mapping the terrain. If after sufficient time all four have produced the same map (similar distribution of samples), you can trust that the map is correct. If they describe completely different landscapes, something has gone wrong — possibly multimodality, poor priors, or model misspecification. The R-hat statistic formalizes this comparison.',
   related:[{id:'mcmc',label:'MCMC'},{id:'r-hat',label:'R-hat'},{id:'iter',label:'iter'},{id:'cores',label:'cores'},{id:'ess',label:'ESS'},{id:'warmup',label:'Warmup'},{id:'traceplot',label:'Traceplot'},{id:'nuts',label:'NUTS'}]
 },
@@ -1233,6 +1266,7 @@ const TERMS = [
 },
 { id:'warmup', cats:['mcmc','brms'], az:'W', name:'Warmup', longname:'Warmup phase in Stan/NUTS — warmup argument in brm()',
   def:'Warmup designates the initial phase of MCMC sampling in which the chain moves from its arbitrary starting point toward the stationary posterior distribution and algorithm parameters (step size/adapt_delta, mass matrix for HMC/NUTS) are automatically calibrated. Warmup samples are discarded and do not enter the posterior estimation. The BTL standard in brms is warmup = 2000 of a total iter = 4000 iterations — i.e. 50% of samples serve calibration. Too short a warmup leads to poor sampler calibration, inefficient sampling, and potentially biased estimates.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., warmup = 2000, iter = 4000)</code>.<br><br><b>Meaning:</b> Number of iterations per chain discarded for calibration before actual sampling.<br><br><b>Watch out for:</b> <code>warmup</code> must be smaller than <code>iter</code> (otherwise an error); the number of usable samples is <code>iter − warmup</code>, not <code>iter</code> alone.',
   intuition:'Imagine a hiker starting from a random point in an unknown mountain landscape. At first they feel their way — sometimes uphill, sometimes downhill, searching the path. After a while they know the main regions (the posterior) and move only there. The warmup phase is this orientation time — one does not want to count the early wanderings as posterior samples. Distinction from the classic burn-in term (Gibbs sampling, JAGS, WinBUGS): burn-in only discards the dependence on the starting value under an UNCHANGED sampling algorithm. Warmup in Stan/NUTS additionally does something plain burn-in does not — it actively tunes the sampler\'s step size and mass matrix to the geometry of the specific posterior while it runs. Warmup is therefore closer to "burn-in plus sampler calibration" than to plain burn-in; brms/Stan deliberately use their own term to mark that difference.',
   related:[{id:'mcmc',label:'MCMC'},{id:'burn-in',label:'Burn-in'},{id:'chains',label:'Chains'},{id:'iter',label:'iter'},{id:'nuts',label:'NUTS'},{id:'traceplot',label:'Traceplot'},{id:'r-hat',label:'R-hat'}]
 },
@@ -1891,36 +1925,42 @@ const TERMS = [
 { id:'multivariates-modell', cats:['bayes','glm','brms'], az:'M', name:'Multivariate Model', longname:'Jointly fitting multiple response variables',
   def:'In a multivariate model, several response variables are fitted jointly in a single model instead of being analyzed separately. In brms this is done via mvbf(bf(y1~...), bf(y2~...)) — each response gets its own formula, predictors, family and priors, but all of them are estimated together in one Stan model. The advantage over separate models: uncertainty propagates correctly, and a genuine correlation between the responses can be estimated as well — either through the residuals (residual correlation, only possible for Gaussian/Student) or through correlated random effects sharing a grouping tag (works for any combination of families).',
   formula:'mvbf(bf(y1 ~ x), bf(y2 ~ x))',
+  usage:'<b>Where in the code:</b> Replaces the normal <code>formula</code> argument: <code>brm(mvbf(bf(y1 ~ x), bf(y2 ~ x)), data = d, family = ...)</code>.<br><br><b>Meaning:</b> Combines several <code>bf()</code> formula objects into one joint model.<br><br><b>Watch out for:</b> With different families per response, <code>family</code> must be passed as a list in the same order (or set directly inside each <code>bf()</code>); without <code>set_rescor(TRUE)</code> (the default for matching families), no residual correlation is estimated.',
   intuition:'You could fit y1 and y2 in two separate brm() calls — but then any possible connection between them stays invisible. A multivariate model makes that connection explicitly estimable: does a surprisingly high value of y1 (after controlling for the predictors) systematically go along with a surprisingly high value of y2? That is typically the actual research reason for a multivariate rather than two separate models.',
   related:[{id:'residualkorrelation',label:'Residual Correlation'},{id:'random-effects',label:'Random Effects'},{id:'brms',label:'brms'}]
 },
 { id:'residualkorrelation', cats:['bayes','glm','brms'], az:'R', name:'Residual Correlation (rescor)', longname:'Estimated correlation between the residuals of several responses',
   def:'Residual correlation (rescor) is the estimated correlation between the residuals of several jointly fitted response variables in a multivariate model. It captures whatever shared, unexplained variation remains between the responses after accounting for all predictors — e.g. due to a shared unobserved cause. In brms, rescor only works for families with a genuine, continuous residual term (Gaussian, Student-t); for Poisson, Bernoulli and similar families the variance is tied to the mean, so this degree of freedom does not exist — there, correlated random effects on a shared observation ID serve as a substitute.',
   formula:'Ω_res[i,j] = Cor(εᵢ, εⱼ) for responses i, j',
+  usage:'<b>Where in the code:</b> Activated implicitly when <code>mvbf()</code> is used with responses of the same type (Gaussian/Student-t) — the default is <code>set_rescor(TRUE)</code>; can be switched off explicitly via <code>mvbf(..., rescor = FALSE)</code>.<br><br><b>Meaning:</b> In the fitted model this appears as the parameter <code>rescor(y1, y2)</code> in <code>summary(fit)</code>.<br><br><b>Watch out for:</b> Only works for families with a genuine residual term (Gaussian, Student-t) — for Poisson/Bernoulli and similar, brms does not create this parameter.',
   intuition:'A positive residual correlation between y1 and y2 means: an observation that turns out surprisingly high on y1 (after controlling for the predictors) also tends to turn out surprisingly high on y2 — not because x explains that, but because of some third thing affecting both responses jointly.',
   related:[{id:'multivariates-modell',label:'Multivariate Model'},{id:'random-effects',label:'Random Effects'}]
 },
 { id:'splines', cats:['glm','reg','brms'], az:'S', name:'Splines / Smooth Terms', longname:'Smooth, nonlinear effects — s(x)',
   def:'A spline (smooth term, s(x) in brms/mgcv) replaces the assumption that the effect of a predictor x is a straight line with the weaker assumption that it is some smooth curve. Technically, a basis of many small, overlapping curve pieces (typically thin-plate splines) is constructed, and the model estimates how strongly each piece is weighted. The "wiggliness" of the resulting curve is not fixed in advance but is itself estimated via its own hyperparameter (regularization strength): small value = very smooth/nearly linear, large value = follows the data more closely.',
   formula:'y ~ s(x)   (brms/mgcv syntax)',
+  usage:'<b>Where in the code:</b> Inside the formula: <code>brm(y ~ s(x), data = d)</code>, also combinable: <code>y ~ x1 + s(x2)</code>.<br><br><b>Meaning:</b> Replaces a linear term with a flexible, smooth curve.<br><br><b>Watch out for:</b> The estimated basis-function coefficients themselves are not interpretable — always use <code>conditional_effects(fit)</code> or <code>plot(conditional_smooths(fit))</code> to evaluate, never report the raw coefficients.',
   intuition:'Splines are the choice when you suspect a relationship is nonlinear but do not want to (or cannot) postulate a concrete functional form (quadratic, logarithmic, …). The individual basis coefficients are not interpretable on their own — only the resulting curve as a whole matters, usually visualized rather than reported as a single number.',
   related:[{id:'gaussian-process',label:'Gaussian Process'},{id:'glm',label:'GLM'}]
 },
 { id:'gaussian-process', cats:['bayes','reg','brms'], az:'G', name:'Gaussian Process', longname:'A distribution over smooth functions — gp(x)',
   def:'A Gaussian Process (gp(x) in brms), like a spline, models an unknown smooth curve instead of a straight line, but through a different mechanism: instead of many small basis functions, a GP assumes that observations with similar x values also have similar effects, and learns from the data how quickly that similarity decays with growing distance. Two hyperparameters control this: the length scale (how far must you travel in x before the effect is "forgotten") and the amplitude (how much the curve is allowed to vary overall). With few observations, a GP is often more robust than a spline; for large datasets it becomes computationally expensive, since the covariance matrix grows quadratically with n.',
   formula:'f(x) ~ GP(0, k(x,x\'));   e.g. k(x,x\') = σ²·exp(−(x−x\')² / (2ℓ²))',
+  usage:'<b>Where in the code:</b> Inside the formula: <code>brm(y ~ gp(x), data = d)</code>; for multidimensional smooth interactions: <code>gp(x1, x2)</code>.<br><br><b>Meaning:</b> Alternative to <code>s(x)</code> for nonlinear effects, particularly suited to small samples or multidimensional smooth surfaces.<br><br><b>Watch out for:</b> Compute time grows quadratically with sample size (n×n covariance matrix) — for large datasets (n beyond a few hundred), <code>gp()</code> quickly becomes impractical; prefer <code>s(x)</code> there.',
   intuition:'A GP does not fix a specific functional form, but rather a probability distribution over ALL conceivable smooth functions — the data then "choose" which of them are plausible. For multidimensional smooth interactions (e.g. gp(x1, x2)), a GP is the more natural extension than a 2D spline.',
   related:[{id:'splines',label:'Splines'},{id:'prior',label:'Prior'}]
 },
 { id:'monotone-effekte', cats:['glm','reg','brms'], az:'M', name:'Monotonic Effects', longname:'Order-preserving effects of ordinal predictors — mo(x)',
   def:'Monotonic effects (mo(x) in brms) model the effect of an ordinal predictor (e.g. education level: primary school < secondary school < high school < university) without assuming that every category step counts equally — as a plain linear coding (1,2,3,4) implicitly does. Instead, the order is respected (a higher level → at least as much effect as a lower one), but the relative size of each step is freely estimated via a Dirichlet-distributed simplex ζ (ζ₁,…,ζₖ₋₁, all ≥0, summing to 1), together with an overall effect βₘ.',
   formula:'y ~ mo(x);   effect of a category jump from a to b = βₘ · Σᵢ₌ₐᵇ⁻¹ ζᵢ',
+  usage:'<b>Where in the code:</b> Inside the formula, the predictor must be coded as an ordered factor: <code>brm(y ~ mo(x), data = d)</code>.<br><br><b>Meaning:</b> Estimates an effect for an ordinal predictor that respects the category order without assuming equal spacing.<br><br><b>Watch out for:</b> <code>x</code> must be explicitly an <code>ordered factor</code> in R (<code>factor(x, ordered=TRUE)</code>), otherwise brms treats it as a plain nominal/continuous variable and the <code>mo()</code> syntax fails or produces nonsense.',
   intuition:'A monotonic effect allows, for instance, the jump from primary to secondary school to be tiny while the jump from high school to university is huge — as long as the order (higher = at least as much effect) is preserved. This requires a clear, substantively justified ordering of the categories.',
   related:[{id:'glm',label:'GLM'}]
 },
 { id:'messfehler-modell', cats:['glm','reg','brms'], az:'M', name:'Measurement Error Model', longname:'Modeling a predictor with known measurement error — me(x, sd_x)',
   def:'A measurement error model (me(x, sd_x) in brms) explicitly accounts for the fact that a predictor x is not measured without error, but is a noisy version of a latent true value with a known (or estimated) measurement error sd_x. Ignoring measurement error in a predictor systematically biases the estimated effect toward zero (attenuation bias / regression dilution) — more strongly the larger the measurement error is relative to the true spread of x. The model explicitly estimates the latent true value and corrects the effect accordingly.',
   formula:'y ~ me(x, sd_x);   x_observed = x_true + ε,  ε ~ Normal(0, sd_x²)',
+  usage:'<b>Where in the code:</b> Inside the formula: <code>brm(y ~ me(x, sd_x), data = d)</code> — <code>sd_x</code> is either a constant or a column in the data giving the measurement error per observation.<br><br><b>Meaning:</b> Models x as a latent, error-prone quantity instead of as measured exactly.<br><br><b>Watch out for:</b> Noticeably increases model complexity and compute time (one extra latent parameter per observation); without a well-estimated <code>sd_x</code> (e.g. derived from the instrument\'s reliability), <code>me()</code> offers no advantage over the plain term.',
   intuition:'The classic case: a questionnaire score with known imprecision, or a lab value with a known standard error. Without me(), measurement error artificially "dilutes" the estimated relationship toward zero — me() corrects this bias; sd_x can, for instance, be computed from the instrument\'s reliability: SEM = SD(x)·√(1−reliability).',
   related:[{id:'standardmessfehler',label:'Standard Error of Measurement (SEM)'},{id:'reliabilitaet',label:'Reliability'}]
 },
@@ -1933,30 +1973,35 @@ const TERMS = [
 { id:'ar-modell', cats:['reg','glm','brms'], az:'A', name:'AR(p) — Autoregressive Term', longname:'Temporal autocorrelation over p previous residuals',
   def:'An AR(p) term (ar() in brms) models the residual εᵢ as depending on the p previous residuals: εᵢ = ρ₁·εᵢ₋₁ + … + ρₚ·εᵢ₋ₚ + zᵢ, where zᵢ is the freshly drawn, unpredictable random component at each time point. ρ (between −1 and 1) indicates how strongly a past error carries over. A single shock decays gradually/exponentially under AR(p) rather than vanishing abruptly — it theoretically plays a role for a long time (just an ever weaker one).',
   formula:'εᵢ = ρ·εᵢ₋₁ + zᵢ  (AR(1) case);   generally: εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ',
+  usage:'<b>Where in the code:</b> Inside <code>bf()</code>: <code>brm(bf(y ~ x + ar(p = 1)), data = d)</code> — needs a time/observation order in the data.<br><br><b>Meaning:</b> Adds an autoregressive term for the residuals to the model.<br><br><b>Watch out for:</b> With several time series (e.g. several persons), the grouping must be specified explicitly: <code>ar(time = time, gr = person, p = 1)</code> — otherwise brms wrongly assumes one single continuous time series.',
   intuition:'You can think of z as "what newly happened at this time point" (day-to-day form, measurement noise), while ε is "what still echoes from that up to today". With several time series (e.g. several persons), each needs its own AR structure — otherwise the model would wrongly try to correlate across persons.',
   related:[{id:'ma-modell',label:'MA(q)'},{id:'arma-modell',label:'ARMA(p,q)'},{id:'ar1',label:'AR(1) Covariance Structure'}]
 },
 { id:'ma-modell', cats:['reg','glm','brms'], az:'M', name:'MA(q) — Moving-Average Term', longname:'Temporal autocorrelation over q previous random components',
   def:'An MA(q) term (ma() in brms) models the residual εᵢ as directly depending on the q previous random components z (not on the previous residuals ε themselves, as in AR): εᵢ = zᵢ + θ·zᵢ₋₁ + …. The practical difference from AR: a single outlier shock affects exactly q time points under MA(q) and then vanishes completely — under AR the same shock instead decays gradually.',
   formula:'εᵢ = zᵢ + θ·zᵢ₋₁  (MA(1) case);   generally: εᵢ = zᵢ + Σₖ θₖ·zᵢ₋ₖ',
+  usage:'<b>Where in the code:</b> Inside <code>bf()</code>: <code>brm(bf(y ~ x + ma(q = 1)), data = d)</code>.<br><br><b>Meaning:</b> Adds a moving-average term for the residuals to the model.<br><br><b>Watch out for:</b> Like <code>ar()</code>, <code>ma()</code> needs the <code>time</code>/<code>gr</code> grouping arguments with several time series; MA terms are more compute-intensive in Stan/brms than plain AR terms.',
   intuition:'AR = "the effect of a shock fades slowly"; MA = "the effect of a shock lasts exactly q time points and is then gone abruptly". Which pattern fits better often only becomes clear through model comparison (e.g. via LOO).',
   related:[{id:'ar-modell',label:'AR(p)'},{id:'arma-modell',label:'ARMA(p,q)'}]
 },
 { id:'arma-modell', cats:['reg','glm','brms'], az:'A', name:'ARMA(p,q)', longname:'Combined autoregressive and moving-average term',
   def:'An ARMA(p,q) term (arma() in brms) combines an AR(p) and an MA(q) component within the same residual model — useful when neither a pure AR nor a pure MA structure captures the autocorrelation of the residuals well and both mechanisms are suspected at once.',
   formula:'εᵢ = Σₖ ρₖ·εᵢ₋ₖ + zᵢ + Σₗ θₗ·zᵢ₋ₗ',
+  usage:'<b>Where in the code:</b> Inside <code>bf()</code>: <code>brm(bf(y ~ x + arma(p = 1, q = 1)), data = d)</code>.<br><br><b>Meaning:</b> Combines an AR and an MA term into a single autocorrelation model.<br><br><b>Watch out for:</b> More parameters than plain AR or MA — for small samples or weakly apparent autocorrelation, a model comparison (LOO) against the simpler alternatives is worth doing before justifying the extra complexity.',
   intuition:'ARMA gives you both parameter sets at once (ar[1..p] and ma[1..q]); whether the extra complexity relative to a pure AR or MA model is really needed is shown by a model comparison.',
   related:[{id:'ar-modell',label:'AR(p)'},{id:'ma-modell',label:'MA(q)'}]
 },
 { id:'car-modell', cats:['reg','glm','brms'], az:'C', name:'CAR — Conditional Autoregressive', longname:'Spatial autocorrelation via a neighborhood structure',
   def:'A CAR term (car() in brms) models spatial rather than temporal autocorrelation: instead of a time ordering, an explicit neighborhood/adjacency matrix is needed (who is a neighbor of whom, e.g. adjoining states). "icar" is the robust default variant, in which a region\'s effect depends only on its direct neighbors; "bym2" additionally combines this with an unstructured random component per region, independent of the neighborhood, for cases where part of the regional differences is not spatially explainable.',
   formula:'y ~ x + car(M, gr = region, type = "icar")',
+  usage:'<b>Where in the code:</b> Inside <code>bf()</code>: <code>brm(bf(y ~ x + car(M, gr = region, type = "icar")), data = d, data2 = list(M = neighborhood_matrix))</code>.<br><br><b>Meaning:</b> Models spatial autocorrelation via an explicit neighborhood matrix.<br><br><b>Watch out for:</b> The neighborhood matrix <code>M</code> must be passed separately via the <code>data2</code> argument, not inside the normal <code>data</code> data frame; choose <code>type = "bym2"</code> instead of <code>"icar"</code> when part of the regional variation is likely not spatially explainable.',
   intuition:'Neighboring regions with a high spatial variation strength (sdcar) should resemble each other in their estimated effects — CAR "smooths" estimates across the neighborhood structure, quite analogous to how AR(1) smooths estimates across time.',
   related:[{id:'ar-modell',label:'AR(p)'}]
 },
 { id:'multi-membership', cats:['glm','bayes','brms'], az:'M', name:'Multi-Membership Random Effects', longname:'Belonging to multiple group levels at once — mm()',
   def:'A normal random effect assumes that every observation belongs uniquely to exactly one level of a grouping. Multi-membership (mm() in brms) relaxes this: an observation may belong to several levels at once — e.g. a student taught by two teachers during one semester. Several columns specify the membership levels, optional weights determine how strongly each level counts (without weights, all are weighted equally).',
   formula:'y ~ x + (1 | mm(g1, g2, weights = cbind(w1, w2)))',
+  usage:'<b>Where in the code:</b> Inside the formula as a random-effects term: <code>brm(y ~ x + (1 | mm(g1, g2)), data = d)</code>.<br><br><b>Meaning:</b> Lets an observation belong to several levels of a grouping at once.<br><br><b>Watch out for:</b> Without a <code>weights</code> argument, all memberships are weighted equally — with unequal substantive importance (e.g. 80% of the time with teacher A, 20% with B), <code>weights = cbind(w1, w2)</code> should be set explicitly.',
   intuition:'There is ONE shared variance parameter for the grouping, not separate ones per membership column — the weights only determine how strongly the effect of each concrete level flows into a given observation.',
   related:[{id:'random-effects',label:'Random Effects'}]
 },
@@ -2273,46 +2318,55 @@ const TERMS = [
 /* ── Addition: brms Model Builder / Prior Predictive Check / LOO Lab — Sampling & Marginal Likelihood ── */
 { id:'backend', cats:['mcmc','brms'], az:'B', name:'Backend (rstan/cmdstanr)', longname:'Stan interface used by brms',
   def:'The backend determines which R interface brms uses to compile the Stan code and run sampling. rstan is the older interface, embedded directly in R (CRAN default, no separate Stan installation needed). cmdstanr instead binds to the standalone CmdStan command-line version — usually more up to date, often faster to compile, and with extra features (e.g. within-chain parallelization via threading, better support for new Stan versions). Both give identical statistical results for the same model and seed; the difference is purely technical.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., backend = "cmdstanr")</code> (default: <code>"rstan"</code>).<br><br><b>Meaning:</b> Chooses the R interface to Stan.<br><br><b>Watch out for:</b> <code>cmdstanr</code> must be installed separately (<code>install.packages("cmdstanr", repos = ...)</code> plus <code>cmdstanr::install_cmdstan()</code>) and is not part of the standard CRAN brms setup; within-chain threading (<code>threads = threading(n)</code>) only works with <code>backend = "cmdstanr"</code>.',
   intuition:'For most analyses, the choice of backend is content-wise irrelevant — it changes nothing about priors, likelihood, or results, only compute time and setup. rstan is fine for a quick start (often already installed); cmdstanr pays off for computationally heavy models, when you want to benefit from the newest Stan optimizations, or when within-chain parallelization is needed, since rstan does not support it.',
   related:[{id:'brms',label:'brms'},{id:'hmc',label:'HMC'},{id:'nuts',label:'NUTS'}]
 },
 { id:'adapt-delta', cats:['mcmc','brms'], az:'A', name:'adapt_delta', longname:'Target acceptance rate of the NUTS step-size adaptation',
   def:'adapt_delta is a tuning parameter of the NUTS sampler (default: 0.80 in brms/Stan) that sets the target acceptance rate for Metropolis steps during warmup. A higher value (e.g. 0.95, 0.99, 0.999) forces the sampler to take smaller steps, reducing divergent transitions but slowing sampling down. In brms it is set via control = list(adapt_delta = 0.95).',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., control = list(adapt_delta = 0.95))</code>.<br><br><b>Meaning:</b> Raises the sampler\'s target acceptance rate and thereby indirectly the care (smaller step size) with which it explores the posterior geometry.<br><br><b>Watch out for:</b> Responding to divergent-transition warnings ONLY by raising <code>adapt_delta</code> without improving the underlying geometry (e.g. non-centered parameterization, more informative priors) often slows sampling substantially without the divergences fully disappearing.',
   intuition:'adapt_delta is the first lever to pull when Stan reports "divergent transitions" — a warning sign that the sampler is failing to properly explore regions of high curvature in the posterior geometry. Typical situations where raising it (step by step: 0.90 → 0.95 → 0.99 → 0.999) helps: hierarchical models with few groups or small random-effects variance ("funnel" geometry); horseshoe and other strongly peaked/sparse shrinkage priors (the global shrinkage parameter\'s proximity to zero creates an especially tight funnel — Stan/brms documentation often recommends adapt_delta ≥ 0.99 plus a higher max_treedepth here directly); models with little data relative to their complexity; strongly correlated predictors; and distribution families with extreme/skewed parameters (e.g. very small residual variance, lognormal with large σ). Raising adapt_delta fixes many, but not all, divergences — if they persist even at 0.999, it usually signals a structural geometry problem that only a reparameterization (non-centered parameterization) or a more informative prior choice can fix.',
   related:[{id:'nuts',label:'NUTS'},{id:'hmc',label:'HMC'},{id:'max-treedepth',label:'max_treedepth'},{id:'horseshoe-prior',label:'Horseshoe Prior'}]
 },
 { id:'max-treedepth', cats:['mcmc','brms'], az:'M', name:'max_treedepth', longname:'Maximum tree depth of the NUTS sampler',
   def:'max_treedepth caps how many times the NUTS sampler may double the "no-U-turn" tree per iteration when proposing a new point (default: 10, i.e. up to 2¹⁰ = 1024 gradient evaluations per step). If the sampler hits this limit before finding a natural stopping criterion (U-turn), the iteration is cut off ("maximum treedepth exceeded") — the result stays valid but is inefficient. In brms: control = list(max_treedepth = 12).',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., control = list(max_treedepth = 12))</code>.<br><br><b>Meaning:</b> Raises the maximum number of doubling steps the NUTS sampler may try per iteration.<br><br><b>Watch out for:</b> Each +1 doubles the maximum compute time per iteration — raise sparingly (10 → 12 → 15), not pre-emptively to a high value; treedepth warnings are (unlike divergent transitions) not a bias risk, only an efficiency problem.',
   intuition:'Unlike divergent transitions, a treedepth warning is not a sign of a biased result but of inefficiency: the sampler would need more steps to move freely, typically because the posterior has strongly correlated or poorly scaled parameters (e.g. random-effects models with many groups, horseshoe/sparse priors, or predictors on very different scales). Pragmatic approach: first check the share of affected iterations — a handful of isolated warnings (<1%) can usually be left as is. For systematic warnings, raise the limit step by step (10 → 12 → 15); because of the exponential cost (each +1 doubles the maximum compute per iteration), do this judiciously rather than pre-emptively jumping to a high value. If warnings occur on nearly every iteration, or runtime stays high even at treedepth=15, the underlying parameterization is usually the real problem (e.g. centered instead of non-centered random effects, unstandardized predictors) — better fixed there than by ever-increasing tree depth.',
   related:[{id:'nuts',label:'NUTS'},{id:'hmc',label:'HMC'},{id:'adapt-delta',label:'adapt_delta'},{id:'horseshoe-prior',label:'Horseshoe Prior'}]
 },
 { id:'save-pars', cats:['bayes','check','brms'], az:'S', name:'save_pars(all = TRUE)', longname:'Saving internal Stan parameters in brms',
   def:'save_pars() controls which internal parameters brm() keeps in the fitted model object. By default (save_pars(group = TRUE)), brms already saves the group-level effects (r_...), which is enough for plain loo()/waic() and for reloo() (full refits). save_pars(all = TRUE) additionally saves internal, non-centered Stan parameterizations (z_, L_ Cholesky factors, threshold reparameterizations, etc.) that are not themselves interpretable but are required directly by loo_moment_match() and bridge_sampler().',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., save_pars = save_pars(all = TRUE))</code> — must be set BEFORE fitting.<br><br><b>Meaning:</b> Saves extra internal Stan parameters in the model object.<br><br><b>Watch out for:</b> Cannot be added after the fact — anyone who needs <code>loo_moment_match()</code> or <code>bridge_sampler()</code> only after fitting, and fitted without <code>all = TRUE</code>, must refit the model entirely.',
   intuition:'save_pars(all = TRUE) costs extra memory at fitting time, but "insures" the model against later needing parameters it does not have — e.g. for high Pareto-k values or a Bayes factor via bridge_sampler(). Models fitted without all=TRUE cannot be patched up afterwards for these purposes; you would have to refit from scratch. Rule of thumb: if fitting time is not a bottleneck, all=TRUE is cheap insurance.',
   related:[{id:'loo-moment-match',label:'loo_moment_match()'},{id:'bridge-sampler',label:'bridge_sampler()'},{id:'reloo',label:'reloo()'}]
 },
 { id:'sample-prior', cats:['bayes','brms'], az:'S', name:'sample_prior', longname:'brm() argument for prior sampling ("no" / "yes" / "only")',
   def:'sample_prior controls in brm() whether and how brms also samples from the prior in addition to the posterior. sample_prior = "no" (default) samples only the posterior. sample_prior = "only" ignores the likelihood entirely and samples exclusively from the prior — the basis for the Prior Predictive Check. sample_prior = "yes" samples prior and posterior in parallel within the same fit — needed for hypothesis() with Bayes factors (Savage-Dickey density ratio) and for prior-posterior overlay plots.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., sample_prior = "yes")</code> — set before/at fitting time.<br><br><b>Meaning:</b> Controls whether the prior is sampled in addition to the posterior.<br><br><b>Watch out for:</b> <code>"only"</code> ignores the data entirely (for Prior Predictive Checks) — this fit supports no substantive conclusions about the data; for <code>hypothesis()</code> with Bayes factors, <code>"yes"</code> is strictly required, otherwise the prior information is missing from the object.',
   intuition:'The three modes answer different questions: "only" asks "what does my prior alone consider plausible, before seeing any data?" (Prior Predictive Check). "yes" additionally asks "how has my belief shifted from prior to posterior?" — a prerequisite for quantifying that shift directly (e.g. via a Bayes factor). "no" is the standard case for plain posterior inference when neither is needed.',
   related:[{id:'prior-predictive-check',label:'Prior Predictive Check'},{id:'bayes-faktor',label:'Bayes Factor'},{id:'prior',label:'Prior'},{id:'posterior',label:'Posterior'}]
 },
 { id:'bridge-sampler', cats:['bayes','check','brms'], az:'B', name:'bridge_sampler()', longname:'Bridge sampling to estimate the marginal likelihood',
   def:'bridge_sampler() (R package bridgesampling, usable in brms via bridge_sampler(fit)) estimates the marginal likelihood p(D) of a fitted model from its MCMC samples — the normalizing constant needed for the Bayes factor between two models: BF₁₂ = p(D|M₁) / p(D|M₂). The method "bridges" the posterior and an auxiliary distribution through iterative reweighting and is numerically more stable than naive Monte Carlo integration. Requirement in brms: the model must have been fitted with save_pars(all = TRUE).',
+  usage:'<b>Where in the code:</b> Called after fitting: <code>bridge_sampler(fit)</code>, typically for two competing models being compared.<br><br><b>Meaning:</b> Estimates the marginal likelihood used to compute a Bayes factor.<br><br><b>Watch out for:</b> Requires <code>save_pars(all = TRUE)</code> in the original fit; considerably more sensitive to the choice of prior than LOO/WAIC (diffuse priors can distort the result strongly, Lindley\'s Paradox) — scrutinize priors before interpreting.',
   intuition:'While LOO/WAIC compare predictive accuracy, bridge_sampler() answers a stricter question: how much evidence do the data provide overall for model A versus model B, when integrating across the entire prior distribution? This makes it more sensitive to the choice of prior than LOO (see Lindley\'s Paradox), but it is the only method that yields a genuine Bayes factor rather than an approximation of out-of-sample predictive accuracy.',
   related:[{id:'bayes-faktor',label:'Bayes Factor'},{id:'save-pars',label:'save_pars(all = TRUE)'},{id:'loo',label:'LOO-CV'},{id:'normalize',label:'normalize'}]
 },
 { id:'normalize', cats:['bayes','brms'], az:'N', name:'normalize', longname:'brm() argument to prepare for bridge_sampler()',
   def:'normalize controls in brm() whether Stan carries the normalizing constants of the log densities through its internal log-likelihood computations (default: TRUE). For bridge_sampler(), brms explicitly recommends normalize = FALSE when fitting — this saves compute time, since these constants are not needed for the later bridge sampling estimate and would otherwise be computed unnecessarily.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., normalize = FALSE)</code> — relevant only if <code>bridge_sampler()</code> is planned afterward.<br><br><b>Meaning:</b> Saves compute time during sampling by omitting normalizing constants that are unnecessary for <code>bridge_sampler()</code>.<br><br><b>Watch out for:</b> A pure efficiency option with no substantive effect — changes nothing about priors or results; without a planned <code>bridge_sampler()</code> call, stick with brms\' default (<code>TRUE</code>).',
   intuition:'normalize = FALSE is a pure efficiency option, not a substantive modeling decision — it changes nothing about priors, posterior, or parameter estimates, it only saves computation time during sampling when you already plan to call bridge_sampler() later for a Bayes factor. Without that plan, brms\' default (TRUE) remains the right choice.',
   related:[{id:'bridge-sampler',label:'bridge_sampler()'},{id:'bayes-faktor',label:'Bayes Factor'}]
 },
 { id:'reloo', cats:['bayes','check','brms'], az:'R', name:'reloo()', longname:'Refit-based Pareto-k correction for LOO',
   def:'reloo() (R package loo, usable in brms as add_criterion(fit, "loo", reloo = TRUE)) corrects LOO estimates for observations with a problematic Pareto-k value (default threshold 0.7), where the PSIS approximation is unreliable. For each affected observation, the model is fully refitted once — excluding that observation — and the exact log-likelihood is computed directly from the refitted model. This is exact, but correspondingly compute-intensive when many points are affected or the model is expensive to fit.',
+  usage:'<b>Where in the code:</b> After fitting: <code>fit &lt;- add_criterion(fit, "loo", reloo = TRUE)</code>.<br><br><b>Meaning:</b> Corrects LOO estimates for observations with a problematic Pareto-k by fully refitting without that observation.<br><br><b>Watch out for:</b> Can take a long time with many affected observations (high Pareto-k count), since each affected observation needs a whole new MCMC run — with many problematic points, consider <code>loo_moment_match()</code> as a faster alternative.',
   intuition:'reloo() is the gold standard for high Pareto-k values: no approximation error, because the model is actually refitted. The cost is compute time — 20 problematic observations mean 20 full MCMC runs. If that is too expensive, loo_moment_match() offers a faster, approximate alternative without refitting.',
   related:[{id:'pareto-k',label:'Pareto-k'},{id:'loo',label:'LOO-CV'},{id:'loo-moment-match',label:'loo_moment_match()'}]
 },
 { id:'loo-moment-match', cats:['bayes','check','brms'], az:'L', name:'loo_moment_match()', longname:'Refit-free alternative to reloo() via moment matching',
   def:'loo_moment_match() (in brms via add_criterion(fit, "loo", moment_match = TRUE)) corrects problematic Pareto-k estimates without refitting the model: it adjusts the existing posterior draws directly through moment-matching transformations to approximate the leave-one-out distribution. This requires access to all (including internal, non-centered) Stan parameters — so the model must have been fitted with save_pars(all = TRUE).',
+  usage:'<b>Where in the code:</b> After fitting: <code>fit &lt;- add_criterion(fit, "loo", moment_match = TRUE)</code>.<br><br><b>Meaning:</b> Corrects problematic Pareto-k values without refitting, via moment-matching of the existing draws.<br><br><b>Watch out for:</b> Requires <code>save_pars(all = TRUE)</code> in the original fit; for very extreme Pareto-k values (k &gt; 1), <code>reloo()</code> remains the more reliable, exact alternative.',
   intuition:'loo_moment_match() is the pragmatic choice when reloo() would be too expensive: large/complex models, long sampling times, or many affected observations. The approximation is usually good enough for moderately high k values (0.7–1); for very extreme k values (k > 1), reloo() remains the more reliable, exact choice.',
   related:[{id:'reloo',label:'reloo()'},{id:'pareto-k',label:'Pareto-k'},{id:'save-pars',label:'save_pars(all = TRUE)'}]
 },
@@ -2325,22 +2379,26 @@ const TERMS = [
 },
 { id:'iter', cats:['mcmc','brms'], az:'I', name:'iter', longname:'brm() argument: total number of iterations per chain (including warmup)',
   def:'iter sets in brm() the total number of MCMC iterations PER CHAIN — including the warmup phase. The number of samples per chain usable for posterior estimation is iter − warmup; across all chains, chains × (iter − warmup). BTL standard: iter = 4000 with warmup = 2000, i.e. 2000 post-warmup samples per chain, 8000 total with 4 chains.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., iter = 4000, warmup = 2000)</code>.<br><br><b>Meaning:</b> Total number of iterations PER chain, warmup included.<br><br><b>Watch out for:</b> Usable post-warmup samples per chain are <code>iter − warmup</code>, not <code>iter</code> itself; raising <code>iter</code> alone without checking whether it is actually needed (e.g. low ESS) just extends compute time unnecessarily.',
   intuition:'iter is NOT a synonym for "number of usable posterior samples" — the warmup share is automatically subtracted. A common beginner mistake: raising iter assuming it yields more posterior samples, without considering that with warmup held fixed, only the usable share grows. Raising iter helps mainly with low ESS (heavy autocorrelation) or when narrow credible intervals are needed for rare events.',
   related:[{id:'warmup',label:'Warmup'},{id:'chains',label:'Chains'},{id:'ess',label:'ESS'}]
 },
 { id:'cores', cats:['mcmc','brms'], az:'C', name:'cores', longname:'brm() argument: number of parallel CPU cores for sampling',
   def:'cores sets in brm() how many CPU cores are used in parallel to sample the chains. It is common to set cores = chains, so each chain gets its own core and all chains run simultaneously instead of one after another. cores has NO effect on the statistical result — purely a question of compute time (wall-clock), not of the number of iterations or model quality.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., cores = 4)</code>, usually set to <code>cores = chains</code>.<br><br><b>Meaning:</b> Number of CPU cores used in parallel for the chains.<br><br><b>Watch out for:</b> Has no effect on the statistical result, only on compute time; more cores than available, or more than <code>chains</code>, brings no additional benefit.',
   intuition:'cores greater than the available physical cores usually brings no further speed benefit (more likely overhead from context switching); cores greater than chains is pointless, since no more chains can ever run simultaneously than there are chains. With cmdstanr as the backend, within-chain parallelization (threads_per_chain) is also available — a separate mechanism that splits the compute load INSIDE a single chain, not across chains.',
   related:[{id:'chains',label:'Chains'},{id:'backend',label:'Backend (rstan/cmdstanr)'}]
 },
 { id:'family', cats:['bayes','glm','brms'], az:'F', name:'family', longname:'brm() argument: response distribution + link function',
   def:'family sets in brm() which probability distribution the response variable has and via which link function the linear predictor is connected to the expected value — e.g. family = gaussian() (link: identity), family = bernoulli(link="logit"), family = poisson(link="log"), family = Beta(), family = cumulative(link="probit") for ordinal data. brms supports far more families than the classic GLM, including Student-t for robust regression as well as zero-inflated and hurdle variants.',
+  usage:'<b>Where in the code:</b> Argument in <code>brm(..., family = poisson(link = "log"))</code>.<br><br><b>Meaning:</b> Sets the distributional assumption for the response and its link function.<br><br><b>Watch out for:</b> A wrongly chosen family (e.g. <code>gaussian()</code> for skewed count data) leads to systematically wrong predictive intervals, even when the mean still looks plausible — <code>pp_check(fit)</code> after fitting is the most direct way to catch a poor family choice.',
   intuition:'family is the central switch that determines how the model handles the response\'s range and variance structure — choosing it wrong (e.g. gaussian() for count data with many zeros) leads to systematically wrong predictive intervals even when the mean is still estimated reasonably. A pp_check() after fitting is the most direct way to spot a poorly chosen family.',
   related:[{id:'glm',label:'GLM'},{id:'link-funktion',label:'Link Function'},{id:'ppc',label:'PPC'},{id:'bf-formula',label:'bf() — brms formula'},{id:'brms',label:'brms'}]
 },
 { id:'bf-formula', cats:['bayes','glm','brms'], az:'B', name:'bf() — brms formula', longname:'brmsformula() — formula object for brm(); the basis for distributional, non-linear, and multivariate models',
   def:'bf() (short for brmsformula()) creates the formula object that tells brm() what to model. In its simplest form, bf(y ~ x) is equivalent to passing y ~ x directly as the formula argument. Its real usefulness shows up in more complex models: distributional models let you model additional parameters of the family (not just the expected value) as a function of predictors themselves, e.g. bf(y ~ x, sigma ~ z) for heterogeneous residual variance. With nl = TRUE, bf() enables non-linear models with a freely defined functional form and its own formula per parameter. Multiple bf() objects can be combined into multivariate models via mvbf().',
   formula:'bf(y ~ x, sigma ~ z)   ·   bf(y ~ a - b^x, a ~ 1, b ~ 1, nl = TRUE)   ·   mvbf(bf(y1 ~ x), bf(y2 ~ x))',
+  usage:'<b>Where in the code:</b> Replaces or extends the <code>formula</code> argument: <code>brm(bf(y ~ x, sigma ~ z), data = d)</code>.<br><br><b>Meaning:</b> Formula object describing what and how to model — the basis for distributional, non-linear, and (via <code>mvbf()</code>) multivariate models.<br><br><b>Watch out for:</b> For simple models <code>bf()</code> is optional (<code>y ~ x</code> is enough); it becomes necessary once you model more than the expected value (<code>sigma ~ z</code>), need non-linear forms (<code>nl = TRUE</code>), or want to combine several <code>bf()</code> objects via <code>mvbf()</code>.',
   intuition:'You can think of the plain formula y ~ x as shorthand for bf(y ~ x) — for standard models it makes no difference whether bf() is written explicitly. bf() only becomes necessary once you go beyond the single linear predictor for μ: for distributional models (also modeling sigma/nu/zi), non-linear models (nl=TRUE), or when combining multiple bf() objects into a multivariate model.',
   related:[{id:'family',label:'family'},{id:'multivariates-modell',label:'Multivariate Model'},{id:'link-funktion',label:'Link Function'},{id:'brms',label:'brms'}]
 },
@@ -2431,7 +2489,8 @@ function fixDiacritics(s) {
 
 function buildCard(t) {
   const art = document.createElement('article');
-  art.className = 'gl-card';
+  const isBrms = t.cats.includes('brms');
+  art.className = 'gl-card' + (isBrms ? ' gl-card-brms' : '');
   art.id = 'gl-' + t.id;
   art.dataset.cat = t.cats.join(' ');
 
@@ -2446,7 +2505,16 @@ function buildCard(t) {
   ).join('')}</div>`;
 
   const formulaHTML = t.formula
-    ? `<div class="gl-formula">${fixDiacritics(t.formula)}</div>` : '';
+    ? `<div class="gl-formula${isBrms ? ' gl-formula-code' : ''}">${fixDiacritics(t.formula)}</div>` : '';
+
+  const usageHTML = t.usage
+    ? `<div class="gl-usage">
+        <button class="gl-usage-toggle" type="button" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+          <span class="gl-usage-arrow">▸</span> Usage in brms
+        </button>
+        <div class="gl-usage-body">${t.usage}</div>
+      </div>`
+    : '';
 
   const relatedHTML = t.related && t.related.length
     ? `<div class="gl-related">→ ${t.related.map(r =>
@@ -2461,6 +2529,7 @@ function buildCard(t) {
     </div>
     <p class="gl-def">${fixDiacritics(t.def)}</p>
     ${formulaHTML}
+    ${usageHTML}
     <div class="gl-intuition">💡 ${fixDiacritics(t.intuition)}</div>
     ${relatedHTML}
   `;
