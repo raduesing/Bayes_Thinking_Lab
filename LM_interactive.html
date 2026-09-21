@@ -133,6 +133,10 @@ a:hover{text-decoration:underline}
 }
 .cv-wrap canvas{display:block}
 .cv-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem}
+.cv-row>div:first-child{flex:1 1 900px;max-width:1080px}
+.cv-row>div:first-child .cv-wrap{display:block;width:100%}
+.cv-row>div:first-child .cv-wrap canvas{width:100%;height:auto}
+.cv-sidebar{max-width:780px}
 .cv-label{
   font-family:'DM Mono',monospace;font-size:.68rem;
   color:var(--ink3);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.08em;
@@ -301,7 +305,7 @@ input[type=range]::-moz-range-thumb{
   font-family:'DM Mono',monospace;font-size:.68rem;
   text-transform:uppercase;letter-spacing:.12em;color:var(--ink3);margin-bottom:1rem;
 }
-.lcard-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem}
+.lcard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,380px));gap:.85rem}
 .lcard{background:var(--panel);border:1px solid var(--border);padding:1rem 1.1rem}
 .lcard:last-child{grid-column:1/-1}
 .lcard-h{
@@ -354,7 +358,7 @@ input[type=range]::-moz-range-thumb{
   border:1px solid var(--border);border-left:3px solid var(--a2);
   padding:.85rem 1rem;
   font-family:'DM Mono',monospace;font-size:.77rem;color:var(--ink2);line-height:1.9;
-  min-width:0;overflow-y:auto;
+  min-width:0;max-width:480px;overflow-y:auto;
 }
 .info-box-h{
   font-size:.64rem;text-transform:uppercase;letter-spacing:.1em;
@@ -491,12 +495,17 @@ input[type=range]::-moz-range-thumb{
             <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a3);width:40px;text-align:right" id="rss-ols-pct">—</div>
           </div>
         </div>
-        <div class="erklaer" style="margin-bottom:0">
+        <div class="erklaer" style="margin-bottom:.5rem">
           <strong>Modell:</strong><br>
           <span class="gk gk-hat">Y</span> = <span id="f-b0" style="color:var(--a2)">—</span>
           + <span id="f-b1" style="color:var(--a2)">—</span> · X₁
         </div>
-        <div class="btn-row" style="margin-bottom:.3rem;flex-wrap:wrap">
+        <div class="erklaer" id="ols-eq-box" style="margin-bottom:0;border-left-color:var(--a3);opacity:.3;transition:opacity .25s">
+          <strong style="color:var(--a3)">OLS (min):</strong><br>
+          <span class="gk gk-hat">Y</span> = <span id="f-ols-b0" style="color:var(--a3)">—</span>
+          + <span id="f-ols-b1" style="color:var(--a3)">—</span> · X₁
+        </div>
+        <div class="btn-row" style="margin-bottom:.3rem;margin-top:.85rem;flex-wrap:wrap">
           <button class="btn accent1" id="btn-hand" onclick="toggleHand()">✏ Hand: An</button>
           <button class="btn" id="btn-show-ols" onclick="toggleShowOLS()">◎ OLS zeigen</button>
         </div>
@@ -512,7 +521,7 @@ input[type=range]::-moz-range-thumb{
         <p><strong>Was ist <a class="glo-link" href="Glossar.html#gl-rss" target="_blank" title="Die RSS ist die Summe der quadrierten Differenzen zwischen beobachteten und vorhergesagten Werten: RSS = Σ(yᵢ − ŷᵢ)² — das zentrale Optimierungskriterium der OLS-Schätzung.">RSS</a>? (Residual Sum of Squares)</strong><br>
         RSS = Σeᵢ² = Σ(yᵢ − ŷᵢ)². <a class="glo-link" href="Glossar.html#gl-ols" target="_blank" title="OLS ist das Standardverfahren zur Schätzung linearer Regressionskoeffizienten: es minimiert die Summe der quadrierten Residuen.">OLS</a> findet analytisch exakt das b₀ und b₁, für das RSS global minimal ist — eindeutig und beweisbar. Kein Ausprobieren: b₁ = Cov(X,Y)/Var(X), b₀ = ȳ − b₁·x̄.</p>
         <p><strong>Warum Quadrate, nicht Beträge?</strong><br>
-        (1) Für jede OLS-Gerade gilt Σeᵢ = 0 — positive und negative Residuen heben sich trivialerweise auf. (2) Das Quadrieren bestraft große Residuen überproportional: ein Residuum von 10 kostet 100, nicht 10. (3) Das Quadrat liefert eine differenzierbare Funktion → geschlossene, eindeutige Lösung.</p>
+        (1) Für jede OLS-Gerade mit Intercept gilt Σeᵢ = 0. Positive und negative Residuen heben sich trivialerweise auf. Sowohl Beträge als auch Quadrate würden das verhindern, aber nur letztere sind optimal um den Mittelwert vorherzusagen. (2) Das Quadrieren allerdings bestraft große Residuen überproportional: ein Residuum von 10 kostet 100, nicht 10. (3) Das Quadrat liefert außerdem eine differenzierbare Funktion → geschlossene, eindeutige Lösung.</p>
         <p><strong><a class="glo-link" href="Glossar.html#gl-gauss-markov" target="_blank" title="Das Gauss-Markov-Theorem besagt: Unter den 5 klassischen Annahmen ist OLS BLUE — der beste lineare unverzerrte Schätzer. Normalverteilung der Fehler wird dafür NICHT benötigt.">Gauss-Markov</a>:</strong> Unter den 5 OLS-Annahmen (→ Modul <span class="tab-num">③</span>) ist OLS der <em>BLUE</em> — Best Linear Unbiased Estimator. Kein anderer linearer unverzerrter Schätzer hat kleinere Varianz.</p>
       </div>
     </div>
@@ -1359,6 +1368,13 @@ function updateMod1Display(b0,b1,isHand){
   document.getElementById('v-rss').textContent=Math.round(handRss);
   document.getElementById('f-b0').textContent=fmt(b0);
   document.getElementById('f-b1').textContent=(b1>=0?'+':'')+fmt(b1);
+
+  const olsBox=document.getElementById('ols-eq-box');
+  if(olsBox){
+    olsBox.style.opacity=ST.showOLS?'1':'.3';
+    document.getElementById('f-ols-b0').textContent=ST.showOLS?fmt(ST.fitBiv.b0):'—';
+    document.getElementById('f-ols-b1').textContent=ST.showOLS?(ST.fitBiv.b1>=0?'+':'')+fmt(ST.fitBiv.b1):'—';
+  }
 
   const handPct=Math.min(100,handRss/sst*100);
   const olsPct=Math.min(100,olsRss/sst*100);

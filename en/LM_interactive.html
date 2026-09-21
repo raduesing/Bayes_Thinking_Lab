@@ -133,6 +133,10 @@ a:hover{text-decoration:underline}
 }
 .cv-wrap canvas{display:block}
 .cv-row{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem}
+.cv-row>div:first-child{flex:1 1 900px;max-width:1080px}
+.cv-row>div:first-child .cv-wrap{display:block;width:100%}
+.cv-row>div:first-child .cv-wrap canvas{width:100%;height:auto}
+.cv-sidebar{max-width:780px}
 .cv-label{
   font-family:'DM Mono',monospace;font-size:.68rem;
   color:var(--ink3);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.08em;
@@ -301,7 +305,7 @@ input[type=range]::-moz-range-thumb{
   font-family:'DM Mono',monospace;font-size:.68rem;
   text-transform:uppercase;letter-spacing:.12em;color:var(--ink3);margin-bottom:1rem;
 }
-.lcard-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem}
+.lcard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,380px));gap:.85rem}
 .lcard{background:var(--panel);border:1px solid var(--border);padding:1rem 1.1rem}
 .lcard:last-child{grid-column:1/-1}
 .lcard-h{
@@ -354,7 +358,7 @@ input[type=range]::-moz-range-thumb{
   border:1px solid var(--border);border-left:3px solid var(--a2);
   padding:.85rem 1rem;
   font-family:'DM Mono',monospace;font-size:.77rem;color:var(--ink2);line-height:1.9;
-  min-width:0;overflow-y:auto;
+  min-width:0;max-width:480px;overflow-y:auto;
 }
 .info-box-h{
   font-size:.64rem;text-transform:uppercase;letter-spacing:.1em;
@@ -491,12 +495,17 @@ input[type=range]::-moz-range-thumb{
             <div style="font-family:'DM Mono',monospace;font-size:.64rem;color:var(--a3);width:40px;text-align:right" id="rss-ols-pct">—</div>
           </div>
         </div>
-        <div class="erklaer" style="margin-bottom:0">
+        <div class="erklaer" style="margin-bottom:.5rem">
           <strong>Model:</strong><br>
           <span class="gk gk-hat">Y</span> = <span id="f-b0" style="color:var(--a2)">—</span>
           + <span id="f-b1" style="color:var(--a2)">—</span> · X₁
         </div>
-        <div class="btn-row" style="margin-bottom:.3rem;flex-wrap:wrap">
+        <div class="erklaer" id="ols-eq-box" style="margin-bottom:0;border-left-color:var(--a3);opacity:.3;transition:opacity .25s">
+          <strong style="color:var(--a3)">OLS (min):</strong><br>
+          <span class="gk gk-hat">Y</span> = <span id="f-ols-b0" style="color:var(--a3)">—</span>
+          + <span id="f-ols-b1" style="color:var(--a3)">—</span> · X₁
+        </div>
+        <div class="btn-row" style="margin-bottom:.3rem;margin-top:.85rem;flex-wrap:wrap">
           <button class="btn accent1" id="btn-hand" onclick="toggleHand()">✏ Manual: On</button>
           <button class="btn" id="btn-show-ols" onclick="toggleShowOLS()">◎ Show OLS</button>
         </div>
@@ -512,7 +521,7 @@ input[type=range]::-moz-range-thumb{
         <p><strong>What is <a class="glo-link" href="Glossar.html#gl-rss" target="_blank" title="The RSS is the sum of squared differences between observed and predicted values: RSS = Σ(yᵢ − ŷᵢ)² — the central optimization criterion of OLS estimation.">RSS</a>? (Residual Sum of Squares)</strong><br>
         RSS = Σeᵢ² = Σ(yᵢ − ŷᵢ)². <a class="glo-link" href="Glossar.html#gl-ols" target="_blank" title="OLS is the standard method for estimating linear regression coefficients: it minimizes the sum of squared residuals.">OLS</a> finds analytically the exact b₀ and b₁ for which RSS is globally minimal — uniquely and provably. No trial and error: b₁ = Cov(X,Y)/Var(X), b₀ = ȳ − b₁·x̄.</p>
         <p><strong>Why squares, not absolute values?</strong><br>
-        (1) For every OLS line Σeᵢ = 0 — positive and negative residuals trivially cancel out. (2) Squaring penalizes large residuals disproportionately: a residual of 10 costs 100, not 10. (3) The square provides a differentiable function → closed, unique solution.</p>
+        (1) For every OLS line with an intercept, Σeᵢ = 0. Positive and negative residuals trivially cancel out. Both absolute values and squares would prevent this, but only the latter are optimal for predicting the mean. (2) Squaring, however, penalizes large residuals disproportionately: a residual of 10 costs 100, not 10. (3) The square also provides a differentiable function → closed, unique solution.</p>
         <p><strong><a class="glo-link" href="Glossar.html#gl-gauss-markov" target="_blank" title="The Gauss-Markov theorem states: under the 5 classical assumptions, OLS is BLUE — the Best Linear Unbiased Estimator. Normality of the errors is NOT required for this.">Gauss-Markov</a>:</strong> Under the 5 OLS assumptions (→ Module <span class="tab-num">③</span>) OLS is the <em>BLUE</em> — Best Linear Unbiased Estimator. No other linear unbiased estimator has smaller variance.</p>
       </div>
     </div>
@@ -1360,6 +1369,13 @@ function updateMod1Display(b0,b1,isHand){
   document.getElementById('v-rss').textContent=Math.round(handRss);
   document.getElementById('f-b0').textContent=fmt(b0);
   document.getElementById('f-b1').textContent=(b1>=0?'+':'')+fmt(b1);
+
+  const olsBox=document.getElementById('ols-eq-box');
+  if(olsBox){
+    olsBox.style.opacity=ST.showOLS?'1':'.3';
+    document.getElementById('f-ols-b0').textContent=ST.showOLS?fmt(ST.fitBiv.b0):'—';
+    document.getElementById('f-ols-b1').textContent=ST.showOLS?(ST.fitBiv.b1>=0?'+':'')+fmt(ST.fitBiv.b1):'—';
+  }
 
   const handPct=Math.min(100,handRss/sst*100);
   const olsPct=Math.min(100,olsRss/sst*100);
