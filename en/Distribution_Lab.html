@@ -104,9 +104,12 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--a6);
 
 /* brms toggle */
 .brms-row{display:flex;gap:1px;background:var(--grid);margin:.28rem 0 .65rem}
-.brms-btn{flex:1;padding:.28rem .4rem;border:none;background:var(--paper);
-  cursor:pointer;color:var(--ink2);font-family:'DM Mono',monospace;font-size:.65rem;
-  transition:all .13s}
+.brms-btn{flex:1;padding:.32rem .3rem;border:none;background:var(--paper);
+  cursor:pointer;color:var(--ink2);font-family:'DM Mono',monospace;
+  transition:all .13s;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:.15rem;min-height:2.7em;line-height:1.2;text-align:center}
+.brms-btn-type{font-size:.67rem;font-weight:600;letter-spacing:.01em}
+.brms-btn-params{font-size:.6rem;opacity:.8}
 .brms-btn:hover{background:var(--panel)}
 .brms-btn.sel{background:var(--a6);color:var(--paper)}
 
@@ -683,12 +686,27 @@ const DISTS = {
   },
 
   skew_normal:{
-    name:'Skew-Normal', group:0, notation:'Y ~ Skew-Normal(ξ, ω, α)',
-    params:[
+    name:'Skew-Normal', group:0,
+    brmsNotation:'Y ~ Skew-Normal(μ, σ, α)', classicNotation:'Y ~ Skew-Normal(ξ, ω, α)',
+    brmsBtnLabel:'brms (μ, σ, α)', classicBtnLabel:'Classical/Azzalini (ξ, ω, α)',
+    hasBrmsToggle:true,
+    paramsBrms:[
+      {id:'mu',    label:'μ (mean)', min:-5,  max:5,  step:0.1, val:0.76, fmt:v=>v.toFixed(2)},
+      {id:'sigma', label:'σ (SD)',   min:0.1, max:5,  step:0.1, val:0.65, fmt:v=>v.toFixed(2)},
+      {id:'alpha', label:'α (skewness)', min:-10, max:10, step:0.5, val:3, fmt:v=>v.toFixed(1)},
+    ],
+    paramsClassic:[
       {id:'xi',    label:'ξ (location)',       min:-5,  max:5,  step:0.1, val:0, fmt:v=>v.toFixed(1)},
       {id:'omega', label:'ω (scale)', min:0.1, max:5,  step:0.1, val:1, fmt:v=>v.toFixed(1)},
       {id:'alpha', label:'α (skewness)',    min:-10, max:10, step:0.5, val:3, fmt:v=>v.toFixed(1)},
     ],
+    toCanonical:(p,brms)=>{
+      if(!brms) return {xi:p.xi, omega:p.omega, alpha:p.alpha};
+      const a=p.alpha, delta=a/Math.sqrt(1+a*a);
+      const omega=p.sigma/Math.sqrt(Math.max(1e-6,1-2*delta*delta/Math.PI));
+      const xi=p.mu-omega*delta*Math.sqrt(2/Math.PI);
+      return {xi, omega, alpha:a};
+    },
     pdf:(x,p)=>{
       if(p.omega<=0)return 0;
       const z=(x-p.xi)/p.omega;
@@ -698,12 +716,24 @@ const DISTS = {
     meanFn:p=>{const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha); return p.xi+p.omega*d*Math.sqrt(2/Math.PI);},
     varianceFn:p=>{const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha); return p.omega*p.omega*(1-2*d*d/Math.PI);},
     modeFn:null, // numerical
+    convertParams:(p,fromBrms)=>{
+      const a=p.alpha, delta=a/Math.sqrt(1+a*a);
+      if(fromBrms){
+        const omega=p.sigma/Math.sqrt(Math.max(1e-6,1-2*delta*delta/Math.PI));
+        const xi=p.mu-omega*delta*Math.sqrt(2/Math.PI);
+        return {xi, omega, alpha:a};
+      } else {
+        const mu=p.xi+p.omega*delta*Math.sqrt(2/Math.PI);
+        const sigma=p.omega*Math.sqrt(Math.max(0,1-2*delta*delta/Math.PI));
+        return {mu, sigma, alpha:a};
+      }
+    },
     info:{
       was:'A Normal distribution with adjustable <strong>asymmetry</strong>. At α = 0 identical to Normal. Positive α values stretch the right side (longer right tail), negative α values the left side.',
       einsatz:'Reaction times in cognitive experiments — most responses are fast, but there is a long right tail with slower answers (α > 0). Exam performance with floor effects (all can do well, few perform very poorly → α < 0). Body weight in some populations. Generally: anywhere a Normal distribution almost fits, but the data is slightly pulled in one direction. <strong>Advantage over Lognormal:</strong> Skew-Normal stays on the original scale, no jump to log-units needed.',
-      parameter:'<strong>ξ (location):</strong> Approximately the mode (most frequent value), but not exactly! <em>Example:</em> ξ = 500 ms for a typical reaction time. Note: due to the skewness, the mean is not at ξ.<br><br><strong>ω (scale, > 0):</strong> The width of the distribution, analogous to σ in Normal. Larger ω → more spread.<br><br><strong>α (skewness):</strong> The decisive new element. α = 0 → identical to Normal. α > 0 → right tail extended (right-skewed, e.g. α = 5 shows a clear long right tail). α < 0 → left tail extended. <em>Rule:</em> The distribution "pulls in the direction of the sign of α".',
-      brms:'<div class="brms-role"><strong>As likelihood</strong> — for mildly asymmetric continuous outcomes:<br><code>brm(y ~ x, data = d, family = skew_normal())</code><br>→ σ (scale, = ω) and α (skewness) are both estimated automatically.<br>→ Useful when Normal almost fits but residuals are slightly skewed.<br><br><strong>Predict σ and α with predictors:</strong><br><code>brm(bf(y ~ x, sigma ~ group, alpha ~ 1), data = d, family = skew_normal())</code><br>→ Both parameters can have their own subformulas — e.g. when skewness or spread varies between groups.<br><br><strong>Parametrisation:</strong> Both uses — likelihood and prior — use the same Azzalini notation (ξ, ω, α): ξ = location, ω = scale (&gt; 0), α = skewness. No difference between the two notations.</div><div class="brms-role"><strong>As prior:</strong> Rarely used, but possible for directional priors:<br><code>prior(skew_normal(0, 1, 3), class = b)</code> → (ξ=0, ω=1, α=3) in Azzalini notation<br>→ Sets positive effects as a priori more probable than negative effects. Identical parametrisation to the likelihood.</div>',
-      technik:'PDF = 2/ω · φ((x−ξ)/ω) · Φ(α·(x−ξ)/ω). E[Y] = ξ + ω·δ·√(2/π), δ = α/√(1+α²). Mode computed numerically. <em>brms:</em> <code>skew_normal(xi, omega, alpha)</code>.'
+      parameter:'<strong>Two different notations — depending on use:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> As likelihood (sliders: μ, σ, α):</strong> The brms likelihood parametrization.<br>• <strong>μ (mean):</strong> Directly the expected value of Y — not approximately, exactly. <em>Example:</em> μ = 500 ms for a typical reaction time.<br>• <strong>σ (SD):</strong> The actual standard deviation of Y, directly comparable to σ in Normal or Student-t.<br>• <strong>α (skewness):</strong> Unchanged — the same skewness as in the classical notation. α = 0 → identical to Normal.<br>→ These values are predicted via the formula <code>y ~ x</code> and are directly interpretable.<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical Azzalini notation (sliders: ξ, ω, α):</strong> Used in brms for <code>prior(skew_normal(...), ...)</code> — <em>not</em> for the likelihood!<br>• <strong>ξ (location):</strong> Approximately the mode, but not exactly, and NOT the mean — that lies elsewhere due to the skewness.<br>• <strong>ω (scale, > 0):</strong> The width of the distribution — analogous to σ in Normal, but NOT identical to the SD of Y (except when α=0).<br>• <strong>α (skewness):</strong> α = 0 → identical to Normal. α > 0 → right tail extended. α < 0 → left tail extended.<br>→ <em>Rule of thumb:</em> The distribution "pulls in the direction of the sign of α".<br><br><strong>Important:</strong> Unlike Gamma/Beta, this difference is especially tricky here because BOTH notations appear under the same function name <code>skew_normal(...)</code> — depending on whether you use it as <code>family</code> or in <code>prior()</code>.',
+      brms:'<div class="brms-role"><strong>As likelihood</strong> — for mildly asymmetric continuous outcomes:<br><code>brm(y ~ x, data = d, family = skew_normal())</code><br>→ The main formula <code>y ~ x</code> predicts μ — the actual mean of the distribution, NOT the location ξ from the Azzalini notation used by the sliders above. σ and α (skewness) are estimated automatically; σ is the actual standard deviation, not the Azzalini scale ω (the two are identical only when α=0).<br>→ Useful when Normal almost fits but residuals are slightly skewed.<br><br><strong>Predict σ and α with predictors:</strong><br><code>brm(bf(y ~ x, sigma ~ group, alpha ~ 1), data = d, family = skew_normal())</code><br>→ Both parameters can have their own subformulas — e.g. when skewness or spread varies between groups.<br><br><strong>Important gotcha — likelihood and prior use DIFFERENT notations:</strong> As a response family, brms deliberately parametrizes Skew-Normal via the actual mean and SD (μ, σ, α) — just like Gamma, Beta, and NegBinomial. Writing <code>prior(skew_normal(...), ...)</code> instead calls Stan\'s built-in density function directly, which uses the classical Azzalini notation (ξ, ω, α). Both calls are named "skew_normal" and take three numbers, but those numbers mean different things.</div><div class="brms-role"><strong>As prior:</strong> Rarely used, but possible for directional priors:<br><code>prior(skew_normal(0, 1, 3), class = b)</code> → (ξ=0, ω=1, α=3) in the classical Azzalini notation — not to be confused with the (μ, σ, α) parameters of the likelihood above.<br>→ Sets positive effects as a priori more probable than negative effects.</div>',
+      technik:'PDF = 2/ω · φ((x−ξ)/ω) · Φ(α·(x−ξ)/ω). E[Y] = ξ + ω·δ·√(2/π), δ = α/√(1+α²). Mode computed numerically. <em>brms likelihood:</em> internally (μ, σ, α) with μ = E[Y], σ = SD. <em>brms prior function:</em> <code>skew_normal(xi, omega, alpha)</code> in the Azzalini notation shown here — the two notations differ.'
     }
   },
 
@@ -751,6 +781,7 @@ const DISTS = {
   gamma:{
     name:'Gamma', group:1,
     brmsNotation:'Y ~ Gamma(μ, φ)', classicNotation:'Y ~ Gamma(α, β_rate)',
+    brmsBtnLabel:'brms (μ, φ)', classicBtnLabel:'Classical (α, β)',
     hasBrmsToggle:true,
     paramsBrms:[
       {id:'mu',  label:'μ (mean)', min:0.1, max:10, step:0.1, val:2, fmt:v=>v.toFixed(1)},
@@ -778,20 +809,28 @@ const DISTS = {
   },
 
   exponential:{
-    name:'Exponential', group:1, notation:'Y ~ Exponential(λ)',
-    params:[
+    name:'Exponential', group:1,
+    brmsNotation:'Y ~ Exponential(μ)', classicNotation:'Y ~ Exponential(λ)',
+    brmsBtnLabel:'brms (μ)', classicBtnLabel:'Classical (λ)',
+    hasBrmsToggle:true,
+    paramsBrms:[
+      {id:'mu', label:'μ (mean)', min:0.2, max:10, step:0.1, val:1, fmt:v=>v.toFixed(2)},
+    ],
+    paramsClassic:[
       {id:'lambda', label:'λ (rate)', min:0.1, max:5, step:0.1, val:1, fmt:v=>v.toFixed(2)},
     ],
-    pdf:(x,p)=>gammaPDF(x,1,p.lambda),
-    supportFn:p=>[0, 6/p.lambda],
-    meanFn:p=>1/p.lambda, varianceFn:p=>1/(p.lambda*p.lambda),
-    modeFn:p=>0,
+    toCanonical:(p,brms)=>brms?{lambda:1/p.mu}:{lambda:p.lambda},
+    pdf:(x,c)=>gammaPDF(x,1,c.lambda),
+    supportFn:c=>[0, 6/c.lambda],
+    meanFn:c=>1/c.lambda, varianceFn:c=>1/(c.lambda*c.lambda),
+    modeFn:c=>0,
+    convertParams:(p,fromBrms)=>fromBrms?{lambda:1/p.mu}:{mu:1/p.lambda},
     info:{
       was:'The simplest waiting-time distribution: the time until the next random event at a <strong>constant, unchanging hazard rate</strong>. A special case of the Gamma distribution with α = 1. Always monotonically decreasing — short waiting times are most common.',
       einsatz:'Time between two phone calls at a call centre, lifetime of devices without wear (light bulbs, simple electronics), time until the next doctor visit at a constant health risk, radioactive decay. <strong>Key characteristic:</strong> The Exponential distribution describes waiting times when the risk of an event is always the same — regardless of how long you have already been waiting. An old device without wear has the same failure probability per hour as a new one.',
-      parameter:'<strong>λ (rate):</strong> How many events occur on average per time unit. The mean waiting time is the reciprocal: 1/λ. <em>Example:</em> λ = 2 calls/hour → mean waiting time = 1/2 hour = 30 minutes. <em>Example:</em> λ = 0.1 → mean waiting time = 10 hours, rare events.<br><br><strong>Intuition:</strong> Imagine guessing — "when will the next call come?". Without additional information your best estimate is always the same distance in the future, regardless of whether you just started waiting or have been waiting for a long time. That is memorylessness — and exactly what the Exponential distribution captures.',
-      brms:'<div class="brms-role"><strong>As likelihood:</strong> No standalone <code>family = exponential()</code> in brms.<br>Recommendation: <code>family = Gamma(link = "log")</code> with fixed shape = 1 in Stan, or Gamma with a strong prior on shape ≈ 1.<br>→ Alternatively directly in Stan: <code>target += exponential_lpdf(y | lambda);</code></div><div class="brms-role"><strong>As prior:</strong> Frequently used for positive parameters:<br><code>prior(exponential(1), class = sigma)</code> — weakly informative prior for standard deviations<br><code>prior(exponential(1), class = shape)</code> — for shape parameters in Gamma/NegBin<br>→ Exponential(1) has mean = 1 and standard deviation = 1, covers positive values with decaying weight.</div>',
-      technik:'Memorylessness: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ, Var = 1/λ². If events follow Poisson(λ) per time unit, inter-arrival times are Exponential(λ). <em>brms:</em> Gamma(1, λ) or directly via Stan.'
+      parameter:'<strong>Two different notations — depending on use:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> brms parametrization (μ):</strong> brms directly models the mean. <em>Example:</em> μ = 0.5 hours → mean waiting time 30 minutes.<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical notation (λ):</strong> How many events occur on average per time unit — the rate. Conversion: μ = 1/λ. <em>Example:</em> λ = 2 calls/hour → mean waiting time = 1/2 hour = 30 minutes. <em>Example:</em> λ = 0.1 → mean waiting time = 10 hours, rare events.<br><br><strong>Watch out, a genuine gotcha:</strong> unlike Poisson/Bernoulli, μ and λ here are NOT simply the same number under a different name — μ = 1/λ is a reciprocal! A coefficient that doubles μ halves the rate λ.<br><br><strong>Intuition (memorylessness):</strong> Imagine guessing — "when will the next call come?". Without additional information your best estimate is always the same distance in the future, regardless of whether you just started waiting or have been waiting for a long time.',
+      brms:'<div class="brms-role"><strong>As likelihood</strong> — a standalone family, directly available:<br><code>brm(y ~ x, data = d, family = exponential(link = "log"))</code><br>→ brms models μ (the mean, NOT the rate λ) via the log link.<br>→ Only one parameter — no dispersion parameter, no distributional model possible.<br>→ Equivalent to <code>family = Gamma(link="log")</code> with shape fixed to 1, but usable directly as its own family.</div><div class="brms-role"><strong>As prior:</strong> Frequently used for positive parameters, independent of the likelihood usage above:<br><code>prior(exponential(1), class = sigma)</code> — weakly informative prior for standard deviations<br><code>prior(exponential(1), class = shape)</code> — for shape/dispersion parameters in Gamma/NegBin<br>→ Here the number in <code>exponential(1)</code> is the classical rate λ = 1 (mean = 1), since <code>prior()</code> uses Stan\'s native parametrization — just like Skew-Normal, this means something different from the μ of the likelihood above.</div>',
+      technik:'Memorylessness: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ = μ, Var = 1/λ² = μ². If events follow Poisson(λ) per time unit, inter-arrival times are Exponential(λ). <em>brms likelihood:</em> <code>exponential(mu)</code> — mean, not rate. <em>brms prior function:</em> <code>exponential(lambda)</code> — classical rate.'
     }
   },
 
@@ -829,9 +868,9 @@ const DISTS = {
     info:{
       was:'Describes the time until a <strong>random process with drift</strong> crosses a threshold. Positive, often strongly right-skewed. Arises when a particle (or a decision) moves towards a goal against random noise.',
       einsatz:'<strong>Reaction time models:</strong> The drift-diffusion model in cognitive psychology explains reaction times as a process in which evidence is accumulated against a noise process until a decision threshold is reached. The time until this threshold crossing follows the Inverse Gaussian distribution. <strong>Latencies</strong> in networks and biological processes. <strong>When to choose?</strong> When Lognormal produces "too much" skew — Inverse Gaussian has a slightly different tail behaviour.<br><br><strong>Distinction from the ExGaussian:</strong> The ExGaussian is a <em>descriptive mixture model</em> (Normal + Exponential) with no theoretical process assumption — ideal when you want to parameterise RT distributions without committing to a drift-model theory. The Inverse Gaussian, by contrast, has a clear <em>generative mechanism</em>: it is the exact first-passage-time distribution of an accumulating process with drift. When the drift-diffusion model is theoretically motivated, the Inverse Gaussian is the more principled choice.',
-      parameter:'<strong>μ (mean):</strong> The mean waiting time until the threshold. <em>Example:</em> μ = 0.5 s → on average 500 ms reaction time.<br><br><strong>λ (shape/precision):</strong> Controls the skew. Small λ (e.g. 1) → strongly right-skewed, long outliers. Large λ (e.g. 20) → more concentrated, narrower distribution. Note: Var(Y) = μ³/λ, so spread depends cubically on the mean — for larger μ, variance grows much faster.',
+      parameter:'<strong>μ (mean):</strong> The mean waiting time until the threshold. <em>Example:</em> μ = 0.5 s → on average 500 ms reaction time.<br><br><strong>λ (shape/precision):</strong> Controls the skew. Small λ (e.g. 1) → strongly right-skewed, long outliers. Large λ (e.g. 20) → more concentrated, narrower distribution. Note: Var(Y) = μ³/λ, so spread depends cubically on the mean — for larger μ, variance grows much faster.<br><br><em>Notation note:</em> λ is the usual mathematical symbol (Chhikara-Folks notation, IG(μ,λ)). In brms itself the R function argument is called <code>shape</code>, not <code>lambda</code> — unlike μ, which is identical in both notations, only the name differs here, not the meaning.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — for reaction times and similar positive processes:<br><code>brm(y ~ x, data = d, family = inverse.gaussian(link = "1/mu^2"))</code><br>→ or link: <code>"log"</code> for simpler interpretation.<br>→ Less commonly used than Lognormal; useful for certain reaction time models.</div><div class="brms-role"><strong>As prior:</strong> Not common.</div>',
-      technik:'Var(Y) = μ³/λ. Mode < Median < Mean (with strong skew). <em>brms:</em> <code>inv_gaussian(mu, lambda)</code>, Link: <code>1/mu²</code>.'
+      technik:'Var(Y) = μ³/λ. Mode < Median < Mean (with strong skew). <em>brms:</em> <code>inv_gaussian(mu, shape)</code>, Link: <code>1/mu²</code> — the R function argument is called "shape", λ is just the mathematical display notation.'
     }
   },
 
@@ -895,7 +934,7 @@ const DISTS = {
       einsatz:'<strong>Cost and expenditure data:</strong> healthcare spending per person per year (many people with €0 spending, everyone else with continuous-positive, right-skewed amounts), insurance claims (no claim = 0, otherwise Gamma-distributed claim size), spending in categories not everyone uses (0 if never purchased, otherwise a positive amount).',
       parameter:'<strong>μ, φ:</strong> Mean and shape of the Gamma component, valid for the cases with Y &gt; 0 — as with ordinary Gamma (brms parametrization).<br><br><strong>hu (hurdle probability):</strong> P(Y=0) — directly and exactly. <em>Example:</em> hu = 0.30 → 30% of observations have exactly €0 spending, 70% have positive, Gamma-distributed spending with mean μ.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — positive amounts/costs with true zeros:<br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_gamma())</code><br>→ hu can get its own predictors — e.g. x2 predicts WHO has any spending at all, x1 HOW MUCH, if so.</div><div class="brms-role"><strong>Prior for hu:</strong><br><code>prior(beta(1, 1), class = hu)</code></div>',
-      technik:'E[Y] = (1−hu)·μ. Var(Y) = (1−hu)·μ²/φ + hu·(1−hu)·μ². For x &gt; 0: density = (1−hu)·Gamma(x|shape=φ, rate=φ/μ). Bar in the plot = hu; curve = (1−hu)·GammaPDF. <em>brms:</em> <code>hurdle_gamma(mu, phi, hu)</code>.'
+      technik:'E[Y] = (1−hu)·μ. Var(Y) = (1−hu)·μ²/φ + hu·(1−hu)·μ². For x &gt; 0: density = (1−hu)·Gamma(x|shape=φ, rate=φ/μ). Bar in the plot = hu; curve = (1−hu)·GammaPDF. <em>brms:</em> <code>hurdle_gamma(mu, shape, hu)</code> — the dispersion parameter is called "shape" in brms, not "phi" (φ is just the display notation here).'
     }
   },
 
@@ -929,6 +968,7 @@ const DISTS = {
   beta:{
     name:'Beta', group:2,
     brmsNotation:'Y ~ Beta(μ, φ)', classicNotation:'Y ~ Beta(α, β)',
+    brmsBtnLabel:'brms (μ, φ)', classicBtnLabel:'Classical (α, β)',
     hasBrmsToggle:true,
     paramsBrms:[
       {id:'mu',  label:'μ (mean)', min:0.01, max:0.99, step:0.01, val:0.5, fmt:v=>v.toFixed(2)},
@@ -1047,22 +1087,33 @@ const DISTS = {
   },
 
   negbin:{
-    name:'Neg. Binomial', group:3, notation:'Y ~ NegBin(μ, φ)',
+    name:'Neg. Binomial', group:3,
+    brmsNotation:'Y ~ NegBin(μ, φ)', classicNotation:'Y ~ NegBin(r, p)',
+    brmsBtnLabel:'brms (μ, shape)', classicBtnLabel:'Classical (r, p)',
+    hasBrmsToggle:true,
     discrete:true,
-    params:[
+    paramsBrms:[
       {id:'mu',  label:'μ (mean)',    min:0.1, max:20, step:0.1, val:4,   fmt:v=>v.toFixed(1)},
-      {id:'phi', label:'φ (overdispersion)',min:0.1, max:20, step:0.1, val:2,   fmt:v=>v.toFixed(1)},
+      {id:'phi', label:'shape (dispersion)',min:0.1, max:20, step:0.1, val:2,   fmt:v=>v.toFixed(1)},
     ],
-    pmf:(k,p)=>negbinPMF(k,p.mu,p.phi),
-    kRangeFn:p=>{const v=p.mu+p.mu*p.mu/p.phi; const hi=Math.ceil(p.mu+5*Math.sqrt(v))+1; return [0,Math.min(hi,80)];},
-    meanFn:p=>p.mu, varianceFn:p=>p.mu+p.mu*p.mu/p.phi,
+    paramsClassic:[
+      {id:'r', label:'r (number of successes)',        min:0.1, max:20, step:0.1, val:2,    fmt:v=>v.toFixed(1)},
+      {id:'p', label:'p (success prob./trial)',min:0.01,max:0.99,step:0.01,val:0.33, fmt:v=>v.toFixed(2)},
+    ],
+    toCanonical:(p,brms)=>brms ? {mu:p.mu, phi:p.phi} : {mu:p.r*(1-p.p)/p.p, phi:p.r},
+    pmf:(k,c)=>negbinPMF(k,c.mu,c.phi),
+    kRangeFn:c=>{const v=c.mu+c.mu*c.mu/c.phi; const hi=Math.ceil(c.mu+5*Math.sqrt(v))+1; return [0,Math.min(hi,80)];},
+    meanFn:c=>c.mu, varianceFn:c=>c.mu+c.mu*c.mu/c.phi,
     modeFn:null, // numerical
+    convertParams:(p,fromBrms)=>fromBrms
+      ?{r:p.phi, p:p.phi/(p.phi+p.mu)}
+      :{mu:p.r*(1-p.p)/p.p, phi:p.r},
     info:{
       was:'Like Poisson, but with <strong>flexible variance</strong>: the variance may be larger than the mean (overdispersion). In practice almost always better than Poisson, because real count data are almost always more variable than the Poisson model allows.',
       einsatz:'<strong>The more robust standard for count data.</strong> Doctor visits per year (a few people go very often, many rarely → strong overdispersion), social-media posts, number of symptoms, sick days. <strong>Golden rule:</strong> Use as standard for count data; only switch to Poisson when equidispersion (Var ≈ Mean) has been verified or is theoretically justified. In practice, count-data overdispersion is the rule, not the exception.',
-      parameter:'<strong>μ (mean):</strong> Like Poisson. <em>Example:</em> μ = 5 → on average 5 events per person.<br><br><strong>φ (precision/dispersion):</strong> Small φ = strong overdispersion (much more spread than Poisson). Large φ → barely distinguishable from Poisson.<br><br><strong>Var(Y) comparison for μ = 5:</strong><br>• φ = 0.5 → Var = 5 + 25/0.5 = 55 (extreme overdispersion)<br>• φ = 1 → Var = 5 + 25 = 30 (strong overdispersion)<br>• φ = 5 → Var = 5 + 5 = 10 (moderate overdispersion)<br>• φ = 50 → Var = 5.5 (barely distinguishable from Poisson)<br>• φ → ∞ → Var = 5 (= Poisson)<br><br><strong>Diagnosis:</strong> If Var(data) > 1.5 × Mean(data) → choose NegBin instead of Poisson.',
+      parameter:'<strong>Two different notations — depending on use:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> brms parametrization (μ, shape):</strong><br>• <strong>μ (mean):</strong> Like Poisson. <em>Example:</em> μ = 5 → on average 5 events per person.<br>• <strong>shape (shown here as φ):</strong> Small φ = strong overdispersion (much more spread than Poisson). Large φ → barely distinguishable from Poisson.<br><br><strong>Var(Y) comparison for μ = 5:</strong><br>• φ = 0.5 → Var = 5 + 25/0.5 = 55 (extreme overdispersion)<br>• φ = 1 → Var = 5 + 25 = 30 (strong overdispersion)<br>• φ = 5 → Var = 5 + 5 = 10 (moderate overdispersion)<br>• φ = 50 → Var = 5.5 (barely distinguishable from Poisson)<br>• φ → ∞ → Var = 5 (= Poisson)<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical notation (r, p) — "number of failures before the r-th success":</strong> The construction usually taught first in intro courses, directly comparable to R\'s built-in <code>dnbinom(x, size, prob)</code>.<br>• <strong>r (= size):</strong> Numerically identical to the brms shape/φ parameter — only the role of the second quantity changes.<br>• <strong>p:</strong> Success probability per trial. Conversion: μ = r(1−p)/p, i.e. p = r/(r+μ).<br><br><strong>Diagnosis:</strong> If Var(data) > 1.5 × Mean(data) → choose NegBin instead of Poisson.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — count data with overdispersion (standard recommendation):<br><code>brm(y ~ x1 + x2, data = d, family = negbinomial(link = "log"))</code><br>→ φ (shape) is estimated automatically.<br>→ Interpretation like Poisson: exp(β) = factor effect on μ.<br>→ Default prior for shape: <code>prior(exponential(1), class = shape)</code></div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(normal(0, 1), class = b)</code><br><code>prior(exponential(1), class = shape)</code> → wide positive prior for φ<br>→ Alternative: <code>prior(gamma(0.01, 0.01), class = shape)</code> for very diffuse prior</div>',
-      technik:'Var(Y) = μ + μ²/φ. Limit φ→∞: → Poisson(μ). Interpretation as mixture: Y|ω ~ Poisson(ω), ω ~ Gamma(φ, φ/μ). <em>brms:</em> <code>negbinomial(mu, phi)</code>.'
+      technik:'Var(Y) = μ + μ²/φ. Limit φ→∞: → Poisson(μ). Interpretation as mixture: Y|ω ~ Poisson(ω), ω ~ Gamma(φ, φ/μ). <em>brms:</em> <code>negbinomial(mu, shape)</code> — the dispersion parameter is called "shape" in brms, not "phi" (φ is just the display notation here).'
     }
   },
 
@@ -1087,23 +1138,35 @@ const DISTS = {
   },
 
   beta_binomial:{
-    name:'Beta-Binomial', group:3, notation:'Y ~ BetaBin(n, μ, φ)',
+    name:'Beta-Binomial', group:3,
+    brmsNotation:'Y ~ BetaBin(n, μ, φ)', classicNotation:'Y ~ BetaBin(n, α, β)',
+    brmsBtnLabel:'brms (μ, φ)', classicBtnLabel:'Classical (α, β)',
+    hasBrmsToggle:true,
     discrete:true,
-    params:[
+    paramsBrms:[
       {id:'n',   label:'n (trials)',       min:1,    max:50, step:1,    val:20, fmt:v=>String(Math.round(v))},
       {id:'mu',  label:'μ (mean prob.)',min:0.01, max:0.99,step:0.01,val:0.4, fmt:v=>v.toFixed(2)},
       {id:'phi', label:'φ (precision)',      min:0.5,  max:30, step:0.5,  val:3,   fmt:v=>v.toFixed(1)},
     ],
-    pmf:(k,p)=>{const n=Math.round(p.n),a=p.mu*p.phi,b=(1-p.mu)*p.phi; return betaBinomPMF(k,n,a,b);},
-    kRangeFn:p=>[0,Math.round(p.n)],
-    meanFn:p=>Math.round(p.n)*p.mu,
-    varianceFn:p=>{const n=Math.round(p.n),a=p.mu*p.phi,b=(1-p.mu)*p.phi,ab=a+b;
-      return n*a*b*(ab+n)/(ab*ab*(ab+1));},
+    paramsClassic:[
+      {id:'n',      label:'n (trials)',   min:1,   max:50, step:1,   val:20, fmt:v=>String(Math.round(v))},
+      {id:'alpha',  label:'α (shape 1)',    min:0.1, max:20, step:0.1, val:8,  fmt:v=>v.toFixed(1)},
+      {id:'beta_',  label:'β (shape 2)',    min:0.1, max:20, step:0.1, val:12, fmt:v=>v.toFixed(1)},
+    ],
+    toCanonical:(p,brms)=>brms?{n:p.n, a:p.mu*p.phi, b:(1-p.mu)*p.phi}:{n:p.n, a:p.alpha, b:p.beta_},
+    pmf:(k,c)=>betaBinomPMF(k,Math.round(c.n),c.a,c.b),
+    kRangeFn:c=>[0,Math.round(c.n)],
+    meanFn:c=>Math.round(c.n)*c.a/(c.a+c.b),
+    varianceFn:c=>{const n=Math.round(c.n),ab=c.a+c.b;
+      return n*c.a*c.b*(ab+n)/(ab*ab*(ab+1));},
     modeFn:null, // numerical
+    convertParams:(p,fromBrms)=>fromBrms
+      ?{n:p.n, alpha:p.mu*p.phi, beta_:(1-p.mu)*p.phi}
+      :{n:p.n, mu:p.alpha/(p.alpha+p.beta_), phi:p.alpha+p.beta_},
     info:{
       was:'A Binomial distribution where the success probability p <strong>varies from person to person</strong> — p itself is Beta-distributed. This creates more spread than pure Binomial: overdispersion.',
       einsatz:'<strong>When Binomial is too rigid</strong> — not all people have the same probability p! Test results in heterogeneous groups (some people are fundamentally better than others → p varies between people). Clinical trials with differently responding patients. Language production (some people generally make more errors). <strong>Diagnosis:</strong> Var(data) > n × p̄ × (1−p̄) → Beta-Binomial instead of Binomial.',
-      parameter:'<strong>n (number of trials):</strong> Same as Binomial.<br><br><strong>μ (mean probability):</strong> The average of p across all people. <em>Example:</em> μ = 0.6 → on average 60% correct.<br><br><strong>φ (concentration):</strong> How strongly does p vary between people?<br>• φ = 0.5 → extreme variation: some almost always wrong, some almost always right<br>• φ = 2 → clear person-to-person differences<br>• φ = 10 → moderate differences<br>• φ = 100 → barely any differences, almost like Binomial<br>• φ → ∞ → identical to Binomial(n, μ)<br><br><strong>Intuition:</strong> Imagine that each person has their own p, drawn from a Beta(μ·φ, (1−μ)·φ) distribution. The Beta-Binomial is the result of this mixture.',
+      parameter:'<strong>n (number of trials):</strong> Same as Binomial — does not change between the two notations.<br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> brms parametrization (μ, φ):</strong><br>• <strong>μ (mean probability):</strong> The average of p across all people. <em>Example:</em> μ = 0.6 → on average 60% correct.<br>• <strong>φ (concentration):</strong> How strongly does p vary between people?<br>&nbsp;&nbsp;· φ = 0.5 → extreme variation: some almost always wrong, some almost always right<br>&nbsp;&nbsp;· φ = 2 → clear person-to-person differences<br>&nbsp;&nbsp;· φ = 100 → barely any differences, almost like Binomial<br>&nbsp;&nbsp;· φ → ∞ → identical to Binomial(n, μ)<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical notation (α, β) of the underlying Beta distribution:</strong> Directly analogous to the Beta distribution itself (see there) — the exact same relationship: μ = α/(α+β), φ = α+β.<br><br><strong>Intuition:</strong> Imagine that each person has their own p, drawn from a Beta(α, β) distribution — equivalently Beta(μ·φ, (1−μ)·φ). The Beta-Binomial is the result of this mixture.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — overdispersed Binomial data:<br><code>brm(k | trials(n) ~ x1, data = d, family = beta_binomial(link = "logit"))</code><br>→ φ (precision of the Beta distribution for p) is estimated automatically.<br>→ Default prior for φ: <code>prior(exponential(1), class = phi)</code></div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(normal(0, 1.5), class = b)</code> for coefficients<br><code>prior(exponential(1), class = phi)</code> for overdispersion parameter<br>→ Small φ (strong overdispersion) and large φ (almost Binomial) both a priori plausible.</div>',
       technik:'Internally: α = μ·φ, β = (1−μ)·φ. E[Y] = n·μ, Var > n·μ·(1−μ). Limit φ→∞: → Binomial(n, μ). <em>brms:</em> <code>beta_binomial(n, mu, phi)</code>.'
     }
@@ -1126,7 +1189,7 @@ const DISTS = {
       einsatz:'<strong>Count data with excess zeros:</strong> number of doctor visits per year (some people are fundamentally never sick → structural 0; others go occasionally but could also randomly have 0 visits), number of cigarettes per day (non-smokers = structural 0, smokers follow a count density that can also give 0 on a smoke-free day), workplace absence days. <strong>Diagnosis:</strong> far more zeros in the data than a plain Poisson(λ) with the same mean would predict.',
       parameter:'<strong>λ (rate):</strong> The Poisson parameter for the part without guaranteed zeros (1−zi) — as with ordinary Poisson. <em>Example:</em> λ = 4 → those who count at all average 4 events (but can still be 0).<br><br><strong>zi (zero-inflation):</strong> The share of guaranteed structural zeros. <em>Example:</em> zi = 0.30 → 30% of observations are guaranteed zeros, the remaining 70% follow Poisson(λ) — whose own P(Y=0) comes <em>on top of that</em>.<br><br><strong>Total P(Y=0) = zi + (1−zi)·e^(−λ)</strong> — always larger than for plain Poisson.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — count data with more zeros than Poisson can explain:<br><code>brm(bf(y ~ x1, zi ~ x2), data = d, family = zero_inflated_poisson())</code><br>→ zi can get its own predictors — e.g. x2 could predict who structurally never counts.<br>→ zi is modeled internally on the logit scale.</div><div class="brms-role"><strong>Prior for zi:</strong><br><code>prior(beta(1, 1), class = zi)</code> → uniform prior<br><code>prior(normal(-1, 1), class = zi, dpar = "zi")</code> → on the logit scale, zero-inflation skewed small</div>',
-      technik:'P(Y=0) = zi + (1−zi)·e^(−λ). P(Y=k&gt;0) = (1−zi)·λ^k·e^(−λ)/k!. E[Y] = (1−zi)·λ. Var(Y) = (1−zi)·λ·(1+zi·λ) — always larger than Var(Poisson) = λ. <em>brms:</em> <code>zero_inflated_poisson(lambda, zi)</code>. Limit zi→0: plain Poisson(λ).'
+      technik:'P(Y=0) = zi + (1−zi)·e^(−λ). P(Y=k&gt;0) = (1−zi)·λ^k·e^(−λ)/k!. E[Y] = (1−zi)·λ. Var(Y) = (1−zi)·λ·(1+zi·λ) — always larger than Var(Poisson) = λ. <em>brms:</em> <code>zero_inflated_poisson(mu, zi)</code> — the Poisson rate λ is uniformly called μ in brms. Limit zi→0: plain Poisson(λ).'
     }
   },
 
@@ -1148,7 +1211,7 @@ const DISTS = {
       einsatz:'<strong>The more robust standard when ZI-Poisson is not enough:</strong> sick days per year (never-sick = structural 0, but also strongly varying frequency among the "potentially sick" → overdispersion), number of aggressive incidents in clinical trials, social-media activity. <strong>Rule of thumb:</strong> if residuals still look overdispersed after fitting ZI-Poisson (Var ≫ E), switch to ZI-NegBinomial.',
       parameter:'<strong>μ, φ:</strong> As with ordinary Negative Binomial — μ is the mean of the count component (the 1−zi share), φ controls its overdispersion (small φ = strongly overdispersed).<br><br><strong>zi:</strong> Share of guaranteed structural zeros, as with ZI-Poisson. Total P(Y=0) = zi + (1−zi)·P(NegBin=0), where P(NegBin=0) = (φ/(μ+φ))^φ.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — overdispersed count data with excess zeros:<br><code>brm(bf(y ~ x1, zi ~ x2), data = d, family = zero_inflated_negbinomial())</code><br>→ φ (shape) is estimated automatically; zi can get its own predictors.</div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(exponential(1), class = shape)</code><br><code>prior(beta(1, 1), class = zi)</code></div>',
-      technik:'P(Y=0) = zi + (1−zi)·(φ/(μ+φ))^φ. E[Y] = (1−zi)·μ. Var(Y) = (1−zi)·[μ + μ²/φ + zi·μ²]. <em>brms:</em> <code>zero_inflated_negbinomial(mu, phi, zi)</code>. Limit φ→∞: ZI-Poisson(μ, zi).'
+      technik:'P(Y=0) = zi + (1−zi)·(φ/(μ+φ))^φ. E[Y] = (1−zi)·μ. Var(Y) = (1−zi)·[μ + μ²/φ + zi·μ²]. <em>brms:</em> <code>zero_inflated_negbinomial(mu, shape, zi)</code> — the dispersion parameter is called "shape" in brms, not "phi". Limit φ→∞: ZI-Poisson(μ, zi).'
     }
   },
 
@@ -1170,7 +1233,7 @@ const DISTS = {
       einsatz:'<strong>When a subgroup structurally never "gets to compete":</strong> number of correctly solved tasks out of n = 20 (some people never attempted the test at all → structural 0, others participated and could also randomly have 0 correct), number of clicks out of n ad impressions (some users never really see the ad → structural 0 clicks).',
       parameter:'<strong>n, p:</strong> As with ordinary Binomial, applied to the part without guaranteed zeros (1−zi).<br><br><strong>zi:</strong> Share of guaranteed structural zeros. Total P(Y=0) = zi + (1−zi)·(1−p)^n — always larger than for plain Binomial.',
       brms:'<div class="brms-role"><strong>As likelihood:</strong><br><code>brm(bf(y | trials(n) ~ x1, zi ~ x2), data = d, family = zero_inflated_binomial())</code><br>→ n as <code>trials(n)</code>, zi can get its own predictors.</div><div class="brms-role"><strong>Prior for zi:</strong><br><code>prior(beta(1, 1), class = zi)</code></div>',
-      technik:'P(Y=0) = zi + (1−zi)·(1−p)^n. E[Y] = (1−zi)·n·p. Var(Y) = (1−zi)·n·p·(1−p) + zi·(1−zi)·(n·p)². <em>brms:</em> <code>zero_inflated_binomial(p, zi)</code> with n via <code>trials()</code>.'
+      technik:'P(Y=0) = zi + (1−zi)·(1−p)^n. E[Y] = (1−zi)·n·p. Var(Y) = (1−zi)·n·p·(1−p) + zi·(1−zi)·(n·p)². <em>brms:</em> <code>zero_inflated_binomial(mu, zi)</code> with n via <code>trials()</code> — the success probability p is uniformly called μ in brms.'
     }
   },
 
@@ -1195,7 +1258,7 @@ const DISTS = {
       einsatz:'<strong>When "participation" and "amount" are two separate decisions:</strong> drinking days per month (hurdle: does the person drink at all? then: how often, if so — never randomly 0, because "0" was already decided at the hurdle), doctor visits (hurdle: does the person see a doctor at all?). <strong>Distinction from ZI-Poisson:</strong> with Hurdle, every zero comes from the same single source (the hurdle) — there is no distinction between different types of zeros. With ZI-Poisson, by contrast, two different sources of zeros mix: guaranteed structural zeros (zi) and random zeros that the count density itself produces.',
       parameter:'<strong>λ (rate):</strong> Parameter of the zero-truncated Poisson component — applies only to cases that cleared the hurdle (Y ≥ 1). <em>Example:</em> λ = 4 → among those who have any events at all, the average is somewhat above 4 (because 0 is cut away and its probability mass redistributed onto 1, 2, 3, ...).<br><br><strong>hu (hurdle probability):</strong> P(Y=0) — directly and exactly, unlike the mixture in ZI models. <em>Example:</em> hu = 0.30 → 30% of observations are 0, 70% are 1 or more.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — separate "whether at all" and "how much, if so" modeling:<br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_poisson())</code><br>→ hu (the hurdle) can get different predictors than λ — e.g. x2 predicts WHO participates at all, x1 HOW MUCH given participation.</div><div class="brms-role"><strong>Prior for hu:</strong><br><code>prior(beta(1, 1), class = hu)</code> → uniform prior on the hurdle probability</div>',
-      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·λ^k·e^(−λ)/(k!·(1−e^(−λ))) — the Poisson PMF divided by the survival probability 1−P(Poisson=0), so the remaining mass again sums to 1−hu. <em>brms:</em> <code>hurdle_poisson(lambda, hu)</code>.'
+      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·λ^k·e^(−λ)/(k!·(1−e^(−λ))) — the Poisson PMF divided by the survival probability 1−P(Poisson=0), so the remaining mass again sums to 1−hu. <em>brms:</em> <code>hurdle_poisson(mu, hu)</code> — the underlying Poisson rate λ is uniformly called μ in brms.'
     }
   },
 
@@ -1221,7 +1284,7 @@ const DISTS = {
       einsatz:'<strong>The more robust standard when Hurdle-Poisson is not enough:</strong> number of symptoms among the ill (hurdle: sick yes/no; amount given illness strongly varying → overdispersion), number of absences (hurdle: absent at all; amount when absent very heterogeneous).',
       parameter:'<strong>μ, φ:</strong> Parameters of the zero-truncated Negative Binomial component, valid for Y ≥ 1. φ controls overdispersion within this group, as with ordinary NegBin.<br><br><strong>hu:</strong> P(Y=0) directly, as with Hurdle-Poisson.',
       brms:'<div class="brms-role"><strong>As likelihood:</strong><br><code>brm(bf(y ~ x1, hu ~ x2), data = d, family = hurdle_negbinomial())</code><br>→ φ is estimated automatically; hu can get its own predictors.</div><div class="brms-role"><strong>Typical priors:</strong><br><code>prior(exponential(1), class = shape)</code><br><code>prior(beta(1, 1), class = hu)</code></div>',
-      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·NegBin(k|μ,φ)/(1−NegBin(0|μ,φ)). <em>brms:</em> <code>hurdle_negbinomial(mu, phi, hu)</code>. Limit φ→∞: Hurdle-Poisson(μ, hu).'
+      technik:'P(Y=0) = hu. P(Y=k&gt;0) = (1−hu)·NegBin(k|μ,φ)/(1−NegBin(0|μ,φ)). <em>brms:</em> <code>hurdle_negbinomial(mu, shape, hu)</code> — the dispersion parameter is called "shape" in brms, not "phi". Limit φ→∞: Hurdle-Poisson(μ, hu).'
     }
   },
 
@@ -1279,6 +1342,12 @@ function initUI(){
     catDiv.appendChild(btn);
   });
   selectCat(0);
+  // Deep-link support: #<dist-key> in the URL opens directly on that distribution
+  const hashKey=decodeURIComponent(location.hash.slice(1));
+  if(hashKey && DISTS[hashKey]){
+    const catIdx=CATS.findIndex(c=>c.dists.includes(hashKey));
+    if(catIdx>=0){ selectCat(catIdx); selectDist(hashKey); }
+  }
   // Re-measure after content renders (dist-strip now populated) and redraw
   setTimeout(()=>{ measureHeader(); renderDist(); }, 60);
   window.addEventListener('resize',()=>{measureHeader(); renderDist();});
@@ -1327,8 +1396,8 @@ function selectDist(key){
   const toggleWrap=document.getElementById('brms-toggle-wrap');
   if(d.hasBrmsToggle){
     toggleWrap.style.display='';
-    document.getElementById('btn-brms').textContent='brms (μ, φ)';
-    document.getElementById('btn-classic').textContent='Classical (α, β)';
+    document.getElementById('btn-brms').innerHTML=fmtBrmsBtn(d.brmsBtnLabel||'brms');
+    document.getElementById('btn-classic').innerHTML=fmtBrmsBtn(d.classicBtnLabel||'Classical');
     BRMS_MODE=true;
     document.getElementById('btn-brms').classList.add('sel');
     document.getElementById('btn-classic').classList.remove('sel');
@@ -1387,6 +1456,12 @@ function onSlider(id){
   renderDist();
 }
 
+function fmtBrmsBtn(label){
+  const i=label.indexOf('(');
+  if(i<0) return '<span class="brms-btn-type">'+label+'</span>';
+  const type=label.slice(0,i).trim(), params=label.slice(i).trim();
+  return '<span class="brms-btn-type">'+type+'</span><span class="brms-btn-params">'+params+'</span>';
+}
 function setBrms(mode){
   if(!DISTS[DIST_KEY].hasBrmsToggle) return;
   if(mode===BRMS_MODE) return;
