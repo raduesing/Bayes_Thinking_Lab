@@ -123,6 +123,13 @@ input[type=checkbox]{cursor:pointer;accent-color:var(--accent2);width:auto!impor
 .doc-card .dc-sim summary:hover{color:var(--accent3)}
 .doc-card .dc-sim[open] summary{margin-bottom:.1rem}
 .doc-card .dc-sim .dc-syntax{color:var(--accent2)}
+/* Collapsible extended explanation — collapsed by default, short intro stays visible */
+.doc-card .dc-detail{margin-top:.3rem;margin-bottom:.4rem}
+.doc-card .dc-detail summary{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.03em;
+    color:var(--accent4);cursor:pointer;user-select:none;padding:.15rem 0;list-style:revert}
+.doc-card .dc-detail summary:hover{color:var(--accent3)}
+.doc-card .dc-detail[open] summary{margin-bottom:.3rem}
+.doc-card .dc-detail p{margin-bottom:.4rem}
 /* Formal-check results */
 #check-results{margin:-.5rem 0 1rem}
 .check-row{display:flex;gap:.5rem;align-items:flex-start;padding:.35rem .6rem;margin-bottom:.3rem;
@@ -1192,14 +1199,17 @@ ranking(cvvs)$fulldata      # Reihenfolge nach Wichtigkeit (x1,x2,x3 zuerst erwa
 plot(cvvs, stats = c("elpd", "rmse"))`
   },
   mixture: {
-    title: '<a class="glo-link" href="Glossar.html#gl-mixture-modell" target="_blank" title="Ein Mixture-Modell nimmt an, dass Beobachtungen aus mehreren unbeobachteten (latenten) Untergruppen stammen, jede mit ihrer eigenen Verteilung.">Mixture-Modell</a> — latente Subgruppen',
+    title: '<a class="glo-link" href="Glossar.html#gl-mixture-modell" target="_blank" title="Ein Mixture-Modell nimmt an, dass Beobachtungen aus mehreren unbeobachteten (latenten) Untergruppen stammen, jede mit ihrer eigenen Verteilung.">Mixture-Modell</a> — Basisfall: θ nur aus y geschätzt',
     body: [
-      'Für den Fall, dass deine Beobachtungen vermutlich aus MEHREREN unbeobachteten (latenten) Untergruppen stammen, jede mit einer eigenen Verteilung — z.B. Reaktionszeiten aus einem "schnell geraten"-Regime und einem "wirklich überlegt"-Regime, oder Zähldaten aus zwei unterschiedlichen Populationen, ohne dass du vorher weißt, welche Beobachtung zu welcher gehört. mixture(gaussian(), gaussian()) sagt: "y_i stammt mit Wahrscheinlichkeit θ₁ aus Verteilung 1 und mit θ₂ = 1-θ₁ aus Verteilung 2" — θ wird aus den Daten mitgeschätzt, nicht vorgegeben.',
-      '<b>Abgrenzung zu anderen Bausteinen:</b> Ein Mixture-Modell ist NICHT dasselbe wie ein multivariates Modell (dort gibt es mehrere VERSCHIEDENE Response-Spalten, hier nur eine) und auch nicht dasselbe wie eine Gruppierung mit Random Effects (dort ist die Gruppenzugehörigkeit BEOBACHTET, z.B. "Proband:in 3", hier ist sie LATENT — für jede Beobachtung unbekannt, nur die Verteilung darüber wird geschätzt). Hurdle- und Zero-Inflated-Familien sind tatsächlich ein SPEZIALFALL eines 2-Komponenten-Mixtures, bei dem eine Komponente ein Punkt auf exakt Null ist — mixture() verallgemeinert diese Idee auf beliebige (nicht-entartete) Komponenten.',
-      '<b>Wie brms das intern baut:</b> Die Formel (z.B. y ~ x) wird für ALLE Komponenten gemeinsam angegeben, aber brms schätzt für jede Komponente TROTZDEM einen eigenen, unabhängigen Koeffizienten-Satz — im Output erscheinen sie als mu1_Intercept, mu2_Intercept, mu1_x, mu2_x, ... (und entsprechend sigma1, sigma2 für die Streuung, falls die Familie eine hat). Du musst also nicht mehrere Formeln schreiben — brms vervielfacht sie automatisch pro Komponente.',
-      '<b>θ (theta) und Label-Switching:</b> Die Mischungsanteile θ₁,...,θ_K bekommen per Default einen Dirichlet(1)-Prior (uniform über alle möglichen Aufteilungen) und erscheinen im Output als theta1, theta2, .... Ein bekanntes Problem bei Mixtures: die Likelihood ist SYMMETRISCH unter Vertauschen der Komponenten-Labels ("Komponente 1" könnte in einer MCMC-Kette mal die schnelle, mal die langsame Gruppe meinen) — das nennt man Label-Switching. brms\' order-Argument behebt das, indem es erzwingt, dass Komponente 1 IMMER den kleineren Wert eines gewählten Parameters hat (hier: mu) — <b>getestet:</b> brms setzt order="mu" für gleich-familiäre Mixtures automatisch als Default, auch wenn man es nicht explizit angibt; hier wird es trotzdem explizit hingeschrieben, damit sichtbar bleibt, WARUM die Komponenten stabil benannt bleiben.',
-      '<b>Was du danach in der Hand hast:</b> summary(fit) zeigt dir mu1_/mu2_-Koeffizienten, sigma1/sigma2 und theta1/theta2 (Mischungsanteile) direkt als Parameter. Für eine WEICHE Zuordnung einzelner Beobachtungen zu Komponenten (statt nur der globalen Anteile) gibt <code>pp_mixture(fit)</code> für jede Beobachtung und jeden Posterior-Sample die Wahrscheinlichkeit zurück, aus welcher Komponente sie stammt — über die Iterationen gemittelt bekommst du z.B. "Beobachtung 42 gehört mit 87% Wahrscheinlichkeit zur langsamen Gruppe".',
-      '<b>Einschränkung dieses Tools:</b> hier werden nur Mixtures aus Komponenten DERSELBEN Familie unterstützt (z.B. zwei gaussian(), nicht gaussian()+lognormal()) und alle Komponenten teilen sich dieselbe Prädiktorenliste/Random-Effects-Struktur — brms selbst kann beides flexibler (unterschiedliche Familien mischen, dpar-spezifische Formeln je Komponente via bf(..., mu1 ~ ..., mu2 ~ ...)), das würde hier aber die Bedienoberfläche erheblich verkomplizieren.',
+      'Deine Beobachtungen stammen vermutlich aus MEHREREN unbeobachteten (latenten) Untergruppen mit jeweils eigener Verteilung — z.B. Reaktionszeiten aus einem "schnell geraten"- und einem "überlegt"-Regime. <code>mixture(gaussian(), gaussian())</code> sagt: "y_i stammt mit Wahrscheinlichkeit θ₁ aus Verteilung 1, mit θ₂ = 1−θ₁ aus Verteilung 2" — θ wird aus den Daten mitgeschätzt, nicht vorgegeben.',
+      'Diese Karte zeigt den <b>Basisfall</b>: θ wird rein aus der Form von y geschätzt, ohne dass irgendein Prädiktor die Gruppenzugehörigkeit mit erklärt. Für Prädiktoren auf θ selbst bzw. eine eigene Regressionsgleichung je Komponente siehe die beiden Karten darunter.'
+    ],
+    bodyDetail: [
+      '<b>Abgrenzung zu anderen Bausteinen:</b> Ein Mixture-Modell ist NICHT dasselbe wie ein multivariates Modell (dort mehrere VERSCHIEDENE Response-Spalten, hier nur eine) und auch nicht dasselbe wie Random Effects (dort ist die Gruppenzugehörigkeit BEOBACHTET, z.B. "Proband:in 3", hier LATENT — für jede Beobachtung unbekannt). Hurdle- und Zero-Inflated-Familien sind ein SPEZIALFALL eines 2-Komponenten-Mixtures, bei dem eine Komponente ein Punkt auf exakt Null ist.',
+      '<b>Wie brms das intern baut:</b> Die Formel (z.B. y ~ x) wird für ALLE Komponenten gemeinsam angegeben, aber brms schätzt trotzdem einen eigenen, unabhängigen Koeffizienten-Satz je Komponente — im Output als mu1_Intercept, mu2_Intercept, mu1_x, mu2_x, ... (und sigma1, sigma2, falls die Familie eine Streuung hat). Du musst also nicht mehrere Formeln schreiben — brms vervielfacht sie automatisch.',
+      '<b>θ (theta) und Label-Switching:</b> Die Mischungsanteile θ₁,...,θ_K bekommen per Default einen Dirichlet(1)-Prior und erscheinen im Output als theta1, theta2, .... Bekanntes Problem: die Likelihood ist SYMMETRISCH unter Vertauschen der Komponenten-Labels (Label-Switching). brms\' <code>order</code>-Argument behebt das, indem Komponente 1 IMMER den kleineren Wert eines gewählten Parameters bekommt (hier: mu) — <b>getestet:</b> brms setzt order="mu" für gleich-familiäre Mixtures automatisch als Default; hier wird es trotzdem explizit hingeschrieben, damit sichtbar bleibt, WARUM die Komponenten stabil benannt bleiben.',
+      '<b>Was du danach in der Hand hast:</b> summary(fit) zeigt mu1_/mu2_-Koeffizienten, sigma1/sigma2 und theta1/theta2 direkt als Parameter. Für eine WEICHE Zuordnung einzelner Beobachtungen (statt nur der globalen Anteile) gibt <code>pp_mixture(fit)</code> für jede Beobachtung und jeden Posterior-Sample die Wahrscheinlichkeit zurück, aus welcher Komponente sie stammt — gemittelt z.B. "Beobachtung 42 gehört mit 87% Wahrscheinlichkeit zur langsamen Gruppe".',
+      '<b>Einschränkung dieses Tools:</b> hier werden nur Mixtures aus Komponenten DERSELBEN Familie unterstützt (z.B. zwei gaussian(), nicht gaussian()+lognormal()) und alle Komponenten teilen sich dieselbe Prädiktorenliste/Random-Effects-Struktur. brms selbst kann beides flexibler — Prädiktoren auf θ selbst und dpar-spezifische Formeln je Komponente (mu1 ~ ..., mu2 ~ ...) zeigen die beiden Karten unten als Beispielcode zum Selbst-Ergänzen (das UI hier generiert das nicht automatisch).',
       '<b>Ehrlicher Hinweis aus echten Tests:</b> Mixture-Modelle sind numerisch schwerer zuverlässig zu samplen als die meisten anderen Bausteine hier — <b>getestet:</b> bei genau diesem Sim-Snippet blieb wiederholt (über mehrere verschiedene Datensätze, Priors UND doppelte Iterationszahl hinweg) EINE Chain in einem entarteten Zustand stecken, in dem eine Komponente fast alle Beobachtungen "schluckt" und die andere nur eine Handvoll Extremwerte mit riesiger Unsicherheit übrig behält — sichtbar an <a class="glo-link" href="Glossar.html#gl-r-hat" target="_blank" title="R-hat (auch: R̂ oder PSRF) ist eine Konvergenzdiagnostik für MCMC, die misst, ob mehrere parallel laufende Chains denselben Posterior erkundet haben. R-hat = 1.0 ist ideal; Werte < 1.01 gelten als akzeptabel; Werte > 1.05 sind ein klares Warnsignal für Konvergenzprobleme.">Rhat</a> > 1.3-1.5 für genau die betroffenen Parameter, während andere (z.B. mu2_x) sauber konvergieren. Das hängt an der zufälligen Start-Initialisierung der Chains, NICHT an zu wenig Iterationen (mehr warmup half hier nachweislich nicht, eine steckengebliebene Chain "erholt" sich nicht von selbst). In der Praxis hilft: <code>summary(fit)</code> nach jedem Mixture-Fit auf Rhat prüfen, bei Problemen einen anderen <code>seed</code> UND eine neue <code>set.seed()</code>-Ausgangslage beim Datengenerieren probieren (beide zusammen ändern die Chain-Startwerte tatsächlich — nur den brm()-<code>seed</code> zu ändern reicht oft NICHT), oder informativere Priors auf die Intercepts der Komponenten setzen.'
     ],
     syntax: 'family = mixture(gaussian(), gaussian(), order = "mu")\npp_mixture(fit)   # P(Beobachtung i aus Komponente k)',
@@ -1223,6 +1233,52 @@ fit <- brm(y ~ x, data = dat,
 summary(fit)   # PRUEFEN: Rhat aller Parameter nahe 1.00? Mixture-Sampling kann steckenbleiben
                # (siehe Dokumentation oben) - falls Rhat > 1.05: set.seed() UND brm(seed=) aendern
 pp_mixture(fit)   # [Beobachtung, Iteration, Komponente] - ueber Iterationen mitteln fuer P(Komponente | Beobachtung)`
+  },
+  mixture_theta_predictors: {
+    title: 'Mixture: Mischungsanteil θ selbst vorhersagen',
+    body: [
+      'Im Basisfall oben ist θ konstant über alle Beobachtungen. Oft gibt es aber einen Prädiktor oder eine Proxy-Variable, die zumindest teilweise verrät, aus welcher latenten Gruppe eine Beobachtung stammt — z.B. eine Selbsteinschätzung ("Wie sicher warst du bei deiner Antwort?") als Proxy für "geraten" vs. "überlegt".',
+      'brms erlaubt, θ wie einen normalen Regressionsparameter zu modellieren: <code>theta2 ~ z</code> sagt "die Wahrscheinlichkeit für Komponente 2 (relativ zu Komponente 1 als Referenz) hängt von z ab" — intern über einen Multinomial-Logit-Link, genau wie bei einem multinomialen Modell mit K−1 Formeln für K Komponenten.',
+      '<b>Warum das hilft:</b> gerade bei Beobachtungen mit einem y-Wert IRGENDWO ZWISCHEN den beiden Verteilungen (wo die Zuordnung aus y allein unsicher ist) kann z den Ausschlag in die richtige Richtung geben — die Trennschärfe der latenten Gruppen verbessert sich, ohne dass z selbst y direkt vorhersagen muss.',
+      '<b>Wichtig:</b> theta1 (die Referenz-Komponente) bekommt KEINE eigene Formel — wie bei einem multinomialen Modell wird sie implizit aus den anderen Anteilen berechnet (θ₁ = 1 − θ₂ − ... − θ_K). Nur theta2, theta3, ... werden explizit modelliert.'
+    ],
+    syntax: 'bf(y ~ x,\n   theta2 ~ z,\n   family = mixture(gaussian(), gaussian(), order = "mu"))',
+    sim: `N <- 300
+z <- rnorm(N)                       # Proxy-Variable, z.B. Konfidenz-Rating
+comp_prob <- plogis(0.8 * z)        # hoeheres z -> eher Komponente 2
+comp <- rbinom(N, 1, comp_prob)     # latente Gruppenzugehoerigkeit - in echten Daten NIE beobachtet
+x <- rnorm(N)
+y <- ifelse(comp == 0, rnorm(N, mean = 2 + 0.5*x, sd = 1),
+                       rnorm(N, mean = 8 + 0.5*x, sd = 1.5))
+dat <- data.frame(y, x, z)
+fit <- brm(bf(y ~ x, theta2 ~ z),
+           data = dat,
+           family = mixture(gaussian(), gaussian(), order = "mu"),
+           chains = 4, cores = 4, iter = 2000, warmup = 1000, seed = 1)
+summary(fit)   # theta2_Intercept und theta2_z zeigen, wie z die Gruppenzugehoerigkeit vorhersagt
+pp_mixture(fit)   # jetzt praeziser: nutzt sowohl y als auch z zur Klassifikation`
+  },
+  mixture_component_predictors: {
+    title: 'Mixture: eigene Regressionsgleichung je Komponente',
+    body: [
+      'Im Basisfall gilt dieselbe Formel y ~ x für ALLE Komponenten — brms schätzt zwar eigene Koeffizienten pro Komponente (mu1_x, mu2_x), aber beide "sehen" denselben Prädiktor x mit derselben Formel. Man kann brms stattdessen für JEDE Komponente eine EIGENE Formel geben: <code>mu1 ~ x</code> und <code>mu2 ~ x</code> — bis hin zu unterschiedlichen Prädiktoren je Komponente.',
+      '<b>Warum das mehr ist als nur Syntax:</b> Bekommen beide Komponenten x, aber mit UNTERSCHIEDLICHEN Effekten, entsteht faktisch eine Interaktion zwischen x und der (latenten!) Gruppenzugehörigkeit — nur dass die Gruppe nie beobachtet wird, quasi eine "latente Interaktion". Steigt y in Komponente 1 stark mit x, aber in Komponente 2 kaum, siehst du das im Output als deutlich unterschiedliche mu1_x- vs. mu2_x-Koeffizienten.',
+      '<b>Kombinierbar</b> mit Prädiktoren auf θ selbst (siehe Karte oben) — z.B. <code>bf(y ~ 1, mu1 ~ x, mu2 ~ x, theta2 ~ z)</code>: z sagt vorher, WER eher zu Gruppe 2 gehört, x sagt vorher, WIE y innerhalb jeder Gruppe mit x variiert. Beides zusammen ist die volle Flexibilität, die mixture() in brms bietet.',
+      '<b>Nicht im Builder oben abbildbar:</b> Dieses UI generiert nur den Fall mit einer geteilten Formel für alle Komponenten (siehe Basiskarte). Für dpar-spezifische Formeln musst du den generierten Code von Hand um die zusätzlichen bf()-Zeilen ergänzen — das Snippet unten zeigt, wie das konkret aussieht.'
+    ],
+    syntax: 'bf(y ~ 1,\n   mu1 ~ x,\n   mu2 ~ x,\n   family = mixture(gaussian(), gaussian(), order = "mu"))',
+    sim: `N <- 300
+comp <- rbinom(N, 1, 0.35)   # latente Gruppenzugehoerigkeit - in echten Daten NIE beobachtet
+x <- rnorm(N)
+# Effekt von x unterscheidet sich JE NACH Komponente - genau das bildet mu1~x / mu2~x ab
+y <- ifelse(comp == 0, rnorm(N, mean = 2 + 0.2*x, sd = 1),
+                       rnorm(N, mean = 8 + 1.5*x, sd = 1.5))
+dat <- data.frame(y, x)
+fit <- brm(bf(y ~ 1, mu1 ~ x, mu2 ~ x),
+           data = dat,
+           family = mixture(gaussian(), gaussian(), order = "mu"),
+           chains = 4, cores = 4, iter = 2000, warmup = 1000, seed = 1)
+summary(fit)   # mu1_x und mu2_x jetzt deutlich UNTERSCHIEDLICH - Komponente 2 reagiert staerker auf x`
   },
   stanvars: {
     title: 'Stanvars — eigene R-Werte in Stan verfügbar machen',
@@ -1273,6 +1329,13 @@ function docCard(key, extraNote) {
   const d = DOCS[key];
   if (!d) return '';
   const body = d.body.map(p => `<p>${p}</p>`).join('');
+  let detail = '';
+  if (d.bodyDetail && d.bodyDetail.length) {
+    detail = `<details class="dc-detail">
+      <summary>📖 Ausführlichere Erklärung</summary>
+      ${d.bodyDetail.map(p => `<p>${p}</p>`).join('')}
+    </details>`;
+  }
   let syn = '';
   if (d.syntax) {
     syn = `<div class="dc-syntax">${escHtml(d.syntax)}</div>`;
@@ -1285,7 +1348,7 @@ function docCard(key, extraNote) {
       <div class="dc-syntax">${escHtml(d.sim)}</div>
     </details>`;
   }
-  return `<div class="doc-card"><h4>${d.title}</h4>${body}${extraNote ? `<p>${extraNote}</p>` : ''}${syn}${sim}</div>`;
+  return `<div class="doc-card"><h4>${d.title}</h4>${body}${detail}${extraNote ? `<p>${extraNote}</p>` : ''}${syn}${sim}</div>`;
 }
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 // Escapes free-text (nonlinear expressions/rhs) for safe use inside a MathJax
@@ -2632,7 +2695,11 @@ function renderDocsArea() {
   if (caps.mm) cards.push(docCard('mm'));
   if (caps.censtrunc) { cards.push(docCard('cens')); cards.push(docCard('trunc')); }
   if (caps.horseshoe) cards.push(docCard('horseshoe'));
-  if (caps.mixture) cards.push(docCard('mixture'));
+  if (caps.mixture) {
+    cards.push(docCard('mixture'));
+    cards.push(docCard('mixture_theta_predictors'));
+    cards.push(docCard('mixture_component_predictors'));
+  }
   if (caps.stanvars) cards.push(docCard('stanvars'));
   if (RESPONSES.some(r => FAMILIES[r.family].needsTrials)) cards.push(docCard('trials'));
   if (!cards.length) {
