@@ -174,17 +174,28 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
 .ref-head .ref-name:hover{color:var(--a2)}
 .ref-head .ref-call{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a2);background:var(--panel);
   border:1px solid var(--border);padding:.2rem .5rem}
-.ref-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+.ref-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--grid)}
 .ref-sect{background:var(--paper);padding:.9rem 1.1rem}
 .ref-sect-h{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
   color:var(--a6);margin-bottom:.55rem;padding-bottom:.3rem;border-bottom:1px solid var(--grid)}
 .ref-sect ul{padding-left:1.1rem}
 .ref-sect li{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.7;margin-bottom:.4rem}
 .ref-sect li:last-child{margin-bottom:0}
-.ref-sect li code, .ref-sect p code{background:var(--panel);border:1px solid var(--border);color:var(--a2);padding:.02rem .3rem}
+.ref-sect li code, .ref-sect p code, .ref-extend li code{background:var(--panel);border:1px solid var(--border);color:var(--a2);padding:.02rem .3rem}
 .ref-sect p{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.75}
 .ref-note{background:var(--panel);border-left:3px solid var(--a5);padding:.7rem 1rem;margin-bottom:.85rem;
   font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.75}
+/* Extensions/distributional models pulled out of the parameter grid into its
+   own visually distinct block — different accent color + left border, mirroring
+   .ref-note/.notrigid-box, so it reads as "optional, different topic" rather
+   than a fourth parameter-estimation fact alongside Required/Priors/Default. */
+.ref-extend{background:var(--panel);border-left:3px solid var(--a5);border-top:1px solid var(--grid);
+  padding:.9rem 1.1rem;margin-top:1px}
+.ref-extend-h{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--a5);margin-bottom:.55rem}
+.ref-extend ul{padding-left:1.1rem}
+.ref-extend li{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.7;margin-bottom:.4rem}
+.ref-extend li:last-child{margin-bottom:0}
 @media(max-width:800px){.ref-grid{grid-template-columns:1fr}}
 
 /* ── NARRATIVE / LEARN CARDS ── */
@@ -214,6 +225,7 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
 
 #toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--a2);color:white;
   font-family:'DM Mono',monospace;font-size:.7rem;padding:.4rem .85rem;
+  max-width:320px;line-height:1.5;
   z-index:999;opacity:0;transform:translateY(8px);
   transition:opacity .3s,transform .3s;pointer-events:none}
 #toast.show{opacity:1;transform:translateY(0)}
@@ -1126,8 +1138,14 @@ function toggleOwnData(){
 
 function useOwnData(){
   const raw=document.getElementById('owndata-input').value;
-  const vals=raw.split(/[\s,;]+/).map(v=>v.trim()).filter(v=>v.length).map(Number).filter(v=>isFinite(v));
-  if(vals.length<3){ showToast('Please enter at least 3 valid numbers.'); return; }
+  const tokens=raw.split(/[\s,;]+/).map(v=>v.trim()).filter(v=>v.length);
+  const vals=[], invalid=[];
+  tokens.forEach(t=>{ const n=Number(t); if(isFinite(n)) vals.push(n); else invalid.push(t); });
+  const invalidHint=invalid.length
+    ? ' Ignored (not a number): '+invalid.slice(0,5).join(', ')+(invalid.length>5?' …':'')
+    : '';
+  if(vals.length<3){ showToast('Please enter at least 3 valid numbers.'+invalidHint, 4200); return; }
+  if(invalid.length){ showToast(invalid.length+' entr'+(invalid.length===1?'y':'ies')+' skipped —'+invalidHint, 4200); }
   currentData=vals;
   const key=document.getElementById('sel-scenario').value;
   const sc=SCENARIOS[key];
@@ -1492,8 +1510,8 @@ function renderRefPanel(key){
   html+='<div class="ref-sect"><div class="ref-sect-h">Required parameters</div><ul>'+ref.must.map(m=>'<li>'+m+'</li>').join('')+'</ul></div>';
   html+='<div class="ref-sect"><div class="ref-sect-h">Priors</div><ul>'+ref.priors.map(p=>'<li>'+p+'</li>').join('')+'</ul></div>';
   html+='<div class="ref-sect"><div class="ref-sect-h">Go-to default</div><p>'+ref.default+'</p></div>';
-  html+='<div class="ref-sect"><div class="ref-sect-h">Extensions (distributional models)</div><ul>'+ref.extend.map(e=>'<li>'+e+'</li>').join('')+'</ul></div>';
   html+='</div>';
+  html+='<div class="ref-extend"><div class="ref-extend-h">＋ Optional: extensions (distributional models)</div><ul>'+ref.extend.map(e=>'<li>'+e+'</li>').join('')+'</ul></div>';
   panel.innerHTML=html;
 }
 
@@ -1511,11 +1529,11 @@ function setStage(s){
 
 // ── Toast ─────────────────────────────────────────────
 let toastTimer=null;
-function showToast(msg){
+function showToast(msg,ms){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),ms||2600);
 }
 
 // ── Floating Help Panel ────────────────────────────────
