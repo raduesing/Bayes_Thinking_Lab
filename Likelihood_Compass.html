@@ -292,9 +292,9 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
     unterschiedlichen Verteilungen der Daten: Reaktionszeiten, Summenscores aus Testitems und Zähldaten mit
     heterogener Rate erzeugen jeweils charakteristische Formen, die man schon vor der ersten Datenerhebung
     vorhersagen kann, wenn man den Entstehungsprozess kennt.</p>
-    <p><strong>Stufe 1</strong>: versucht durch gezielte Fragen und Überlegungen mögliche Kandidaten einzugrenzen.<br>
-    <strong>Stufe 2</strong>: typische Daten anschauen und die Passung der Verteilungen betrachten.<br>
-    <strong>Stufe 3</strong>: Was muss ich in <code>brm()</code> beachten? Welche Parameter und Priors sind notwendig?</p>
+    <p><strong>Stufe 1</strong>: Durch gezielte Fragen und Überlegungen mögliche Kriterien eingegrenzen.<br>
+    <strong>Stufe 2</strong>: Daten anschauen und die Passung der Verteilung bewerten.<br>
+    <strong>Stufe 3</strong>: Was es in <code>brm()</code> zu beachten gilt und welche Parameter und Priors notwendig sind.</p>
   </div>
 </div>
 
@@ -315,6 +315,12 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
 
 <!-- ══════════ STAGE 2 — FIT AT OWN DATA ═════════════════════════ -->
 <div id="stage-2" style="display:none">
+  <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.7;
+       border-left:2px solid var(--a5);padding:.4rem .5rem;margin-bottom:.6rem">
+    <b>Orientierung fürs Szenario unten:</b> Kontinuierliche Messwerte → Normal/Student-t · Zähldaten →
+    Poisson/Negative Binomial · Summe aus N 0/1-Items (Erfolge aus N Versuchen) → Binomial/Beta-Binomial ·
+    Anteil auf (0,1) → Beta.
+  </div>
   <div class="ctrl-bar">
     <div class="ctrl-group">
       <span class="ctrl-lbl">Szenario</span>
@@ -381,10 +387,11 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
   <div class="lcard">
     <div class="lcard-h cg">Kostenlose Flexibilität: der Ein-Parameter-Trick</div>
     <div class="lcard-body">
-      Student-t statt Normal, Negative Binomial statt Poisson, Beta-Binomial statt Binomial — in allen drei Fällen
-      kostet die robustere Familie nur <b>einen zusätzlichen Parameter</b>, der bei „braven" Daten automatisch gegen
-      den Grenzfall der einfacheren Familie konvergiert (ν → ∞, φ → ∞). Es gibt praktisch keinen Nachteil, direkt mit
-      der flexibleren Familie zu starten — nur die Möglichkeit, unbemerkte <a class="glo-link" href="Glossar.html#gl-overdispersion" target="_blank" title="Overdispersion liegt vor, wenn die beobachtete Varianz größer ist als vom Verteilungsmodell erwartet — bei Poisson etwa, wenn σ²_emp > μ.">Überdispersion</a> oder Ausreißer aufzufangen.
+      Student-t statt Normal, Negative Binomial statt Poisson, Beta-Binomial statt Binomial: In allen drei Fällen
+      ergänzt die robustere Familie das Standardmodell um <b>einen zusätzlichen Parameter</b>. Dieser steuert, wie
+      stark von der einfacheren Verteilung abgewichen werden darf — etwa durch Ausreißer oder <a class="glo-link" href="Glossar.html#gl-overdispersion" target="_blank" title="Overdispersion liegt vor, wenn die beobachtete Varianz größer ist als vom Verteilungsmodell erwartet — bei Poisson etwa, wenn σ²_emp > μ.">Überdispersion</a>.
+      Wird diese zusätzliche Flexibilität nicht gebraucht, nähert sich das Modell automatisch dem Standardfall an
+      (ν → ∞, φ → ∞).
     </div>
   </div>
   <div class="lcard">
@@ -775,8 +782,8 @@ const SCENARIOS = {
   cont_positive_skew:  {label:'Kontinuierlich, positiv, rechtsschief', gen:()=>genContPositiveSkew(),      discrete:false, needsN:false, fams:['lognormal','gamma','normal']},
   count_hetero:        {label:'Zähldaten, überdispers',                gen:()=>genCountSample(5,1.5,50),   discrete:true,  needsN:false, fams:['negbin','poisson']},
   count_homog:         {label:'Zähldaten, homogen',                    gen:()=>genCountSample(5,50,50),    discrete:true,  needsN:false, fams:['poisson','negbin']},
-  sum_hetero_r:        {label:'Summe aus N Items, heterogen',          gen:(n)=>genSumSample(n,2,3,50),    discrete:true,  needsN:true,  fams:['beta_binomial','binomial']},
-  sum_homog_r:         {label:'Summe aus N Items, homogen',            gen:(n)=>genSumSample(n,40,60,50),  discrete:true,  needsN:true,  fams:['binomial','beta_binomial']},
+  sum_hetero_r:        {label:'Summe aus N 0/1-Items, heterogen',      gen:(n)=>genSumSample(n,2,3,50),    discrete:true,  needsN:true,  fams:['beta_binomial','binomial']},
+  sum_homog_r:         {label:'Summe aus N 0/1-Items, homogen',        gen:(n)=>genSumSample(n,40,60,50),  discrete:true,  needsN:true,  fams:['binomial','beta_binomial']},
   proportion:          {label:'Anteil auf (0,1)',                      gen:()=>genPropSample(5,2,50),      discrete:false, needsN:false, fams:['beta','normal']},
 };
 
@@ -1570,15 +1577,19 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="hp-body">
     <div class="hp-sect">Was lerne ich hier?</div>
     Dieses Tool hilft bei einer Entscheidung, die vor jeder Regression ansteht: welche Verteilungsfamilie
-    passt zu den eigenen Daten — und zwar aus der Kenntnis heraus, <em>wie</em> die Zahlen entstanden sind,
-    nicht nur, wie ihr Histogramm aussieht.
+    passt zu den eigenen Daten. Entscheidend ist nicht nur, wie die Daten im Histogramm verteilt aussehen,
+    sondern welcher Datentyp vorliegt und durch welchen Prozess die Werte entstanden sind.
     <ul class="hp-seq" style="margin-top:.4rem">
       <li>Welcher Datengenerierungsprozess steckt hinter kontinuierlichen Messungen, Zähldaten, Summenscores
           oder Anteilen — und welche Familie folgt jeweils daraus?</li>
-      <li>Warum kostet eine robustere Familie (Student-t, Negative Binomial, Beta-Binomial) fast nichts,
-          kann aber viel retten?</li>
-      <li>Wann reicht der klassische Standard trotzdem?</li>
+      <li>Was gewinnt man durch flexiblere Verteilungsfamilien wie Student-t, Negative Binomial oder
+          Beta-Binomial — und wann braucht man diese zusätzliche Flexibilität überhaupt? Wann reicht der
+          klassische Standard trotzdem?</li>
     </ul>
+    Die meisten greifen automatisch zu Normal, Poisson oder Binomial-Verteilungen — nicht weil diese Familien
+    am besten passen, sondern weil sie am bekanntesten sind. Ein bewusster Blick auf den Entstehungsprozess
+    kostet wenig und verhindert, dass eine unpassende Likelihood unbemerkt Schätzungen, Standardfehler oder
+    Vorhersagen verzerrt.
 
     <div class="hp-sect">Die drei Stufen</div>
     <ul class="hp-seq">
@@ -1587,15 +1598,10 @@ document.addEventListener('DOMContentLoaded',()=>{
       <li><strong>Stufe 2 — Am eigenen Datensatz prüfen:</strong> Die Kandidaten werden per Maximum Likelihood
           an synthetische Beispieldaten (oder eigene eingefügte Werte) angepasst — Histogramm/Häufigkeiten,
           angepasste Kurven und ein AIC/BIC-Vergleich direkt nebeneinander.</li>
-      <li><strong>Stufe 3 — Modellvergleich &amp; Predictive Checks:</strong> Links zu Prior Predictive Check,
-          Posterior Predictive Check und LOO Lab — den eigentlichen Werkzeugen für eine belastbare Entscheidung.</li>
+      <li><strong>Stufe 3 — Parameter &amp; Priors in brms:</strong> Wie sieht konkret in brms die
+          Parametrisierung aus? Welche Parameter sind notwendig, welche sind optional, und wofür muss man
+          welche Priors setzen?</li>
     </ul>
-
-    <div class="hp-sect">Warum das wichtig ist</div>
-    Die meisten greifen automatisch zu Normal, Poisson oder Binomial — nicht weil diese Familien am besten
-    passen, sondern weil sie am bekanntesten sind. Ein bewusster Blick auf den Entstehungsprozess kostet wenig
-    und verhindert, dass eine unpassende Likelihood unbemerkt Schätzungen, Standardfehler oder Vorhersagen
-    verzerrt.
     <div class="hp-next">Siehe auch → <strong>Distribution Lab</strong> für alle Verteilungsfamilien im Detail
     und <strong>brms Model Builder</strong> für den fertigen Modellcode.</div>
 
