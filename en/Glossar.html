@@ -3529,36 +3529,53 @@ let activeCats = new Set(['all']);
 let searchQ = '';
 
 // ── Render ──
+const TERMS_BY_ID = {};
+TERMS.forEach(t => { TERMS_BY_ID[t.id] = t; });
+
+function matchesFilter(t) {
+  const q = searchQ.toLowerCase().trim();
+  const catOk = activeCats.has('all') || t.cats.some(c => activeCats.has(c));
+  const searchOk = !q || t.name.toLowerCase().includes(q)
+    || (t.longname||'').toLowerCase().includes(q)
+    || t.def.toLowerCase().includes(q);
+  return catOk && searchOk;
+}
+
 function render() {
   const main = document.getElementById('gl-main');
   const empty = document.getElementById('gl-empty');
 
-  // Remember scroll anchor: which letter group currently sits at the top of
-  // the visible area? Changing the filter/search changes the list's total
-  // height (fewer cards = shorter list), so a plain scrollTop value would
-  // seemingly jump to a completely different letter — instead, after
-  // rebuilding, the exact same group is scrolled back to the same screen
-  // position (or the nearest one still present, if that letter got filtered
-  // out entirely).
+  // Remember scroll anchor: which CARD currently sits at the top of the
+  // visible area AND will survive the upcoming filter/search change? Only a
+  // card that still exists afterward is fit to anchor on — otherwise we'd be
+  // holding onto a card that's about to disappear and still jump somewhere
+  // else (possibly far away) once it's gone. Searched from the current
+  // scroll position downward; if nothing there survives (a completely
+  // non-overlapping filter change), falls back to the nearest still-present
+  // card searching backward instead.
   const mainRectBefore = main.getBoundingClientRect();
-  let anchorLetter = null, anchorTopDelta = 0;
-  for (const g of main.querySelectorAll('.gl-letter-group')) {
-    const r = g.getBoundingClientRect();
-    if (r.bottom > mainRectBefore.top) {
-      anchorLetter = g.id.slice(3);
-      anchorTopDelta = r.top - mainRectBefore.top;
+  const cardsBefore = [...main.querySelectorAll('.gl-card')];
+  let anchorId = null, anchorTopDelta = 0;
+  for (const card of cardsBefore) {
+    const r = card.getBoundingClientRect();
+    if (r.bottom <= mainRectBefore.top) continue; // already scrolled fully past
+    const t = TERMS_BY_ID[card.id.slice(3)];
+    if (!t || !matchesFilter(t)) continue; // about to be filtered out — unfit as anchor
+    anchorId = t.id;
+    anchorTopDelta = r.top - mainRectBefore.top;
+    break;
+  }
+  if (!anchorId) {
+    for (let i = cardsBefore.length - 1; i >= 0; i--) {
+      const t = TERMS_BY_ID[cardsBefore[i].id.slice(3)];
+      if (!t || !matchesFilter(t)) continue;
+      anchorId = t.id;
+      anchorTopDelta = 0; // no sensible old position left — place it at the top
       break;
     }
   }
 
-  const q = searchQ.toLowerCase().trim();
-  const filtered = TERMS.filter(t => {
-    const catOk = activeCats.has('all') || t.cats.some(c => activeCats.has(c));
-    const searchOk = !q || t.name.toLowerCase().includes(q)
-      || (t.longname||'').toLowerCase().includes(q)
-      || t.def.toLowerCase().includes(q);
-    return catOk && searchOk;
-  });
+  const filtered = TERMS.filter(matchesFilter);
 
   document.getElementById('gl-count').textContent =
     `${filtered.length} of ${TERMS.length} terms`;
@@ -3591,19 +3608,14 @@ function render() {
   });
 
   updateAZNav(groups);
-  restoreScrollAnchor(main, anchorLetter, anchorTopDelta);
+  restoreScrollAnchor(main, anchorId, anchorTopDelta);
 }
 
-function restoreScrollAnchor(main, anchorLetter, anchorTopDelta) {
-  if (!anchorLetter) return;
-  let target = document.getElementById('az-' + anchorLetter);
-  if (!target) {
-    // Letter got filtered out entirely: fall back to the nearest one still
-    // present (search forward through the alphabet first, then backward)
-    const idx = ALPHABET.indexOf(anchorLetter);
-    for (let i = idx + 1; i < ALPHABET.length && !target; i++) target = document.getElementById('az-' + ALPHABET[i]);
-    for (let i = idx - 1; i >= 0 && !target; i--) target = document.getElementById('az-' + ALPHABET[i]);
-  }
+// anchorId was already checked against the NEW filter (see render()) — the
+// card is therefore guaranteed to exist after the rebuild.
+function restoreScrollAnchor(main, anchorId, anchorTopDelta) {
+  if (!anchorId) return;
+  const target = document.getElementById('gl-' + anchorId);
   if (!target) return;
   const mainRectAfter = main.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
