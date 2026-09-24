@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTL Lernkarten – Bayes Thinking Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+/* ── Design Tokens (identisch zu Glossar.html) ── */
+:root {
+  --bg:#f0ead8; --paper:#f8f3e8; --ink:#18130e; --ink2:#5a4f42; --ink3:#8a7f72;
+  --a1:#c94a2a; --a2:#2a6e8a; --a3:#5a8a2a; --a4:#7a3a8a; --a5:#b85c00; --a6:#0e7c7b; --a7:#a8265a; --a8:#3a4a9a;
+  --a9:#998629; --a10:#749929; --a11:#29993b; --a12:#29996a; --a13:#4a2999; --a14:#992986; --a15:#295b99;
+  --grid:#ddd5c5; --panel:#e8e0ce; --border:#c8bfaa; --warm:#c8a96e;
+  --good:#2f8f4e; --bad:#c94a2a;
+  --topbar-h:54px;
+}
+[data-theme="dark"] {
+  --bg:#0c0f14; --paper:#111520; --ink:#ece6d8; --ink2:#8a8070; --ink3:#5a5448;
+  --a1:#e8614a; --a2:#4ab0d8; --a3:#80cb52; --a4:#c87ad8; --a5:#e07830; --a6:#2bc7c4; --a7:#ef5da0; --a8:#8a9af0;
+  --a9:#d7c56a; --a10:#b3d76a; --a11:#6ad77c; --a12:#6ad7aa; --a13:#8b6ad7; --a14:#d76ac5; --a15:#6a9bd7;
+  --grid:#1e242e; --panel:#171d28; --border:#2a3040; --warm:#c8a96e;
+  --good:#6ad77c; --bad:#e8614a;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,serif; min-height:100vh; }
+
+/* ── Topbar (identisch zu Glossar.html) ── */
+#topbar {
+  position:sticky; top:0; z-index:100;
+  background:var(--paper); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:.75rem; padding:.55rem 1.1rem;
+  height:var(--topbar-h);
+}
+#topbar h1 { font-size:1.05rem; font-weight:600; letter-spacing:.01em; flex:1; }
+#topbar h1 span { color:var(--a4); }
+.tb-btn {
+  font-family:'DM Mono',monospace; font-size:.75rem; padding:.3rem .7rem;
+  border:1px solid var(--border); border-radius:4px; cursor:pointer;
+  background:var(--panel); color:var(--ink2); transition:background .15s;
+}
+.tb-btn:hover { background:var(--border); }
+.tb-btn.help-btn { border-color:var(--a1); color:var(--a1); }
+.tb-btn.help-btn:hover { background:var(--a1); color:#fff; }
+.back-link {
+  font-family:'DM Mono',monospace; font-size:.75rem; color:var(--ink3);
+  text-decoration:none; padding:.3rem .6rem; border:1px solid var(--border);
+  border-radius:4px; transition:background .15s;
+}
+.back-link:hover { background:var(--panel); color:var(--ink); }
+
+/* ── Layout ── */
+#app {
+  max-width:720px; margin:0 auto; padding:1.6rem 1.1rem 3rem;
+  display:flex; flex-direction:column; gap:1.1rem; align-items:center;
+}
+
+/* Deck controls */
+#deck-bar { width:100%; }
+.sb-label {
+  font-family:'DM Mono',monospace; font-size:.72rem; text-transform:uppercase;
+  letter-spacing:.08em; color:var(--ink3); margin-bottom:.4rem;
+}
+.cat-filters { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.7rem; }
+.cat-btn {
+  font-family:'DM Mono',monospace; font-size:.75rem; padding:.28rem .6rem;
+  border:1px solid var(--border); border-radius:3px; cursor:pointer;
+  background:var(--bg); color:var(--ink2); transition:all .15s;
+}
+.cat-btn:hover, .cat-btn.active { color:#fff; border-color:transparent; }
+.cat-btn[data-cat="all"].active    { background:var(--ink2); }
+.cat-btn[data-cat="causal"].active { background:var(--a1); }
+.cat-btn[data-cat="reg"].active    { background:var(--a2); }
+.cat-btn[data-cat="glm"].active    { background:var(--a3); }
+.cat-btn[data-cat="bayes"].active  { background:var(--a4); }
+.cat-btn[data-cat="mcmc"].active   { background:var(--a5); }
+.cat-btn[data-cat="dist"].active   { background:var(--a6); }
+.cat-btn[data-cat="brms"].active   { background:var(--a7); }
+.cat-btn[data-cat="margeff"].active{ background:var(--a8); }
+.cat-btn[data-cat="bayestestr"].active{ background:var(--a15); }
+.cat-btn[data-cat="check"].active  { background:var(--a9); }
+.cat-btn[data-cat="mle"].active    { background:var(--a10); }
+.cat-btn[data-cat="eff"].active    { background:var(--a11); }
+.cat-btn[data-cat="rel"].active    { background:var(--a12); }
+.cat-btn[data-cat="diag"].active   { background:var(--a13); }
+.cat-btn[data-cat="irt"].active    { background:var(--a14); }
+
+.deck-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
+.deck-actions .tb-btn { background:var(--panel); }
+
+/* Stats */
+#stats {
+  font-family:'DM Mono',monospace; font-size:.78rem; color:var(--ink3);
+  width:100%; display:flex; justify-content:space-between; flex-wrap:wrap; gap:.4rem;
+}
+#stats b { color:var(--ink2); font-weight:500; }
+.stat-known { color:var(--good); }
+.stat-again { color:var(--bad); }
+
+/* Card */
+#card-wrap { width:100%; display:flex; justify-content:center; }
+#empty-state {
+  text-align:center; padding:3rem 1rem; color:var(--ink3);
+  font-family:'DM Mono',monospace; font-size:.85rem;
+}
+.card {
+  width:100%; max-width:560px; min-height:320px; background:var(--paper);
+  border:1px solid var(--border); border-radius:10px; padding:1.6rem 1.7rem;
+  cursor:pointer; display:flex; flex-direction:column; position:relative;
+  box-shadow:0 2px 10px rgba(0,0,0,.08); transition:border-color .15s;
+}
+.card:hover { border-color:var(--warm); }
+.card-tags { display:flex; gap:.3rem; flex-wrap:wrap; justify-content:flex-end; position:absolute; top:1rem; right:1.1rem; }
+.gl-tag {
+  font-family:'DM Mono',monospace; font-size:.62rem; text-transform:uppercase;
+  letter-spacing:.06em; padding:.13rem .4rem; border-radius:3px; white-space:nowrap;
+}
+.gl-tag-reg   { background:var(--a2); color:#fff; }
+.gl-tag-bayes { background:var(--a4); color:#fff; }
+.gl-tag-brms  { background:var(--a7); color:#fff; }
+.gl-tag-margeff{ background:var(--a8); color:#fff; }
+.gl-tag-bayestestr{ background:var(--a15); color:#fff; }
+.gl-tag-dist  { background:var(--a6); color:#fff; }
+.gl-tag-mcmc  { background:var(--a5); color:#fff; }
+.gl-tag-glm   { background:var(--a3); color:#fff; }
+.gl-tag-causal{ background:var(--a1); color:#fff; }
+.gl-tag-check { background:var(--a9);  color:#fff; }
+.gl-tag-mle   { background:var(--a10); color:#fff; }
+.gl-tag-eff   { background:var(--a11); color:#fff; }
+.gl-tag-rel   { background:var(--a12); color:#fff; }
+.gl-tag-diag  { background:var(--a13); color:#fff; }
+.gl-tag-irt   { background:var(--a14); color:#fff; }
+
+.card-front { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:.6rem; }
+.card-name { font-size:1.6rem; font-weight:600; letter-spacing:.01em; }
+.card-longname { font-family:'DM Mono',monospace; font-size:.85rem; color:var(--ink3); font-style:italic; }
+.flip-hint { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--ink3); margin-top:1.2rem; }
+
+.card-back { flex:1; display:flex; flex-direction:column; gap:.6rem; }
+.card-back .card-name { font-size:1.15rem; text-align:left; }
+.card-def { font-size:.9rem; line-height:1.65; color:var(--ink); }
+.card-formula {
+  font-family:'Georgia','Cambria',serif; font-size:.8rem; background:var(--grid);
+  padding:.35rem .7rem; border-radius:4px; overflow-x:auto; color:var(--a4);
+}
+.card-intuition-details summary {
+  font-family:'DM Mono',monospace; font-size:.72rem; color:var(--warm);
+  cursor:pointer; list-style:none;
+}
+.card-intuition-details summary::-webkit-details-marker { display:none; }
+.card-intuition {
+  font-family:'DM Mono',monospace; font-size:.76rem; color:var(--ink2);
+  background:var(--panel); border-left:3px solid var(--warm);
+  padding:.4rem .7rem; border-radius:0 4px 4px 0; margin-top:.4rem; line-height:1.6;
+}
+[hidden] { display:none !important; }
+
+/* Nav + assessment rows */
+#nav-row, #assess-row { width:100%; max-width:560px; display:flex; gap:.6rem; justify-content:center; }
+#nav-row button, #assess-row button {
+  font-family:'DM Mono',monospace; font-size:.85rem; padding:.5rem 1rem;
+  border-radius:5px; cursor:pointer; transition:all .15s; flex:1;
+}
+#nav-row button { border:1px solid var(--border); background:var(--panel); color:var(--ink2); }
+#nav-row button:hover { background:var(--border); }
+#again-btn { border:1px solid var(--bad); background:transparent; color:var(--bad); }
+#again-btn:hover { background:var(--bad); color:#fff; }
+#know-btn { border:1px solid var(--good); background:transparent; color:var(--good); }
+#know-btn:hover { background:var(--good); color:#fff; }
+
+/* ── Help Panel (identisch zu Glossar.html) ── */
+#help-panel {
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.5); backdrop-filter:blur(3px);
+}
+#help-panel.open { display:flex; align-items:center; justify-content:center; }
+.hp-box {
+  background:var(--paper); border:1px solid var(--border); border-radius:8px;
+  max-width:560px; width:90%; max-height:80vh; overflow-y:auto; padding:1.5rem;
+}
+.hp-box h2 {
+  font-size:1.05rem; font-weight:600; margin-bottom:.9rem;
+  padding-bottom:.5rem; border-bottom:1px solid var(--border);
+}
+.hp-box p, .hp-box li {
+  font-size:.88rem; line-height:1.75; color:var(--ink2); margin-bottom:.5rem;
+}
+.hp-box ul { padding-left:1.1rem; }
+.hp-close {
+  font-family:'DM Mono',monospace; font-size:.75rem; text-align:right; color:var(--ink3); cursor:pointer;
+  border:none; background:none; padding:.3rem 0; display:block; margin-left:auto;
+}
+.hp-close:hover { color:var(--a1); }
+</style>
+</head>
+<body>
+
+<!-- ══ Topbar ══ -->
+<div id="topbar">
+  <h1>BTL <span>Lernkarten</span></h1>
+  <a class="back-link" href="index_de.html">← Index</a>
+  <a class="back-link" href="Glossar.html">📖 Glossar</a>
+  <button class="tb-btn" id="theme-btn">☀ Hell</button>
+  <button class="tb-btn help-btn" id="help-btn">? Hilfe</button>
+</div>
+
+<!-- ══ App ══ -->
+<div id="app">
+
+  <div id="deck-bar">
+    <div class="sb-label">Kategorie</div>
+    <div class="cat-filters">
+      <button class="cat-btn active" data-cat="all">Alle</button>
+      <button class="cat-btn" data-cat="bayes">Bayes</button>
+      <button class="cat-btn" data-cat="mcmc">MCMC</button>
+      <button class="cat-btn" data-cat="reg">Regression</button>
+      <button class="cat-btn" data-cat="glm">GLM/GLMM</button>
+      <button class="cat-btn" data-cat="dist">Verteilungen</button>
+      <button class="cat-btn" data-cat="causal">Kausalität</button>
+      <button class="cat-btn" data-cat="check">Modellprüfung</button>
+      <button class="cat-btn" data-cat="diag">Diagnostik</button>
+      <button class="cat-btn" data-cat="mle">MLE</button>
+      <button class="cat-btn" data-cat="eff">Effektgröße</button>
+      <button class="cat-btn" data-cat="irt">IRT/Testtheorie</button>
+      <button class="cat-btn" data-cat="rel">Reliabilität</button>
+      <button class="cat-btn" data-cat="brms">brms</button>
+      <button class="cat-btn" data-cat="margeff">marginaleffects</button>
+      <button class="cat-btn" data-cat="bayestestr">bayestestR</button>
+    </div>
+    <div class="deck-actions">
+      <button class="tb-btn" id="shuffle-btn">🔀 Mischen</button>
+      <button class="tb-btn" id="reset-btn">↺ Fortschritt zurücksetzen</button>
+    </div>
+  </div>
+
+  <div id="stats">
+    <span>Neu: <b id="stat-new">0</b> · Lernend: <b id="stat-learning">0</b> · <span class="stat-known">Sicher: <b id="stat-known">0</b></span></span>
+    <span>Karte <b id="pos">0</b>/<b id="total">0</b></span>
+  </div>
+
+  <div id="card-wrap">
+    <div id="empty-state" hidden>Keine Karten für diese Auswahl.</div>
+    <div class="card" id="card" tabindex="0">
+      <div class="card-front" id="card-front">
+        <div class="card-tags" id="card-tags-front"></div>
+        <h2 class="card-name" id="card-name-front"></h2>
+        <div class="card-longname" id="card-longname"></div>
+        <div class="flip-hint">Klicken oder Leertaste zum Umdrehen</div>
+      </div>
+      <div class="card-back" id="card-back" hidden>
+        <div class="card-tags" id="card-tags-back"></div>
+        <h2 class="card-name" id="card-name-back"></h2>
+        <p class="card-def" id="card-def"></p>
+        <div class="card-formula" id="card-formula" hidden></div>
+        <details class="card-intuition-details">
+          <summary>💡 Mehr anzeigen</summary>
+          <div class="card-intuition" id="card-intuition"></div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div id="nav-row">
+    <button id="prev-btn">◀ Zurück</button>
+    <button id="flip-btn">Umdrehen</button>
+    <button id="next-btn">Weiter ▶</button>
+  </div>
+  <div id="assess-row" hidden>
+    <button id="again-btn">✗ Nochmal</button>
+    <button id="know-btn">✓ Kenn ich</button>
+  </div>
+
+</div><!-- #app -->
+
+<!-- ══ Help Panel ══ -->
+<div id="help-panel">
+  <div class="hp-box">
+    <h2>📖 Wie nutze ich die Lernkarten?</h2>
+    <p>Die Lernkarten greifen live auf die Begriffe des BTL-Glossars zu — jede Karte zeigt vorne den Begriffsnamen, hinten Definition und Formel.</p>
+    <ul>
+      <li><strong>Umdrehen</strong> – Klicke auf die Karte oder drücke die Leertaste.</li>
+      <li><strong>Kategorie</strong> – Wähle einen oder mehrere Bereiche, um nur diese Begriffe zu üben.</li>
+      <li><strong>✓ Kenn ich / ✗ Nochmal</strong> – Deine Einschätzung wird lokal gespeichert (nur in diesem Browser): gewusste Karten tauchen seltener wieder auf, unsichere schneller wieder.</li>
+      <li><strong>🔀 Mischen</strong> – Bringt die aktuelle Auswahl in eine neue Zufallsreihenfolge.</li>
+    </ul>
+    <p>Tastenkürzel: Leertaste/Enter = Umdrehen, ← / → = vorherige/nächste Karte, sobald umgedreht: 1 = Nochmal, 2 = Kenn ich.</p>
+    <button class="hp-close" id="help-close">Schließen ✕</button>
+  </div>
+</div>
+
+<script src="glossar-daten.js"></script>
+<script>
+// ── Theme Toggle (identisch zu Glossar.html) ──
+const themeBtn = document.getElementById('theme-btn');
+const html = document.documentElement;
+(function initTheme() {
+  const saved = localStorage.getItem('btl-theme') || 'dark';
+  html.setAttribute('data-theme', saved);
+  themeBtn.textContent = saved === 'dark' ? '☀ Hell' : '☾ Dunkel';
+})();
+themeBtn.addEventListener('click', () => {
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('btl-theme', next);
+  themeBtn.textContent = next === 'dark' ? '☀ Hell' : '☾ Dunkel';
+});
+
+// ── Help Panel ──
+document.getElementById('help-btn').addEventListener('click', () =>
+  document.getElementById('help-panel').classList.add('open'));
+document.getElementById('help-close').addEventListener('click', () =>
+  document.getElementById('help-panel').classList.remove('open'));
+document.getElementById('help-panel').addEventListener('click', e => {
+  if (e.target === document.getElementById('help-panel'))
+    document.getElementById('help-panel').classList.remove('open');
+});
+
+// ── Fortschritt (Leitner-lite, rein lokal im Browser) ──
+// Box 0 = Neu, 1 = Lernend, 2 = Sicher. "Nochmal" wirft eine Karte zurück auf
+// Box 0, "Kenn ich" befördert sie eine Box weiter (max. 2).
+const PROGRESS_KEY = 'btl-karteikarten-progress';
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); } catch (e) { progress = {}; }
+function saveProgress() {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) {}
+}
+function boxOf(id) { return progress[id] || 0; }
+
+// ── State ──
+const TERMS_BY_ID = {};
+TERMS.forEach(t => { TERMS_BY_ID[t.id] = t; });
+let activeCats = new Set(['all']);
+let queue = [];   // Array von Term-IDs in aktueller Sitzungsreihenfolge
+let pos = 0;
+let flipped = false;
+
+function fixDiacritics(s) {
+  return s
+    .replace(/([^\s<>])̂/g, '<span class="gl-hat">$1</span>')
+    .replace(/([^\s<>])̄/g, '<span class="gl-bar">$1</span>');
+}
+
+const _tagLabels = {
+  reg:'Regression', bayes:'Bayes', dist:'Verteilung', mcmc:'MCMC',
+  glm:'GLM/GLMM', causal:'Kausalität', check:'Modellprüfung', mle:'MLE',
+  diag:'Diagnostik', rel:'Reliabilität', irt:'IRT/Testtheorie', eff:'Effektgröße',
+  brms:'brms', margeff:'marginaleffects', bayestestr:'bayestestR'
+};
+
+function matchesFilter(t) {
+  return activeCats.has('all') || t.cats.some(c => activeCats.has(c));
+}
+
+function buildQueue(shuffleFully) {
+  const filtered = TERMS.filter(matchesFilter);
+  if (shuffleFully) {
+    // Fisher-Yates
+    for (let i = filtered.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+    }
+  } else {
+    // nach Box sortiert (Neu/Lernend zuerst), innerhalb einer Box zufällig
+    filtered.sort((a, b) => boxOf(a.id) - boxOf(b.id) || Math.random() - 0.5);
+  }
+  queue = filtered.map(t => t.id);
+  pos = 0;
+  flipped = false;
+  render();
+}
+
+function currentTerm() {
+  if (!queue.length) return null;
+  return TERMS_BY_ID[queue[pos]];
+}
+
+function renderStats() {
+  const filtered = TERMS.filter(matchesFilter);
+  let n0 = 0, n1 = 0, n2 = 0;
+  filtered.forEach(t => {
+    const b = boxOf(t.id);
+    if (b === 0) n0++; else if (b === 1) n1++; else n2++;
+  });
+  document.getElementById('stat-new').textContent = n0;
+  document.getElementById('stat-learning').textContent = n1;
+  document.getElementById('stat-known').textContent = n2;
+  document.getElementById('pos').textContent = queue.length ? pos + 1 : 0;
+  document.getElementById('total').textContent = queue.length;
+}
+
+function renderTags(t, containerId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = t.cats.map(c =>
+    `<span class="gl-tag gl-tag-${c}">${_tagLabels[c] || c}</span>`
+  ).join('');
+}
+
+function render() {
+  renderStats();
+  const t = currentTerm();
+  const empty = document.getElementById('empty-state');
+  const cardEl = document.getElementById('card');
+  const navRow = document.getElementById('nav-row');
+  if (!t) {
+    empty.hidden = false;
+    cardEl.hidden = true;
+    navRow.hidden = true;
+    document.getElementById('assess-row').hidden = true;
+    return;
+  }
+  empty.hidden = true;
+  cardEl.hidden = false;
+  navRow.hidden = false;
+
+  document.getElementById('card-name-front').textContent = t.name;
+  document.getElementById('card-longname').textContent = t.longname || '';
+  renderTags(t, 'card-tags-front');
+
+  document.getElementById('card-name-back').textContent = t.name;
+  document.getElementById('card-def').innerHTML = fixDiacritics(t.def);
+  const formulaEl = document.getElementById('card-formula');
+  if (t.formula) { formulaEl.innerHTML = fixDiacritics(t.formula); formulaEl.hidden = false; }
+  else { formulaEl.hidden = true; }
+  document.getElementById('card-intuition').innerHTML = fixDiacritics(t.intuition || '');
+  renderTags(t, 'card-tags-back');
+
+  document.getElementById('card-front').hidden = flipped;
+  document.getElementById('card-back').hidden = !flipped;
+  document.getElementById('assess-row').hidden = !flipped;
+  document.getElementById('flip-btn').textContent = flipped ? 'Zurückdrehen' : 'Umdrehen';
+}
+
+function flip() {
+  if (!currentTerm()) return;
+  flipped = !flipped;
+  render();
+}
+
+function goTo(delta) {
+  if (!queue.length) return;
+  pos = (pos + delta + queue.length) % queue.length;
+  flipped = false;
+  render();
+}
+
+function assess(known) {
+  const t = currentTerm();
+  if (!t) return;
+  progress[t.id] = known ? Math.min(boxOf(t.id) + 1, 2) : 0;
+  saveProgress();
+  goTo(1);
+}
+
+// ── Kategorie-Filter (Mehrfachauswahl, wie im Glossar) ──
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const cat = btn.dataset.cat;
+    if (cat === 'all') {
+      activeCats = new Set(['all']);
+    } else {
+      activeCats.delete('all');
+      if (activeCats.has(cat)) activeCats.delete(cat);
+      else activeCats.add(cat);
+      if (activeCats.size === 0) activeCats.add('all');
+    }
+    document.querySelectorAll('.cat-btn').forEach(b =>
+      b.classList.toggle('active', activeCats.has(b.dataset.cat)));
+    buildQueue(false);
+  });
+});
+
+document.getElementById('shuffle-btn').addEventListener('click', () => buildQueue(true));
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (!confirm('Fortschritt für alle Lernkarten wirklich zurücksetzen?')) return;
+  progress = {};
+  saveProgress();
+  buildQueue(false);
+});
+
+document.getElementById('card').addEventListener('click', flip);
+document.getElementById('flip-btn').addEventListener('click', flip);
+document.getElementById('prev-btn').addEventListener('click', () => goTo(-1));
+document.getElementById('next-btn').addEventListener('click', () => goTo(1));
+document.getElementById('again-btn').addEventListener('click', () => assess(false));
+document.getElementById('know-btn').addEventListener('click', () => assess(true));
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('help-panel').classList.contains('open')) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); flip(); }
+  else if (e.code === 'ArrowLeft') goTo(-1);
+  else if (e.code === 'ArrowRight') goTo(1);
+  else if (flipped && (e.key === '1')) assess(false);
+  else if (flipped && (e.key === '2')) assess(true);
+});
+
+// ── Init ──
+buildQueue(false);
+
+// Topbar-Höhe dynamisch (wie im Glossar, falls Font-Ladezeiten die Höhe verschieben)
+document.documentElement.style.setProperty('--topbar-h',
+  document.getElementById('topbar').offsetHeight + 'px');
+</script>
+</body>
+</html>
