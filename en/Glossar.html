@@ -3533,6 +3533,24 @@ function render() {
   const main = document.getElementById('gl-main');
   const empty = document.getElementById('gl-empty');
 
+  // Remember scroll anchor: which letter group currently sits at the top of
+  // the visible area? Changing the filter/search changes the list's total
+  // height (fewer cards = shorter list), so a plain scrollTop value would
+  // seemingly jump to a completely different letter — instead, after
+  // rebuilding, the exact same group is scrolled back to the same screen
+  // position (or the nearest one still present, if that letter got filtered
+  // out entirely).
+  const mainRectBefore = main.getBoundingClientRect();
+  let anchorLetter = null, anchorTopDelta = 0;
+  for (const g of main.querySelectorAll('.gl-letter-group')) {
+    const r = g.getBoundingClientRect();
+    if (r.bottom > mainRectBefore.top) {
+      anchorLetter = g.id.slice(3);
+      anchorTopDelta = r.top - mainRectBefore.top;
+      break;
+    }
+  }
+
   const q = searchQ.toLowerCase().trim();
   const filtered = TERMS.filter(t => {
     const catOk = activeCats.has('all') || t.cats.some(c => activeCats.has(c));
@@ -3573,6 +3591,23 @@ function render() {
   });
 
   updateAZNav(groups);
+  restoreScrollAnchor(main, anchorLetter, anchorTopDelta);
+}
+
+function restoreScrollAnchor(main, anchorLetter, anchorTopDelta) {
+  if (!anchorLetter) return;
+  let target = document.getElementById('az-' + anchorLetter);
+  if (!target) {
+    // Letter got filtered out entirely: fall back to the nearest one still
+    // present (search forward through the alphabet first, then backward)
+    const idx = ALPHABET.indexOf(anchorLetter);
+    for (let i = idx + 1; i < ALPHABET.length && !target; i++) target = document.getElementById('az-' + ALPHABET[i]);
+    for (let i = idx - 1; i >= 0 && !target; i--) target = document.getElementById('az-' + ALPHABET[i]);
+  }
+  if (!target) return;
+  const mainRectAfter = main.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  main.scrollTop += (targetRect.top - mainRectAfter.top) - anchorTopDelta;
 }
 
 function fixDiacritics(s) {
