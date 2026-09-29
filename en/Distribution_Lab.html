@@ -131,6 +131,15 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--a6);
 /* ── CANVAS AREA ── */
 #canvas-wrap{padding:.8rem 1rem 0;flex-shrink:0}
 canvas#dist-canvas{display:block;width:100%}
+.canvas-toolbar{display:flex;justify-content:flex-end;margin-bottom:.5rem}
+.xfix-btn{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:600;
+  padding:.4rem 1rem;border:1.5px solid var(--border);border-radius:4px;
+  background:var(--panel);color:var(--ink2);cursor:pointer;transition:all .15s}
+.xfix-btn:hover:not(:disabled){border-color:var(--a6);color:var(--a6)}
+.xfix-btn.on{border-color:var(--a6);color:var(--a6);
+  background:color-mix(in srgb,var(--a6) 14%,var(--panel));
+  box-shadow:0 0 0 1px var(--a6)}
+.xfix-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
 
 /* ── INFO TEXT ── */
 #dist-info{padding:.75rem 1rem 1.5rem;flex:1;min-height:0}
@@ -209,7 +218,6 @@ canvas#dist-canvas{display:block;width:100%}
   </div>
   <div class="hdr-btns">
     <button class="hbtn" onclick="window.open('../index.html','_self')" style="border-color:var(--a5);color:var(--a5)">← Overview</button>
-    <button class="hbtn" id="btn-xfix" onclick="toggleXFix()">X lock</button>
     <button class="hbtn" id="btn-karte" onclick="toggleKarte()" style="border-color:var(--a4);color:var(--a4)">⊞ Relations</button>
     <button class="hbtn" onclick="toggleHelp()" style="border-color:var(--a1);color:var(--a1)">ℹ Help</button>
     <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
@@ -268,6 +276,9 @@ canvas#dist-canvas{display:block;width:100%}
 
   <div id="dl-right">
     <div id="canvas-wrap">
+      <div class="canvas-toolbar">
+        <button class="xfix-btn" id="btn-xfix" onclick="toggleXFix()">X locked</button>
+      </div>
       <canvas id="dist-canvas" height="480"></canvas>
     </div>
     <div id="dist-info"></div>
@@ -504,7 +515,7 @@ canvas#dist-canvas{display:block;width:100%}
     <strong>Distribution buttons</strong> below select the specific distribution.<br>
     <strong>Sliders</strong> on the left adjust parameters in real time.
     <div class="hp-sect">Lock x-axis</div>
-    <strong>X lock</strong> button (topbar): Freezes the x-axis so that when changing parameters (e.g. μ or σ) the shape change is directly visible — instead of the axis rescaling. Resets automatically when switching distributions.
+    <strong>X locked / X free</strong> button (above the chart): Freezes the x-axis so that when changing parameters (e.g. μ or σ) the shape change is directly visible — instead of the axis rescaling. Active by default, and the <em>on/off setting</em> is global across all distributions. The frozen axis range itself, however, is remembered <em>per distribution</em> rather than shared — so continuous-unbounded and continuous-bounded distributions still each get their own sensible axis. The tool likewise remembers each distribution's last-set parameter values, so you can jump back and forth between distributions without losing your settings — until the page is reloaded, after which everything reverts to defaults. Disabled for discrete, mixed, and ordinal distributions (not meaningful there).
     <div class="hp-sect">Distribution relationships</div>
     <strong>⊞ Relations</strong> button opens a large overview map with all 21 distributions of the Distribution Lab and their connections: special cases, limits, constructions. Orientation in the distribution zoo.
     <div class="hp-sect">Moments</div>
@@ -527,7 +538,9 @@ let CAT_IDX = 0;
 let DIST_KEY = 'normal';
 let PARAMS = {};
 let BRMS_MODE = true;
-let X_FIXED = false;
+// Default: locked (not free) — so on first load you can immediately switch between
+// distributions and compare their shape on the same x-axis.
+let X_FIXED = true;
 let FIXED_XRANGE = null;
 
 function cv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
@@ -660,10 +673,13 @@ const DISTS = {
 
   student_t:{
     name:'Student-t', group:0, notation:'Y ~ Student-t(ν, μ, σ)',
+    // σ default 0.75 (not 1) so the default support ([-4.5,4.5], same 4.5·σ margin as
+    // Normal/Skew-Normal) matches the rest of group 0 — lets you switch distributions
+    // with X-Fix on and compare shapes on the same x-axis.
     params:[
       {id:'nu',    label:'ν (degrees of freedom)', min:1,   max:30, step:0.5, val:5, fmt:v=>v.toFixed(1)},
       {id:'mu',    label:'μ (location)',           min:-5,  max:5,  step:0.1, val:0, fmt:v=>v.toFixed(1)},
-      {id:'sigma', label:'σ (scale)',     min:0.1, max:5,  step:0.1, val:1, fmt:v=>v.toFixed(1)},
+      {id:'sigma', label:'σ (scale)',     min:0.1, max:5,  step:0.1, val:0.75, fmt:v=>v.toFixed(2)},
     ],
     pdf:(x,p)=>{
       const nu=p.nu, sig=p.sigma, mu=p.mu;
@@ -783,8 +799,10 @@ const DISTS = {
     brmsNotation:'Y ~ Gamma(μ, φ)', classicNotation:'Y ~ Gamma(α, β_rate)',
     brmsBtnLabel:'brms (μ, φ)', classicBtnLabel:'Classical (α, β)',
     hasBrmsToggle:true,
+    // μ default 1.9 (not 2) so the default support lands almost exactly on Log-Normal's
+    // (both group-1 defaults end near x≈7.4) — lets you compare shapes at the same x-axis.
     paramsBrms:[
-      {id:'mu',  label:'μ (mean)', min:0.1, max:10, step:0.1, val:2, fmt:v=>v.toFixed(1)},
+      {id:'mu',  label:'μ (mean)', min:0.1, max:10, step:0.1, val:1.9, fmt:v=>v.toFixed(1)},
       {id:'phi', label:'φ (shape/precision)', min:0.1, max:20, step:0.1, val:3, fmt:v=>v.toFixed(1)},
     ],
     paramsClassic:[
@@ -813,8 +831,10 @@ const DISTS = {
     brmsNotation:'Y ~ Exponential(μ)', classicNotation:'Y ~ Exponential(λ)',
     brmsBtnLabel:'brms (μ)', classicBtnLabel:'Classical (λ)',
     hasBrmsToggle:true,
+    // μ default 1.2 (not 1) so the default support (6·μ) lands close to the rest of
+    // group 1's ≈7.4 default range — lets you compare shapes at the same x-axis.
     paramsBrms:[
-      {id:'mu', label:'μ (mean)', min:0.2, max:10, step:0.1, val:1, fmt:v=>v.toFixed(2)},
+      {id:'mu', label:'μ (mean)', min:0.2, max:10, step:0.1, val:1.2, fmt:v=>v.toFixed(2)},
     ],
     paramsClassic:[
       {id:'lambda', label:'λ (rate)', min:0.1, max:5, step:0.1, val:1, fmt:v=>v.toFixed(2)},
@@ -836,10 +856,13 @@ const DISTS = {
 
   exgaussian:{
     name:'ExGaussian', group:1, notation:'Y ~ ExGauss(μ, σ, β)',
+    // β default 0.7 (not 0.5) so the default support (with μ, σ unchanged) lands close
+    // to the rest of group 1's ≈7.4 default range — lets you compare shapes at the
+    // same x-axis (the lower bound is already 0 here at these μ/σ defaults).
     params:[
       {id:'mu',    label:'μ (mean)',         min:-2, max:5,  step:0.1, val:1.5, fmt:v=>v.toFixed(1)},
       {id:'sigma', label:'σ (normal SD)',    min:0.1, max:3, step:0.1, val:0.5, fmt:v=>v.toFixed(1)},
-      {id:'beta',  label:'β (exp mean)',     min:0.1, max:3, step:0.1, val:0.5, fmt:v=>v.toFixed(1)},
+      {id:'beta',  label:'β (exp mean)',     min:0.1, max:3, step:0.1, val:0.7, fmt:v=>v.toFixed(1)},
     ],
     pdf:(x,p)=>exGaussPDF(x,p.mu,p.sigma,p.beta),
     supportFn:p=>{const sd=Math.sqrt(p.sigma*p.sigma+p.beta*p.beta); return [p.mu-3*p.sigma, p.mu+p.beta+6*sd];},
@@ -857,8 +880,10 @@ const DISTS = {
 
   inv_gaussian:{
     name:'Inv. Gaussian', group:1, notation:'Y ~ InvGaussian(μ, λ)',
+    // μ default 1.6 (not 2) so the default support lands close to the rest of group 1's
+    // ≈7.4 default range — lets you compare shapes at the same x-axis.
     params:[
-      {id:'mu',  label:'μ (mean)', min:0.1, max:10, step:0.1, val:2, fmt:v=>v.toFixed(1)},
+      {id:'mu',  label:'μ (mean)', min:0.1, max:10, step:0.1, val:1.6, fmt:v=>v.toFixed(1)},
       {id:'lam', label:'λ (shape)',      min:0.1, max:20, step:0.1, val:3, fmt:v=>v.toFixed(1)},
     ],
     pdf:(x,p)=>invGaussPDF(x,p.mu,p.lam),
@@ -970,13 +995,15 @@ const DISTS = {
     brmsNotation:'Y ~ Beta(μ, φ)', classicNotation:'Y ~ Beta(α, β)',
     brmsBtnLabel:'brms (μ, φ)', classicBtnLabel:'Classical (α, β)',
     hasBrmsToggle:true,
+    // Same defaults as ZI-Beta/ZOIB's Beta component (μ=0.5, φ=4 ⇔ α=β=2) — makes the
+    // plain Beta's default shape consistent with its mixed siblings.
     paramsBrms:[
       {id:'mu',  label:'μ (mean)', min:0.01, max:0.99, step:0.01, val:0.5, fmt:v=>v.toFixed(2)},
-      {id:'phi', label:'φ (precision)',  min:0.5,  max:30,   step:0.5,  val:5,   fmt:v=>v.toFixed(1)},
+      {id:'phi', label:'φ (precision)',  min:0.5,  max:30,   step:0.5,  val:4,   fmt:v=>v.toFixed(1)},
     ],
     paramsClassic:[
-      {id:'alpha',  label:'α (Shape 1)', min:0.1, max:20, step:0.1, val:2.5, fmt:v=>v.toFixed(1)},
-      {id:'beta_',  label:'β (Shape 2)', min:0.1, max:20, step:0.1, val:2.5, fmt:v=>v.toFixed(1)},
+      {id:'alpha',  label:'α (Shape 1)', min:0.1, max:20, step:0.1, val:2, fmt:v=>v.toFixed(1)},
+      {id:'beta_',  label:'β (Shape 2)', min:0.1, max:20, step:0.1, val:2, fmt:v=>v.toFixed(1)},
     ],
     toCanonical:(p,brms)=>brms?{a:p.mu*p.phi,b:(1-p.mu)*p.phi}:{a:p.alpha,b:p.beta_},
     pdf:(x,c)=>betaPDF(x,c.a,c.b),
@@ -1378,16 +1405,29 @@ function selectCat(idx){
   setTimeout(()=>{ measureHeader(); renderDist(); }, 50);
 }
 
+// Per-distribution memory (session-only — a plain in-memory object, never written to
+// localStorage, so it is automatically gone on page refresh and everything reverts to
+// defaults). Keyed by distribution key: {brmsMode, params, fixedRange}. Lets the user
+// tweak a distribution, jump to another one, and come back to find both the slider
+// values AND the frozen x-axis (if X-Fix was on) exactly as they left them.
+let DIST_STATE={};
+
+function saveDistState(){
+  const d=DISTS[DIST_KEY];
+  DIST_STATE[DIST_KEY]={
+    brmsMode: d.hasBrmsToggle?BRMS_MODE:undefined,
+    params: {...PARAMS},
+    fixedRange: FIXED_XRANGE,
+  };
+}
+
 function selectDist(key){
-  // Reset X-Fix when switching distributions
-  if(X_FIXED){ X_FIXED=false; FIXED_XRANGE=null;
-    const b=document.getElementById('btn-xfix');
-    b.textContent='X fix'; b.style.borderColor=''; b.style.color=''; }
   DIST_KEY=key;
   document.querySelectorAll('.dist-btn').forEach(b=>{
     b.classList.toggle('sel', b.textContent===DISTS[key].name);
   });
   const d=DISTS[key];
+  const remembered=DIST_STATE[key];
 
   // Header
   document.getElementById('sb-name').textContent=d.name;
@@ -1398,20 +1438,54 @@ function selectDist(key){
     toggleWrap.style.display='';
     document.getElementById('btn-brms').innerHTML=fmtBrmsBtn(d.brmsBtnLabel||'brms');
     document.getElementById('btn-classic').innerHTML=fmtBrmsBtn(d.classicBtnLabel||'Classical');
-    BRMS_MODE=true;
-    document.getElementById('btn-brms').classList.add('sel');
-    document.getElementById('btn-classic').classList.remove('sel');
+    BRMS_MODE=remembered&&remembered.brmsMode!==undefined?remembered.brmsMode:true;
+    document.getElementById('btn-brms').classList.toggle('sel',BRMS_MODE);
+    document.getElementById('btn-classic').classList.toggle('sel',!BRMS_MODE);
   } else {
     toggleWrap.style.display='none';
   }
 
   // Set notation
   updateNotation();
-  // Build sliders with default values
-  initParams();
+  // Restore remembered slider values for this distribution, or fall back to defaults
+  if(remembered){ PARAMS={...remembered.params}; } else { initParams(); }
   buildSliders();
   updateInfo();
+  // X-Fix (on/off) is a GLOBAL setting and is never reset here. The actual frozen
+  // x-axis RANGE, however, is remembered PER DISTRIBUTION (not shared globally) —
+  // continuous-unbounded and continuous-positive/bounded distributions should never
+  // be forced onto each other's axis. First time a distribution is shown with X-Fix
+  // on, a starting range is computed from its (possibly restored) parameters; on
+  // later visits, the exact range from last time is restored instead.
+  if(X_FIXED&&xFixSupported(d)){
+    FIXED_XRANGE=(remembered&&remembered.fixedRange)?remembered.fixedRange:computeCurrentSupport(d);
+  } else {
+    FIXED_XRANGE=null;
+  }
+  updateXFixButton();
+  saveDistState();
   renderDist();
+}
+
+function xFixSupported(d){
+  return !(d.discrete||d.mixed||d.ordinal);
+}
+
+function computeCurrentSupport(d){
+  let cp=PARAMS;
+  if(d.hasBrmsToggle) cp=d.toCanonical(PARAMS,BRMS_MODE);
+  let [xlo,xhi]=d.supportFn(cp);
+  if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
+  return [xlo,xhi];
+}
+
+function updateXFixButton(){
+  const btn=document.getElementById('btn-xfix');
+  if(!btn) return;
+  const supported=xFixSupported(DISTS[DIST_KEY]);
+  btn.disabled=!supported;
+  btn.classList.toggle('on', X_FIXED && supported);
+  btn.textContent=X_FIXED?'X locked':'X free';
 }
 
 function updateNotation(){
@@ -1453,6 +1527,7 @@ function onSlider(id){
   const raw=+document.getElementById('sl-'+id).value;
   PARAMS[id]=pDef.step===1?Math.round(raw):raw;
   document.getElementById('pv-'+id).textContent=pDef.fmt(PARAMS[id]);
+  saveDistState();
   renderDist();
 }
 
@@ -1478,6 +1553,7 @@ function setBrms(mode){
   document.getElementById('btn-classic').classList.toggle('sel', !mode);
   updateNotation();
   buildSliders();
+  saveDistState();
   renderDist();
 }
 
@@ -1538,26 +1614,12 @@ function toggleKarte(){
 }
 function toggleXFix(){
   const d=DISTS[DIST_KEY];
-  // X-Fix nur für kontinuierliche, nicht-gemischte Verteilungen sinnvoll
-  if(d.discrete||d.mixed||d.ordinal){ return; }
+  // X-Fix only makes sense for continuous, non-mixed distributions
+  if(!xFixSupported(d)){ return; }
   X_FIXED=!X_FIXED;
-  const btn=document.getElementById('btn-xfix');
-  if(X_FIXED){
-    // Aktuelle Range einfrieren
-    let cp=PARAMS;
-    if(d.hasBrmsToggle) cp=d.toCanonical(PARAMS,BRMS_MODE);
-    let [xlo,xhi]=d.supportFn(cp);
-    if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
-    FIXED_XRANGE=[xlo,xhi];
-    btn.style.borderColor='var(--a6)';
-    btn.style.color='var(--a6)';
-    btn.textContent='X free';
-  } else {
-    FIXED_XRANGE=null;
-    btn.style.borderColor='';
-    btn.style.color='';
-    btn.textContent='X lock';
-  }
+  FIXED_XRANGE=X_FIXED?computeCurrentSupport(d):null;
+  updateXFixButton();
+  saveDistState();
   renderDist();
 }
 function toggleTheme(){
