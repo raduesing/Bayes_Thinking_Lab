@@ -86,6 +86,12 @@ select.inp option{background:var(--paper);color:var(--ink)}
 .tab-btn:hover{color:var(--ink)}
 .tab-btn.active{color:var(--a5);border-bottom-color:var(--a5);font-weight:500}
 .tab-panel{display:none}.tab-panel.active{display:block}
+/* SCALE TOGGLE (μ/η vs. E[Y] input mode) — segmented control so BOTH states are always
+   visible and the current one is unmistakable at a glance (no reading required) */
+.scale-toggle{display:inline-flex;border:1.5px solid var(--a5);border-radius:5px;overflow:hidden}
+.scale-seg{font-family:'DM Mono',monospace;font-size:.72rem;background:none;border:none;color:var(--ink3);padding:.3rem .6rem;cursor:pointer;transition:background .12s,color .12s}
+.scale-seg:not(.active):hover{background:var(--panel);color:var(--ink)}
+.scale-seg.active{background:var(--a5);color:#18130e;font-weight:600;cursor:default}
 /* MEAN GRID */
 .mean-grid-wrap{overflow-x:auto}
 .mean-grid{border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.78rem;min-width:100%}
@@ -190,9 +196,15 @@ select.inp option{background:var(--paper);color:var(--ink)}
     </div>
 
     <div class="help-section">
-      <div class="help-section-hdr" onclick="toggleHelpSection(this)">Likelihood &amp; Model Scale (η) <span>▸</span></div>
+      <div class="help-section-hdr" onclick="toggleHelpSection(this)">Likelihood &amp; Input Scale (η vs. E[Y]) <span>▸</span></div>
       <div class="help-section-body">
-        <p>All means are entered on the <strong>model scale η</strong> (linear predictor):</p>
+        <p>Means can be entered on two scales — switchable via the <strong>input scale</strong> buttons above the mean grid:</p>
+        <ul>
+          <li><strong>E[Y] · Response scale</strong> (default): input directly on the response scale — e.g. probabilities (0–1) for Bernoulli/Binomial/Beta, rates/expected values (&gt; 0) for Poisson/Gamma/NegBinomial/Lognormal, ordinary numbers for Gaussian/Student.</li>
+          <li><strong>μ · Model scale (η)</strong>: input on the linear predictor — e.g. logits for Bernoulli/Binomial/Beta, log scale for Poisson/Gamma/NegBinomial/Lognormal.</li>
+        </ul>
+        <p>Internally everything is always stored as η — the input scale only affects display and entry, not the generated data. The buttons and the hint text below them dynamically show what kind of number is currently expected (e.g. "model scale · logits" vs. "response scale · probability"); for Gaussian/Student this extra label is empty, since both scales are identical there (identity link).</p>
+        <p>Conversion η ↔ E[Y] per likelihood:</p>
         <ul>
           <li><strong><a class="glo-link" href="Glossar.html#gl-normalverteilung" target="_blank" title="The normal (Gaussian) distribution is the central continuous probability distribution in statistics, parameterized by mean μ and standard deviation σ.">Gaussian</a></strong>: η = E[Y] directly (identity link)</li>
           <li><strong><a class="glo-link" href="Glossar.html#gl-poisson-verteilung" target="_blank" title="The Poisson distribution models the number of events in a fixed interval when events occur independently at a constant rate λ — expected value and variance are identical.">Poisson</a> / <a class="glo-link" href="Glossar.html#gl-negative-binomial" target="_blank" title="The Negative Binomial distribution extends the Poisson distribution with a dispersion parameter φ, modeling overdispersion (variance greater than the mean).">NegBin</a></strong>: η = log(E[Y]) → E[Y] = exp(η)</li>
@@ -201,7 +213,6 @@ select.inp option{background:var(--paper);color:var(--ink)}
           <li><strong><a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="The Gamma distribution is a continuous distribution for positive real values, parameterized by shape α and rate β.">Gamma</a></strong>: η = log(E[Y]), φ = shape (variability)</li>
           <li><strong><a class="glo-link" href="Glossar.html#gl-student-t" target="_blank" title="The Student-t distribution is a symmetric, bell-shaped distribution with heavier tails than the normal distribution, parameterized by degrees of freedom ν.">Student-t</a></strong>: η = E[Y], ν = degrees of freedom (smaller ν = heavier tails)</li>
         </ul>
-        <p>The <strong>⇄ Response scale</strong> button allows input on the response scale E[Y] — internally everything is converted to η.</p>
         <p>The <strong>Scale Converter</strong> (below the likelihood selector) shows the η ↔ E[Y] conversion interactively for any value.</p>
       </div>
     </div>
@@ -238,6 +249,17 @@ select.inp option{background:var(--paper);color:var(--ink)}
         <p><strong>ρ₀₁ (intercept–slope correlation)</strong>: Correlation between u₀ and u₁. Positive means: classes with a high baseline also show stronger effects. Generated via <a class="glo-link" href="Glossar.html#gl-cholesky" target="_blank" title="The Cholesky decomposition factors a positive-definite covariance matrix Σ = L·Lᵀ and is used to turn independent noise into correlated draws.">Cholesky decomposition</a>.</p>
         <p><strong>Slope on</strong>: Choose which predictor receives the random slope — between or within factor possible. This determines the brms formula.</p>
         <p><strong><a class="glo-link" href="Glossar.html#gl-icc" target="_blank" title="The Intraclass Correlation Coefficient measures what proportion of the total variance is attributable to group differences: ICC = τ₀²/(τ₀²+σ²).">ICC</a></strong>: Intraclass correlation = τ₀²/(τ₀²+σ²). Typical values: schools ~0.10–0.20, families ~0.15–0.45.</p>
+        <p><strong>Cluster-randomized</strong> (only visible when a between factor is also active): by default, clusters are assigned independently of group — a cluster can contain people from several groups (individual randomization within the cluster). Turning the toggle on makes each cluster belong entirely to one group (k is split evenly across the groups) — reflecting classic <em>cluster-randomized</em> studies (e.g. a whole school = intervention/control). Subject/cluster IDs always stay globally unique either way — no two different people ever share an ID across clusters. The setting behaves identically in the live preview and in the generated R code (there, via <code>group_by()</code> + <code>cur_group_id()</code> instead of <code>sample()</code>).</p>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-hdr" onclick="toggleHelpSection(this)">Item Structure (Crossed Random Effects) <span>▸</span></div>
+      <div class="help-section-body">
+        <p>Unlike the <strong>cluster</strong> above (nested: each person belongs to exactly one school), the <strong>item structure</strong> is fully crossed: every item appears for every subject/condition — typical for experiments with multiple stimuli/items per condition (e.g. several test items per person and time point).</p>
+        <p>Example formula: <code>Y ~ Group * Condition + (1 | ID) + (1 | Item)</code>. Each item gets its own random intercept ~ N(0, τ²) — intercept only for now, no item random slope (v1 scope).</p>
+        <p>Because an item can occur across multiple measurements of the same person, an active item structure automatically forces <strong><a class="glo-link" href="Glossar.html#gl-wide-long-format" target="_blank" title="In wide format there is one row per person and one column per measurement occasion; in long format one row per measurement. lme4/brms require long format.">long format</a></strong>: the CSV export then shows only one button (no separate wide/long) and the plot switches to a simplified box+jitter view.</p>
+        <p><strong>Known limitation in the generated R code:</strong> the combination of cluster + item + a non-additive family (e.g. Bernoulli, Poisson) <em>without</em> a within factor cannot be auto-generated correctly in R code (Y is already a drawn, discrete sample at that point — item effects would need to be injected on η beforehand). This one case is emitted as clearly commented-out code with an explanation instead of being silently wrong; the live preview/CSV above simulate it correctly.</p>
       </div>
     </div>
 
@@ -260,7 +282,8 @@ select.inp option{background:var(--paper);color:var(--ink)}
       <div class="help-section-body">
         <p>The <strong>formula preview</strong> (tab 1) shows lme4- and brms-compatible formulas. With multiple factors, the <strong>full interaction model</strong> (<code>A * B * W</code>) is automatically suggested — the most robust model for repeated measures.</p>
         <p><code>A * B</code> expands to <code>A + B + A:B</code> (main effects + interaction). <code>A * B * W</code> yields all two-way and the three-way interaction.</p>
-        <p>The random effect term <code>(1 | class)</code> appears automatically when cluster is active. With random slope: <code>(1 + time | class)</code>.</p>
+        <p>The random effect term <code>(1 | class)</code> appears automatically when cluster is active, <code>(1 | item)</code> when the item structure is active. With random slope: <code>(1 + time | class)</code>.</p>
+        <p>For non-Gaussian likelihoods, the appropriate <strong>family</strong> is shown explicitly next to the formula (e.g. <code>family = binomial(link="logit")</code>) — important since, unlike <code>brms</code>, <code>lme4</code>/<code>glmmTMB</code> have no dedicated <code>bernoulli()</code> family (Bernoulli is just Binomial with N=1 under the hood). Some families (Student-t, Lognormal, Beta, NegBinomial) can only be fit by <code>glmmTMB</code>, not <code>lme4</code> — the formula preview flags this via the <code>glmmTMB:</code> prefix (instead of <code>lme4/glmmTMB:</code>) plus a short note.</p>
       </div>
     </div>
 
@@ -286,6 +309,8 @@ select.inp option{background:var(--paper);color:var(--ink)}
         <p><strong>Non-Gaussian likelihoods:</strong> <code>sim_design()</code> always generates normally distributed η values. These are then transformed via <code>mutate(across(...))</code> into the target distribution (e.g. <code>rbinom(n(), 1, plogis(eta))</code> for Bernoulli). This is a Gaussian approximation at the η level — well suited for moderate correlations and not too extreme distribution parameters.</p>
         <p><strong><a class="glo-link" href="Glossar.html#gl-wide-long-format" target="_blank" title="In wide format there is one row per person and one column per measurement occasion; in long format one row per measurement. lme4/brms require long format.">Wide → Long</a>:</strong> Within designs produce dat_wide (one column per time point). <code>pivot_longer()</code> converts it to dat_long — the format expected by <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms is an R package providing a flexible high-level interface for fitting Bayesian regression models via Stan.">brms</a>/lme4. Covariates (between-subjects) are automatically replicated.</p>
         <p><strong>🎯 Exact Parameters (toggle above):</strong> Forces exact sample means/SDs instead of random sampling deviation — useful e.g. to check whether a model recovers the true population parameters exactly. Uses the <code>empirical = TRUE</code> principle (linear rescaling instead of redrawing) and behaves identically in the JS preview/CSV and in the generated R code. Fully applies to Gaussian/Student/Lognormal (covariates, cluster random effects, Y); for Gamma/Bernoulli/Beta/Binomial/Poisson/NegBinomial only the underlying η/cluster structure is exact — the final draw stays random there, since no general exact procedure exists for these families. The power-analysis code block intentionally ignores the toggle (Monte Carlo power needs real sampling variability).</p>
+        <p><strong>Item random effects in the code:</strong> when the item structure is active, item assignment is injected only <em>after</em> <code>pivot_longer()</code> (or after cluster resolution in the between-only case with no within factor) — see the "Item Structure" help section above for details and the one known limitation.</p>
+        <p><strong>Cluster-randomized in the code:</strong> when the toggle is active, <code>group_by(across(...)) + cur_group_id()</code> replaces the plain <code>sample()</code> assignment, splitting the k clusters evenly and exclusively across the between groups (no cluster in more than one group) — see the "Cluster / Random Effects" help section above. The commented-out power simulation block below does not yet know about this option and gets a warning comment instead.</p>
         <p><strong>Package installation:</strong></p>
         <ul>
           <li><code>install.packages("faux")</code></li>
@@ -335,6 +360,8 @@ select.inp option{background:var(--paper);color:var(--ink)}
         </ul>
 
         <p><strong>Parallelization:</strong> <code>library(future.apply); plan(multisession)</code> → <code>future_sapply()</code> instead of <code>sapply()</code>. Speedup ~3–6× depending on machine.</p>
+
+        <p><strong>Not yet covered:</strong> the block knows neither the item structure (crossed random effects) nor the "Cluster-randomized" toggle — both options only produce a warning comment there instead of automatically adjusted code. For a power analysis with these options, <code>sim_data_one()</code> needs to be extended by hand (instructions right in the comment).</p>
 
         <p><strong>Interpretation:</strong> <a class="glo-link" href="Glossar.html#gl-power" target="_blank" title="The power of a statistical test is the probability of correctly detecting a true effect as significant: Power = 1 − β.">Power</a> of 80% = in 80 out of 100 replications of the experiment, the effect would be detected as significant given your chosen parameters.</p>
       </div>
@@ -387,11 +414,15 @@ select.inp option{background:var(--paper);color:var(--ink)}
 
   <div>
     <div class="sec-title">Sample</div>
-    <div class="row" style="margin-bottom:.35rem">
-      <label>n per cell</label>
-      <input type="number" id="nPerCell" class="inp inp-sm" value="50" min="5" max="5000" oninput="updateFormula()">
-      <label>seed</label>
-      <input type="number" id="seedVal" class="inp inp-sm" value="42">
+    <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.35rem">
+      <div class="row" style="flex-wrap:nowrap">
+        <label style="width:78px;flex-shrink:0">n per cell</label>
+        <input type="number" id="nPerCell" class="inp inp-sm" value="50" min="5" max="5000" oninput="updateFormula()">
+      </div>
+      <div class="row" style="flex-wrap:nowrap">
+        <label style="width:78px;flex-shrink:0">seed</label>
+        <input type="number" id="seedVal" class="inp inp-sm" value="42">
+      </div>
     </div>
   </div>
 
@@ -539,9 +570,15 @@ select.inp option{background:var(--paper);color:var(--ink)}
     </div>
 
     <div id="panel-means" class="tab-panel active">
-      <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.55rem;flex-wrap:wrap">
-        <button class="btn btn-sm" id="rawModeBtn" onclick="toggleRawMode()" style="border-color:var(--a5);color:var(--a5)">⇄ Response scale E[Y]</button>
-        <span id="rawModeHint" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3)">Enter means on response scale (inverse link)</span>
+      <div style="margin-bottom:.55rem">
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">Input scale:</span>
+          <div class="scale-toggle" role="group" aria-label="Input scale">
+            <button type="button" class="scale-seg active" id="scaleSegRaw" onclick="setRawMode(true)">E[Y] · Response scale</button>
+            <button type="button" class="scale-seg" id="scaleSegEta" onclick="setRawMode(false)">μ · Model scale (η)</button>
+          </div>
+        </div>
+        <div id="rawModeHint" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3);margin-top:.3rem">Input is on the response scale E[Y] — stored internally as η (model scale)</div>
       </div>
       <div id="meanGridWrap">
         <div class="empty-hint">Add factors to configure the mean grid.</div>
@@ -926,24 +963,33 @@ function renderMeanGrid(){
   syncMeanKeys();
 
   // Helper: display value based on rawMode
-  const dispVal=(mKey)=>rawMode?etaToRaw(ST.means[mKey]??0,mKey,lik).toFixed(4):(ST.means[mKey]??0);
-  const muLabel=rawMode?'E[Y] <span style="font-style:italic;font-weight:300">(response scale)</span>':'μ <span style="font-style:italic;font-weight:300">(model scale)</span>';
+  const dispVal=(mKey)=>rawMode?etaToRaw(ST.means[mKey]??0,mKey,lik).toFixed(4):(ST.means[mKey]??0).toFixed(4);
+  // What kind of number is actually expected, per likelihood + scale — e.g. "logits" vs.
+  // "probability" for bernoulli/binomial/beta. null for identity-link families
+  // (gaussian/student), where both scales are the same value, so no extra unit is shown.
+  const unitNote=scaleUnitNote(lik,rawMode);
+  const scaleName=rawMode?'response scale':'model scale';
+  const muLabel=(rawMode?'E[Y]':'μ')+` <span style="font-style:italic;font-weight:300">(${scaleName}${unitNote?' · '+unitNote:''})</span>`;
   const muRowLabel=rawMode?'E[Y]':'μ';
   const sdNote=useSd?'<span style="color:var(--a2)">σ</span> = residual SD':'<span style="color:var(--ink3)">σ locked</span> — spread determined by distribution parameters';
   const footNote=rawMode
-    ?`E[Y] on response scale → stored internally as η (model scale) &nbsp;·&nbsp; ${sdNote}`
-    :`μ = mean on model scale (η) &nbsp;·&nbsp; ${sdNote}`;
+    ?`E[Y] on response scale${unitNote?' ('+unitNote+')':''} → stored internally as η (model scale) &nbsp;·&nbsp; ${sdNote}`
+    :`μ = mean on model scale (η)${unitNote?' — here: '+unitNote:''} &nbsp;·&nbsp; ${sdNote}`;
 
-  // Update button + hint label
-  const btn=document.getElementById('rawModeBtn');
+  // Sync the scale-toggle segments (segmented control — active state shown via
+  // background fill, so the CURRENT input scale is unmistakable, not just the target
+  // of a click) and the explanatory hint text.
+  const segEta=document.getElementById('scaleSegEta');
+  const segRaw=document.getElementById('scaleSegRaw');
+  if(segEta) segEta.classList.toggle('active',!rawMode);
+  if(segRaw) segRaw.classList.toggle('active',rawMode);
   const hint=document.getElementById('rawModeHint');
-  if(btn) btn.textContent=rawMode?'⇄ Model scale (η)':'⇄ Response scale E[Y]';
   if(hint) hint.textContent=rawMode
-    ?'Active: input on response scale E[Y] — stored internally as η'
-    :'Enter means on response scale (inverse link)';
+    ?`Input is on the response scale E[Y]${unitNote?' ('+unitNote+')':''} — stored internally as η (model scale)`
+    :`Input is on the model scale η (linear predictor)${unitNote?' — here: '+unitNote:''}`;
 
   if(!hasB&&!hasW){
-    const dispAll=rawMode?etaToRaw(ST.means['all']??0,'all',lik).toFixed(4):(ST.means['all']??0);
+    const dispAll=rawMode?etaToRaw(ST.means['all']??0,'all',lik).toFixed(4):(ST.means['all']??0).toFixed(4);
     el.innerHTML=`
       <div class="row" style="gap:1rem;flex-wrap:wrap">
         <div><div class="sec-title" style="margin-bottom:.25rem">Mean ${muLabel}</div>
@@ -3791,7 +3837,7 @@ function showTab(id){
 // ────────────────────────────────────────────────────────────
 // ROHSKALA-SOLVER (inverse link functions)
 // ────────────────────────────────────────────────────────────
-let rawMode=false;
+let rawMode=true;
 
 function etaToRaw(eta,mKey,lik){
   if(['gamma','poisson','negbinomial'].includes(lik)) return Math.exp(eta);
@@ -3809,19 +3855,25 @@ function rawToEta(raw,mKey,lik){
   return raw;
 }
 
+// What a mean input actually represents, per likelihood + scale — shown next to the
+// scale toggle and the mean labels so new users don't have to infer it (e.g. bernoulli:
+// "logits" on the model scale vs. "probability" on the response scale). null for
+// identity-link families (gaussian/student), where both scales are the same value.
+function scaleUnitNote(lik,rawMode){
+  if(['bernoulli','beta','binomial'].includes(lik)) return rawMode?'probability':'logits';
+  if(['gamma','poisson','negbinomial'].includes(lik)) return rawMode?'rate/expected value':'log scale';
+  if(lik==='lognormal') return rawMode?'expected value':'log scale';
+  return null; // gaussian, student
+}
+
 function setMeanRaw(mKey,val){
   const lik=document.getElementById('likSel').value;
   ST.means[mKey]=rawMode?rawToEta(+val,mKey,lik):+val;
 }
 
-function toggleRawMode(){
-  rawMode=!rawMode;
-  const btn=document.getElementById('rawModeBtn');
-  const hint=document.getElementById('rawModeHint');
-  if(btn) btn.textContent=rawMode?'⇄ Model scale (η)':'⇄ Response scale E[Y]';
-  if(hint) hint.textContent=rawMode
-    ?'Active: input on response scale E[Y] — stored internally as η'
-    :'Enter means on response scale (inverse link)';
+function setRawMode(v){
+  if(rawMode===v) return;
+  rawMode=v;
   renderMeanGrid();
 }
 
