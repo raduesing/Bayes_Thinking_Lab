@@ -113,7 +113,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
 /* FORMULA PREVIEW */
 .formula-box{background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:.6rem .8rem}
 .formula-row{font-family:'DM Mono',monospace;font-size:.8rem;line-height:1.8;color:var(--ink)}
-.formula-prefix{color:var(--ink3);font-size:.72rem;display:inline-block;width:55px}
+.formula-prefix{color:var(--ink3);font-size:.72rem;display:inline-block;width:110px}
 /* PANEL BOXES */
 .panel-box{background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:.8rem}
 /* PLOT */
@@ -456,6 +456,14 @@ select.inp option{background:var(--paper);color:var(--ink)}
           <label>k</label>
           <input type="number" id="clusterK" class="inp inp-sm" value="20" min="2" oninput="updateFormula()">
         </div>
+        <label class="row" id="clusterRandomizedRow" style="cursor:pointer;display:none">
+          <input type="checkbox" id="clusterRandomized" style="accent-color:var(--a5)">
+          <span style="font-family:'DM Mono',monospace;font-size:.73rem">Cluster-randomized (each cluster = one group)</span>
+        </label>
+        <div class="hint" id="clusterRandomizedHint" style="font-size:.68rem;color:var(--ink3);margin-top:-.1rem;display:none">
+          Off: clusters are assigned independently of the group (can contain both groups) — individual randomization within the cluster.<br>
+          On: each cluster belongs entirely to one group (k is split evenly across the groups) — typical for cluster-randomized studies (e.g. a whole school = intervention/control).
+        </div>
         <div class="row">
           <label>τ₀ (intercept SD)</label>
           <input type="number" id="clusterTau0" class="inp inp-sm" value="0.5" step="0.1" min="0" oninput="updateFormula()">
@@ -472,6 +480,33 @@ select.inp option{background:var(--paper);color:var(--ink)}
         <div class="row" id="corrRow01" style="display:none">
           <label>ρ₀₁ (intercept–slope)</label>
           <input type="number" id="clusterRho01" class="inp inp-sm" value="0" step="0.05" min="-0.99" max="0.99" oninput="updateFormula()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="sec-title">Item <span style="font-style:italic;text-transform:none;font-size:.72rem">(crossed)</span></div>
+    <div class="cluster-box">
+      <label class="row" style="cursor:pointer">
+        <input type="checkbox" id="itemActive" onchange="onItemToggle()" style="accent-color:var(--a5)">
+        <span style="font-family:'DM Mono',monospace;font-size:.78rem">Enable item structure</span>
+      </label>
+      <div id="itemBody" class="cluster-body" style="display:none">
+        <div class="row">
+          <label>Name</label>
+          <input type="text" id="itemName" class="inp inp-sm" value="item" style="width:80px" oninput="updateFormula()">
+          <label>k</label>
+          <input type="number" id="itemK" class="inp inp-sm" value="10" min="2" oninput="updateFormula()">
+        </div>
+        <div class="row">
+          <label>τ (item intercept SD)</label>
+          <input type="number" id="itemTau0" class="inp inp-sm" value="0.3" step="0.1" min="0" oninput="updateFormula()">
+        </div>
+        <div class="hint" style="font-size:.68rem;color:var(--ink3);margin-top:.15rem">
+          Every item appears for every subject/condition (fully crossed) — unlike the
+          nested cluster above. Automatically produces long-format output (one row per
+          subject × condition × item).
         </div>
       </div>
     </div>
@@ -530,7 +565,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
   <div class="panel-box" id="formulaBox">
     <div class="sec-title">Model Formula Preview</div>
     <div class="formula-box">
-      <div class="formula-row"><span class="formula-prefix">lme4:</span><span id="formulaLme4">Y ~ 1</span></div>
+      <div class="formula-row"><span class="formula-prefix" id="formulaLme4Prefix">lme4/glmmTMB:</span><span id="formulaLme4">Y ~ 1</span><span id="formulaLme4Family" style="color:var(--ink3)"></span></div>
       <div class="formula-row"><span class="formula-prefix">brms:</span><span id="formulaBrms">Y ~ 1</span></div>
     </div>
   </div>
@@ -599,6 +634,7 @@ const ST = {
   covariates: [],  // [{id, name, mu, sd, groupMeans:{}, useGroupMeans:false}]  — max 2
   covRho: 0,       // correlation between the two covariates (if 2 defined)
   cluster: { active:false },
+  item:    { active:false },  // crossed (not nested) random-intercept factor, e.g. "item"
   means:   {},   // {'A_t1': 5.0, ...}
   sds:     {},   // {'t1': 1.0, ...} — per within level (or 'all')
   corrMats:{},   // {withinId: [[1,r01,...],[r10,1,...],...]}
@@ -1122,23 +1158,21 @@ function renderRETab(){
   }
   if(rhoRow) rhoRow.style.display=tau1>0&&hasFactor?'flex':'none';
 
-  if(!ST.cluster.active){
-    el.innerHTML='<div class="empty-hint">Cluster structure not activated. Enable it in the sidebar.</div>';
-    return;
-  }
-  const name=document.getElementById('clusterName')?.value||'school';
-  const k=document.getElementById('clusterK')?.value||20;
-  // Read selected slope predictor
-  const slopeOnId=document.getElementById('clusterSlopeOn')?.value;
-  const allFactors=[...ST.between.map(f=>({...f,kind:'between'})),...ST.within.map(f=>({...f,kind:'within'}))];
-  const slopeFactor=allFactors.find(f=>f.id===slopeOnId)||allFactors[0]||null;
-  const hasSlope=tau1>0&&slopeFactor!=null;
-  const sfName=slopeFactor?.name||'x';
-  const sfKind=slopeFactor?.kind||'within';
+  let clusterHtml='';
+  if(ST.cluster.active){
+    const name=document.getElementById('clusterName')?.value||'school';
+    const k=document.getElementById('clusterK')?.value||20;
+    // Read selected slope predictor
+    const slopeOnId=document.getElementById('clusterSlopeOn')?.value;
+    const allFactors=[...ST.between.map(f=>({...f,kind:'between'})),...ST.within.map(f=>({...f,kind:'within'}))];
+    const slopeFactor=allFactors.find(f=>f.id===slopeOnId)||allFactors[0]||null;
+    const hasSlope=tau1>0&&slopeFactor!=null;
+    const sfName=slopeFactor?.name||'x';
+    const sfKind=slopeFactor?.kind||'within';
 
-  el.innerHTML=`
+    clusterHtml=`
     <div style="font-family:'DM Mono',monospace;font-size:.82rem;color:var(--ink2);margin-bottom:.7rem">
-      Cluster: <strong>${esc(name)}</strong> &nbsp;·&nbsp; k = ${k} &nbsp;·&nbsp; τ₀ = ${tau0}${hasSlope?` &nbsp;·&nbsp; τ₁ = ${tau1} &nbsp;·&nbsp; ρ₀₁ = ${rho01}`:''}
+      Cluster (nested): <strong>${esc(name)}</strong> &nbsp;·&nbsp; k = ${k} &nbsp;·&nbsp; τ₀ = ${tau0}${hasSlope?` &nbsp;·&nbsp; τ₁ = ${tau1} &nbsp;·&nbsp; ρ₀₁ = ${rho01}`:''}
     </div>
     <div style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink);margin-bottom:.3rem">
       ${hasSlope
@@ -1151,7 +1185,34 @@ function renderRETab(){
     </div>
     ${!hasSlope&&hasFactor?`<div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">τ₁ > 0 enables random slopes for the selected predictor.</div>`:''}
     ${!hasFactor&&tau1>0?`<div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a1)">⚠ No factor defined — τ₁ and ρ₀₁ are ignored.</div>`:''}
-    ${hasSlope?`<div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-top:.25rem">Slope auf: <strong>${esc(sfName)}</strong> (${sfKind==='within'?'Within-Faktor, Stufen-Index 0,1,…':'Between-Faktor, Level-Index 0,1,…'})</div>`:''}`;
+    ${hasSlope?`<div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-top:.25rem">Slope on: <strong>${esc(sfName)}</strong> (${sfKind==='within'?'within factor, level index 0,1,…':'between factor, level index 0,1,…'})</div>`:''}`;
+  }
+
+  let itemHtml='';
+  if(ST.item.active){
+    const iName=document.getElementById('itemName')?.value||'item';
+    const iK=document.getElementById('itemK')?.value||10;
+    const iTau0=+(document.getElementById('itemTau0')?.value||0.3);
+    itemHtml=`
+    <div style="font-family:'DM Mono',monospace;font-size:.82rem;color:var(--ink2);margin:${ST.cluster.active?'1rem':'0'} 0 .7rem">
+      Item (crossed): <strong>${esc(iName)}</strong> &nbsp;·&nbsp; k = ${iK} &nbsp;·&nbsp; τ = ${iTau0}
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink);margin-bottom:.3rem">
+      v<sub>l</sub> ~ Normal(0, τ²) &ensp; — <em>one</em> v<sub>l</sub> per item l, shared across all subjects/conditions
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a5);margin-bottom:.25rem">
+      η<sub>ijl</sub> = μ<sub>ij</sub> + v<sub>l</sub> &nbsp;(+ cluster terms above, if active)
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">
+      Automatically produces long-format output: one row per subject${ST.within.length>0?' × '+esc(ST.within[0]?.name||'condition'):''} × item.
+    </div>`;
+  }
+
+  if(!clusterHtml&&!itemHtml){
+    el.innerHTML='<div class="empty-hint">Cluster and item structure not activated. Enable them in the sidebar.</div>';
+    return;
+  }
+  el.innerHTML=clusterHtml+itemHtml;
 }
 
 function updateSlopeOnOptions(){
@@ -1287,6 +1348,16 @@ function updateFormula(){
   const clActive=document.getElementById('clusterActive')?.checked;
   const clName=document.getElementById('clusterName')?.value||'school';
   const lik=document.getElementById('likSel')?.value||'gaussian';
+
+  // "Cluster-randomized" toggle only makes sense with a between factor to randomize
+  // clusters against — hide it otherwise (and make sure it can't silently stay checked
+  // with no effect, which would be confusing).
+  const hasBForCl=ST.between.length>0;
+  const clRandRow=document.getElementById('clusterRandomizedRow');
+  const clRandHint=document.getElementById('clusterRandomizedHint');
+  if(clRandRow) clRandRow.style.display=(clActive&&hasBForCl)?'flex':'none';
+  if(clRandHint) clRandHint.style.display=(clActive&&hasBForCl)?'block':'none';
+
   // binomial with N>1 trials needs a trials-aware LHS — plain "Y" would be raw success
   // counts, which glmmTMB/glm/brms all reject or silently misinterpret as 0/1 Bernoulli.
   const ntrialsFm=lik==='binomial'?+(document.getElementById('extraNtrials')?.value||10):null;
@@ -1312,13 +1383,23 @@ function updateFormula(){
     reTerms.push(idSlope?`(1 + ${wTerms[0]} | id)`:`(1 | id)`);
   }
   if(clActive) reTerms.push(hasSlope?`(1 + ${cleanR(fmSlopeFactor.name)} | ${cleanR(clName)})`:`(1 | ${cleanR(clName)})`);
+  const itemActive=document.getElementById('itemActive')?.checked;
+  const itemName=document.getElementById('itemName')?.value||'item';
+  if(itemActive) reTerms.push(`(1 | ${cleanR(itemName)})`);
   const re=reTerms.length?' + '+reTerms.join(' + '):'';
 
+  const lf=lme4Family(lik);
+  // formulaLme4 stays a bare "Y ~ ..." formula (buildPowerRCode() extracts it for the
+  // actual glmmTMB() calls) — family info goes in a separate span, never appended here.
   const lme4=`${yn.lme4} ~ ${fixed}${re}`;
   const brms=`bf(${yn.brms} ~ ${fixed}${re}${lik!=='gaussian'?`, family = ${brmsFamily(lik)}`:''})`;
 
   document.getElementById('formulaLme4').textContent=lme4;
   document.getElementById('formulaBrms').textContent=brms;
+  const lme4PrefixEl=document.getElementById('formulaLme4Prefix');
+  if(lme4PrefixEl) lme4PrefixEl.textContent=lf.ok?'lme4/glmmTMB:':'glmmTMB:';
+  const lme4FamEl=document.getElementById('formulaLme4Family');
+  if(lme4FamEl) lme4FamEl.textContent=lik!=='gaussian'?`  ·  family = ${lf.fam}${lf.note?`  (${lf.note})`:''}`:'';
 }
 
 // binomial with N>1 trials: lme4/glmmTMB use cbind(successes, failures) as the response;
@@ -1329,6 +1410,28 @@ function likYName(l,ntrials){
   return {lme4:'Y', brms:'Y'};
 }
 function brmsFamily(l){return{gaussian:'gaussian()',student:'student()',lognormal:'lognormal()',gamma:'Gamma(link="log")',bernoulli:'bernoulli()',beta:'Beta()',binomial:'binomial()',poisson:'poisson()',negbinomial:'negbinomial()'}[l]||'gaussian()';}
+
+// lme4::glmer() only accepts base-R glm() families (gaussian, binomial, poisson, Gamma) —
+// it has no bernoulli() (bernoulli IS just binomial() fit on 0/1 data, same family for
+// lme4 *and* glmmTMB) and no student-t/lognormal/beta/negbinomial family objects at all.
+// glmmTMB extends this with its own family functions (t_family, lognormal, beta_family,
+// nbinom2) that glmer() cannot use. Keep "ok" (lme4-compatible) in sync with familyMap
+// further down (used for the glmmTMB power-sim code) — same family strings, glmmTMB just
+// supports more of them.
+function lme4Family(l){
+  const m={
+    gaussian:   {fam:'gaussian()',                 ok:true},
+    student:    {fam:'t_family()',                 ok:false, note:'glmmTMB only — lme4 has no Student-t family'},
+    lognormal:  {fam:'lognormal()',                ok:false, note:'glmmTMB only — lme4 has no lognormal family'},
+    gamma:      {fam:'Gamma(link="log")',          ok:true},
+    bernoulli:  {fam:'binomial(link="logit")',     ok:true},
+    beta:       {fam:'beta_family(link="logit")',  ok:false, note:'glmmTMB only — lme4 has no beta family'},
+    binomial:   {fam:'binomial(link="logit")',     ok:true},
+    poisson:    {fam:'poisson(link="log")',        ok:true},
+    negbinomial:{fam:'nbinom2(link="log")',        ok:false, note:'glmmTMB only — lme4: MASS::glmer.nb(), different syntax'}
+  };
+  return m[l]||m.gaussian;
+}
 
 // ────────────────────────────────────────────────────────────
 // LIKELIHOOD EXTRAS
@@ -1373,6 +1476,14 @@ function onClusterToggle(){
   updateFormula();
 }
 
+function onItemToggle(){
+  const active=document.getElementById('itemActive').checked;
+  ST.item.active=active;
+  document.getElementById('itemBody').style.display=active?'flex':'none';
+  renderRETab();
+  updateFormula();
+}
+
 // ────────────────────────────────────────────────────────────
 // DATA GENERATION
 // ────────────────────────────────────────────────────────────
@@ -1405,6 +1516,19 @@ function generateAndRender(){
   const genSlopeFactor=allGenFactors.find(f=>f.id===slopeOnId)||allGenFactors[0]||null;
   const hasSlopes=clActive&&clTau1>0&&genSlopeFactor!=null;
 
+  // Crossed item random intercepts: unlike the cluster RE above (subjects NESTED in
+  // clusters), each item appears once per subject × within-level — fully CROSSED, not
+  // nested. That forces long-format output (see buildItemColName usage below), since a
+  // single wide row per subject can no longer hold "the" value for a within-level once
+  // there are multiple item-repetitions of it.
+  const itemActive=ST.item.active;
+  const itemName=document.getElementById('itemName')?.value||'item';
+  const itemK=itemActive?Math.max(2,+(document.getElementById('itemK')?.value||10)):1;
+  const itemTau0=+(document.getElementById('itemTau0')?.value||0.3);
+  let itemEffects=itemActive?Array.from({length:itemK},()=>rNorm()*itemTau0):[0];
+  if(itemActive&&ST.exactMode) itemEffects=rescaleExact1D(itemEffects,0,itemTau0);
+  const itemLabel=j=>'I'+(j+1);
+
   const bRows=hasB?bCells:[[]];
   const data=[];
   let subjId=0;   // global subject counter → id column (matches faux::sim_design behaviour)
@@ -1433,6 +1557,35 @@ function generateAndRender(){
     }
   }
   let grpCounter=0, obsInGrp=0, nPerGrp=Math.ceil(n/clK);
+  // "Cluster-randomized": each cluster belongs entirely to ONE between-cell (e.g. a
+  // school is wholly in the intervention or control arm) instead of clusters cycling
+  // continuously across ALL between-cells (which lets the same school contain subjects
+  // from every condition — individual randomization within cluster, a different, also
+  // valid design, but not what "cluster-randomized" means). clRangeStart/End restrict
+  // grpCounter's wraparound to the current between-cell's own slice of the k cluster
+  // indices; nextClusterLabel() is the single place that advances/wraps it, used by
+  // every branch below instead of each duplicating the wrap arithmetic.
+  const clRandomized=clActive&&hasB&&!!document.getElementById('clusterRandomized')?.checked;
+  let clRangeStart=0, clRangeEnd=clK;
+  function setClusterRangeForCell(bIdx){
+    if(!clRandomized) return;
+    clRangeStart=Math.floor(bIdx*clK/bRows.length);
+    clRangeEnd=Math.max(clRangeStart+1,Math.floor((bIdx+1)*clK/bRows.length));
+    grpCounter=clRangeStart; obsInGrp=0;
+    nPerGrp=Math.ceil(n/(clRangeEnd-clRangeStart));
+  }
+  function nextClusterLabel(){
+    if(!clActive) return null;
+    const label='G'+(grpCounter+1);
+    obsInGrp++;
+    if(obsInGrp>=nPerGrp){
+      grpCounter=clRandomized
+        ? ((grpCounter+1-clRangeStart)%(clRangeEnd-clRangeStart))+clRangeStart
+        : (grpCounter+1)%clK;
+      obsInGrp=0;
+    }
+    return label;
+  }
 
   // ── Pre-generate covariate z-scores (correlated if ρ ≠ 0) ────
   const nCovs=ST.covariates.length;
@@ -1453,6 +1606,7 @@ function generateAndRender(){
 
   for(const bc of bRows){
     const bk=cellKey(bc);
+    setClusterRangeForCell(bRows.indexOf(bc));
 
     if(!hasW){
       // No within factor — sample n obs per between cell
@@ -1474,22 +1628,31 @@ function generateAndRender(){
       const isAdditiveB=(lik==='gaussian'||lik==='student'||lik==='lognormal');
       const cellNoiseB=[], cellRowsB=[], cellReslopeB=[];
       for(let i=0;i<n;i++){
-        const row={id:++subjId};
-        if(clActive){row[cleanR(clName)]='G'+(grpCounter+1);obsInGrp++;if(obsInGrp>=nPerGrp){grpCounter=(grpCounter+1)%clK;obsInGrp=0;}}
-        ST.between.forEach((f,fi)=>row[cleanR(f.name)]=bc[fi]);
+        subjId++;
+        const clusterLabel=nextClusterLabel();
         const re=clActive?(grpEffects[grpCounter]||0):0;
         const slope=hasSlopes?(slopeEffects[grpCounter]||0)*bSlopeCode:0;
-        if(isAdditiveB){
-          const noise=lik==='student'?rStudentT(extra.nu||4)*sd:rNorm()*sd;
-          cellNoiseB.push(noise); cellReslopeB.push(re+slope); cellRowsB.push(row);
-        } else {
-          row.Y=samplePoint(mu+re+slope, lik, extra, sd);
-        }
-        ST.covariates.forEach((cov,ci)=>{
+        const covVals=ST.covariates.map((cov,ci)=>{
           const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
-          row[cleanR(cov.name)]=cmu+(covZ[ci]?.[subjId-1]||0);
+          return cmu+(covZ[ci]?.[subjId-1]||0);
         });
-        data.push(row);
+        // Item loop: itemK=1 (no Item column) when the crossed item factor is off —
+        // that degenerates to exactly one row per subject, identical to pre-item behaviour.
+        for(let j=0;j<itemK;j++){
+          const row={id:subjId};
+          if(clActive) row[cleanR(clName)]=clusterLabel;
+          ST.between.forEach((f,fi)=>row[cleanR(f.name)]=bc[fi]);
+          if(itemActive) row[cleanR(itemName)]=itemLabel(j);
+          const itemEff=itemEffects[j]||0;
+          if(isAdditiveB){
+            const noise=lik==='student'?rStudentT(extra.nu||4)*sd:rNorm()*sd;
+            cellNoiseB.push(noise); cellReslopeB.push(re+slope+itemEff); cellRowsB.push(row);
+          } else {
+            row.Y=samplePoint(mu+re+slope+itemEff, lik, extra, sd);
+          }
+          ST.covariates.forEach((cov,ci)=>row[cleanR(cov.name)]=covVals[ci]);
+          data.push(row);
+        }
       }
       if(isAdditiveB){
         let noiseVals=cellNoiseB;
@@ -1533,13 +1696,90 @@ function generateAndRender(){
       // (0, tau0) above), then recombine — analogous to the between/no-factor branch above,
       // so cluster variance never gets absorbed into the within-level sd target.
       const isAdditiveW=(lik==='gaussian'||lik==='student'||lik==='lognormal');
+
+      if(itemActive){
+        // Crossed items force long-format output: each (subject, item) pair is now its
+        // own TRIAL, and gets its own fresh within-level innovation draw — items simply
+        // add more trials per subject, each still respecting the configured within-level
+        // correlation structure. (Without items there's exactly one trial per subject,
+        // which is the wide-format branch below.)
+        const innovBuffersW=isAdditiveW?wf.levels.map(()=>[]):null;
+        const reslopeBufW=isAdditiveW?[]:null;   // per trial: array of k values
+        const trialRowsW=isAdditiveW?[]:null;    // per trial: array of k row refs (one per level)
+
+        for(let obs=0;obs<n;obs++){
+          subjId++;
+          const clusterLabel=nextClusterLabel();
+          const re=clActive?(grpEffects[grpCounter]||0):0;
+          const u1=hasSlopes?(slopeEffects[grpCounter]||0):0;
+          const idDev=hasIdSlope?wf.levels.map((_,wi)=>wi===0?0:rNorm()*idTau1):null;
+          const covVals=ST.covariates.map((cov,ci)=>{
+            const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
+            return cmu+(covZ[ci]?.[subjId-1]||0);
+          });
+
+          for(let j=0;j<itemK;j++){
+            const itemEff=itemEffects[j]||0;
+            const baseRow={id:subjId};
+            if(clActive) baseRow[cleanR(clName)]=clusterLabel;
+            ST.between.forEach((f,fi)=>baseRow[cleanR(f.name)]=bc[fi]);
+            baseRow[cleanR(itemName)]=itemLabel(j);
+            ST.covariates.forEach((cov,ci)=>baseRow[cleanR(cov.name)]=covVals[ci]);
+
+            if(isAdditiveW){
+              const trialRows=wf.levels.map(lv=>({...baseRow,[cleanR(wf.name)]:lv}));
+              trialRowsW.push(trialRows);
+              reslopeBufW.push(wf.levels.map((_,wi)=>{
+                const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
+                return re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff;
+              }));
+              if(lik==='gaussian'){
+                const z=Array.from({length:k},()=>rNorm());
+                wf.levels.forEach((lv,wi)=>{
+                  let innov=0;
+                  for(let jj=0;jj<=wi;jj++) innov+=L[wi][jj]*z[jj];
+                  innovBuffersW[wi].push(innov);
+                });
+              } else {
+                wf.levels.forEach((lv,wi)=>{
+                  const noise=lik==='student'?rStudentT(extra.nu||4)*sds[wi]:rNorm()*sds[wi];
+                  innovBuffersW[wi].push(noise);
+                });
+              }
+            } else {
+              wf.levels.forEach((lv,wi)=>{
+                const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
+                const row={...baseRow,[cleanR(wf.name)]:lv};
+                row.Y=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff, lik, extra, sds[wi]);
+                data.push(row);
+              });
+            }
+          }
+        }
+
+        if(isAdditiveW){
+          let innov=innovBuffersW;
+          if(ST.exactMode){
+            innov=lik==='gaussian'
+              ? rescaleExactMulti(innovBuffersW,means.map(()=>0),sds,corrMat)
+              : wf.levels.map((_,wi)=>rescaleExact1D(innovBuffersW[wi],0,sds[wi]));
+          }
+          trialRowsW.forEach((trialRows,tIdx)=>{
+            trialRows.forEach((row,wi)=>{
+              const v=means[wi]+reslopeBufW[tIdx][wi]+innov[wi][tIdx];
+              row.Y=lik==='lognormal'?Math.exp(v):v;
+              data.push(row);
+            });
+          });
+        }
+      } else {
       const innovBuffersW=isAdditiveW?wf.levels.map(()=>[]):null;
       const reslopeBufW=isAdditiveW?[]:null;
       const rowsW=isAdditiveW?[]:null;
 
       for(let obs=0;obs<n;obs++){
         const row={id:++subjId};
-        if(clActive){row[cleanR(clName)]='G'+(grpCounter+1);obsInGrp++;if(obsInGrp>=nPerGrp){grpCounter=(grpCounter+1)%clK;obsInGrp=0;}}
+        if(clActive) row[cleanR(clName)]=nextClusterLabel();
         ST.between.forEach((f,fi)=>row[cleanR(f.name)]=bc[fi]);
         const re=clActive?(grpEffects[grpCounter]||0):0;
         const u1=hasSlopes?(slopeEffects[grpCounter]||0):0;
@@ -1600,29 +1840,48 @@ function generateAndRender(){
           });
         });
       }
+      }
     }
   }
 
-  // Build column names — id first (matches faux::sim_design output)
+  // Build column names — id first (matches faux::sim_design output). Item-crossing
+  // forces long-format columns (within-factor as a real column, not one column per
+  // level) since a wide row can no longer hold "the" value for a level once there are
+  // multiple item-repetitions of it.
   const colNames=['id'];
   if(clActive) colNames.push(cleanR(clName));
   ST.between.forEach(f=>colNames.push(cleanR(f.name)));
-  if(hasW) ST.within[0].levels.forEach(lv=>colNames.push(lv));
-  else colNames.push('Y');
+  if(hasW){
+    if(itemActive){
+      colNames.push(cleanR(ST.within[0].name));
+      colNames.push(cleanR(itemName));
+      colNames.push('Y');
+    } else {
+      ST.within[0].levels.forEach(lv=>colNames.push(lv));
+    }
+  } else {
+    if(itemActive) colNames.push(cleanR(itemName));
+    colNames.push('Y');
+  }
   ST.covariates.forEach(cov=>colNames.push(cleanR(cov.name)));
 
-  const rCode=buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,genSlopeFactor);
+  const rCode=buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,genSlopeFactor,itemActive,itemName,itemK,itemTau0,clRandomized);
   const csv=buildCSV(data,colNames);
-  ST.generated={data,colNames,csv,rCode,hasW};
+  ST.generated={data,colNames,csv,rCode,hasW,itemActive};
 
   renderTable(data,colNames);
   renderDescStats(data,colNames);
-  renderPlot(data,colNames,hasB,hasW);
+  renderPlot(data,colNames,hasB,hasW,itemActive);
   document.getElementById('rArea').innerHTML=highlightR(rCode);
   document.getElementById('plotSection').style.display='block';
   document.getElementById('tableSection').style.display='block';
   document.getElementById('csvWideBtn').disabled=false;
-  if(hasW){document.getElementById('csvLongBtn').style.display='';document.getElementById('csvLongBtn').disabled=false;}
+  // Item-crossing forces long-format data — there's no separate "wide" layout to export,
+  // so collapse the two CSV buttons into one plain download rather than offering a
+  // "CSV Long" that would just duplicate the "CSV Wide" button's output.
+  document.getElementById('csvWideBtn').textContent=itemActive?'⬇ CSV':'⬇ CSV Wide';
+  if(hasW&&!itemActive){document.getElementById('csvLongBtn').style.display='';document.getElementById('csvLongBtn').disabled=false;}
+  else document.getElementById('csvLongBtn').style.display='none';
   updatePlotSelectors();
   document.getElementById('seedVal').value = seed + 1;
   showToast(`✓ ${data.length} rows generated (seed: ${seed})`);
@@ -1727,9 +1986,9 @@ function _renderDescTable(data,numCols){
 // ────────────────────────────────────────────────────────────
 function updatePlot(){
   if(!ST.generated) return;
-  const {data,colNames,hasW}=ST.generated;
+  const {data,colNames,hasW,itemActive}=ST.generated;
   const hasB=ST.between.length>0;
-  renderPlot(data,colNames,hasB,hasW);
+  renderPlot(data,colNames,hasB,hasW,itemActive);
 }
 
 // Populate plot control selectors based on current factor configuration.
@@ -1785,7 +2044,7 @@ function pct(arr,p){
   return lo===hi?s[lo]:s[lo]*(hi-i)+s[hi]*(i-lo);
 }
 
-function renderPlot(data,colNames,hasB,hasW){
+function renderPlot(data,colNames,hasB,hasW,itemActive){
   const svg=document.getElementById('plotSvg');
   const W=svg.getBoundingClientRect().width||700, H=260;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
@@ -1827,7 +2086,7 @@ function renderPlot(data,colNames,hasB,hasW){
   let html=`<rect width="${W}" height="${H}" fill="${bg}"/>`;
   html+=se('rect',{x:pad.l,y:pad.t,width:pw,height:ph,fill:bg,stroke:grid,'stroke-width':1});
 
-  if(hasW){
+  if(hasW&&!itemActive){
     // Within factor: line plot per between combination
     const wf=ST.within[0];
     const lvls=wf.levels;
@@ -1964,6 +2223,54 @@ function renderPlot(data,colNames,hasB,hasW){
       html+=se('text',{x:pad.l+pw/2,y:H-5,'text-anchor':'middle',fill:ink2,'font-size':11,'font-family':'DM Mono,monospace'},esc(wf.name));
     }
 
+  } else if(hasW&&itemActive){
+    // Simplified plot for crossed items: box + jitter per (within-level × between-group),
+    // aggregated over item-repetitions. The long-format item data (one row per
+    // subject × level × item) doesn't fit the ribbon-plot machinery above, which reads
+    // per-level values directly off wide columns (r[level]) — this branch reads the
+    // level from an actual column instead, generically, same as the hasB-only branch below.
+    const wf=ST.within[0];
+    const lvls=wf.levels;
+    const wfNameR=cleanR(wf.name);
+    const bCellArrays=buildGroupArrays();
+    const slotW=pw/(lvls.length+1);
+    const boxW=slotW/((bCellArrays.length||1)+1);
+    const allVals=data.map(r=>r.Y).filter(v=>typeof v==='number'&&isFinite(v));
+    const ymn=Math.min(...allVals), ymx=Math.max(...allVals);
+    const yRange=ymx-ymn||1;
+    const ymn2=ymn-yRange*.08, ymx2=ymx+yRange*.08;
+    const scY=v=>pad.t+ph*(1-(v-ymn2)/(ymx2-ymn2||1));
+
+    lvls.forEach((lv,li)=>{
+      const xCenter=pad.l+slotW*(li+1);
+      bCellArrays.forEach((bc,gi)=>{
+        const col=colors[gi%colors.length];
+        const cx=bCellArrays.length>1?xCenter+(gi-(bCellArrays.length-1)/2)*(boxW+2):xCenter;
+        const filt=makeGroupFilter(bc);
+        const vals=data.filter(r=>filt(r)&&String(r[wfNameR])===String(lv)).map(r=>r.Y).filter(v=>typeof v==='number'&&isFinite(v));
+        if(!vals.length)return;
+        const sv=[...vals].sort((a,b)=>a-b);
+        const q1=sv[Math.floor(sv.length*.25)], med=sv[Math.floor(sv.length*.5)], q3=sv[Math.floor(sv.length*.75)];
+        const bxw=boxW*.7;
+        html+=se('line',{x1:cx,y1:scY(sv[0]),x2:cx,y2:scY(q1),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
+        html+=se('line',{x1:cx,y1:scY(q3),x2:cx,y2:scY(sv[sv.length-1]),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
+        html+=se('rect',{x:cx-bxw/2,y:scY(q3),width:bxw,height:scY(q1)-scY(q3),fill:col,opacity:.25,stroke:col,'stroke-width':1.5});
+        html+=se('line',{x1:cx-bxw/2,y1:scY(med),x2:cx+bxw/2,y2:scY(med),stroke:col,'stroke-width':2.5});
+        sv.filter((_,j)=>j%Math.ceil(sv.length/40)===0).forEach(v=>{
+          html+=se('circle',{cx:cx+(_rng()-.5)*bxw*.7,cy:scY(v),r:2,fill:col,opacity:.4});
+        });
+        if(hasB&&bc&&li===lvls.length-1)
+          html+=se('text',{x:cx+8,y:scY(med)+4,fill:col,'font-size':8,'font-family':'DM Mono,monospace'},esc(groupLabel(bc)));
+      });
+      html+=se('text',{x:xCenter,y:pad.t+ph+14,'text-anchor':'middle',fill:ink3,'font-size':10,'font-family':'DM Mono,monospace'},esc(lv));
+    });
+    html+=se('text',{x:pad.l+4,y:pad.t+11,fill:ink3,'font-size':9,'font-family':'DM Mono,monospace'},'Boxplot per condition — aggregated over items');
+    [0,.25,.5,.75,1].forEach(tick=>{
+      const y=pad.t+ph-tick*ph, v=ymn2+tick*(ymx2-ymn2);
+      html+=se('text',{x:pad.l-4,y:y+4,'text-anchor':'end',fill:ink3,'font-size':10,'font-family':'DM Mono,monospace'},v.toFixed(2));
+    });
+    html+=se('text',{x:pad.l+pw/2,y:H-5,'text-anchor':'middle',fill:ink2,'font-size':11,'font-family':'DM Mono,monospace'},esc(wf.name));
+
   } else if(hasB){
     // Between factor only — X-axis = xFactor, grouped by grpFactor (if different and selected)
     const f=xFactor||ST.between[0];
@@ -2068,7 +2375,31 @@ function cv(n){return getComputedStyle(document.documentElement).getPropertyValu
 // ────────────────────────────────────────────────────────────
 // R CODE GENERATION
 // ────────────────────────────────────────────────────────────
-function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1=0,clRho01=0,clSlopeFactor=null){
+// Cluster-randomized assignment: each cluster belongs entirely to ONE between-cell
+// (instead of being scattered randomly across all cells) — for classic cluster-randomized
+// designs (e.g. whole school = intervention/control). Splits the k clusters evenly across
+// the between-cells (the same floor(idx*k/nCells) boundary as the live preview in
+// generateAndRender()/nextClusterLabel()) and distributes them round-robin across the
+// subjects within their own cell range.
+function pushClusterRandomizedAssignLines(lines,dfName,clNameR,bNamesR,nCells){
+  lines.push(`# Cluster-randomized: each cluster belongs entirely to one between-cell`);
+  lines.push(`# (${bNamesR.join(' × ')}) — the ${nCells} cells split the k clusters evenly`);
+  lines.push(`# among themselves, no cluster appears in more than one cell.`);
+  const groupCols=bNamesR.map(n=>`"${n}"`).join(', ');
+  lines.push(`n_cells <- ${nCells}`);
+  lines.push(`${dfName} <- ${dfName} |>`);
+  lines.push(`  group_by(across(all_of(c(${groupCols})))) |>`);
+  lines.push(`  mutate(`);
+  lines.push(`    .cell_idx = cur_group_id() - 1,`);
+  lines.push(`    .cl_from  = floor(.cell_idx * k / n_cells),`);
+  lines.push(`    .cl_to    = pmax(.cl_from + 1, floor((.cell_idx + 1) * k / n_cells)),`);
+  lines.push(`    ${clNameR} = factor(paste0("${clNameR}", .cl_from + ((row_number() - 1) %% (.cl_to - .cl_from)) + 1))`);
+  lines.push(`  ) |>`);
+  lines.push(`  ungroup() |>`);
+  lines.push(`  select(-.cell_idx, -.cl_from, -.cl_to)`);
+}
+
+function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1=0,clRho01=0,clSlopeFactor=null,itemActive=false,itemName='item',itemK=10,itemTau0=0.3,clRandomized=false){
   const lines=[];
   const bNames=ST.between.map(f=>f.name);          // display names (Kommentare, UI)
   const bNamesR=ST.between.map(f=>cleanR(f.name)); // sanitized for R code
@@ -2078,10 +2409,11 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   const clNameR=cleanR(clName);
   const sfNameR=clSlopeFactor?cleanR(clSlopeFactor.name):null;
   const nTotal=hasB?(n*bCells.length):n;
+  const bRowsAll=hasB?bCells:[[]]; // between-cells in the same order as crossProduct()/nextClusterLabel()
 
   lines.push('# ══════════════════════════════════════════════════════');
   lines.push('# Data Creator — Bayes Thinking Lab');
-  lines.push(`# Design: ${hasB?'Between: '+bNames.join(' × '):''}${hasW?' | Within: '+wf.name+' ('+wNames.join(',')+')':', kein Within-Faktor'}`);
+  lines.push(`# Design: ${hasB?'Between: '+bNames.join(' × '):''}${hasW?' | Within: '+wf.name+' ('+wNames.join(',')+')':', no within factor'}${clActive?' | Cluster: '+clName+' (nested, k='+clK+')':''}${itemActive?' | Item: '+itemName+' (crossed, k='+itemK+')':''}`);
   lines.push(`# Likelihood: ${lik} | n pro Zelle: ${n} | seed: ${seed}`);
   lines.push('# ══════════════════════════════════════════════════════');
   lines.push('');
@@ -2198,7 +2530,9 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       } else {
         lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
       }
-      if(ST.exactMode){
+      if(clRandomized){
+        pushClusterRandomizedAssignLines(lines,'dat_wide',clNameR,bNamesR,bRowsAll.length);
+      } else if(ST.exactMode){
         lines.push(`# Balanced (instead of random) cluster assignment — needed so the exact`);
         lines.push(`# Random-Intercept statistics (u0) also show up exactly in the final`);
         lines.push(`# η/Y mean (unequal cluster sizes would dilute this).`);
@@ -2259,7 +2593,10 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     // sim_design() always generates normally distributed η values (Gaussian approximation).
     // Cluster REs have already been added on the η scale.
     // Afterwards: replace each column with target likelihood (unless Gaussian).
-    if(lik==='student'){
+    // When items are active: do NOT transform here (dat_wide stays on the η scale) — the
+    // transformation happens further below AFTER pivot_longer + item expansion, so that
+    // v_l (item random effect) gets added on the same η scale as cluster/slope terms.
+    if(!itemActive&&lik==='student'){
       // Student-t via Probability Integral Transform (PIT): pnorm(η) → qt(..., df=ν)
       // NOTE: This approach transforms the marginal distribution to t(ν), but slightly
       // shifts the variance structure of the correlation matrix.
@@ -2271,7 +2608,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push('# transforms marginal distribution to t, preserving rank correlations.');
       lines.push(`dat_wide <- dat_wide |>`);
       lines.push(`  mutate(across(c(${wNames.map(l=>`"${l}"`).join(', ')}), ${lambda}))`);
-    } else if(lik!=='gaussian'){
+    } else if(!itemActive&&lik!=='gaussian'){
       const lambda=rTransformLambda(lik,extra);
       if(lambda){
         lines.push('');
@@ -2322,6 +2659,54 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     if(hasB) ST.between.forEach((f,fi)=>{
       lines.push(`dat_long$${bNamesR[fi]} <- factor(dat_long$${bNamesR[fi]})`);
     });
+
+    if(itemActive){
+      const itemNameR=cleanR(itemName);
+      lines.push('');
+      lines.push('# ── Item random effects (crossed, AFTER pivot_longer!) ─────────');
+      lines.push('# Every item appears for every subject/condition — true cross-classification,');
+      lines.push('# unlike the nested cluster above. Y is still η (model scale) here; the');
+      lines.push('# transformation to the target likelihood happens afterwards, so v_l gets');
+      lines.push('# added on η just like the other random effects.');
+      lines.push(`k_item   <- ${itemK}`);
+      lines.push(`tau_item <- ${itemTau0}   # item random-intercept SD`);
+      if(ST.exactMode){
+        lines.push(`item_effects <- setNames(exact_mean_sd(rnorm(k_item), 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
+      } else {
+        lines.push(`item_effects <- setNames(rnorm(k_item, 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
+      }
+      lines.push('dat_long <- dat_long |>');
+      lines.push('  slice(rep(1:n(), each = k_item)) |>');
+      lines.push('  mutate(');
+      lines.push(`    ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
+      lines.push(`    Y = Y + unname(item_effects[as.character(${itemNameR})])`);
+      lines.push('  )');
+
+      if(lik==='student'){
+        const lambda=rTransformLambda('student',extra);
+        lines.push('');
+        lines.push('# ── Student-t transformation (PIT), after item expansion ───────');
+        lines.push(`# Grouped by condition so mean(Y)/sd(Y)/n() apply correctly per level`);
+        lines.push('# (analogous to the wide-column variant without items).');
+        lines.push('dat_long <- dat_long |>');
+        lines.push(`  group_by(${wfNameR}) |>`);
+        lines.push(`  mutate(Y = (${lambda})(Y)) |>`);
+        lines.push('  ungroup()');
+      } else if(lik!=='gaussian'){
+        const lambda=rTransformLambda(lik,extra);
+        if(lambda){
+          lines.push('');
+          lines.push('# ── η → target likelihood transformation, after item expansion ───');
+          lines.push('# Grouped by condition so n() (and mean/sd for Student) apply correctly');
+          lines.push('# per level (analogous to the wide-column variant without items).');
+          lines.push('dat_long <- dat_long |>');
+          lines.push(`  group_by(${wfNameR}) |>`);
+          lines.push(`  mutate(Y = (${lambda})(Y)) |>`);
+          lines.push('  ungroup()');
+        }
+      }
+    }
+
     lines.push('');
     lines.push('# ── Long → Wide (back, if needed) ──────────────────');
     lines.push('# dat_wide2 <- pivot_wider(dat_long,');
@@ -2386,6 +2771,47 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push(')');
   }
 
+  // Item random effects (crossed, NO within factor) — must run AFTER the cluster
+  // resolution below (Y is already final there), which is unproblematic for additive
+  // scales (gaussian/student: identity link, "+ item_effects" is exactly equivalent to
+  // injecting on η). For non-additive families (Bernoulli/Poisson/…) WITH an active
+  // cluster, Y at that point would already be a drawn, discrete sample — item effects
+  // would need to be injected BEFORE the cluster η→Y resolution. This one special case
+  // is deliberately left as a note only (the live preview/CSV above simulate it correctly).
+  if(itemActive&&!hasW){
+    const itemNameR=cleanR(itemName);
+    const identityOk=isIdentityLink(lik);
+    const problematicCombo=clActive&&!identityOk;
+    lines.push('');
+    lines.push('# ── Item random effects (crossed, no within factor) ─────────');
+    lines.push('# Every item appears for every subject — true cross-classification.');
+    lines.push(`k_item   <- ${itemK}`);
+    lines.push(`tau_item <- ${itemTau0}   # item random-intercept SD`);
+    lines.push(ST.exactMode
+      ? `item_effects <- setNames(exact_mean_sd(rnorm(k_item), 0, tau_item), paste0("${itemNameR}", 1:k_item))`
+      : `item_effects <- setNames(rnorm(k_item, 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
+    if(problematicCombo){
+      lines.push(`# ⚠ Cluster + item together with a non-additive family (${lik}) require`);
+      lines.push('# reordering: Y above is already a drawn, discrete sample — item effects');
+      lines.push('# would need to be added to .eta BEFORE "Y = ' + rYFromEtaCol(lik,extra).slice(0,40) + '…" in the');
+      lines.push('# cluster section above. Left commented out instead of generated incorrectly —');
+      lines.push('# the live preview/CSV above already simulate this case correctly.');
+      lines.push('# dat <- dat |>');
+      lines.push('#   slice(rep(1:n(), each = k_item)) |>');
+      lines.push('#   mutate(');
+      lines.push(`#     ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
+      lines.push(`#     Y = Y + unname(item_effects[as.character(${itemNameR})])  # wrong for non-additive Y!`);
+      lines.push('#   )');
+    } else {
+      lines.push('dat <- dat |>');
+      lines.push('  slice(rep(1:n(), each = k_item)) |>');
+      lines.push('  mutate(');
+      lines.push(`    ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
+      lines.push(`    Y = Y + unname(item_effects[as.character(${itemNameR})])`);
+      lines.push('  )');
+    }
+  }
+
   // Cluster for between-only or no-factor designs (hasW case handled above, inside wide block)
   if(clActive&&!hasW){
     lines.push('');
@@ -2403,7 +2829,9 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     } else {
       lines.push(`u0   <- setNames(rnorm(k, 0, tau0), paste0("${clNameR}", 1:k))`);
     }
-    if(ST.exactMode){
+    if(clRandomized){
+      pushClusterRandomizedAssignLines(lines,'dat',clNameR,bNamesR,bRowsAll.length);
+    } else if(ST.exactMode){
       lines.push(`# Balanced (instead of random) cluster assignment — needed so the exact`);
       lines.push(`# Random-Intercept statistics (u0) also show up exactly in the final`);
       lines.push(`# η/Y mean (unequal cluster sizes would dilute this).`);
@@ -2487,11 +2915,11 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
 
   lines.push('');
   lines.push('# ── Model formula ────────────────────────────────────────');
-  lines.push(`# lme4: ${document.getElementById('formulaLme4').textContent}`);
+  lines.push(`# ${document.getElementById('formulaLme4Prefix').textContent} ${document.getElementById('formulaLme4').textContent}${document.getElementById('formulaLme4Family').textContent}`);
   lines.push(`# brms: ${document.getElementById('formulaBrms').textContent}`);
 
   // ── Auskommentierter Power-Simulations-Block ──────────────
-  const pwLines=buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor);
+  const pwLines=buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor,itemActive,clRandomized);
   if(pwLines.length){
     lines.push('');
     pwLines.forEach(l=>lines.push(l));
@@ -2631,7 +3059,7 @@ function buildCovAssignment(cov,cR,datObjName,bNamesR,zExpr){
 // ────────────────────────────────────────────────────────────
 // POWER-SIMULATIONS R-CODE (auskommentiert)
 // ────────────────────────────────────────────────────────────
-function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor=null){
+function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor=null,itemActive=false,clRandomized=false){
   const L=[];
   const wf=hasW?ST.within[0]:null;
   const wNames=wf?wf.levels:[];
@@ -2746,6 +3174,22 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   L.push('# Likelihood (glmmTMB): '+rFamily);
   L.push('# ════════════════════════════════════════════════════════');
   L.push('#');
+  if(itemActive){
+    L.push('# ⚠ This power-sim block does NOT yet know about the item factor (crossed');
+    L.push('# random effects) — sim_data_one() below only simulates the subject/cluster');
+    L.push('# level. For a power analysis WITH item cross-classification: extend');
+    L.push('# sim_data_one() analogous to the item injection above (after pivot_longer)');
+    L.push('# and add "(1 | '+cleanR(document.getElementById('itemName')?.value||'item')+')" to the formula.');
+    L.push('#');
+  }
+  if(clRandomized){
+    L.push('# ⚠ This power-sim block does NOT yet know about "Cluster-randomized" — the');
+    L.push('# cluster assignment below (sample()/rep()) still scatters across all');
+    L.push('# between-cells. For a power analysis with TRUE cluster randomization,');
+    L.push('# replace the assignment analogous to the main code generated above (the');
+    L.push('# pushClusterRandomizedAssignLines block) so each cluster belongs to only one group.');
+    L.push('#');
+  }
   L.push('# library(glmmTMB)');
   L.push('# library(car)          # Wald-Tests: car::Anova()');
   L.push('# library(future.apply)   # optional — for parallel execution');
@@ -3273,7 +3717,9 @@ function buildCSV(data,colNames){
 }
 
 function buildLongCSV(data,colNames){
-  if(!ST.generated?.hasW) return buildCSV(data,colNames);
+  // Item-crossing already forces long-format data (see colNames/generateAndRender) —
+  // there's no separate wide layout to pivot from here.
+  if(!ST.generated?.hasW||ST.generated?.itemActive) return buildCSV(data,colNames);
   const wf=ST.within[0];
   const wLvls=wf.levels;
   const nonWide=colNames.filter(c=>!wLvls.includes(c));
@@ -3298,7 +3744,7 @@ function downloadCSV(format){
   const lik=document.getElementById('likSel').value;
   const n=+(document.getElementById('nPerCell').value)||50;
   const csv=format==='long'?buildLongCSV(data,colNames):buildCSV(data,colNames);
-  const fname=`${lik}_n${n}_${format}.csv`;
+  const fname=`${lik}_n${n}_${ST.generated?.itemActive?'long':format}.csv`;
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download=fname; a.click();
