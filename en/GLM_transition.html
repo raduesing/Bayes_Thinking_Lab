@@ -73,10 +73,19 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
 
 /* NARRATIVE */
 .narr{background:var(--paper);border:1px solid var(--border);
-  padding:.7rem 1.1rem;margin-bottom:1px;font-family:'DM Mono',monospace;
+  padding:.7rem 1.1rem;margin-bottom:1.5rem;font-family:'DM Mono',monospace;
   font-size:.75rem;color:var(--ink2);line-height:1.8}
 .narr b{color:var(--ink)}.narr em{color:var(--a3);font-style:normal}
 .narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.35rem}
+/* Labeled-row layout for the scenario narrative (Example/Predictor/The Problem/
+   The Solution) — was one undifferentiated prose block, now mirrors the row-table
+   structure from the reference mockup. */
+.narr-rows{display:flex;flex-direction:column}
+.narr-row{display:grid;grid-template-columns:8em 1fr;gap:.3rem 1rem;padding:.5rem 0}
+.narr-row+.narr-row{border-top:1px solid var(--grid)}
+.narr-row-lbl{font-weight:600;color:var(--ink)}
+.narr-row-body{color:var(--ink2)}
+@media(max-width:700px){.narr-row{grid-template-columns:1fr}}
 .ntag{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;
   text-transform:uppercase;padding:.1rem .38rem;border:1px solid;white-space:nowrap}
 .ntag.c6{border-color:var(--a3);color:var(--a3)}
@@ -132,17 +141,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 
 /* INTRO STRIP */
 .intro-strip{background:var(--paper);border:1px solid var(--border);
-  padding:.75rem 1rem .65rem;margin-bottom:1px}
+  padding:.75rem 1rem .65rem;margin-bottom:1.5rem}
 .intro-badge{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--a3);border:1px solid var(--a3);
   padding:.08rem .38rem;display:inline-block;margin-bottom:.4rem}
 .intro-main{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);
   line-height:1.65;margin-bottom:.45rem}
 .intro-main b{color:var(--ink)}
-.intro-pills{display:flex;gap:3px;flex-wrap:wrap}
-.intro-pill{font-family:'DM Mono',monospace;font-size:.72rem;padding:.15rem .55rem;
-  border:1px solid var(--border);color:var(--ink2);background:var(--panel)}
-.intro-pill .sn{color:var(--a5);margin-right:.3rem;font-weight:600;font-size:1.2rem;line-height:1;vertical-align:-.15em}
 
 /* STEP ROW */
 .step-row{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;
@@ -165,6 +170,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .sec-hdr-badge{font-size:.65rem;padding:.08rem .35rem;border:1px solid;white-space:nowrap}
 .sec-hdr-badge.c3{border-color:var(--a3);color:var(--a3)}
 .sec-hdr-badge.c2{border-color:var(--a2);color:var(--a2)}
+
+/* LINK FUNCTION VISUAL — connector overlay */
+.link-viz-wrap{position:relative}
+#link-connectors{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 
 /* LINK TO GLM */
 .glm-link-box{background:var(--panel);border:1.5px solid var(--a3);
@@ -257,11 +266,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     Three scenarios from body image research show what happens when you force an LM anyway —
     and how a <a class="glo-link" href="Glossar.html#gl-glm" target="_blank" title="The Generalized Linear Model extends ordinary linear regression to non-normally distributed outcomes via a distribution family, linear predictor, and link function.">GLM</a> with an appropriate distribution resolves the situation.
   </div>
-  <div class="intro-pills">
-    <span class="intro-pill"><span class="sn">①</span>Therapy outcome CBT — 0/1 → Bernoulli</span>
-    <span class="intro-pill"><span class="sn">②</span>Body checking — count data → Poisson</span>
-    <span class="intro-pill"><span class="sn">③</span>Reaction time Stroop — positively skewed → Gamma</span>
-  </div>
 </div>
 
 <!-- SCENARIO TABS -->
@@ -296,7 +300,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 <!-- NARRATIVE -->
 <div class="narr" id="narr-box">
   <div class="narr-h"><span class="ntag c1" id="narr-tag">Problem</span></div>
-  <span id="narr-text"></span>
+  <div id="narr-text"></div>
 </div>
 
 <!-- MAIN STAGE -->
@@ -414,28 +418,38 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
   What the link function does — visually
 </div>
 <div style="background:var(--paper);border:1px solid var(--border);border-top:none;margin-bottom:1px;padding:.7rem 1rem">
-  <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:.5rem;align-items:center">
-    <div>
-      <canvas id="c-link-left" height="140" style="display:block;width:100%"></canvas>
-      <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-           text-align:center;margin-top:.25rem">
-        Linear predictor η = a + b·x<br>
-        <span style="color:var(--ink2);opacity:.65">Value range: −∞ to +∞</span>
-      </div>
+  <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+       line-height:1.65;margin-bottom:.6rem;padding-bottom:.6rem;border-bottom:1px solid var(--grid)">
+    <b style="color:var(--ink)">How to read this diagram:</b> On top is the linear predictor η = a + b·x —
+    just like in ordinary linear regression, it can take any value between −∞ and +∞.
+    The link function (arrow) maps η onto the <em>valid</em> range for this distribution family
+    (below) — e.g. probabilities in (0,1) for Bernoulli, or positive values for Poisson/Gamma.
+    The five <b>colored points</b> are the same example x-values on top and below — the
+    connecting lines show directly how the link function compresses or stretches them
+    to bring them into the valid range.
+  </div>
+  <div class="link-viz-wrap">
+    <svg id="link-connectors"></svg>
+    <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+         text-align:center;margin-bottom:.3rem;position:relative;z-index:1;background:var(--paper)">
+      Linear predictor η = a + b·x
+      <span style="color:var(--ink2);opacity:.65">&nbsp;· Value range: −∞ to +∞</span>
     </div>
-    <div style="text-align:center;font-family:'DM Mono',monospace;font-size:.75rem">
-      <div style="color:var(--a3);font-size:1rem">→</div>
-      <div id="link-fn-label" style="font-size:.75rem;color:var(--a3);line-height:1.5;
-           border:1px solid var(--a3);padding:.15rem .35rem;white-space:nowrap"></div>
+    <canvas id="c-link-left" height="130" style="display:block;width:100%"></canvas>
+
+    <div style="text-align:center;font-family:'DM Mono',monospace;font-size:.75rem;
+         background:var(--paper);position:relative;z-index:1;padding:.3rem 0">
+      <div style="color:var(--a3);font-size:1.1rem;line-height:1">↓</div>
+      <div id="link-fn-label" style="display:inline-block;font-size:.75rem;color:var(--a3);line-height:1.5;
+           border:1px solid var(--a3);padding:.15rem .35rem;white-space:nowrap;background:var(--paper)"></div>
     </div>
-    <div>
-      <canvas id="c-link-right" height="140" style="display:block;width:100%"></canvas>
-      <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
-           text-align:center;margin-top:.25rem" id="link-right-label">
-        E[y] = g⁻¹(η)<br>
-        <span style="color:var(--ink2);opacity:.65">Value range: restricted</span>
-      </div>
+
+    <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);
+         text-align:center;margin-bottom:.3rem;position:relative;z-index:1;background:var(--paper)" id="link-right-label">
+      E[y] = g⁻¹(η)
+      <span style="color:var(--ink2);opacity:.65">Value range: restricted</span>
     </div>
+    <canvas id="c-link-right" height="130" style="display:block;width:100%"></canvas>
   </div>
 </div>
 
@@ -577,7 +591,12 @@ const SCENARIOS = [
     glmSolution:'<b>Logit link:</b> log(p/(1−p)) = η keeps p always in (0,1). MLE under Bernoulli likelihood.',
     residLabel:'Residuals should be normally distributed — impossible here (only 0/1)',
     narr:{tag:'c1',
-      text:'<b>Example — Therapy outcome after CBT:</b> Has someone achieved a clinically significant improvement in their body image disorder after 12 sessions of cognitive behavioural therapy? (0 = no, 1 = yes).<br><br>Predictor: therapeutic alliance (WAI-S — Working Alliance Inventory, short form, Hatcher &amp; Gillaspy 2006), <b>z-transformed</b> (x-axis: SD units). Stronger therapeutic alliance → higher success probability.<br><br><b>The problem:</b> The LM fits a straight line through 0/1 data — <em>and the line leaves the range [0,1]</em> for extreme WAI-S values. Predictions of 1.3 or −0.2 are meaningless as success probabilities.<br><br><b>The solution:</b> <a class="glo-link" href="Glossar.html#gl-logistische-regression" target="_blank" title="Logistic regression models the probability of a binary outcome as a function of predictors via the logit link." style="color:inherit">Logistic model</a> (<a class="glo-link" href="Glossar.html#gl-bernoulli" target="_blank" title="The Bernoulli distribution describes a random experiment with exactly two possible outcomes: success (p) and failure (1−p)." style="color:inherit">Bernoulli</a> + <a class="glo-link" href="Glossar.html#gl-logit" target="_blank" title="The logit is the link function of logistic regression: logit(p) = log(p/(1−p)), mapping probabilities (0,1) to the real line." style="color:inherit">logit link</a>). The S-curve always stays in (0,1). <a class="glo-link" href="Glossar.html#gl-mle" target="_blank" title="Maximum Likelihood Estimation seeks the parameter value θ̂ that maximizes the probability of the observed data." style="color:inherit">MLE</a> under Bernoulli likelihood yields a clearly better <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better." style="color:inherit">AIC</a>.'},
+      text:'<div class="narr-rows">'
+        +'<div class="narr-row"><div class="narr-row-lbl">Example</div><div class="narr-row-body">Has someone achieved a clinically significant improvement in their body image disorder after 12 sessions of cognitive behavioural therapy? (0 = no, 1 = yes).</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">Predictor</div><div class="narr-row-body">Therapeutic alliance (WAI-S — Working Alliance Inventory, short form, Hatcher &amp; Gillaspy 2006), <b>z-transformed</b> (x-axis: SD units). Stronger therapeutic alliance → higher success probability.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The problem</div><div class="narr-row-body">The LM fits a straight line through 0/1 data — <em>and the line leaves the range [0,1]</em> for extreme WAI-S values. Predictions of 1.3 or −0.2 are meaningless as success probabilities.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The solution</div><div class="narr-row-body"><a class="glo-link" href="Glossar.html#gl-logistische-regression" target="_blank" title="Logistic regression models the probability of a binary outcome as a function of predictors via the logit link." style="color:inherit">Logistic model</a> (<a class="glo-link" href="Glossar.html#gl-bernoulli" target="_blank" title="The Bernoulli distribution describes a random experiment with exactly two possible outcomes: success (p) and failure (1−p)." style="color:inherit">Bernoulli</a> + <a class="glo-link" href="Glossar.html#gl-logit" target="_blank" title="The logit is the link function of logistic regression: logit(p) = log(p/(1−p)), mapping probabilities (0,1) to the real line." style="color:inherit">logit link</a>). The S-curve always stays in (0,1). <a class="glo-link" href="Glossar.html#gl-mle" target="_blank" title="Maximum Likelihood Estimation seeks the parameter value θ̂ that maximizes the probability of the observed data." style="color:inherit">MLE</a> under Bernoulli likelihood yields a clearly better <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better." style="color:inherit">AIC</a>.</div></div>'
+        +'</div>'},
   },
   {
     id:1, name:'Body Checking (count data)',
@@ -586,7 +605,12 @@ const SCENARIOS = [
     glmSolution:'<b>Log link:</b> log(λ) = η keeps λ always > 0. Poisson likelihood fits the integer nature of the data.',
     residLabel:'Residuals often right-skewed — normal distribution assumption violated',
     narr:{tag:'c1',
-      text:'<b>Example — Body Checking:</b> How many times per day does someone inspect specific negatively rated body parts in the mirror? (0, 1, 2, …).<br><br>Predictor: severity of body image disorder (BSQ — Body Shape Questionnaire), <b>z-transformed</b> (x-axis: SD units). Higher BSQ → more frequent checking expected.<br><br><b>The problem:</b> Count data cannot be negative — but the LM can produce negative predictions, especially for small expected frequencies. Residuals are also typically right-skewed, not normally distributed.<br><br><b>The solution:</b> <a class="glo-link" href="Glossar.html#gl-poisson-verteilung" target="_blank" title="The Poisson distribution models the number of events in a fixed interval when events occur independently at a constant rate λ." style="color:inherit">Poisson model</a> with log link. λ = e^(a+b·z) is always positive. Poisson likelihood correctly models the discrete, integer nature of body checking frequency.'},
+      text:'<div class="narr-rows">'
+        +'<div class="narr-row"><div class="narr-row-lbl">Example</div><div class="narr-row-body">How many times per day does someone inspect specific negatively rated body parts in the mirror? (0, 1, 2, …).</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">Predictor</div><div class="narr-row-body">Severity of body image disorder (BSQ — Body Shape Questionnaire), <b>z-transformed</b> (x-axis: SD units). Higher BSQ → more frequent checking expected.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The problem</div><div class="narr-row-body">Count data cannot be negative — but the LM can produce negative predictions, especially for small expected frequencies. Residuals are also typically right-skewed, not normally distributed.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The solution</div><div class="narr-row-body"><a class="glo-link" href="Glossar.html#gl-poisson-verteilung" target="_blank" title="The Poisson distribution models the number of events in a fixed interval when events occur independently at a constant rate λ." style="color:inherit">Poisson model</a> with log link. λ = e^(a+b·z) is always positive. Poisson likelihood correctly models the discrete, integer nature of body checking frequency.</div></div>'
+        +'</div>'},
   },
   {
     id:2, name:'Reaction time Stroop test (ms)',
@@ -595,12 +619,45 @@ const SCENARIOS = [
     glmSolution:'<b>Gamma + log link:</b> Gamma is by definition positive and directly models right skew; log link ensures positivity.',
     residLabel:'Right-skewed LM residuals — Gamma residuals markedly more symmetric',
     narr:{tag:'c5',
-      text:'<b>Example — Reaction time in emotional Stroop test:</b> How long (ms) does someone take to name the colour of a body-related word?<br><br>Predictor: anxiety level (STAI — State-Trait Anxiety Inventory, State scale), <b>z-transformed</b> (x-axis: SD units). Higher anxiety → longer reaction time expected.<br><br><b>The problem:</b> Reaction times are always positive and typically right-skewed. The LM can produce negative predictions and residuals are systematically non-symmetric — the <a class="glo-link" href="Glossar.html#gl-normalverteilungsannahme" target="_blank" title="The formal assumption of linear OLS regression concerns the true, unobservable errors ε_i: ε_i ~ N(0, σ²)." style="color:inherit">normal distribution assumption</a> is structurally violated.<br><br><b>The solution:</b> <a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="The Gamma distribution is a continuous distribution for positive real values, parameterized by shape α and rate β." style="color:inherit">Gamma distribution</a> with log link. Gamma is by definition positive, models right skew directly, and the <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better." style="color:inherit">AIC</a> comparison shows the clear advantage over the LM.'},
+      text:'<div class="narr-rows">'
+        +'<div class="narr-row"><div class="narr-row-lbl">Example</div><div class="narr-row-body">How long (ms) does someone take to name the colour of a body-related word (emotional Stroop test)?</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">Predictor</div><div class="narr-row-body">Anxiety level (STAI — State-Trait Anxiety Inventory, State scale), <b>z-transformed</b> (x-axis: SD units). Higher anxiety → longer reaction time expected.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The problem</div><div class="narr-row-body">Reaction times are always positive and typically right-skewed. The LM can produce negative predictions and residuals are systematically non-symmetric — the <a class="glo-link" href="Glossar.html#gl-normalverteilungsannahme" target="_blank" title="The formal assumption of linear OLS regression concerns the true, unobservable errors ε_i: ε_i ~ N(0, σ²)." style="color:inherit">normal distribution assumption</a> is structurally violated.</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">The solution</div><div class="narr-row-body"><a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="The Gamma distribution is a continuous distribution for positive real values, parameterized by shape α and rate β." style="color:inherit">Gamma distribution</a> with log link. Gamma is by definition positive, models right skew directly, and the <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better." style="color:inherit">AIC</a> comparison shows the clear advantage over the LM.</div></div>'
+        +'</div>'}
   }
 ];
 
 let currentScen = 0;
 let N=50;
+
+// First 5 slots of a validated categorical ordering (blue, orange, aqua, yellow,
+// magenta), hand-picked hues having been tried and rejected: that first attempt
+// clustered three of the five in the blue/cyan/teal family, which read as nearly
+// identical at marker size. These 5 clear every pairwise contrast/CVD check
+// ADJACENT in the sequence in both themes; two non-adjacent pairs (orange-vs-
+// yellow, and in dark mode yellow-vs-red-not-present-here) can still sit close
+// for full-color viewers, which is why every point ALSO gets a number label
+// (1-5, drawn in drawLinkFn) as a color-independent secondary identity cue.
+function linkPtColors(){
+  return DARK
+    ? ['#3987e5','#d95926','#199e70','#c98500','#d55181']
+    : ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4'];
+}
+// Small "1"-"5" label next to a sample point's dot — a color-independent
+// identity cue on top of the per-point color, since two of the five hues can
+// still sit close for some viewers (see linkPtColors comment above).
+function drawPtNum(ctx,x,y,i,dy){
+  ctx.font='bold 10px DM Mono,monospace'; ctx.textAlign='center';
+  ctx.lineJoin='round'; ctx.lineWidth=3;
+  ctx.strokeStyle=DARK?'#0c0f14':'#faf6ee';
+  ctx.strokeText(i+1,x,y+dy);
+  ctx.fillStyle=DARK?'#e8e2d8':'#18130e';
+  ctx.fillText(i+1,x,y+dy);
+}
+// Canvas-local pixel positions of the 5 points on each side, refreshed every
+// drawLinkFn() call, consumed by drawLinkConnectors() right after.
+let linkVizPts = { left:[], right:[] };
 
 // ── Generate data per scenario ─────────────────────────
 function genData(){
@@ -807,18 +864,22 @@ function drawLinkFn(){
   // Left: linear predictor space (eta, unbounded)
   // Right: response space (transformed, bounded)
   const etaRange=[-4,4];
+  const sampleX=[-2,-1,0,1,2];
+  const ptColors=linkPtColors();
   const linkFns={
     0:{name:'Logit',  inv:e=>1/(1+Math.exp(-e)), yRange:[0,1], yLabel:'p ∈ (0,1)',
        formula:'g⁻¹(η) = 1/(1+e⁻η)'},
     1:{name:'Log',    inv:e=>Math.exp(e),          yRange:[0, Math.exp(4)], yLabel:'λ > 0',
-       formula:'g⁻¹(η) = eη'},
+       formula:'g⁻¹(η) = e^η'},
     2:{name:'Log',    inv:e=>Math.exp(e),           yRange:[0, Math.exp(4)], yLabel:'μ > 0',
-       formula:'g⁻¹(η) = eη'},
+       formula:'g⁻¹(η) = e^η'},
   };
   const lf=linkFns[currentScen];
   document.getElementById('link-fn-label').textContent=lf.formula;
   document.getElementById('link-right-label').innerHTML=
     'E[y] = g⁻¹(η)<br><span style="color:var(--ink2);opacity:.65">'+lf.yLabel+'</span>';
+
+  linkVizPts = { left:[], right:[] };
 
   // ── Left panel: linear predictor ──
   {
@@ -843,25 +904,35 @@ function drawLinkFn(){
       ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1.5; ctx.stroke();
     });
 
-    // Tick marks and labels
-    ctx.fillStyle=DARK?'#2a3a55':'#8a7f72'; ctx.font='13px DM Mono,monospace';
+    // Tick marks and labels — tick marks stay recessive (axis-line gray), but the
+    // label TEXT uses the much higher-contrast ink2 tone so the numbers are
+    // actually easy to read, especially in dark mode where the axis gray is
+    // nearly the same lightness as the canvas background.
+    ctx.font='bold 13px DM Mono,monospace';
     ctx.textAlign='center';
     [-4,-2,0,2,4].forEach(v=>{
       ctx.beginPath(); ctx.moveTo(toX(v),cy-3); ctx.lineTo(toX(v),cy+3);
       ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1; ctx.stroke();
-      ctx.fillText(v, toX(v), cy+12);
+      ctx.fillStyle=DARK?'#9a9080':'#5a4f42';
+      ctx.fillText(v, toX(v), cy+13);
     });
-    ctx.fillText('−∞', m.l+4, cy+12);
-    ctx.fillText('+∞', W-m.r-4, cy+12);
+    ctx.fillStyle=DARK?'#9a9080':'#5a4f42';
+    ctx.fillText('−∞', m.l+4, cy+13);
+    ctx.fillText('+∞', W-m.r-4, cy+13);
 
-    // GLM's linear predictor dots (sample x values mapped through a+b*x)
+    // GLM's linear predictor dots (sample x values mapped through a+b*x) — each
+    // sample x gets its own fixed color, matched on the right panel, so the
+    // connector lines (drawn afterwards) have an unambiguous color per point.
     if(cachedGLM){
-      const sampleX=[-2,-1,0,1,2];
-      sampleX.forEach(x=>{
+      sampleX.forEach((x,i)=>{
         const eta=cachedGLM.a+cachedGLM.b*x;
         const etaC=Math.max(etaRange[0], Math.min(etaRange[1], eta));
-        ctx.beginPath(); ctx.arc(toX(etaC),cy,5,0,Math.PI*2);
-        ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+        const px=toX(etaC);
+        ctx.beginPath(); ctx.arc(px,cy,5,0,Math.PI*2);
+        ctx.fillStyle=ptColors[i]; ctx.fill();
+        ctx.lineWidth=1.5; ctx.strokeStyle=DARK?'#0c0f14':'#faf6ee'; ctx.stroke();
+        linkVizPts.left.push({x:px,y:cy});
+        drawPtNum(ctx,px,cy,i,-11);
       });
     }
     ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
@@ -893,14 +964,16 @@ function drawLinkFn(){
       ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.font='13px DM Mono,monospace';
       ctx.textAlign='left'; ctx.fillText('0', m.l+2, barY-3);
       ctx.textAlign='right'; ctx.fillText('1', W-m.r-2, barY-3);
-      // Sample points (same x values)
+      // Sample points (same x values, same colors as left panel)
       if(cachedGLM){
-        const sampleX=[-2,-1,0,1,2];
-        sampleX.forEach(x=>{
+        sampleX.forEach((x,i)=>{
           const p=1/(1+Math.exp(-(cachedGLM.a+cachedGLM.b*x)));
-          const px=m.l+p*Wp;
-          ctx.beginPath(); ctx.arc(px, barY+barH/2, 5, 0, Math.PI*2);
-          ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+          const px=m.l+p*Wp, py=barY+barH/2;
+          ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI*2);
+          ctx.fillStyle=ptColors[i]; ctx.fill();
+          ctx.lineWidth=1.5; ctx.strokeStyle=DARK?'#0c0f14':'#faf6ee'; ctx.stroke();
+          linkVizPts.right.push({x:px,y:py});
+          drawPtNum(ctx,px,py,i,15);
         });
       }
       ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
@@ -918,25 +991,61 @@ function drawLinkFn(){
       ctx.beginPath(); ctx.moveTo(m.l,axis_y-12); ctx.lineTo(m.l,axis_y+4);
       ctx.strokeStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
       ctx.lineWidth=2; ctx.stroke();
-      // Sample dots
+      // Sample dots (same x values, same colors as left panel)
       const maxVal=Math.exp(4);
       if(cachedGLM){
-        const sampleX=[-2,-1,0,1,2];
-        sampleX.forEach(x=>{
+        sampleX.forEach((x,i)=>{
           const mu=Math.exp(cachedGLM.a+cachedGLM.b*x);
           const px=m.l+Math.min(Wp, mu/maxVal*Wp);
           ctx.beginPath(); ctx.arc(px, axis_y, 5,0,Math.PI*2);
-          ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.fill();
+          ctx.fillStyle=ptColors[i]; ctx.fill();
+          ctx.lineWidth=1.5; ctx.strokeStyle=DARK?'#0c0f14':'#faf6ee'; ctx.stroke();
+          linkVizPts.right.push({x:px,y:axis_y});
+          drawPtNum(ctx,px,axis_y,i,14);
         });
       }
       ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
       ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
-      ctx.fillText('μ = eη  > 0  (never negative)', W/2, m.t+10);
+      ctx.fillText('μ = e^η  > 0  (never negative)', W/2, m.t+10);
       ctx.fillStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
       ctx.textAlign='left';
       ctx.fillText('0 ←boundary', m.l+3, axis_y-15);
     }
   }
+
+  drawLinkConnectors(ptColors);
+}
+
+// Draws the lines linking each sample point's position in the top (eta) panel
+// to its position in the bottom (transformed) panel, in an SVG overlay spanning
+// both canvases — canvas-local pixel coordinates are converted to the overlay's
+// coordinate space via getBoundingClientRect() since the two canvases sit in
+// separate rows with an arrow/formula row between them.
+function drawLinkConnectors(ptColors){
+  // c-link-left/c-link-right are now stacked top/bottom (ids kept to avoid
+  // touching the drawing functions above, which key off them unchanged).
+  const svg=document.getElementById('link-connectors');
+  const wrap=svg.closest('.link-viz-wrap');
+  const topC=document.getElementById('c-link-left');
+  const botC=document.getElementById('c-link-right');
+  if(!svg||!wrap||!topC||!botC) return;
+  const wrapR=wrap.getBoundingClientRect();
+  svg.setAttribute('viewBox','0 0 '+wrapR.width+' '+wrapR.height);
+  const toOverlay=(canvasEl,pt)=>{
+    const cR=canvasEl.getBoundingClientRect();
+    const sx=cR.width/canvasEl.width, sy=cR.height/canvasEl.height;
+    return { x:cR.left-wrapR.left+pt.x*sx, y:cR.top-wrapR.top+pt.y*sy };
+  };
+  const n=Math.min(linkVizPts.left.length, linkVizPts.right.length);
+  let html='';
+  for(let i=0;i<n;i++){
+    const p1=toOverlay(topC, linkVizPts.left[i]);
+    const p2=toOverlay(botC, linkVizPts.right[i]);
+    const midY=(p1.y+p2.y)/2;
+    html+='<path d="M'+p1.x+','+p1.y+' C'+p1.x+','+midY+' '+p2.x+','+midY+' '+p2.x+','+p2.y+'" '
+      +'fill="none" stroke="'+ptColors[i]+'" stroke-width="1.5" opacity="0.55"/>';
+  }
+  svg.innerHTML=html;
 }
 
 // Shared y-range for the LM and GLM panels — using the SAME axis on both sides
@@ -1302,7 +1411,7 @@ function setScen(i){
   [0,1,2].forEach(j=>document.getElementById('sctab-'+j).classList.toggle('sel',j===i));
   const n=SCENARIO_NARR[i];
   document.getElementById('narr-tag').textContent=SCENARIOS[i].glmName;
-  document.getElementById('narr-tag').className='ntag '+(i===0?'c1':i===1?'c1':'c5');
+  document.getElementById('narr-tag').className='ntag c1';
   document.getElementById('narr-text').innerHTML=n.text;
 
   // Regenerate data
