@@ -112,6 +112,18 @@
   .rnd{color:var(--accent2);font-weight:500;}
   .gry{color:var(--ink2);}
 
+  /* "Hat"/"bar" accents (γ̂, τ̂, σ̂, λ̄ …): plain Unicode combining marks render
+     visibly offset from the base letter in several fonts — draw them via ::before
+     over an inline-block instead, so they stay centered. Canvas-drawn text can't
+     use this (no spans there), so it keeps plain combining chars. */
+  .gk{position:relative;display:inline-block;font-family:'Fraunces',serif;line-height:1}
+  .gk-hat::before{content:'^';position:absolute;top:-.12em;left:0;right:0;
+    text-align:center;font-size:.72em;line-height:1;pointer-events:none;
+    transform:scale(1.8)}
+  .gk-bar::before{content:'–';position:absolute;top:.05em;left:0;right:0;
+    text-align:center;font-size:.65em;line-height:1;pointer-events:none;
+    transform:scale(1.5)}
+
 
   /* ── CHARTS COLUMN ── */
   .charts-col{display:flex;flex-direction:column;gap:.9rem;}
@@ -346,10 +358,14 @@
 
     <div class="bottom-row">
       <div class="chart-panel">
-        <div class="panel-label">SHRINKAGE-DIAGRAMM</div>
+        <div class="panel-label">RANDOM EFFECTS</div>
+        <div class="panel-title">Gruppenintercepts — <em>No-Pooling vs. Partial-Pooling</em></div>
+        <div id="grp-table-panel"></div>
+
+        <div class="panel-label" style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--grid)">SHRINKAGE-DIAGRAMM</div>
         <div class="panel-title">No Pooling <em>vs.</em> Partial Pooling Intercepts</div>
         <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.35rem;line-height:1.6">
-          <b>Wie lesen?</b> Jede Zeile = eine Gruppe, sortiert nach No-Pooling-Intercept (oben = größter). ○ = No-Pooling &nbsp;·&nbsp; ● = Partial-Pooling. Pfeil zeigt Richtung und Stärke der Shrinkage zum Grand Mean (γ̂₀₀, gestrichelt).
+          <b>Wie lesen?</b> Jede Zeile = eine Gruppe, sortiert nach No-Pooling-Intercept (oben = größter). ○ = No-Pooling &nbsp;·&nbsp; ● = Partial-Pooling. Pfeil zeigt Richtung und Stärke der Shrinkage zum Grand Mean (<span class="gk gk-hat">γ</span>₀₀, gestrichelt).
           <span id="outlier-note-cat" style="display:none;color:var(--accent)"> &nbsp;·&nbsp; ⚡ = Ausreißer-Gruppe</span>
         </div>
         <div style="display:none;position:relative;height:0">
@@ -358,7 +374,6 @@
         <div style="position:relative;">
           <canvas id="caterpillarCanvas" style="display:block;width:100%;"></canvas>
         </div>
-        <div id="grp-table-panel" style="margin-top:.6rem"></div>
       </div>
 
       <div class="chart-panel">
@@ -457,6 +472,7 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 let showTrue   = false;
 let showOutlier = false;
 let activeGid = null;
+let lastCatP = null, lastCatEst = null;
 
 function toggleTrue() {
   showTrue = !showTrue;
@@ -500,6 +516,10 @@ function highlightGroup(gid) {
     tr.style.opacity = (gid === null || j === gid) ? '1' : '0.25';
     tr.style.background = (gid === j) ? 'var(--panel)' : '';
   });
+
+  // Highlight matching row in the Shrinkage-Diagramm (sorted differently, so
+  // redraw with the active gid instead of relying on DOM order).
+  if (lastCatP && lastCatEst) buildCaterpillar(lastCatP, lastCatEst);
 }
 
 // Chart.js Plugin for drawing arrows on the shrinkage lines
@@ -1230,7 +1250,7 @@ function buildMain(p, est) {
     lhtml += `<div class="legend-item"><div class="ldot" style="background:${GC[j%GC.length]}"></div><span>Gr.${j+1}${isOut?' ⚡':''}</span></div>`;
   }
   if (poolMode!=='cp')
-    lhtml += `<div class="legend-item"><div style="width:22px;height:3px;border-top:3px dashed ${FE_COLOR}"></div><span style="margin-left:3px">Fixed Effect γ̂</span></div>`;
+    lhtml += `<div class="legend-item"><div style="width:22px;height:3px;border-top:3px dashed ${FE_COLOR}"></div><span style="margin-left:3px">Fixed Effect <span class="gk gk-hat">γ</span></span></div>`;
   else
     lhtml += `<div class="legend-item"><div class="lline" style="background:${css('--accent')}"></div><span>Complete Pooling</span></div>`;
   if (showTrue)
@@ -1329,8 +1349,9 @@ function buildCaterpillar(p, est) {
 
   // Dimensions
   const W   = canvas.parentElement.clientWidth || 380;
-  const rowH = Math.max(22, Math.min(32, Math.floor((300 - 52) / totalJ)));
-  const H   = totalJ * rowH + 52;
+  const padL = 44, padR = 18, padT = 26, padB = 38;
+  const rowH = Math.max(22, Math.min(32, Math.floor((300 - (padT+padB)) / totalJ)));
+  const H   = totalJ * rowH + padT + padB;
   const dpr = window.devicePixelRatio || 1;
   canvas.width  = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
@@ -1349,7 +1370,6 @@ function buildCaterpillar(p, est) {
   const xMin    = Math.min(...allVals) - padX;
   const xMax    = Math.max(...allVals) + padX;
 
-  const padL = 44, padR = 18, padT = 20, padB = 32;
   const innerW = W - padL - padR;
 
   function xPx(v) { return padL + (v - xMin) / (xMax - xMin) * innerW; }
@@ -1369,55 +1389,61 @@ function buildCaterpillar(p, est) {
     ctx.moveTo(x, padT - 4);
     ctx.lineTo(x, H - padB + 4);
     ctx.stroke();
-    ctx.font      = '9px DM Mono, monospace';
+    ctx.font      = '10px DM Mono, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = css('--chart-tick');
-    ctx.fillText(v.toFixed(2), x, H - padB + 15);
+    ctx.fillText(v.toFixed(2), x, H - padB + 17);
   }
 
   // Axis label
-  ctx.font      = '9px DM Mono, monospace';
+  ctx.font      = '10px DM Mono, monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = css('--chart-tick');
-  ctx.fillText('Intercept', padL + innerW / 2, H - 3);
+  ctx.fillText('Intercept', padL + innerW / 2, H - 4);
 
-  // Grand Mean vertical line
+  // Grand Mean vertical line — stops at the top row, doesn't poke into the γ̂₀₀ label above it
   const gmX = xPx(feA);
   ctx.save();
   ctx.strokeStyle = FE_COLOR + 'bb';
   ctx.lineWidth   = 1.5;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(gmX, padT - 8);
+  ctx.moveTo(gmX, padT);
   ctx.lineTo(gmX, H - padB + 4);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.font      = '9px DM Mono, monospace';
+  ctx.font      = '11px DM Mono, monospace';
   ctx.textAlign = 'center';
   ctx.fillStyle = FE_COLOR + 'cc';
-  ctx.fillText('γ̂₀₀', gmX, padT - 10);
+  ctx.fillText('γ̂₀₀', gmX, padT - 11);
   ctx.restore();
 
   // Per-group rows
   order.forEach((j, rank) => {
     const np    = npVals[j];
     const pp    = ppVals[j];
-    const isOut = trueGrp[j]?.isOutlier;
-    const col   = GC[j % GC.length];
-    const y     = padT + (rank + 0.5) * rowH;
-    const xNP   = xPx(np);
-    const xPP   = xPx(pp);
-    const r     = isOut ? 5.5 : 4;
+    const isOut   = trueGrp[j]?.isOutlier;
+    const isActive= activeGid === j;
+    const isFaded = activeGid !== null && !isActive;
+    const col     = GC[j % GC.length];
+    const y       = padT + (rank + 0.5) * rowH;
+    const xNP     = xPx(np);
+    const xPP     = xPx(pp);
+    const r       = (isOut ? 5.5 : 4) + (isActive ? 1 : 0);
 
-    // Subtle background stripe for readability
-    if (rank % 2 === 0) {
+    // Row background: active row gets a solid highlight, others keep the
+    // usual zebra stripe (dimmed further when some other row is active).
+    if (isActive) {
+      ctx.fillStyle = css('--panel');
+      ctx.fillRect(padL, y - rowH / 2, innerW, rowH);
+    } else if (rank % 2 === 0) {
       ctx.fillStyle = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)';
       ctx.fillRect(padL, y - rowH / 2, innerW, rowH);
     }
 
     // Connecting line NP → PP
-    ctx.strokeStyle = col + '55';
-    ctx.lineWidth   = 1.2;
+    ctx.strokeStyle = col + (isFaded ? '18' : '55');
+    ctx.lineWidth   = isActive ? 1.8 : 1.2;
     ctx.beginPath();
     ctx.moveTo(xNP, y);
     ctx.lineTo(xPP, y);
@@ -1427,7 +1453,7 @@ function buildCaterpillar(p, est) {
     const dx = xPP - xNP;
     if (Math.abs(dx) > r * 2 + 2) {
       const dir = dx > 0 ? 1 : -1;
-      ctx.fillStyle = col + 'cc';
+      ctx.fillStyle = col + (isFaded ? '22' : 'cc');
       ctx.beginPath();
       ctx.moveTo(xPP, y);
       ctx.lineTo(xPP - dir * 7, y - 3.5);
@@ -1439,20 +1465,21 @@ function buildCaterpillar(p, est) {
     // NP: hollow circle
     ctx.beginPath();
     ctx.arc(xNP, y, r, 0, 2 * Math.PI);
-    ctx.strokeStyle = col;
+    ctx.strokeStyle = isFaded ? col + '22' : col;
     ctx.lineWidth   = 1.8;
     ctx.stroke();
 
     // PP: filled circle
     ctx.beginPath();
     ctx.arc(xPP, y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = col;
+    ctx.fillStyle = isFaded ? col + '22' : col;
     ctx.fill();
 
     // True value (×) if showTrue is active
     if (showTrue && trueGrp[j]) {
       const xT = xPx(p.g00 + trueGrp[j].u0);
-      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)';
+      ctx.strokeStyle = isFaded ? (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)')
+                                 : (isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)');
       ctx.lineWidth   = 1.5;
       const s = 4;
       ctx.beginPath();
@@ -1462,19 +1489,20 @@ function buildCaterpillar(p, est) {
     }
 
     // Group label on left
-    ctx.font      = `${isOut ? 'bold ' : ''}9px DM Mono, monospace`;
+    ctx.font      = `${(isOut || isActive) ? 'bold ' : ''}10.5px DM Mono, monospace`;
     ctx.textAlign = 'right';
-    ctx.fillStyle = col;
+    ctx.fillStyle = isFaded ? col + '33' : col;
     ctx.fillText(`G${j + 1}${isOut ? '⚡' : ''}`, padL - 5, y + 3);
   });
 
   // Mini legend
-  const legY = H - padB + 26;
-  ctx.font      = '8.5px DM Mono, monospace';
+  const legY = H - padB + 28;
+  ctx.font      = '10px DM Mono, monospace';
   ctx.textAlign = 'left';
   ctx.fillStyle = css('--ink2');
-  ctx.fillText('○ No Pooling', padL, legY);
-  ctx.fillText('● Partial Pooling', padL + 78, legY);
+  const legLabel1 = '○ No Pooling';
+  ctx.fillText(legLabel1, padL, legY);
+  ctx.fillText('● Partial Pooling', padL + ctx.measureText(legLabel1).width + 16, legY);
 }
 
 function modelFitStats(p, est) {
@@ -1663,11 +1691,11 @@ function updateResults(p, est) {
                       && Math.abs(cpSlope) > 0.05 && Math.abs(withinSlope) > 0.05;
 
   function fmtCI(lo, hi) {
-    return '<span style="color:var(--ink2);font-size:.75rem">[' + lo.toFixed(3) + ', ' + hi.toFixed(3) + ']</span>';
+    return '<span style="color:var(--accent3);font-size:.75rem">[' + lo.toFixed(3) + ', ' + hi.toFixed(3) + ']</span>';
   }
   function fmtCItau(ci) {
-    if (!ci) return '<span style="color:var(--ink2);font-size:.75rem">τ̂≈0 (nicht schätzbar)</span>';
-    return '<span style="color:var(--ink2);font-size:.75rem">[' + ci[0].toFixed(3) + ', ' + ci[1].toFixed(3) + ']</span>';
+    if (!ci) return '<span style="color:var(--ink2);font-size:.75rem"><span class="gk gk-hat">τ</span>≈0 (nicht schätzbar)</span>';
+    return '<span style="color:var(--accent3);font-size:.75rem">[' + ci[0].toFixed(3) + ', ' + ci[1].toFixed(3) + ']</span>';
   }
   function fmtAIC(s, active) {
     var cls = active ? 'res-val active-mode' : 'res-val';
@@ -1719,23 +1747,26 @@ function updateResults(p, est) {
   const isLog      = isPoisson || isGamma;
   // p_base = baseline probability when x=0 (for logistic)
   const pBase = isLogistic ? (1/(1+Math.exp(-feA))) : null;
-  const intLabel   = isLogistic ? 'γ̂₀₀ · Intercept auf Log-Odds-Skala (x=0)'
-                   : isLog      ? 'γ̂₀₀ · Intercept (log-Skala)'
-                   :              'γ̂₀₀ · Grand Intercept';
-  const slopeLabel = isLogistic ? 'γ̂₁₀ · Slope auf Log-Odds-Skala'
-                   : isLog      ? 'γ̂₁₀ · Slope (log-Skala)'
-                   :              'γ̂₁₀ · Fixed Slope';
+  const gHat = '<span class="gk gk-hat">γ</span>';
+  const g00  = '<span style="color:' + FE_COLOR + '">' + gHat + '₀₀</span>';
+  const g10  = '<span style="color:' + FE_COLOR + '">' + gHat + '₁₀</span>';
+  const intLabel   = isLogistic ? g00 + ' · Intercept auf Log-Odds-Skala (x=0)'
+                   : isLog      ? g00 + ' · Intercept (log-Skala)'
+                   :              g00 + ' · Grand Intercept';
+  const slopeLabel = isLogistic ? g10 + ' · Slope auf Log-Odds-Skala'
+                   : isLog      ? g10 + ' · Slope (log-Skala)'
+                   :              g10 + ' · Fixed Slope';
   const expIntRow = isLogistic
     ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">' +
-      'exp(γ̂₀₀) = Baseline-Odds = ' + Math.exp(feA).toFixed(3) +
+      'exp(' + g00 + ') = Baseline-Odds = ' + Math.exp(feA).toFixed(3) +
       ' → Baseline-Wkt. = ' + (pBase*100).toFixed(1) + '%' +
       '</span></div>'
     : isLog
-    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">exp(γ̂₀₀) = Baseline-Mittelwert = ' + Math.exp(feA).toFixed(3) + '</span></div>'
+    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">exp(' + g00 + ') = Baseline-Mittelwert = ' + Math.exp(feA).toFixed(3) + '</span></div>'
     : '';
   const expSlopeRow = isLogistic
     ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Odds Ratio (OR) = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span style="color:var(--accent2)">Odds Ratio (OR) = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
       '<span class="res-val" style="color:var(--accent2)">OR</span></div>' +
       '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">' +
       'Pro Einheit ↑x multiplizieren sich die Odds um ' + Math.exp(feB).toFixed(3) +
@@ -1743,27 +1774,27 @@ function updateResults(p, est) {
       '</span></div>'
     : isPoisson
     ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Incidence Rate Ratio (IRR) = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span style="color:var(--accent2)">Incidence Rate Ratio (IRR) = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
       '<span class="res-val" style="color:var(--accent2)">IRR</span></div>' +
       '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">' +
       'Pro Einheit ↑x ändert sich die Rate um Faktor ' + Math.exp(feB).toFixed(3) +
       '</span></div>'
     : isGamma
     ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Multiplikativer Effekt = exp(γ̂₁₀) = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
+      '<span style="color:var(--accent2)">Multiplikativer Effekt = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
       '<span class="res-val" style="color:var(--accent2)">×μ</span></div>'
     : '';
 
   var feBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.3rem">'
-    + 'SE aus Within-Group-Residuen · <span style="color:var(--accent3)">■ geschätzt</span> &nbsp;<span style="color:var(--ink2)">· wahr = Datengenerator</span></div>'
+    + 'SE aus Within-Group-Residuen · <span style="color:var(--accent3)">■ geschätzt</span> &nbsp;<span style="color:var(--accent)">■ wahr = Datengenerator</span></div>'
     + '<div class="res-row"><span>' + intLabel + '</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + feA.toFixed(3) + '</span></div>'
     + expIntRow
-    + subrow('SE=' + fit.se_feA.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₀₀=' + p.g00.toFixed(3), fmtCI(fit.ci_feA[0], fit.ci_feA[1]))
+    + subrow('SE=' + fit.se_feA.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr γ₀₀=' + p.g00.toFixed(3) + '</span>', fmtCI(fit.ci_feA[0], fit.ci_feA[1]))
     + '<div class="res-row" style="margin-top:.3rem"><span>' + slopeLabel + '</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + feB.toFixed(3) + '</span></div>'
     + expSlopeRow
-    + subrow('SE=' + fit.se_feB.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; wahr γ₁₀=' + p.g10.toFixed(3), fmtCI(fit.ci_feB[0], fit.ci_feB[1]));
+    + subrow('SE=' + fit.se_feB.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr γ₁₀=' + p.g10.toFixed(3) + '</span>', fmtCI(fit.ci_feB[0], fit.ci_feB[1]));
   if (simpsonRisk) {
     feBody += '<div class="res-row" style="margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--grid)">'
       + '<span style="color:var(--warn)">CP-Slope (verzerrt!)</span>'
@@ -1774,26 +1805,27 @@ function updateResults(p, est) {
   var vcBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.3rem">'
     + 'Schätzung aus Daten (Method of Moments) · '
     + '<span style="color:var(--accent3)">■ geschätzt</span> &nbsp;'
-    + '<span style="color:var(--ink2)">· wahr = Datengenerator</span></div>'
-    + '<div class="res-row"><span>τ̂₀ · SD Random Intercept</span>'
+    + '<span style="color:var(--accent)">■ wahr = Datengenerator</span></div>'
+    + '<div class="res-row"><span><span class="gk gk-hat">τ</span>₀ · SD Random Intercept</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + fit.tau0hat.toFixed(3) + '</span></div>'
-    + subrow('95%-KI &nbsp;·&nbsp; wahr τ₀=' + p.tau0.toFixed(3), fmtCItau(fit.ci_tau0));
+    + subrow('95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr τ₀=' + p.tau0.toFixed(3) + '</span>', fmtCItau(fit.ci_tau0));
   if (reMode === 'both') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>τ̂₁ · SD Random Slope</span>'
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">τ</span>₁ · SD Random Slope</span>'
       + '<span class="res-val" style="color:var(--accent3)">' + fit.tau1hat.toFixed(3) + '</span></div>'
-      + subrow('95%-KI &nbsp;·&nbsp; wahr τ₁=' + p.tau1.toFixed(3), fmtCItau(fit.ci_tau1))
-      + '<div class="res-row" style="margin-top:.3rem"><span>ρ · Korrelation u₀↔u₁ <span style="font-size:.75rem;color:var(--ink2)">(wahr)</span></span>'
-      + '<span class="res-val" style="color:var(--ink2)">' + p.rho.toFixed(2) + '</span></div>';
+      + subrow('95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr τ₁=' + p.tau1.toFixed(3) + '</span>', fmtCItau(fit.ci_tau1))
+      + '<div class="res-row" style="margin-top:.3rem"><span>ρ · Korrelation u₀↔u₁</span>'
+      + '<span class="res-val" style="color:var(--ink2)">– (nicht geschätzt)</span></div>'
+      + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr ρ=' + p.rho.toFixed(2) + '</span></div>';
   }
   // σ row: context-sensitive per likelihood
   if (modelKey === 'gauss') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Residual SD (aus Daten)</span>'
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">σ</span> · Residual SD (aus Daten)</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + '</span></div>';
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr σ=' + p.sig.toFixed(3) + '</span></div>';
   } else if (modelKey === 'gamma') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span>σ̂ · Disp.-Param. CV (aus Daten)</span>'
+    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">σ</span> · Disp.-Param. CV (aus Daten)</span>'
     + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">wahr σ=' + p.sig.toFixed(3) + ' · V₁=' + (fit.v_lvl1||0).toFixed(3) + '</span></div>';
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr σ=' + p.sig.toFixed(3) + '</span><span style="color:var(--ink2)"> · V₁=' + (fit.v_lvl1||0).toFixed(3) + '</span></div>';
   } else if (modelKey === 'logistic') {
     vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ theoretisch (Logit-Var.)</span>'
     + '<span class="res-val" style="color:var(--ink2)">π²/3 ≈ 3.290</span></div>'
@@ -1801,9 +1833,9 @@ function updateResults(p, est) {
   } else if (modelKey === 'poisson') {
     vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ Nakagawa-Näherung</span>'
     + '<span class="res-val" style="color:var(--ink2)">' + (fit.v_lvl1||0).toFixed(3) + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">log(1+1/λ̄) — ändert sich mit den Daten</span></div>';
+    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">log(1+1/<span class="gk gk-bar">λ</span>) — ändert sich mit den Daten</span></div>';
   }
-  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>ICC = τ̂₀²/(τ̂₀²+σ̂²)</span>'
+  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>ICC = <span class="gk gk-hat">τ</span>₀²/(<span class="gk gk-hat">τ</span>₀²+<span class="gk gk-hat">σ</span>²)</span>'
     + '<span class="res-val" style="color:var(--accent2)">' + (vpc*100).toFixed(1) + '%</span></div>'
     + '<div class="vpc-track" style="margin:.28rem 0">'
     + '<div class="vpc-between" style="width:' + Math.min(vpc*100,100).toFixed(0) + '%"></div>'
@@ -1858,7 +1890,7 @@ function updateResults(p, est) {
   html += section('SHRINKAGE λ = τ₀²/(τ₀²+σ²/nⱼ)', shrinkBody);
 
   var modeDescr = {
-    pp: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial Pooling ist die Schätzstrategie in hierarchischen Modellen: Gruppenspezifische Parameter werden weder vollständig getrennt noch vollständig zusammengefasst geschätzt.">Partial Pooling</a> (LMM): γ̂₀₀=' + feA.toFixed(3) + ', γ̂₁₀=' + feB.toFixed(3)
+    pp: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial Pooling ist die Schätzstrategie in hierarchischen Modellen: Gruppenspezifische Parameter werden weder vollständig getrennt noch vollständig zusammengefasst geschätzt.">Partial Pooling</a> (LMM): ' + g00 + '=' + feA.toFixed(3) + ', ' + g10 + '=' + feB.toFixed(3)
       + '. R²_marg=' + (fit.R2m*100).toFixed(1) + '%, R²_cond=' + (fit.R2c*100).toFixed(1) + '%.',
     np: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="No Pooling schätzt jede Gruppe vollständig separat — Gegenpol zum Partial Pooling.">No Pooling</a>: Jede Gruppe hat eigene Schätzung (k=' + fit.k_np + ' Parameter). <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC und BIC sind frequentistische Modellgütemaße, die Anpassung und Komplexität gegeneinander abwägen: AIC = −2ℓ + 2k. Niedrigere Werte sind besser.">AIC</a>=' + fit.np_stats.aic.toFixed(1) + '.',
     cp: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Complete Pooling fasst alle Gruppen zu einer einzigen Schätzung zusammen — Gegenpol zum Partial Pooling.">Complete Pooling</a>: Eine Gerade für alle. AIC=' + fit.cp_stats.aic.toFixed(1) + (simpsonRisk ? ' — ⚠ <a class="glo-link" href="Glossar.html#gl-simpsons-paradox" target="_blank" title="Das Simpson-Paradoxon beschreibt die Situation, in der ein statistischer Zusammenhang in den Gesamtdaten in eine Richtung zeigt, sich aber in jeder Teilgruppe umkehrt.">Simpson</a>-Risiko!' : '') + '.'
@@ -1868,10 +1900,7 @@ function updateResults(p, est) {
   document.getElementById('results-panel').innerHTML = html;
 
   document.getElementById('grp-table-panel').innerHTML =
-    '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;'
-    + 'color:var(--accent2);margin-bottom:.3rem;padding-top:.5rem;border-top:1px solid var(--grid)">'
-    + 'RANDOM EFFECTS — GRUPPENINTERCEPTS</div>'
-    + '<table class="re-table"><thead><tr><th>Gr.</th><th>No-Pool â₀</th><th>Part.-Pool â₀</th><th>λ</th><th>n</th></tr></thead>'
+    '<table class="re-table"><thead><tr><th>Gr.</th><th>No-Pool â₀</th><th>Part.-Pool â₀</th><th>λ</th><th>n</th></tr></thead>'
     + '<tbody id="re-table-body">' + grpRows + '</tbody></table>';
 }
 
@@ -1893,6 +1922,7 @@ function renderAll() {
   checkSimpson(est.cpFit, est.grpFit);
   buildMain(p, est);
   buildShrink(p, est);
+  lastCatP = p; lastCatEst = est;
   buildCaterpillar(p, est);
   updateResults(p, est);
 }
