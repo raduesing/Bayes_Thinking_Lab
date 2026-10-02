@@ -1595,19 +1595,100 @@ function exportToPPC() {
         ts: Date.now()
       });
     } catch(e){}
-    // postMessage to PPC if it was opened via our window reference
-    if (window._ppcWin && !window._ppcWin.closed) {
-      try { window._ppcWin.postMessage({ type: 'brms2ppc', data: payload }, '*'); } catch(ex) {}
+    // If this Builder tab was itself opened FROM PP-Check (window.opener), adopt that
+    // as our tracked PP-Check tab — but only once we've confirmed via same-origin
+    // location that it really is PP-Check, not e.g. the overview page (most tools
+    // are opened with target="_blank" from index.html too, which also sets .opener).
+    _adoptOpenerAsPPC();
+    const ppcWin = _knownPPCWin();
+    const ppcAlive = !!ppcWin || _isPPCAlive();
+    if (ppcWin) {
+      // Case 1: a PP-Check tab is already open AND we hold a window reference to it
+      // — deliver the model directly. No new tab: the existing one already
+      // re-renders itself via its storage/postMessage listener.
+      try { ppcWin.postMessage({ type: 'brms2ppc', data: payload }, '*'); } catch(ex) {}
+    } else if (ppcAlive) {
+      // Case 2: a PP-Check tab is open somewhere, but not one we have a window
+      // reference to (e.g. opened independently, not via this tab's opener chain —
+      // window.open(url, name) can only reuse a tab from the SAME opener chain, so
+      // it would otherwise open a duplicate). The model is already in localStorage
+      // above; the open tab's storage-event listener picks it up.
+    } else {
+      // Case 3: no PP-Check tab open anywhere — open exactly one now. The model is
+      // already in localStorage, so it picks it up itself on load; using a named
+      // target (instead of "_blank") means a stray tab from elsewhere with the same
+      // name gets reused instead of duplicated.
+      window._ppcWin = window.open('Bayesian_PP_Check.html', 'btlPpcCheck');
     }
     showToast('✓ Model sent to PP-Check', 'var(--accent3)');
-    _showPPCHint();
+    _showPPCHint(ppcAlive);
   } catch(e) {
     showToast('⚠ localStorage unavailable — open both tools in the same browser', 'var(--accent)');
     console.error('exportToPPC:', e);
   }
 }
 
-function _showPPCHint() {
+// Returns the PP-Check tab we already know about (tracked reference, still open),
+// or null. Kept as a single source of truth so the header button and the hint
+// banner's own link always agree on whether a tab needs opening or just focusing.
+function _knownPPCWin() {
+  if (window._ppcWin && !window._ppcWin.closed) return window._ppcWin;
+  return null;
+}
+
+// If we don't yet have a tracked PP-Check tab but this Builder tab's opener is
+// same-origin and its path is PP-Check, adopt it — covers "started in PP-Check, sent
+// data back without ever using the Builder's own open-link first".
+function _adoptOpenerAsPPC() {
+  if (window._ppcWin && !window._ppcWin.closed) return;
+  try {
+    if (window.opener && !window.opener.closed &&
+        /Bayesian_PP_Check\.html$/i.test(window.opener.location.pathname)) {
+      window._ppcWin = window.opener;
+    }
+  } catch(e) {}
+}
+
+// Focuses the already-known PP-Check tab if there is one. If there's no window
+// reference but the heartbeat says a PP-Check tab is alive somewhere, we can't focus
+// it (no reference) but must NOT open a duplicate either — just tell the user to
+// switch manually. Only opens a new tab when none is alive anywhere.
+function _focusOrOpenPPC() {
+  const w = _knownPPCWin();
+  if (w) { try { w.focus(); } catch(e) {} return; }
+  if (_isPPCAlive()) {
+    showToast('PP-Check tab is already open — please switch to it manually', 'var(--accent)');
+    return;
+  }
+  window._ppcWin = window.open('Bayesian_PP_Check.html', 'btlPpcCheck');
+}
+
+// ── Presence heartbeat ────────────────────────────────────
+// Lets the OTHER tool detect "a tab of mine is open right now" without needing a
+// window reference — window.open(url, name) only reuses/focuses a tab from the same
+// opener chain, never an unrelated tab. Each tool writes its own liveness timestamp;
+// the other tool treats it as alive while recent enough.
+const BUILDER_ALIVE_KEY = 'btlBuilderAlive';
+const PPC_ALIVE_KEY = 'btlPpcAlive';
+const ALIVE_STALE_MS = 4000; // > 2x the 1500ms heartbeat interval below
+
+function _isPPCAlive() {
+  try {
+    const ts = parseInt(localStorage.getItem(PPC_ALIVE_KEY) || '0', 10);
+    return (Date.now() - ts) < ALIVE_STALE_MS;
+  } catch(e) { return false; }
+}
+
+(function _startBuilderHeartbeat() {
+  function announce() { try { localStorage.setItem(BUILDER_ALIVE_KEY, String(Date.now())); } catch(e) {} }
+  announce();
+  setInterval(announce, 1500);
+  window.addEventListener('pagehide', function() {
+    try { localStorage.removeItem(BUILDER_ALIVE_KEY); } catch(e) {}
+  });
+})();
+
+function _showPPCHint(wasAlreadyOpen) {
   const existing = document.getElementById('ppc-hint-bar');
   if (existing) { existing.remove(); }
   const bar = document.createElement('div');
@@ -1620,15 +1701,15 @@ function _showPPCHint() {
     'justify-content:space-between','z-index:9999',
     'box-shadow:0 -2px 12px rgba(0,0,0,.25)'
   ].join(';');
+  const statusMsg = wasAlreadyOpen
+    ? '✓ Model sent to the open PP-Check tab — picked up automatically there.'
+    : '✓ Model saved and a new PP-Check tab opened — the model will be picked up automatically there.';
   bar.innerHTML = `
-    <span>✓ Model saved.&nbsp;&nbsp;
-      <strong>Step 2:</strong> Open Prior Predictive Check and click
-      <strong style="border:1px solid rgba(255,255,255,.6);padding:.1rem .35rem">⬡ ← Builder</strong> there.
-    </span>
+    <span>${statusMsg}</span>
     <span style="display:flex;gap:.7rem;align-items:center">
       <a href="Bayesian_PP_Check.html"
          style="color:white;font-weight:600;text-decoration:none;border:1.5px solid white;padding:.2rem .7rem;cursor:pointer"
-         onclick="window._ppcWin=window.open('Bayesian_PP_Check.html','_blank');document.getElementById('ppc-hint-bar').remove();return false;">
+         onclick="_focusOrOpenPPC();document.getElementById('ppc-hint-bar').remove();return false;">
         Open PP-Check →
       </a>
       <span onclick="this.parentElement.parentElement.remove()"
@@ -1722,6 +1803,30 @@ function importFromPPC() {
       svNames.forEach(sv => { userPriors['re_sd_slp_'+sv] = `exponential(${fmt(d.reSlp.p1??1)})`; });
     }
     if (d.lkjEta) userPriors['re_cor'] = `lkj(${fmt(d.lkjEta)})`;
+  }
+
+  // Distributional parameters (sigma, nu, shape, phi, ndt, alpha, zi, zoi, coi) — PPC's
+  // distPriors uses the same {param, preds, intParsed, betaParsed} shape for every dpar.
+  // This was previously never read here at all (PPC -> Builder always dropped it,
+  // the Builder -> PPC direction above in exportToPPC has always sent it correctly).
+  // rebuildDistArea() above already rebuilt #dist-area fresh for the new family, so every
+  // checkbox/textbox here starts unchecked/empty; update() below re-reads the DOM state
+  // we set and re-renders the prior sidebar from it.
+  if (d.distPriors && d.distPriors.length > 0) {
+    d.distPriors.forEach(dp => {
+      const ck = document.querySelector(`.d-ck[data-p="${dp.param}"]`);
+      if (!ck) return; // this dpar doesn't apply to the newly-set family — nothing to restore
+      ck.checked = true;
+      const box = document.getElementById(`d-box-${dp.param}`);
+      if (box) box.style.display = '';
+      const predInp = box ? box.querySelector('input.d-pre') : null;
+      const predNames = dp.preds || [];
+      if (predInp) predInp.value = predNames.join(', ');
+      if (dp.intParsed) userPriors[dp.param + '_int'] = ppcLocToStr(dp.intParsed);
+      predNames.forEach((p, i) => {
+        if (dp.betaParsed && dp.betaParsed[i]) userPriors[dp.param + '_b_' + p] = ppcLocToStr(dp.betaParsed[i]);
+      });
+    });
   }
 
   // Clear stale data
