@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){['btn-theme','btn-th','btn-th-nav','themeBtn'].forEach(function(id){var b=document.getElementById(id);if(b)b.textContent='🌙 Dark';});});})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="The Prior Elicitor: simulationsbasierte Prior-Elicitation interaktiv und didaktisch. Vom Expertenwissen ueber Target Quantities zu informativen Priors fuer brms — nach Bockting et al. (2024) und Mikkola et al. (2024).">
+<meta name="keywords" content="Prior Elicitation, Prior, brms, Bayes, simulationsbasiert, MMD, Target Quantities, Expertenwissen, Bockting, Mikkola, Statistik">
+<meta property="og:title" content="The Prior Elicitor — Prior Elicitation interaktiv">
+<meta property="og:description" content="Simulationsbasierte Prior-Elicitation didaktisch: vom Expertenwissen zu informativen Priors fuer brms.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.bayes-thinking-lab.uni-osnabrueck.de/The_Prior_Elicitor.html">
+<meta property="og:site_name" content="Bayes Thinking Lab">
+<link rel="canonical" href="https://www.bayes-thinking-lab.uni-osnabrueck.de/The_Prior_Elicitor.html">
+<title>The Prior Elicitor — Prior Elicitation interaktiv</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,200;1,9..144,300;1,9..144,400&display=swap');
+
+:root{
+  --bg:#f0ead8;--paper:#f8f3e8;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c5;--panel:#e8e0ce;--border:#c8bfaa;--warm:#c8a96e;--shadow:#c0b8a4;
+}
+[data-theme="dark"]{
+  --bg:#0c0f14;--paper:#111520;--ink:#ece6d8;--ink2:#8a8070;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#1e242e;--panel:#171d28;--border:#2a3040;--warm:#c8a96e;--shadow:#080b10;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px;-webkit-font-smoothing:antialiased}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);height:100vh;overflow:hidden;display:flex;flex-direction:column;font-weight:300}
+
+/* ── HEADER (einheitlich, identisch zu Bayesian_model_architect) ── */
+#hdr{background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.5rem 1.1rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:.5rem;line-height:normal}
+.hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2;display:flex;align-items:center;gap:.6rem}
+.hdr-h1 em{font-style:italic;color:var(--a2)}
+.hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;margin-top:.1rem}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--a2);color:var(--a2)}
+
+/* Demo-Badge: macht den exemplarischen Charakter dauerhaft sichtbar */
+.demo-badge{font-family:'DM Mono',monospace;font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--a5);border:1px solid var(--a5);border-radius:2px;padding:.12rem .4rem;white-space:nowrap;cursor:help}
+
+#shell{flex:1;overflow-y:auto;min-height:0}
+.wrap{max-width:1080px;margin:0 auto;padding:1.4rem 1.6rem 3rem}
+
+/* ── PHASEN-FORTSCHRITTSBALKEN (Stepper) ── */
+.stepper{display:flex;align-items:stretch;gap:0;margin:0 0 1.6rem;border:1.5px solid var(--border);background:var(--paper);box-shadow:2px 2px 0 var(--shadow)}
+.step{flex:1;display:flex;flex-direction:column;gap:.18rem;padding:.6rem .8rem;border-right:1.5px solid var(--border);position:relative;transition:background .2s}
+.step:last-child{border-right:none}
+.step-n{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;color:var(--ink3)}
+.step-t{font-family:'Fraunces',Georgia,serif;font-size:.92rem;color:var(--ink2)}
+.step.active{background:color-mix(in srgb,var(--a2) 14%,transparent)}
+.step.active .step-n{color:var(--a2)}
+.step.active .step-t{color:var(--ink)}
+.step.done .step-n::before{content:"✓ "}
+.step.done .step-n{color:var(--a3)}
+
+/* ── BASIS-PANELS (für Folgeschritte) ── */
+.panel{background:var(--paper);border:1.5px solid var(--border);padding:1.1rem 1.3rem;box-shadow:2px 2px 0 var(--shadow);margin-bottom:1.2rem}
+.panel-title{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink3);margin-bottom:.8rem;padding-bottom:.3rem;border-bottom:1px solid var(--grid)}
+.lead{font-size:.95rem;line-height:1.6;color:var(--ink2);max-width:62ch}
+.muted{color:var(--ink3)}
+
+/* Buttons im Inhalt */
+.cbtn{font-family:'DM Mono',monospace;font-size:.78rem;background:var(--a2);color:var(--paper);
+  border:1.5px solid var(--a2);padding:.4rem .9rem;cursor:pointer;transition:all .15s}
+.cbtn:hover{filter:brightness(1.08)}
+.cbtn.ghost{background:transparent;color:var(--a2)}
+.cbtn.ghost:hover{background:color-mix(in srgb,var(--a2) 12%,transparent)}
+.cbtn:disabled{opacity:.4;cursor:not-allowed;filter:none}
+
+/* Hypercube-Begleiter (dezent, pro Phase nur relevante Dimension) */
+.hypercue{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);
+  border-left:2px solid var(--a2);padding:.3rem .7rem;margin:.2rem 0 1.2rem;background:color-mix(in srgb,var(--a2) 6%,transparent)}
+.hypercue b{color:var(--a2);font-weight:500}
+
+/* ── PHASE 1: Setup-Komponenten ── */
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start}
+@media(max-width:820px){.setup-grid{grid-template-columns:1fr}}
+select.msel{font-family:'DM Mono',monospace;font-size:.8rem;background:var(--panel);border:1.5px solid var(--border);color:var(--ink);padding:.45rem .6rem;cursor:pointer;width:100%;outline:none}
+select.msel:focus{border-color:var(--a2)}
+.hint{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);margin-top:.4rem;line-height:1.5}
+.eq{font-family:'DM Mono',monospace;font-size:.84rem;line-height:2;color:var(--ink);background:var(--bg);border:1px solid var(--grid);padding:.7rem .9rem;overflow-x:auto}
+.eq .pp{color:var(--a2)}
+.deflist{margin-top:.8rem;display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;font-size:.82rem;line-height:1.5}
+.deflist dt{font-family:'DM Mono',monospace;color:var(--a2);white-space:nowrap}
+.deflist dd{color:var(--ink2)}
+.seg{display:flex;gap:0;border:1.5px solid var(--border);width:fit-content;max-width:100%}
+.seg button{font-family:'DM Mono',monospace;font-size:.72rem;padding:.4rem .8rem;background:transparent;border:none;border-right:1.5px solid var(--border);color:var(--ink2);cursor:pointer;transition:all .15s}
+.seg button:last-child{border-right:none}
+.seg button:hover{color:var(--a2)}
+.seg button.on{background:var(--a2);color:var(--paper)}
+.story{border:1.5px dashed var(--warm);background:color-mix(in srgb,var(--warm) 12%,transparent);padding:.9rem 1.1rem;margin-bottom:1.2rem}
+.story-h{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--warm);margin-bottom:.45rem}
+.story p{font-size:.9rem;line-height:1.6;color:var(--ink2)}
+.story b{color:var(--ink);font-weight:600}
+.actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:.4rem}
+
+/* ── PHASE 2: Target-Quantity-Karten ── */
+.target-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;margin-bottom:1.2rem}
+@media(max-width:820px){.target-grid{grid-template-columns:1fr}}
+.tcard{background:var(--paper);border:1.5px solid var(--border);box-shadow:2px 2px 0 var(--shadow);padding:.9rem 1rem}
+.tcard-head{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;margin-bottom:.6rem}
+.tcard-name{font-size:.95rem;color:var(--ink);line-height:1.3}
+.tcard-maps{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--a2);white-space:nowrap}
+.seg-sm button{padding:.28rem .6rem;font-size:.66rem}
+.tinputs{display:flex;gap:.6rem;margin-top:.7rem;flex-wrap:wrap}
+.tinputs label{display:flex;flex-direction:column;gap:.2rem;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3);flex:1;min-width:62px}
+.tinputs input{font-family:'DM Mono',monospace;font-size:.8rem;background:var(--bg);border:1.5px solid var(--border);color:var(--ink);padding:.3rem .4rem;width:100%;outline:none}
+.tinputs input:focus{border-color:var(--a2)}
+.tinputs input::placeholder{color:var(--ink3);opacity:.5}
+.tstatus{font-family:'DM Mono',monospace;font-size:.64rem;margin-top:.55rem;min-height:1em;color:var(--ink3)}
+.tstatus.good{color:var(--a3)}
+.tstatus.bad{color:var(--a1)}
+.tviz{margin-top:.55rem;height:74px}
+.tviz canvas{width:100%;height:74px;display:block}
+.tplaus{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);margin-top:.45rem;line-height:1.4;min-height:1em}
+.pl-prior{color:var(--a2)}
+
+/* ── PHASE 3: Lern-Ergebnis ── */
+.lr-loss{font-family:'DM Mono',monospace;font-size:.8rem;margin:.9rem 0 .6rem;color:var(--a2)}
+.lr-out{display:grid;gap:.45rem;margin-top:.4rem}
+.lr-row{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:.6rem;font-family:'DM Mono',monospace;font-size:.72rem;align-items:baseline;border-bottom:1px solid var(--grid);padding-bottom:.32rem}
+.lr-row .lr-k{color:var(--ink2)}
+.lr-row .lr-v{color:var(--ink);text-align:right}
+.lr-row.lr-head .lr-v,.lr-row.lr-head .lr-k{color:var(--ink3);font-size:.62rem;letter-spacing:.04em;text-transform:uppercase}
+.lr-note{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink3);margin-top:.7rem;line-height:1.55}
+.lr-warn{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--a1);margin-top:.8rem}
+.learn-plots{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+@media(max-width:820px){.learn-plots{grid-template-columns:1fr}}
+.lp{background:var(--bg);border:1px solid var(--grid);padding:.5rem .6rem}
+.lp-t{font-family:'DM Mono',monospace;font-size:.6rem;letter-spacing:.04em;color:var(--ink3);text-transform:uppercase;margin-bottom:.35rem}
+.lp canvas{width:100%;height:120px;display:block}
+.lp-leg{display:flex;gap:.9rem;margin-top:.35rem;font-family:'DM Mono',monospace;font-size:.62rem}
+.lg::before{content:"— ";font-weight:700}
+.lg-a2{color:var(--a2)}.lg-a3{color:var(--a3)}.lg-a5{color:var(--a5)}
+.mmd-box{background:var(--bg);border:1px solid var(--grid);padding:.5rem .6rem;margin-top:1rem}
+.mmd-box canvas{width:100%;height:88px;display:block}
+.mmd-cap{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink2);margin-top:.35rem}
+.dotexp{color:var(--a5)}.dotmod{color:var(--a2)}
+.match-row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:1rem;font-family:'DM Mono',monospace;font-size:.66rem}
+.match-row .ml{color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;font-size:.6rem}
+.chip{padding:.2rem .5rem;border:1px solid var(--border);border-radius:2px}
+.chip.good{color:var(--a3);border-color:var(--a3)}
+.chip.warn{color:var(--a5);border-color:var(--a5)}
+.advbox{margin-top:1.2rem;border-top:1px solid var(--grid);padding-top:.6rem}
+.advbox summary{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--a2);cursor:pointer}
+.advbody{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);line-height:1.6;margin-top:.5rem}
+
+/* ── PHASE 4: Ergebnis & Export ── */
+.prior-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-top:.4rem}
+@media(max-width:820px){.prior-grid{grid-template-columns:1fr}}
+.pp-card{background:var(--bg);border:1px solid var(--grid);padding:.5rem .6rem}
+.pp-t{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--a2);margin-bottom:.3rem}
+.pp-card canvas{width:100%;height:88px;display:block}
+.rcode{font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.65;background:var(--bg);border:1px solid var(--grid);padding:.8rem 1rem;overflow-x:auto;white-space:pre;color:var(--ink);margin-bottom:.7rem}
+.r-com{color:var(--ink3);font-style:italic}.r-str{color:var(--a3)}.r-num{color:var(--a5)}.r-fun{color:var(--a2)}.r-key{color:var(--a4)}
+#cv-ppc{width:100%;height:120px;display:block}
+input[type=range]{width:100%;-webkit-appearance:none;height:3px;background:var(--grid);outline:none;cursor:pointer;border-radius:2px;margin:.7rem 0 .3rem}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--a2);border-radius:50%;cursor:pointer}
+.sens-lbl{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--a2)}
+.sens-out{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);margin-top:.5rem;line-height:1.5;min-height:1em}
+.export-msg{font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);margin-left:.6rem}
+.export-msg a{color:var(--a2)}
+
+/* ── Lernkarten ── */
+.learn-section{margin:1.8rem 0 .5rem;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--grid)}
+@media(max-width:820px){.learn-section{grid-template-columns:1fr}}
+.lcard{background:var(--paper);padding:.95rem 1.1rem}
+.lcard-h{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.45rem;padding-bottom:.22rem;border-bottom:1px solid var(--grid);color:var(--a2)}
+.lcard-body{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.7}
+
+/* ── Overlays (Hilfe / Transparenz) ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:1.5rem}
+.ov.show{display:flex}
+.ov-card{background:var(--paper);border:1.5px solid var(--border);box-shadow:4px 4px 0 var(--shadow);max-width:680px;width:100%;max-height:85vh;overflow-y:auto;padding:1.4rem 1.6rem}
+.ov-close{float:right;background:none;border:none;color:var(--ink3);font-size:1.15rem;cursor:pointer;font-family:'DM Mono',monospace;line-height:1}
+.ov-close:hover{color:var(--a1)}
+.ov-h{font-family:'Fraunces',Georgia,serif;font-size:1.3rem;font-weight:300;margin-bottom:.4rem;letter-spacing:-.01em}
+.ov-h em{font-style:italic;color:var(--a2)}
+.ov-card h4{font-family:'DM Mono',monospace;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:1.1rem 0 .4rem;border-bottom:1px solid var(--grid);padding-bottom:.25rem}
+.ov-card p{font-size:.9rem;line-height:1.6;color:var(--ink2);margin-bottom:.5rem}
+.ov-card ul{margin:.2rem 0 .5rem 1.1rem}
+.ov-card li{font-size:.88rem;line-height:1.55;color:var(--ink2);margin-bottom:.25rem}
+.ov-card a{color:var(--a2)}
+.ov-card code{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--a5)}
+.reflist{list-style:none;margin-left:0!important}
+.reflist li{font-family:'DM Mono',monospace;font-size:.74rem}
+
+/* Phasen-Sichtbarkeit */
+.phase{display:none}
+.phase.show{display:block}
+</style>
+</head>
+<body>
+
+<!-- ════════════ HEADER ════════════ -->
+<div id="hdr">
+  <div>
+    <div class="hdr-h1">The Prior <em>Elicitor</em>
+      <span class="demo-badge" onclick="openOv('about')" title="Demo-Engine: bildet die Methode exemplarisch an Dummy-Beispielen nach — kein Ersatz fuer die Originalsoftware. Siehe Phase „Was ist das?“.">Demo-Engine · exemplarisch</span>
+    </div>
+    <div class="hdr-sub2">Target Quantities · Quantil/Moment · simulationsbasiert · brms-Export</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" onclick="location.href='index_de.html'" style="border-color:var(--a2);color:var(--a2)">← Übersicht</button>
+    <button class="hbtn" onclick="openOv('help')" style="border-color:var(--a1);color:var(--a1)">? Hilfe</button>
+    <button class="hbtn" onclick="openOv('about')">Was ist das?</button>
+    <button class="hbtn" id="btn-th" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<!-- ════════════ SCROLLBARER INHALT ════════════ -->
+<div id="shell">
+<div class="wrap">
+
+  <!-- Phasen-Stepper -->
+  <div class="stepper" id="stepper">
+    <div class="step active" data-step="1"><div class="step-n">Phase 1</div><div class="step-t">Modell &amp; Raum</div></div>
+    <div class="step" data-step="2"><div class="step-n">Phase 2</div><div class="step-t">Expertenbefragung</div></div>
+    <div class="step" data-step="3"><div class="step-n">Phase 3</div><div class="step-t">Lernen</div></div>
+    <div class="step" data-step="4"><div class="step-n">Phase 4</div><div class="step-t">Ergebnis</div></div>
+  </div>
+
+  <!-- ── PHASE 1 ── -->
+  <section class="phase show" id="phase-1">
+    <div class="hypercue"><b>Hypercube-Dimension D2 &amp; D3</b> — Welche Modellfamilie nutzt du, und in welchem Raum hast du Vorwissen: über <em>Parameter</em> oder über <em>beobachtbare Größen</em>?</div>
+
+    <div class="story">
+      <div class="story-h">Durchgehendes Beispiel · Dummy-Daten</div>
+      <p>Wir begleiten dich mit einer Evaluationsstudie zu <b>kognitivem Training</b>: Verbessert ein Gedächtnistraining die kognitive Leistung? Zielgröße <b>y = IQ-/kognitiver Testwert</b> (Metrik M ≈ 100, SD ≈ 15), Prädiktor <b>x = Bedingung</b> (0 = Kontrollgruppe, 1 = Training). Das sind keine echten Daten — sie dienen nur dem Mitdenken.</p>
+    </div>
+
+    <div class="setup-grid">
+      <div class="panel">
+        <div class="panel-title">1 · Modell wählen</div>
+        <select class="msel" id="model-sel" onchange="onModelChange()">
+          <option value="linear">Lineare Regression — Normal · Identität</option>
+          <option value="logistic" disabled>Logistische Regression — Binomial · Logit  (folgt)</option>
+          <option value="poisson" disabled>Poisson-Regression — Poisson · Log  (folgt)</option>
+          <option value="hier" disabled>Hierarchisches Modell — Normal  (folgt)</option>
+        </select>
+        <div class="hint">Im MVP ist das lineare Gauß-Modell vollständig umgesetzt; die übrigen Klassen folgen in einer späteren Ausbaustufe.</div>
+
+        <div class="panel-title" style="margin-top:1.2rem">2 · Worüber hast du Vorwissen?</div>
+        <div class="seg" id="space-seg">
+          <button data-space="param" onclick="setSpace('param')">Parameter</button>
+          <button data-space="obs" onclick="setSpace('obs')">Beobachtbares</button>
+          <button data-space="both" class="on" onclick="setSpace('both')">Beides</button>
+        </div>
+        <div class="hint" id="space-hint"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Modellgleichung</div>
+        <div class="eq" id="model-eq"></div>
+        <dl class="deflist" id="model-def"></dl>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="cbtn" onclick="gotoPhase(2)">Weiter zur Befragung →</button>
+    </div>
+  </section>
+
+  <!-- ── PHASE 2 ── -->
+  <section class="phase" id="phase-2">
+    <div class="hypercue"><b>Hypercube-Dimension D6 &amp; D7</b> — Wie befragen wir den Experten (Assessment-Task), und wie verlässlich sind menschliche Wahrscheinlichkeits-Urteile? Achte auf Anker- und Überkonfidenz-Effekte.</div>
+
+    <div class="panel" style="margin-bottom:1.2rem">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
+        <div class="panel-title" style="margin:0;border:none;padding:0">Expertenbefragung · Target Quantities</div>
+        <div class="seg seg-sm">
+          <button id="viz-dot" class="on" onclick="setVizMode('dot')">Dotplot</button>
+          <button id="viz-den" onclick="setVizMode('density')">Dichte</button>
+        </div>
+      </div>
+      <p class="lead" style="margin-top:.7rem">Du gibst dein Vorwissen nicht über abstrakte Parameter an, sondern über <b>verständliche Größen</b>. Wähle je Karte ein Eingabeformat und trage deine Erwartung ein — die implizierte Verteilung erscheint sofort. <span class="muted">Default ist der <b>Quantil-Dotplot</b>; er wird zuverlässiger gelesen als eine Dichtekurve.</span></p>
+    </div>
+
+    <div class="target-grid" id="target-grid"></div>
+
+    <div class="actions">
+      <button class="cbtn ghost" onclick="gotoPhase(1)">← Zurück</button>
+      <button class="cbtn" onclick="gotoPhase(3)">Weiter zum Lernen →</button>
+    </div>
+  </section>
+  <!-- ── PHASE 3 ── -->
+  <section class="phase" id="phase-3">
+    <div class="hypercue"><b>Hypercube-Dimension D4 &amp; D5</b> — Elicitation als Optimierungsproblem (Fitting-Ansatz) und dessen Berechnung: Gesucht sind die Hyperparameter λ, die <em>alle</em> deine Angaben zugleich am besten treffen.</div>
+
+    <div class="panel">
+      <div class="panel-title">Lernen · simulationsbasierte Optimierung</div>
+      <p class="lead">Die ersten drei Größen legen β₀, β₁ und s bereits analytisch fest. Das <b>R²</b> koppelt sie: Es hängt vom Verhältnis aus Steigungs- und Residual-Streuung ab. Der Optimierer (<b>Nelder-Mead</b>, gradientenfrei) passt λ so an, dass die <b>Energy Distance</b> über alle Targets minimal wird — Bocktings Multi-Objective-Idee, nur ohne Gradienten.</p>
+      <div class="actions" style="justify-content:flex-start;margin-top:.9rem;align-items:center">
+        <button class="cbtn" id="btn-learn" onclick="runLearning()">Optimierung starten</button>
+        <span id="learn-status" class="muted" style="font-family:'DM Mono',monospace;font-size:.66rem"></span>
+      </div>
+
+      <div class="learn-plots">
+        <div class="lp"><div class="lp-t">Loss · Energy Distance (gesamt)</div><canvas id="cv-loss"></canvas></div>
+        <div class="lp"><div class="lp-t">Hyperparameter-Konvergenz</div><canvas id="cv-conv"></canvas>
+          <div class="lp-leg"><span class="lg lg-a2">μ₁</span><span class="lg lg-a3">σ₁</span><span class="lg lg-a5">ν</span></div>
+        </div>
+      </div>
+
+      <div class="mmd-box">
+        <div class="lp-t">Energy Distance = mittlerer Abstand zweier Punktwolken · Target R²</div>
+        <canvas id="cv-cloud"></canvas>
+        <div class="mmd-cap"><span class="dotexp">●</span> Experten-Erwartung &nbsp; <span class="dotmod">●</span> Modell (aktuelles λ) &nbsp; <span id="cloud-ed"></span></div>
+      </div>
+
+      <div id="match-status"></div>
+      <div id="learn-out"></div>
+
+      <details class="advbox">
+        <summary>Unterschied zum Originalpaper (Bockting et al.)</summary>
+        <div class="advbody">Dieselbe Idee — Elicitation als Minimierung der Energy Distance zwischen modell- und experten-implizierten Größen — aber didaktisch vereinfacht: <b>gradientenfreier</b> Nelder-Mead statt Stochastic Gradient Descent; dadurch <b>kein Gumbel-Softmax</b> nötig (diskrete Variablen würden direkt gezogen) und <b>kein TensorFlow</b>; DWA-Gewichtung ersetzt durch einfache Skalen-Normierung; kleine Stichprobe (S = 64) und ~240 Iterationen statt B = 256 / 400–600 Epochen. Ergebnis: läuft in &lt; 1 s im Browser statt 20–53 min. Für echte Modelle → Originalsoftware <i>PriorLearning</i> (siehe Schluss-Sektion).</div>
+      </details>
+    </div>
+
+    <div class="actions">
+      <button class="cbtn ghost" onclick="gotoPhase(2)">← Zurück</button>
+      <button class="cbtn" id="btn-to4" onclick="gotoPhase(4)" disabled>Weiter zum Ergebnis →</button>
+    </div>
+  </section>
+  <!-- ── PHASE 4 ── -->
+  <section class="phase" id="phase-4">
+    <div class="hypercue"><b>Hypercube-Dimension D1 &amp; Evaluation</b> — Die fertige (univariate, parametrische) Prior, validiert per Prior Predictive Check und auf Robustheit geprüft (responsiveness).</div>
+
+    <div class="panel">
+      <div class="panel-title">Gelernte Priors</div>
+      <div class="prior-grid">
+        <div class="pp-card"><div class="pp-t" id="pt-b0"></div><canvas id="cv-pb0"></canvas></div>
+        <div class="pp-card"><div class="pp-t" id="pt-b1"></div><canvas id="cv-pb1"></canvas></div>
+        <div class="pp-card"><div class="pp-t" id="pt-s"></div><canvas id="cv-ps"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">brms-Code · direkt einsetzbar</div>
+      <pre class="rcode" id="brms-code"></pre>
+      <div class="actions" style="justify-content:flex-start;margin-top:0;align-items:center">
+        <button class="cbtn ghost" id="btn-copy" onclick="copyBrms()">Code kopieren</button>
+      </div>
+      <div class="hint" style="margin-top:.7rem">Hinweis: brms zentriert Prädiktoren intern — die <b>Intercept</b>-Prior bezieht sich auf den Erwartungswert von y bei <em>mittlerem</em> x. Soll sie sich auf „y bei x = 0“ beziehen, die Syntax <code>0 + Intercept</code> verwenden.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Prior Predictive Check</div>
+      <p class="lead" style="margin-bottom:.5rem">Welche Daten erwartet dein Modell <em>vor</em> dem Datenkontakt? Simulierte IQ-Werte aus den gelernten Priors je Gruppe:</p>
+      <canvas id="cv-ppc"></canvas>
+      <div class="mmd-cap"><span class="dotmod">●</span> Kontrollgruppe (x = 0) &nbsp; <span class="dotexp">●</span> Training (x = 1)</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Sensitivitätsanalyse</div>
+      <p class="lead" style="margin-bottom:.3rem">Wie stark hängt das Ergebnis an deiner R²-Erwartung? Verschiebe den Median und beobachte, wie sich die gelernten Priors anpassen (Mikkola-Kriterium <em>responsiveness</em>).</p>
+      <input type="range" id="sens" min="70" max="130" value="100" oninput="onSens()">
+      <span class="sens-lbl" id="sens-lbl">R²-Erwartung ×1.00</span>
+      <div class="sens-out" id="sens-out"></div>
+    </div>
+
+    <div class="actions" style="align-items:center">
+      <button class="cbtn ghost" onclick="gotoPhase(3)">← Zurück</button>
+      <button class="cbtn" onclick="exportToBuilder()">An brms Builder / PP-Check übergeben →</button>
+      <span class="export-msg" id="export-msg"></span>
+    </div>
+
+    <div class="learn-section">
+      <div class="lcard"><div class="lcard-h">Priors im Beobachtungsraum</div><div class="lcard-body">Vorwissen wird nicht über abstrakte Parameter angegeben, sondern über verständliche Größen (Mittelwert, Effekt, R²). Das Tool übersetzt sie in Priors.</div></div>
+      <div class="lcard"><div class="lcard-h">Elicitation = Optimierung</div><div class="lcard-body">Die passende Prior wird gesucht, indem die Diskrepanz zwischen Modell und Erwartung minimiert wird — sichtbar an der fallenden Loss-Kurve.</div></div>
+      <div class="lcard"><div class="lcard-h">Energy Distance / MMD</div><div class="lcard-body">Der Loss misst den Abstand zweier Stichproben-Wolken. Klein = Modell und Experte stimmen überein.</div></div>
+      <div class="lcard"><div class="lcard-h">Prior Predictive Check</div><div class="lcard-body">Vor dem Datenkontakt prüfen, welche Daten die Priors erwarten — ein Realitätscheck der Annahmen.</div></div>
+      <div class="lcard"><div class="lcard-h">Konflikt &amp; Sensitivität</div><div class="lcard-body">Widersprechen sich Angaben (z. B. R² vs. Effekt + Streuung), zeigt der Abgleich orange. Der Sensitivitäts-Slider zeigt, wie robust das Ergebnis ist.</div></div>
+    </div>
+  </section>
+
+</div><!-- /.wrap -->
+</div><!-- /#shell -->
+
+<!-- ════════════ OVERLAYS (Hilfe / Transparenz) ════════════ -->
+<div class="ov" id="ov-help">
+  <div class="ov-card">
+    <button class="ov-close" onclick="closeOv()">✕</button>
+    <div class="ov-h">So funktioniert <em>The Prior Elicitor</em></div>
+    <p>Ziel: aus deinem Vorwissen eine sinnvolle <b>Prior-Verteilung</b> für ein Bayes-Modell gewinnen — nicht im abstrakten Parameterraum, sondern über verständliche Größen.</p>
+    <h4>Durchgehendes Beispiel</h4>
+    <p>Eine Evaluationsstudie zu <b>kognitivem Training</b>: Verbessert ein Gedächtnistraining die Leistung? <code>y</code> = IQ-Testwert (M ≈ 100, SD ≈ 15), <code>x</code> = Bedingung (0 = Kontrolle, 1 = Training). Dummy-Daten zum Mitdenken.</p>
+    <h4>Die vier Phasen</h4>
+    <ul>
+      <li><b>1 · Modell &amp; Raum</b> — Modell wählen und festlegen, worüber du Vorwissen hast.</li>
+      <li><b>2 · Befragung</b> — je „Target Quantity“ Quantile oder Momente eintragen; die implizierte Prior erscheint sofort als Dotplot.</li>
+      <li><b>3 · Lernen</b> — der Optimierer passt die Hyperparameter an, bis Modell und Erwartung zusammenpassen (Loss fällt).</li>
+      <li><b>4 · Ergebnis</b> — gelernte Priors, fertiger brms-Code, Prior Predictive Check, Sensitivitätsanalyse.</li>
+    </ul>
+    <p class="muted">Mehr zum exemplarischen Charakter: Button „Was ist das?“ oder das Badge oben anklicken.</p>
+  </div>
+</div>
+
+<div class="ov" id="ov-about">
+  <div class="ov-card">
+    <button class="ov-close" onclick="closeOv()">✕</button>
+    <div class="ov-h">Was dieses Tool <em>ist</em> — und was nicht</div>
+    <p>The Prior Elicitor zeigt an Dummy-Beispielen, <b>wie</b> simulationsbasierte Prior-Elicitation funktioniert. Er bildet die Kern-Konzepte der Methode nach, ist aber <b>kein Ersatz für die Originalsoftware</b> bei echten Analysen.</p>
+    <h4>Originalgetreu</h4>
+    <ul>
+      <li>Target-Quantity-Denken &amp; Parameter- vs. Beobachtungsraum</li>
+      <li>Energy Distance / MMD als Diskrepanzmaß</li>
+      <li>Loss-Minimierung, gelernte parametrische Priors</li>
+      <li>Prior Predictive Check &amp; brms-Anbindung</li>
+    </ul>
+    <h4>Bewusst vereinfacht</h4>
+    <ul>
+      <li>gradientenfreier Nelder-Mead statt Stochastic Gradient Descent</li>
+      <li>kein Gumbel-Softmax (diskrete Variablen würden direkt gezogen)</li>
+      <li>kein TensorFlow; nur Lehr-Modelle niedriger Dimension</li>
+      <li>Dummy-/Beispieldaten statt echter Studien</li>
+    </ul>
+    <h4>Im Ernstfall so vorgehen</h4>
+    <ul>
+      <li>Modell in brms/Stan spezifizieren</li>
+      <li><code>PriorLearning</code> (Python/TensorFlow) installieren</li>
+      <li>Target Quantities + Experten-Statistiken definieren</li>
+      <li>echtes SGD laufen lassen → Priors in den brms-Workflow zurückspielen</li>
+    </ul>
+    <h4>Originalarbeiten &amp; Software</h4>
+    <ul class="reflist">
+      <li>→ Bockting, Radev &amp; Bürkner (2024): <a href="https://arxiv.org/abs/2308.11672" target="_blank" rel="noopener">arXiv:2308.11672</a> — die Methode</li>
+      <li>→ Mikkola et al. (2024), Bayesian Analysis: <a href="https://doi.org/10.1214/23-BA1381" target="_blank" rel="noopener">doi:10.1214/23-BA1381</a> — der Rahmen</li>
+      <li>→ Software: <a href="https://github.com/florence-bockting/PriorLearning" target="_blank" rel="noopener">PriorLearning (GitHub)</a></li>
+      <li>→ Supplement: <a href="https://osf.io/rxgv2" target="_blank" rel="noopener">osf.io/rxgv2</a></li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   THE PRIOR ELICITOR — didaktischer Emulator (reine JS, keine Abhängigkeiten)
+   Modulgliederung (siehe Implementierungsplan):
+   1. STATE · 2. MODEL · 3. ELICIT-UI · 4. ENGINE-A · 5. ENGINE-B
+   6. PLOTS · 7. EXPORT · 8. WORKFLOW · 9. TRANSPARENZ · 10. STORY
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── 1. STATE ─────────────────────────────────────────────────────────── */
+const STATE = {
+  phase: 1,
+  model: 'linear',        // MVP: nur lineares Gauß-Modell
+  space: 'both',          // Elicitation-Raum: 'param' | 'obs' | 'both'
+  targets: {},            // Target-Quantity-Eingaben
+  lambda: {},             // gelernte Hyperparameter
+  vizMode: 'dot',         // 'dot' = Quantil-Dotplot | 'density' = Dichtekurve
+};
+
+/* ─── 2. MODEL ─────────────────────────────────────────────────────────── */
+const MODELS = {
+  linear: {
+    eq: [
+      'y<sub>i</sub> ~ <span class="pp">Normal</span>(θ<sub>i</sub>, s)',
+      'θ<sub>i</sub> = β<sub>0</sub> + β<sub>1</sub>·x<sub>1</sub>',
+      'β<sub>k</sub> ~ <span class="pp">Normal</span>(μ<sub>k</sub>, σ<sub>k</sub>) für k = 0, 1',
+      's ~ <span class="pp">Exponential</span>(ν)'
+    ],
+    defs: [
+      ['β<sub>0</sub>', 'Intercept — erwarteter IQ der Kontrollgruppe (x = 0)'],
+      ['β<sub>1</sub>', 'Steigung — Trainingseffekt in IQ-Punkten je Einheit x'],
+      ['s', 'Streuung der Residuen (interindividuelle Streuung, ~15)'],
+      ['μ<sub>k</sub>, σ<sub>k</sub>, ν', 'die gesuchten Hyperparameter λ der Priors']
+    ]
+  }
+};
+function renderModel(){
+  const m = MODELS[STATE.model]; if(!m) return;
+  document.getElementById('model-eq').innerHTML = m.eq.join('<br>');
+  document.getElementById('model-def').innerHTML =
+    m.defs.map(d=>`<dt>${d[0]}</dt><dd>${d[1]}</dd>`).join('');
+}
+function onModelChange(){ STATE.model = document.getElementById('model-sel').value; renderModel(); }
+
+const SPACE_HINTS = {
+  param: 'Du gibst Vorwissen direkt über Modellparameter an (z. B. „der Trainingseffekt liegt bei etwa 5 Punkten“).',
+  obs:   'Du gibst Vorwissen über beobachtbare Größen an (z. B. „die Kontrollgruppe liegt im Mittel bei IQ ≈ 100“) — das Tool übersetzt es in Priors.',
+  both:  'Mische beides: Angaben über Parameter und über Beobachtbares (Bocktings „hybrider“ Ansatz).'
+};
+function setSpace(s){
+  STATE.space = s;
+  document.querySelectorAll('#space-seg button').forEach(b=>b.classList.toggle('on', b.dataset.space===s));
+  document.getElementById('space-hint').textContent = SPACE_HINTS[s];
+}
+
+/* ─── 3. ELICIT-UI ─────────────────────────────────────────────────────── */
+const TARGETS_LINEAR = [
+  {id:'b0',    name:'Erwarteter IQ der Kontrollgruppe', maps:'β₀ (Intercept)', methods:['quantile','moment'], default:'quantile', placeholder:{q10:95,q50:100,q90:105,m:100,sd:3}},
+  {id:'b1',    name:'Trainingseffekt (Δ IQ)',           maps:'β₁ (Steigung)',  methods:['quantile','moment'], default:'quantile', placeholder:{q10:1,q50:5,q90:9,m:5,sd:2.5}},
+  {id:'sigma', name:'Streuung der Residuen (SD)',        maps:'s ~ Exponential', methods:['quantile','moment'], default:'moment',  placeholder:{q10:12,q50:15,q90:18,m:15,sd:2}},
+  {id:'r2',    name:'Erwartetes R² (Varianzaufklärung)', maps:'R²',              methods:['quantile'],          default:'quantile', placeholder:{q10:0.02,q50:0.06,q90:0.12}}
+];
+
+function cardHTML(t){
+  const st = STATE.targets[t.id];
+  const m = st.method, ph = t.placeholder || {};
+  const methBtns = t.methods.map(mm=>
+    `<button data-m="${mm}" class="${mm===m?'on':''}" onclick="setMethod('${t.id}','${mm}')">${mm==='quantile'?'Quantile':'Momente'}</button>`
+  ).join('');
+  const qin = `<div class="tinputs" id="qin-${t.id}"${m==='quantile'?'':' style="display:none"'}>
+      <label>Q10<input type="number" step="any" data-tid="${t.id}" data-q="q10" placeholder="${ph.q10??''}" oninput="onElicitInput('${t.id}')"></label>
+      <label>Q50 · Median<input type="number" step="any" data-tid="${t.id}" data-q="q50" placeholder="${ph.q50??''}" oninput="onElicitInput('${t.id}')"></label>
+      <label>Q90<input type="number" step="any" data-tid="${t.id}" data-q="q90" placeholder="${ph.q90??''}" oninput="onElicitInput('${t.id}')"></label>
+    </div>`;
+  const min = t.methods.includes('moment') ? `<div class="tinputs" id="min-${t.id}"${m==='moment'?'':' style="display:none"'}>
+      <label>Mittelwert<input type="number" step="any" data-tid="${t.id}" data-q="m" placeholder="${ph.m??''}" oninput="onElicitInput('${t.id}')"></label>
+      <label>SD<input type="number" step="any" data-tid="${t.id}" data-q="sd" placeholder="${ph.sd??''}" oninput="onElicitInput('${t.id}')"></label>
+    </div>` : '';
+  return `<div class="tcard" id="tcard-${t.id}">
+    <div class="tcard-head"><div class="tcard-name">${t.name}</div><div class="tcard-maps">→ ${t.maps}</div></div>
+    <div class="seg seg-sm">${methBtns}</div>
+    ${qin}${min}
+    <div class="tstatus" id="tstatus-${t.id}"></div>
+    <div class="tviz"><canvas id="cv-${t.id}"></canvas></div>
+    <div class="tplaus" id="plaus-${t.id}"></div>
+  </div>`;
+}
+
+function renderTargets(){
+  TARGETS_LINEAR.forEach(t=>{ if(!STATE.targets[t.id]) STATE.targets[t.id] = {method:t.default, vals:{}}; });
+  document.getElementById('target-grid').innerHTML = TARGETS_LINEAR.map(cardHTML).join('');
+  TARGETS_LINEAR.forEach(t=>onElicitInput(t.id));
+}
+
+function setMethod(tid, m){
+  STATE.targets[tid].method = m;
+  const card = document.getElementById('tcard-'+tid);
+  card.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  const qin = document.getElementById('qin-'+tid), min = document.getElementById('min-'+tid);
+  if(qin) qin.style.display = m==='quantile' ? '' : 'none';
+  if(min) min.style.display = m==='moment'   ? '' : 'none';
+  onElicitInput(tid);
+}
+
+function onElicitInput(tid){
+  const st = STATE.targets[tid];
+  document.querySelectorAll(`input[data-tid="${tid}"][data-q]`).forEach(inp=>{
+    const raw = (inp.value||'').trim().replace(',','.');
+    st.vals[inp.dataset.q] = raw==='' ? undefined : parseFloat(raw);
+  });
+  const res = checkConsistency(st);
+  const el = document.getElementById('tstatus-'+tid);
+  el.textContent = res.msg;
+  el.className = 'tstatus' + (res.ok===true?' good':res.ok===false?' bad':'');
+  // Engine-A: implizierte Verteilung ableiten, zeichnen, Plausibilität anzeigen
+  st.dist = res.ok ? deriveDistribution(tid, st) : null;
+  drawViz(tid);
+  const pe = document.getElementById('plaus-'+tid);
+  if(pe) pe.innerHTML = st.dist ? plausText(tid, st.dist) : '';
+}
+
+// Monotonie-/Plausibilitätsprüfung der Experten-Eingabe
+function checkConsistency(st){
+  const v = st.vals;
+  if(st.method==='quantile'){
+    const {q10,q50,q90} = v;
+    if([q10,q50,q90].some(x=>x===undefined||isNaN(x))) return {ok:null, msg:'Bitte Q10, Q50 und Q90 angeben.'};
+    if(!(q10<q50 && q50<q90)) return {ok:false, msg:'⚠ Quantile müssen aufsteigen: Q10 < Q50 < Q90.'};
+    return {ok:true, msg:'✓ konsistent'};
+  } else {
+    const {m,sd} = v;
+    if([m,sd].some(x=>x===undefined||isNaN(x))) return {ok:null, msg:'Bitte Mittelwert und SD angeben.'};
+    if(!(sd>0)) return {ok:false, msg:'⚠ Die SD muss größer als 0 sein.'};
+    return {ok:true, msg:'✓ konsistent'};
+  }
+}
+
+/* ─── 4. ENGINE-A (analytisch) ─────────────────────────────────────────── */
+const Z80 = 1.2815515655446004;   // z_{0.9} = -z_{0.1}
+
+function fmt(x){ if(x===undefined||!isFinite(x)) return '–'; const a=Math.abs(x); return a>=100?x.toFixed(0):a>=1?x.toFixed(2):x.toFixed(3); }
+
+// Normal an drei Quantile anpassen (kleinste Quadrate über die z-Quantile)
+function normalFromQuantiles(q10,q50,q90){
+  let sigma=(q90-q10)/(2*Z80); if(!(sigma>0)) sigma=1e-6;
+  const mu=(q10+q50+q90)/3;      // LS-Intercept (z̄ = 0)
+  return {mu,sigma};
+}
+// Exponential(ν) an drei Quantile von s anpassen: Q_p = (1/ν)·(-ln(1-p)), LS durch Ursprung
+function expFromQuantiles(q10,q50,q90){
+  const a=[0.10536051565782628,0.6931471805599453,2.302585092994046], Q=[q10,q50,q90];
+  let num=0,den=0; for(let i=0;i<3;i++){num+=a[i]*Q[i];den+=a[i]*a[i];}
+  return {nu: num>0 ? den/num : 1};   // Steigung k=num/den=1/ν → ν=den/num
+}
+
+function makeNormal(mu,sigma,priorText){
+  return {kind:'normal',mu,sigma,priorText,
+    qf:p=>mu+sigma*normInv(p),
+    pdf:x=>Math.exp(-0.5*((x-mu)/sigma)**2)/(sigma*Math.sqrt(2*Math.PI)),
+    xmin:mu-3.6*sigma, xmax:mu+3.6*sigma};
+}
+function makeExp(nu,priorText){
+  return {kind:'exp',nu,priorText,
+    qf:p=>-Math.log(1-p)/nu,
+    pdf:x=>x>=0?nu*Math.exp(-nu*x):0,
+    xmin:0, xmax:-Math.log(0.01)/nu};
+}
+
+// Aus den Experten-Angaben die implizierte Verteilung / Prior ableiten
+function deriveDistribution(tid, st){
+  const v=st.vals;
+  if(tid==='b0'||tid==='b1'){
+    let mu,sigma;
+    if(st.method==='moment'){mu=v.m;sigma=v.sd;} else {({mu,sigma}=normalFromQuantiles(v.q10,v.q50,v.q90));}
+    const sym=tid==='b0'?'β₀':'β₁';
+    return makeNormal(mu,sigma,`${sym} ~ Normal(${fmt(mu)}, ${fmt(sigma)})`);
+  }
+  if(tid==='sigma'){
+    let nu;
+    if(st.method==='moment'){ nu=v.m>0?1/v.m:1; } else { ({nu}=expFromQuantiles(v.q10,v.q50,v.q90)); }
+    return makeExp(nu,`s ~ Exponential(${fmt(nu)})`);
+  }
+  if(tid==='r2'){
+    let mu,sigma;
+    if(st.method==='moment'){mu=v.m;sigma=v.sd;} else {({mu,sigma}=normalFromQuantiles(v.q10,v.q50,v.q90));}
+    const d=makeNormal(mu,sigma,'Prior folgt im Lernschritt (simulationsbasiert)');
+    d.xmin=Math.max(0,d.xmin); d.xmax=Math.min(1,d.xmax); d.clip01=true;
+    return d;
+  }
+  return null;
+}
+
+/* ─── 5. ENGINE-B (MC + Nelder-Mead) ───────────────────────────────────── */
+const DESIGN_VARX = 0.25;   // Populationsvarianz von x bei balanciertem 2-Gruppen-Design (0/1, je 50 %)
+const S_MC = 64;            // Stichprobengröße je Target (Common Random Numbers, fix)
+
+// Energy Distance (= MMD mit Energiekern k(x,y)=-|x-y|, Bockting Gl. 8), 1-D
+function energyDist(X,Y){
+  const n=X.length, m=Y.length;
+  let xy=0; for(let i=0;i<n;i++){ const xi=X[i]; for(let j=0;j<m;j++) xy+=Math.abs(xi-Y[j]); }
+  let xx=0; for(let i=0;i<n;i++){ const xi=X[i]; for(let j=0;j<n;j++) xx+=Math.abs(xi-X[j]); }
+  let yy=0; for(let i=0;i<m;i++){ const yi=Y[i]; for(let j=0;j<m;j++) yy+=Math.abs(yi-Y[j]); }
+  return 2*xy/(n*m) - xx/(n*n) - yy/(m*m);
+}
+// Energy Distance auf einer gemeinsamen Skala (Task-Balancing-Ersatz für DWA)
+function edStd(X,Y,sc){ const x=X.map(a=>a/sc), y=Y.map(a=>a/sc); return energyDist(x,y); }
+
+// Elicited-Samples + Common Random Numbers einmalig aufbauen (→ deterministischer, glatter Loss)
+function buildElicited(){
+  const U=[]; for(let j=0;j<S_MC;j++) U.push((j+0.5)/S_MC);
+  let seed=20230815; const rnd=()=>{ seed=(seed*1103515245+12345)&0x7fffffff; return (seed+0.5)/0x80000000; };
+  const U1=[],U2=[]; for(let j=0;j<S_MC;j++){ U1.push(rnd()); U2.push(rnd()); }
+  const sampFromDist=(d,clip)=>U.map(u=>{ let x=d.qf(u); if(clip) x=Math.min(0.999,Math.max(0.001,x)); return x; });
+  const scaleOf=arr=>{ const m=arr.reduce((a,b)=>a+b,0)/arr.length;
+    const v=arr.reduce((a,b)=>a+(b-m)*(b-m),0)/arr.length; return Math.max(Math.sqrt(v),1e-6); };
+  const t=STATE.targets;
+  const b0=sampFromDist(t.b0.dist), b1=sampFromDist(t.b1.dist),
+        sg=sampFromDist(t.sigma.dist), r2=sampFromDist(t.r2.dist,true);
+  return {U,U1,U2,
+    b0:{samp:b0,scale:scaleOf(b0)}, b1:{samp:b1,scale:scaleOf(b1)},
+    sigma:{samp:sg,scale:scaleOf(sg)}, r2:{samp:r2,scale:scaleOf(r2)}};
+}
+
+// Loss-Komponenten bei λ-Vektor v = [μ₀, log σ₀, μ₁, log σ₁, log ν]
+function lossComponents(v, elic){
+  const mu0=v[0], s0=Math.exp(v[1]), mu1=v[2], s1=Math.exp(v[3]), nu=Math.exp(v[4]);
+  const mB0=elic.U.map(u=>mu0+s0*normInv(u));
+  const mB1=elic.U.map(u=>mu1+s1*normInv(u));
+  const mS =elic.U.map(u=>-Math.log(1-u)/nu);
+  const mR2=elic.U1.map((u1,j)=>{                       // R² = var(θ)/(var(θ)+s²), θ=β₀+β₁x
+    const b1=mu1+s1*normInv(u1), s=-Math.log(1-elic.U2[j])/nu;
+    const vt=b1*b1*DESIGN_VARX; return vt/(vt+s*s);
+  });
+  return {
+    b0:    edStd(mB0, elic.b0.samp,    elic.b0.scale),
+    b1:    edStd(mB1, elic.b1.samp,    elic.b1.scale),
+    sigma: edStd(mS,  elic.sigma.samp, elic.sigma.scale),
+    r2:    edStd(mR2, elic.r2.samp,    elic.r2.scale)
+  };
+}
+function buildLoss(elic){ return v=>{ const c=lossComponents(v,elic); return c.b0+c.b1+c.sigma+c.r2; }; }
+
+// Nelder-Mead (gradientenfrei); zeichnet die Trajektorie des besten Vertex je Iteration auf
+function nelderMead(f, x0, {maxIter=240, tol=1e-10}={}){
+  const n=x0.length, A=1, G=2, R=0.5, SH=0.5;
+  let simplex=[x0.slice()];
+  for(let i=0;i<n;i++){ const p=x0.slice(); p[i]+=(p[i]!==0?0.05*Math.abs(p[i]):0.05); simplex.push(p); }
+  let fv=simplex.map(f); const traj=[];
+  for(let it=0; it<maxIter; it++){
+    const idx=[...Array(n+1).keys()].sort((a,b)=>fv[a]-fv[b]);
+    simplex=idx.map(i=>simplex[i]); fv=idx.map(i=>fv[i]);
+    traj.push({it, fx:fv[0], x:simplex[0].slice()});
+    if(Math.abs(fv[n]-fv[0]) < tol*(Math.abs(fv[0])+tol)) break;
+    const cen=new Array(n).fill(0);
+    for(let i=0;i<n;i++) for(let j=0;j<n;j++) cen[j]+=simplex[i][j]/n;
+    const xr=cen.map((c,j)=>c+A*(c-simplex[n][j])), fr=f(xr);
+    if(fr<fv[0]){
+      const xe=cen.map((c,j)=>c+G*(xr[j]-c)), fe=f(xe);
+      if(fe<fr){simplex[n]=xe;fv[n]=fe;} else {simplex[n]=xr;fv[n]=fr;}
+    } else if(fr<fv[n-1]){
+      simplex[n]=xr;fv[n]=fr;
+    } else {
+      const xc=cen.map((c,j)=>c+R*(simplex[n][j]-c)), fc=f(xc);
+      if(fc<fv[n]){simplex[n]=xc;fv[n]=fc;}
+      else { for(let i=1;i<=n;i++){ simplex[i]=simplex[0].map((x0j,j)=>x0j+SH*(simplex[i][j]-x0j)); fv[i]=f(simplex[i]); } }
+    }
+  }
+  let bi=0; for(let i=1;i<fv.length;i++) if(fv[i]<fv[bi]) bi=i;
+  return {x:simplex[bi], fx:fv[bi], traj};
+}
+
+// Orchestrierung: Engine-A-Werte als Start → gradientenfreier Multi-Target-Fit
+function runLearning(){
+  const t=STATE.targets, out=document.getElementById('learn-out');
+  const ready=['b0','b1','sigma','r2'].every(id=>t[id] && t[id].dist);
+  if(!ready){ out.innerHTML='<div class="lr-warn">⚠ Bitte zuerst alle vier Target Quantities in Phase 2 vollständig und konsistent ausfüllen.</div>'; return; }
+  const elic=buildElicited();
+  const loss=buildLoss(elic);
+  const x0=[t.b0.dist.mu, Math.log(t.b0.dist.sigma), t.b1.dist.mu, Math.log(t.b1.dist.sigma), Math.log(t.sigma.dist.nu)];
+  const startLoss=loss(x0);
+  const res=nelderMead(loss, x0);
+  const v=res.x;
+  STATE.lambda={mu0:v[0], sigma0:Math.exp(v[1]), mu1:v[2], sigma1:Math.exp(v[3]), nu:Math.exp(v[4])};
+  STATE.learn={startLoss, endLoss:res.fx, traj:res.traj, elic, x0};
+  startLearnAnimation();
+}
+
+function getLamVec(){ const L=STATE.lambda; return [L.mu0, Math.log(L.sigma0), L.mu1, Math.log(L.sigma1), Math.log(L.nu)]; }
+
+// Modell-implizierte R²-Stichprobe bei λ-Vektor v
+function modelR2(v, elic){
+  const mu1=v[2], s1=Math.exp(v[3]), nu=Math.exp(v[4]);
+  return elic.U1.map((u1,j)=>{ const b1=mu1+s1*normInv(u1), s=-Math.log(1-elic.U2[j])/nu, vt=b1*b1*DESIGN_VARX; return vt/(vt+s*s); });
+}
+
+function startLearnAnimation(){
+  const tr=STATE.learn.traj, total=tr.length, elic=STATE.learn.elic;
+  const lossCv=document.getElementById('cv-loss'), convCv=document.getElementById('cv-conv'), cloudCv=document.getElementById('cv-cloud');
+  document.getElementById('btn-learn').disabled=true;
+  document.getElementById('learn-status').textContent='läuft…';
+  let i=0; const step=Math.max(1,Math.round(total/90));
+  function frame(){
+    i=Math.min(total-1, i+step);
+    drawLossCurve(lossCv, tr, i);
+    drawConvergence(convCv, tr, i);
+    const mr=modelR2(tr[i].x, elic);
+    drawCloud(cloudCv, mr, elic.r2.samp);
+    document.getElementById('cloud-ed').textContent='ED(R²) = '+edStd(mr, elic.r2.samp, elic.r2.scale).toFixed(3);
+    if(i<total-1) requestAnimationFrame(frame); else finishLearn();
+  }
+  requestAnimationFrame(frame);
+}
+function finishLearn(){
+  document.getElementById('btn-learn').disabled=false;
+  document.getElementById('learn-status').textContent='fertig · '+STATE.learn.traj.length+' Iterationen';
+  renderLearnResult();
+  renderMatchStatus();
+}
+function renderMatchStatus(){
+  const c=lossComponents(getLamVec(), STATE.learn.elic);
+  const items=[['β₀',c.b0],['β₁',c.b1],['s',c.sigma],['R²',c.r2]];
+  document.getElementById('match-status').innerHTML='<div class="match-row"><span class="ml">Abgleich Modell ↔ Experte:</span>'+
+    items.map(([l,ed])=>`<span class="chip ${ed<0.05?'good':'warn'}">${l}: ${ed.toFixed(3)}</span>`).join('')+'</div>';
+}
+// Endzustand neu zeichnen (Theme-Wechsel / Resize / Wiedereintritt Phase 3)
+function redrawLearnFinal(){
+  if(!STATE.learn) return;
+  const tr=STATE.learn.traj, last=tr.length-1, elic=STATE.learn.elic;
+  drawLossCurve(document.getElementById('cv-loss'), tr, last);
+  drawConvergence(document.getElementById('cv-conv'), tr, last);
+  drawCloud(document.getElementById('cv-cloud'), modelR2(getLamVec(), elic), elic.r2.samp);
+}
+
+/* ─── Phase 4: Render, Prior Predictive Check, Sensitivität ─────────────── */
+function gaussRand(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function sampleScale(a){ const m=a.reduce((x,y)=>x+y,0)/a.length; const v=a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length; return Math.max(Math.sqrt(v),1e-6); }
+function samplePPC(lam){
+  const K=1500, y0=[], y1=[];
+  for(let i=0;i<K;i++){
+    const b0=lam.mu0+lam.sigma0*gaussRand(), b1=lam.mu1+lam.sigma1*gaussRand(), s=-Math.log(Math.random())/lam.nu;
+    y0.push(b0 + s*gaussRand()); y1.push(b0+b1 + s*gaussRand());
+  }
+  return {y0,y1};
+}
+function renderPhase4(){
+  if(!STATE.lambda) return;
+  renderLearnedPriors(STATE.lambda);
+  document.getElementById('brms-code').innerHTML = highlightR(brmsCode(STATE.lambda));
+  STATE.ppc = samplePPC(STATE.lambda);
+  drawPPC(document.getElementById('cv-ppc'), STATE.ppc.y0, STATE.ppc.y1);
+  document.getElementById('sens').value=100;
+  document.getElementById('sens-lbl').textContent='R²-Erwartung ×1.00';
+  document.getElementById('sens-out').innerHTML='';
+}
+function redrawPhase4(){
+  if(!STATE.lambda) return;
+  renderLearnedPriors(STATE.lambda);
+  if(STATE.ppc) drawPPC(document.getElementById('cv-ppc'), STATE.ppc.y0, STATE.ppc.y1);
+}
+// Sensitivität: R²-Median skalieren, Fit erneut (gekürzt), Vorschau-Priors zeigen
+function onSens(){
+  if(!STATE.learn) return;
+  const f=(+document.getElementById('sens').value)/100;
+  document.getElementById('sens-lbl').textContent='R²-Erwartung ×'+f.toFixed(2);
+  const t=STATE.targets, base=STATE.learn.elic;
+  const r2d=makeNormal(t.r2.dist.mu*f, t.r2.dist.sigma, '');
+  const r2samp=base.U.map(u=>Math.min(0.999,Math.max(0.001, r2d.qf(u))));
+  const elic=Object.assign({}, base, {r2:{samp:r2samp, scale:sampleScale(r2samp)}});
+  const loss=buildLoss(elic);
+  const x0=[t.b0.dist.mu, Math.log(t.b0.dist.sigma), t.b1.dist.mu, Math.log(t.b1.dist.sigma), Math.log(t.sigma.dist.nu)];
+  const res=nelderMead(loss, x0, {maxIter:160});
+  const lam={mu0:res.x[0], sigma0:Math.exp(res.x[1]), mu1:res.x[2], sigma1:Math.exp(res.x[3]), nu:Math.exp(res.x[4])};
+  renderLearnedPriors(lam);
+  document.getElementById('brms-code').innerHTML = highlightR(brmsCode(lam));
+  const ppc=samplePPC(lam); drawPPC(document.getElementById('cv-ppc'), ppc.y0, ppc.y1);
+  document.getElementById('sens-out').innerHTML =
+    `Bei dieser R²-Erwartung: s ~ Exponential(${fmt(lam.nu)}) · β₁ ~ Normal(${fmt(lam.mu1)}, ${fmt(lam.sigma1)})`+
+    (Math.abs(f-1)<1e-9 ? '' : ' <span class="muted">— „An Builder übergeben“ nutzt weiterhin das offizielle Ergebnis (×1.00).</span>');
+}
+
+function renderLearnResult(){
+  const L=STATE.learn, lam=STATE.lambda, t=STATE.targets;
+  const comp=lossComponents([lam.mu0,Math.log(lam.sigma0),lam.mu1,Math.log(lam.sigma1),Math.log(lam.nu)], L.elic);
+  const rows=[
+    ['β₀ ~ Normal', `${fmt(t.b0.dist.mu)}, ${fmt(t.b0.dist.sigma)}`, `${fmt(lam.mu0)}, ${fmt(lam.sigma0)}`],
+    ['β₁ ~ Normal', `${fmt(t.b1.dist.mu)}, ${fmt(t.b1.dist.sigma)}`, `${fmt(lam.mu1)}, ${fmt(lam.sigma1)}`],
+    ['s ~ Exponential', `${fmt(t.sigma.dist.nu)}`, `${fmt(lam.nu)}`]
+  ];
+  document.getElementById('learn-out').innerHTML =
+    `<div class="lr-loss">Gesamt-Loss: ${L.startLoss.toFixed(4)} → <b>${L.endLoss.toFixed(4)}</b> · ${L.traj.length} Iterationen</div>
+     <div class="lr-out">
+       <div class="lr-row lr-head"><span class="lr-k">Hyperparameter</span><span class="lr-v">Start (analytisch)</span><span class="lr-v">gelernt</span></div>
+       ${rows.map(r=>`<div class="lr-row"><span class="lr-k">${r[0]}</span><span class="lr-v">${r[1]}</span><span class="lr-v">${r[2]}</span></div>`).join('')}
+     </div>
+     <div class="lr-note">End-Energy-Distance je Target — β₀: ${comp.b0.toFixed(4)} · β₁: ${comp.b1.toFixed(4)} · s: ${comp.sigma.toFixed(4)} · R²: ${comp.r2.toFixed(4)}. Kleine Werte = gute Übereinstimmung. Bleibt ein Wert groß, widerspricht dein R² den übrigen Angaben (Prior-Konflikt). <span class="muted">Die Live-Animation dieses Vorgangs folgt im nächsten Schritt.</span></div>`;
+  document.getElementById('btn-to4').disabled=false;
+}
+
+/* ─── 6. PLOTS ─────────────────────────────────────────────────────────── */
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function hexA(hex,a){ hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
+  const n=parseInt(hex,16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+
+// Inverse Normal-CDF (Probit) — Acklam-Approximation
+function normInv(p){
+  if(p<=0) return -Infinity; if(p>=1) return Infinity;
+  const a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.383577518672690e2,-3.066479806614716e1,2.506628277459239e0];
+  const b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1];
+  const c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838e0,-2.549732539343734e0,4.374664141464968e0,2.938163982698783e0];
+  const d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996e0,3.754408661907416e0];
+  const plow=0.02425, phigh=1-plow; let q,r;
+  if(p<plow){ q=Math.sqrt(-2*Math.log(p)); return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  if(p<=phigh){ q=p-0.5; r=q*q; return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+  q=Math.sqrt(-2*Math.log(1-p)); return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+
+function setupCanvas(cv){
+  const w=cv.clientWidth; if(!w) return null;
+  const dpr=window.devicePixelRatio||1, h=cv.clientHeight||74;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+function drawViz(tid){
+  const cv=document.getElementById('cv-'+tid); if(!cv) return;
+  const s=setupCanvas(cv); if(!s) return;          // verborgen (Breite 0) → später neu zeichnen
+  const dist=STATE.targets[tid].dist; if(!dist) return;
+  if(STATE.vizMode==='density') drawDensity(s,dist); else drawDotplot(s,dist);
+}
+// Quantil-Dotplot (Kay et al.): N gleichabständige Quantile als gestapelte Punkte
+function drawDotplot({ctx,w,h},dist){
+  const pad=5, N=20, col=cssVar('--a2');
+  const xs=[]; for(let i=1;i<=N;i++) xs.push(dist.qf((i-0.5)/N));
+  const xmin=dist.xmin, span=(dist.xmax-dist.xmin)||1;
+  const toPx=x=>pad+(x-xmin)/span*(w-2*pad);
+  const dotD=Math.min(9,Math.max(5,(w-2*pad)/(N*0.7)));
+  const stacks={};
+  xs.forEach(x=>{ const px=toPx(x), c=Math.round(px/dotD); (stacks[c]=stacks[c]||{n:0,px}).n++; });
+  ctx.fillStyle=col;
+  Object.values(stacks).forEach(st=>{ for(let k=0;k<st.n;k++){
+    const cy=h-pad-dotD/2-k*dotD;
+    ctx.beginPath(); ctx.arc(st.px,cy,dotD/2-0.8,0,6.2832); ctx.fill();
+  }});
+  ctx.strokeStyle=cssVar('--grid'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,h-pad); ctx.lineTo(w-pad,h-pad); ctx.stroke();
+}
+function drawDensity({ctx,w,h},dist){
+  const pad=5, col=cssVar('--a2'), M=80;
+  const xmin=dist.xmin, span=(dist.xmax-dist.xmin)||1;
+  const pts=[]; let pmax=0;
+  for(let i=0;i<=M;i++){ const x=xmin+span*i/M, y=dist.pdf(x); pts.push([x,y]); if(y>pmax)pmax=y; }
+  if(pmax<=0)pmax=1;
+  const toPx=x=>pad+(x-xmin)/span*(w-2*pad), toPy=y=>h-pad-(y/pmax)*(h-2*pad);
+  ctx.beginPath(); ctx.moveTo(pad,h-pad);
+  pts.forEach(([x,y])=>ctx.lineTo(toPx(x),toPy(y)));
+  ctx.lineTo(w-pad,h-pad); ctx.closePath();
+  ctx.fillStyle=hexA(col,0.18); ctx.fill();
+  ctx.beginPath(); pts.forEach(([x,y],i)=>{ const px=toPx(x),py=toPy(y); i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
+  ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.stroke();
+}
+function plausText(tid,dist){
+  const lo=dist.qf(0.1), hi=dist.qf(0.9);
+  return `<span>80 %-Intervall: [${fmt(lo)}, ${fmt(hi)}]</span> · <span class="pl-prior">${dist.priorText}</span>`;
+}
+function setVizMode(m){
+  STATE.vizMode=m;
+  document.getElementById('viz-dot').classList.toggle('on',m==='dot');
+  document.getElementById('viz-den').classList.toggle('on',m==='density');
+  redrawAllViz();
+}
+function redrawAllViz(){ TARGETS_LINEAR.forEach(t=>drawViz(t.id)); }
+
+// Phase 3: Loss-Kurve über Iterationen
+function drawLossCurve(cv, traj, upto){
+  const s=setupCanvas(cv); if(!s) return; const {ctx,w,h}=s, pad=6, n=traj.length;
+  let ymax=0; for(const t of traj) if(t.fx>ymax) ymax=t.fx; if(ymax<=0) ymax=1;
+  const toX=i=> n>1 ? pad+i/(n-1)*(w-2*pad) : w/2;
+  const toY=v=> h-pad-(v/ymax)*(h-2*pad);
+  ctx.strokeStyle=cssVar('--grid'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,h-pad); ctx.lineTo(w-pad,h-pad); ctx.stroke();
+  ctx.strokeStyle=cssVar('--a2'); ctx.lineWidth=1.6; ctx.beginPath();
+  for(let i=0;i<=upto;i++){ const x=toX(i),y=toY(traj[i].fx); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke();
+  ctx.fillStyle=cssVar('--a2'); ctx.beginPath(); ctx.arc(toX(upto),toY(traj[upto].fx),2.8,0,6.2832); ctx.fill();
+}
+// Phase 3: Hyperparameter-Konvergenz (μ₁, σ₁, ν je eigene Skala normiert)
+function drawConvergence(cv, traj, upto){
+  const s=setupCanvas(cv); if(!s) return; const {ctx,w,h}=s, pad=6, n=traj.length;
+  const series=[{f:x=>x[2],c:'--a2'},{f:x=>Math.exp(x[3]),c:'--a3'},{f:x=>Math.exp(x[4]),c:'--a5'}];
+  const toX=i=> n>1 ? pad+i/(n-1)*(w-2*pad) : w/2;
+  series.forEach(se=>{
+    const vals=traj.map(t=>se.f(t.x));
+    let mn=Infinity,mx=-Infinity; for(const v of vals){ if(v<mn)mn=v; if(v>mx)mx=v; }
+    const rg=(mx-mn)||1, toY=v=> h-pad-((v-mn)/rg)*(h-2*pad);
+    ctx.strokeStyle=cssVar(se.c); ctx.lineWidth=1.5; ctx.beginPath();
+    for(let i=0;i<=upto;i++){ const x=toX(i),y=toY(vals[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.stroke();
+  });
+}
+// Phase 3: zwei Punktwolken (Experte vs. Modell) für ein Target
+function drawCloud(cv, model, expert){
+  const s=setupCanvas(cv); if(!s) return; const {ctx,w,h}=s, pad=8;
+  let xmin=Infinity,xmax=-Infinity; for(const a of model.concat(expert)){ if(a<xmin)xmin=a; if(a>xmax)xmax=a; }
+  if(xmax-xmin<1e-9){ xmin-=0.01; xmax+=0.01; }
+  const toX=x=>pad+(x-xmin)/(xmax-xmin)*(w-2*pad);
+  const rowE=h*0.34, rowM=h*0.7, r=2.4, jit=k=>(((k*2654435761)>>>0)%1000/1000-0.5)*8;
+  ctx.fillStyle=cssVar('--a5'); expert.forEach((x,k)=>{ ctx.beginPath(); ctx.arc(toX(x),rowE+jit(k),r,0,6.2832); ctx.fill(); });
+  ctx.fillStyle=cssVar('--a2'); model.forEach((x,k)=>{ ctx.beginPath(); ctx.arc(toX(x),rowM+jit(k),r,0,6.2832); ctx.fill(); });
+}
+
+// Phase 4: gelernte Prior-Kurven
+function drawDistInto(id, dist){ const cv=document.getElementById(id); if(!cv) return; const s=setupCanvas(cv); if(!s) return; drawDensity(s, dist); }
+function renderLearnedPriors(lam){
+  drawDistInto('cv-pb0', makeNormal(lam.mu0,lam.sigma0,''));
+  drawDistInto('cv-pb1', makeNormal(lam.mu1,lam.sigma1,''));
+  drawDistInto('cv-ps',  makeExp(lam.nu,''));
+  document.getElementById('pt-b0').textContent='β₀ ~ Normal('+fmt(lam.mu0)+', '+fmt(lam.sigma0)+')';
+  document.getElementById('pt-b1').textContent='β₁ ~ Normal('+fmt(lam.mu1)+', '+fmt(lam.sigma1)+')';
+  document.getElementById('pt-s').textContent ='s ~ Exponential('+fmt(lam.nu)+')';
+}
+// Phase 4: Prior Predictive Check — zwei Gruppen-Histogramme
+function pctile(sorted,p){ const i=(sorted.length-1)*p, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); }
+function drawPPC(cv, y0, y1){
+  const s=setupCanvas(cv); if(!s) return; const {ctx,w,h}=s, pad=8, bins=44;
+  const s0=[...y0].sort((a,b)=>a-b), s1=[...y1].sort((a,b)=>a-b);
+  let xmin=Math.min(pctile(s0,0.01),pctile(s1,0.01)), xmax=Math.max(pctile(s0,0.99),pctile(s1,0.99));
+  if(xmax-xmin<1e-9){ xmin-=1; xmax+=1; }
+  const hist=arr=>{ const c=new Array(bins).fill(0); for(const v of arr){ let b=Math.floor((v-xmin)/(xmax-xmin)*bins); if(b<0)b=0; if(b>=bins)b=bins-1; c[b]++; } return c; };
+  const c0=hist(y0), c1=hist(y1); let mx=0; for(const c of c0.concat(c1)) if(c>mx)mx=c; if(!mx)mx=1;
+  const toX=b=>pad+(b+0.5)/bins*(w-2*pad), toY=c=>h-pad-(c/mx)*(h-2*pad);
+  const drawC=(c,col)=>{
+    ctx.beginPath(); ctx.moveTo(pad,h-pad); for(let b=0;b<bins;b++) ctx.lineTo(toX(b),toY(c[b])); ctx.lineTo(w-pad,h-pad); ctx.closePath();
+    ctx.fillStyle=hexA(cssVar(col),0.22); ctx.fill();
+    ctx.beginPath(); for(let b=0;b<bins;b++){ const x=toX(b),y=toY(c[b]); b?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.strokeStyle=cssVar(col); ctx.lineWidth=1.4; ctx.stroke();
+  };
+  drawC(c0,'--a2'); drawC(c1,'--a5');
+}
+
+/* ─── 7. EXPORT (brms + localStorage) ──────────────────────────────────── */
+// KORREKTE Klassen-Zuordnung: Intercept → class=Intercept, Steigung → class=b, coef=x1
+function brmsCode(lam){
+  return `# Gelernte Priors — The Prior Elicitor (Dummy-Beispiel: kognitives Training)
+priors <- prior(normal(${fmt(lam.mu0)}, ${fmt(lam.sigma0)}), class = Intercept) +
+          prior(normal(${fmt(lam.mu1)}, ${fmt(lam.sigma1)}), class = b, coef = x1) +
+          prior(exponential(${fmt(lam.nu)}), class = sigma)
+
+# fit <- brm(y ~ 1 + x1, data = d, family = gaussian(),
+#            prior = priors, chains = 4, cores = 4, warmup = 2000, iter = 4000)`;
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Leichtgewichtiges R-Syntax-Highlighting (zeilenweise, Kommentar zuerst abtrennen)
+function highlightR(code){
+  return code.split('\n').map(line=>{
+    const ci=line.indexOf('#');
+    let codePart = ci>=0 ? line.slice(0,ci) : line;
+    const com = ci>=0 ? line.slice(ci) : '';
+    let h=escHtml(codePart);
+    // Reihenfolge wichtig: Keywords ZUERST (bevor span-Markup mit class="…" existiert),
+    // sonst würde das Keyword „class" das class-Attribut der eigenen Spans treffen.
+    h=h.replace(/'[^']*'|"[^"]*"/g, m=>`<span class="r-str">${m}</span>`);
+    h=h.replace(/\b(class|coef|data|family|chains|cores|warmup|iter)\b/g, '<span class="r-key">$1</span>');
+    h=h.replace(/\b([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g, '<span class="r-fun">$1</span>(');
+    h=h.replace(/\b(\d+\.?\d*)\b/g, '<span class="r-num">$1</span>');
+    return h + (com ? `<span class="r-com">${escHtml(com)}</span>` : '');
+  }).join('\n');
+}
+
+function copyBrms(){
+  navigator.clipboard.writeText(brmsCode(STATE.lambda)).then(()=>{
+    const b=document.getElementById('btn-copy'), o=b.textContent;
+    b.textContent='✓ kopiert'; setTimeout(()=>b.textContent=o,1500);
+  });
+}
+
+function exportToBuilder(){
+  const payload={source:'The Prior Elicitor', model:'linear', lambda:STATE.lambda, brms:brmsCode(STATE.lambda), ts:Date.now()};
+  localStorage.setItem('btl-elicited-priors', JSON.stringify(payload));
+  document.getElementById('export-msg').innerHTML='✓ Priors gespeichert · öffnen: '+
+    '<a href="Brms_model_builder.html">brms Builder</a> · <a href="Bayesian_PP_Check.html">Prior PP-Check</a>';
+}
+
+/* ─── 8. WORKFLOW (Phasensteuerung, Stepper, Hypercube) ────────────────── */
+function gotoPhase(n){
+  STATE.phase = n;
+  document.querySelectorAll('.phase').forEach(p=>p.classList.remove('show'));
+  document.getElementById('phase-'+n).classList.add('show');
+  document.querySelectorAll('#stepper .step').forEach(s=>{
+    const sn = +s.dataset.step;
+    s.classList.toggle('active', sn===n);
+    s.classList.toggle('done', sn<n);
+  });
+  document.getElementById('shell').scrollTop = 0;
+  if(n===2) requestAnimationFrame(redrawAllViz);              // Canvas erst zeichnen, wenn sichtbar
+  if(n===3 && STATE.learn) requestAnimationFrame(redrawLearnFinal);
+  if(n===4 && STATE.lambda) requestAnimationFrame(renderPhase4);
+}
+
+/* ─── 9. TRANSPARENZ ───────────────────────────────────────────────────── */
+function openOv(which){ const el=document.getElementById('ov-'+which); if(el) el.classList.add('show'); }
+function closeOv(){ document.querySelectorAll('.ov').forEach(o=>o.classList.remove('show')); }
+
+/* ─── 10. STORY (Dummy: Unkelbach & Rom, PTJ) ──────────────────────────── */
+// (Schritt 2+)
+
+/* ─── Theme-Toggle (BTL-Standard) ──────────────────────────────────────── */
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur==='dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('btl-theme', next);
+  document.getElementById('btn-th').textContent = next==='dark' ? '☀ Light' : '🌙 Dark';
+  if(STATE.phase===2) requestAnimationFrame(redrawAllViz);   // Akzentfarbe hat gewechselt
+  if(STATE.phase===3) requestAnimationFrame(redrawLearnFinal);
+  if(STATE.phase===4) requestAnimationFrame(redrawPhase4);
+}
+
+/* ─── INIT ──────────────────────────────────────────────────────────────── */
+renderModel();
+setSpace('both');
+renderTargets();
+window.addEventListener('resize', ()=>{ if(STATE.phase===2) redrawAllViz(); if(STATE.phase===3) redrawLearnFinal(); if(STATE.phase===4) redrawPhase4(); });
+document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click', e=>{ if(e.target===o) closeOv(); }));
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeOv(); });
+</script>
+</body>
+</html>
