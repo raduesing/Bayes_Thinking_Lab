@@ -909,7 +909,7 @@ const TERMS = [
   def:'The RSS is the sum of squared differences between observed and predicted values: RSS = Σ(yᵢ − ŷᵢ)². It is the central optimization criterion of OLS estimation — OLS minimizes exactly this quantity. RSS relates to further model fit measures: R² = 1 − RSS/TSS; the estimate of residual variance σ² = RSS/(n−p) uses it directly; and deviance under normality assumption is proportional to RSS. Other common names for the same quantity: SSE (Sum of Squares Error) in many textbooks; German-language texts use SAQ_innerhalb or SAQ_Fehler/SAQ_Residuen (see the SAQ entry). Confusing exception: some sources call this very residual share "SSR" as well — there the R stands for "Residual" rather than the more usual "Regression" (see the note in the SSM entry).',
   formula:'RSS = Σᵢ (yᵢ − ŷᵢ)²',
   intuition:'RSS measures how far data points are from the regression line overall — summed across all observations and squared. Squaring has two consequences: positive and negative deviations do not cancel out, and large deviations are penalized disproportionately. This makes OLS sensitive to outliers: a single extreme point can shift the regression line substantially because it strongly increases the RSS.',
-  related:[{id:'ols',label:'OLS'},{id:'ssm',label:'SSM'},{id:'residuen',label:'Residuals'},{id:'r2',label:'R²'},{id:'deviance',label:'Deviance'}]
+  related:[{id:'ols',label:'OLS'},{id:'ssm',label:'SSM'},{id:'tss',label:'TSS'},{id:'saq',label:'SS (SAQ)'},{id:'residuen',label:'Residuals'},{id:'r2',label:'R²'},{id:'deviance',label:'Deviance'}]
 },
 
 /* ── S ── */
@@ -946,7 +946,7 @@ const TERMS = [
   def:'The SSM (also SS_Model) is the sum of squared differences between the predicted values ŷᵢ and the overall mean ȳ: SSM = Σ(ŷᵢ − ȳ)². It measures the share of the total spread (TSS) that the model explains over and above simply predicting the mean. The exact decomposition TSS = SSM + RSS holds, and R² = SSM/TSS. OLS maximizes SSM (equivalent to minimizing RSS). Note on notation: some (older) sources write "SSR" (Sum of Squares Regression) for this model term — do not confuse it with RSS (Residual Sum of Squares). German-language texts: SAQ_zwischen or SAQ_Modell/SAQ_Effekt (see the SAQ entry).',
   formula:'SSM = Σᵢ (ŷᵢ − ȳ)²',
   intuition:'SSM answers the question: "How much better does the model predict than a null model that simply uses the mean ȳ?" Each contribution is the distance of the regression line from the mean ȳ at the position of a data point — one per observation. A large SSM relative to TSS means the regression line deviates markedly from the flat mean line and the model explains a lot. SSM (explained, model) and RSS (unexplained, residual) add up to the total spread TSS.',
-  related:[{id:'rss',label:'RSS'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'},{id:'residuen',label:'Residuals'}]
+  related:[{id:'rss',label:'RSS'},{id:'tss',label:'TSS'},{id:'saq',label:'SS (SAQ)'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'},{id:'residuen',label:'Residuals'}]
 },
 { id:'standardfehler', cats:['reg','mle'], az:'S', name:'Standard Error', longname:'Standard Error (SE)',
   def:'The standard error (SE) is the standard deviation of an estimator across (hypothetically) repeated samples — it describes how much the estimate would vary if the sample were drawn again. For the sample mean, SE(x̄) = σ/√n. For OLS coefficients β̂, the full covariance matrix is Var(β̂) = σ²(XᵀX)⁻¹; the SE of a single coefficient is the square root of its diagonal element. The SE decreases with 1/√n — a fourfold sample size halves it. In frequentist tests the SE is the basis for t-statistics and confidence intervals; in Bayesian analysis the posterior standard deviation takes this role.',
@@ -1288,7 +1288,7 @@ const TERMS = [
   def:'The TSS is the sum of squared deviations of all observed Y values from their mean: TSS = Σ(yᵢ − ȳ)². It quantifies the total variability in Y that exists BEFORE any model is fit — independent of which predictors are later used. TSS decomposes exactly into an explained and an unexplained part: TSS = SSM + RSS (Sum of Squares Model + Residual Sum of Squares), the basis for R² = SSM/TSS = 1 − RSS/TSS. Other common names for the same quantity: SST (Sum of Squares Total) in some (especially older) sources; German-language texts use SAQ_total or SAQ_gesamt (see the SAQ entry).',
   formula:'TSS = Σ(yᵢ − ȳ)² = SSM + RSS',
   intuition:'TSS is the "baseline": how much Y varies if you predict nothing but the mean for everyone. Every model\'s job is to explain as much of TSS as possible via SSM while leaving as little as possible unexplained as RSS — TSS itself never changes, since it is independent of the model.',
-  related:[{id:'rss',label:'RSS'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
+  related:[{id:'rss',label:'RSS'},{id:'ssm',label:'SSM'},{id:'saq',label:'SS (SAQ)'},{id:'r2',label:'R²'},{id:'ols',label:'OLS'}]
 },
 
 { id:'gauss-markov', cats:['reg'], az:'G', name:'Gauss-Markov Theorem', longname:'The BLUE property of the OLS estimator under the classical assumptions',
@@ -1444,7 +1444,7 @@ const TERMS = [
   def:'SAQ is the German-language abbreviation for what is called "Sum of Squares" (SS) in English: the sum of squared deviations of observed values from a reference value (e.g. the grand mean or a group mean). In analysis of variance (ANOVA), the total SS is decomposed into components: SS_between (effect) + SS_within (error/residual) — exactly the same decomposition as TSS = SSM + RSS in regression (see those glossary entries). Alternatively you will also find the abbreviations SST = SSR + SSE — careful: "SSR" there stands for "Sum of Squares Regression" (= the explained/model share, equivalent to SSM), not "Residual" as the similar letters shared with RSS might suggest.',
   formula:'SS = Σ(xᵢ − x̄)²   (called "SAQ" in German-language textbooks)',
   intuition:'SS is the raw quantity from which, after dividing by the associated degrees of freedom, the Mean Square (MS, German "MQ") is obtained — and from the ratio of two MS values, in turn, the F-statistic in the ANOVA table. Anyone combining English-language statistics software (R, SPSS output in English) with German-language textbooks needs to mentally equate SAQ ↔ SS and MQ ↔ MS — the concepts are identical, only the abbreviation differs.',
-  related:[{id:'mq',label:'MS (MQ)'},{id:'anova',label:'ANOVA'},{id:'rss',label:'RSS'},{id:'r2',label:'R²'}]
+  related:[{id:'mq',label:'MS (MQ)'},{id:'anova',label:'ANOVA'},{id:'rss',label:'RSS'},{id:'ssm',label:'SSM'},{id:'tss',label:'TSS'},{id:'r2',label:'R²'}]
 },
 { id:'mq', cats:['reg'], az:'M', name:'MS (MQ)', longname:'Mean Square — German abbreviation "MQ" (Mittleres Quadrat)',
   def:'MQ is the German-language abbreviation for "Mean Square" (MS): a sum of squares (SS/SAQ) divided by its associated degrees of freedom df. In the ANOVA table, an MS is computed for each source (effect, residual); the ratio MS_effect / MS_residual yields the F-statistic used to test whether the effect contributes significantly to explaining variance.',
