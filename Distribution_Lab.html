@@ -837,10 +837,11 @@ const DISTS = {
     brmsNotation:'Y ~ Exponential(μ)', classicNotation:'Y ~ Exponential(λ)',
     brmsBtnLabel:'brms (μ)', classicBtnLabel:'Klassisch (λ)',
     hasBrmsToggle:true,
-    // μ default 1.2 (not 1) so the default support (6·μ) lands close to the rest of
-    // group 1's ≈7.4 default range — lets you compare shapes at the same x-axis.
+    // μ default 1.23 (not 1) so the default support (6·μ) matches the ≈7.39 default
+    // range of the rest of group 1 (Log-Normal/Gamma) almost exactly — lets you compare
+    // shapes at the same x-axis.
     paramsBrms:[
-      {id:'mu', label:'μ (Mittelwert)', min:0.2, max:10, step:0.1, val:1.2, fmt:v=>v.toFixed(2)},
+      {id:'mu', label:'μ (Mittelwert)', min:0.2, max:10, step:0.01, val:1.23, fmt:v=>v.toFixed(2)},
     ],
     paramsClassic:[
       {id:'lambda', label:'λ (Rate)', min:0.1, max:5, step:0.1, val:1, fmt:v=>v.toFixed(2)},
@@ -866,15 +867,18 @@ const DISTS = {
     brmsBtnLabel:'brms (μ, k)', classicBtnLabel:'Klassisch (k, λ)',
     hasBrmsToggle:true,
     // k ist in beiden Notationen identisch (wie α bei Skew-Normal) — nur ein Slider-Satz.
-    // mu=2, k=2 (brms) ergibt mean+5·sd ≈ 7.2 — landet nahe am ≈7.4-Richtwert der übrigen
-    // Gruppe-1-Verteilungen (vergleichbare x-Achse beim Durchschalten mit X-Fix).
+    // mu=2.04, k=2 (brms) ergibt mean+5·sd ≈ 7.37 — matcht den ≈7.39-Richtwert der übrigen
+    // Gruppe-1-Verteilungen (Log-Normal/Gamma) fast exakt (vergleichbare x-Achse beim
+    // Durchschalten mit X-Fix). Achtung bei künftigen Anpassungen: mean+5·sd skaliert mit λ
+    // (nicht direkt mit μ!), also support(μ) = μ·(Γ(1.5)+5·√(Γ(2)−Γ(1.5)²))/Γ(1.5) — bei
+    // Zielwerten numerisch (Bisektion) statt per Hand lösen.
     paramsBrms:[
-      {id:'mu', label:'μ (Mittelwert)', min:0.2, max:10, step:0.1, val:2,   fmt:v=>v.toFixed(2)},
-      {id:'k',  label:'k (Shape)',      min:0.3, max:8,  step:0.1, val:2,   fmt:v=>v.toFixed(1)},
+      {id:'mu', label:'μ (Mittelwert)', min:0.2, max:10, step:0.01, val:2.04, fmt:v=>v.toFixed(2)},
+      {id:'k',  label:'k (Shape)',      min:0.3, max:8,  step:0.1,  val:2,    fmt:v=>v.toFixed(1)},
     ],
     paramsClassic:[
-      {id:'k',      label:'k (Shape)', min:0.3, max:8,  step:0.1, val:2,    fmt:v=>v.toFixed(1)},
-      {id:'lambda', label:'λ (Skala)', min:0.1, max:10, step:0.1, val:2.26, fmt:v=>v.toFixed(2)},
+      {id:'k',      label:'k (Shape)', min:0.3, max:8,  step:0.1,  val:2,    fmt:v=>v.toFixed(1)},
+      {id:'lambda', label:'λ (Skala)', min:0.1, max:10, step:0.01, val:2.30, fmt:v=>v.toFixed(2)},
     ],
     toCanonical:(p,brms)=> brms ? {k:p.k, lambda:p.mu/gammaFn(1+1/p.k)} : {k:p.k, lambda:p.lambda},
     pdf:(x,c)=>weibullPDF(x,c.k,c.lambda),
@@ -890,11 +894,11 @@ const DISTS = {
       ?{k:p.k, lambda:p.mu/gammaFn(1+1/p.k)}
       :{mu:p.lambda*gammaFn(1+1/p.k), k:p.k},
     info:{
-      was:'Die <strong>Weibull-Verteilung</strong> beschreibt positive, oft rechtsschiefe Wartezeiten und Ausfallzeiten und ist eng mit der Gamma-Verteilung verwandt: Beide enthalten die Exponentialverteilung als Spezialfall (k=1 bzw. α=1) und sehen oberflächlich ähnlich aus — rechtsschief, flexibel in der Form, immer positiv. Der entscheidende Unterschied liegt in der <em>Hazard-Funktion</em> (dem momentanen Risiko, zu diesem Zeitpunkt ein Ereignis zu erleben, gegeben es ist noch nicht passiert): Bei Weibull steigt oder fällt das Risiko als reine Potenzfunktion der Zeit unbegrenzt weiter (k&gt;1: Verschleiß/Alterung, k&lt;1: „Kinderkrankheiten"), während sich die Gamma-Hazardrate langfristig immer einer konstanten Rate annähert — das Risiko „sättigt" sich dort.',
+      was:'Die <strong>Weibull-Verteilung</strong> beschreibt positive, oft rechtsschiefe Wartezeiten und Ausfallzeiten und ist eng mit der Gamma-Verteilung verwandt: Beide enthalten die Exponentialverteilung als Spezialfall (k=1 bzw. α=1) und sehen oberflächlich ähnlich aus — rechtsschief, flexibel in der Form, immer positiv. Der entscheidende Unterschied liegt in der <em>Hazard-Funktion</em> (dem momentanen Risiko, zu diesem Zeitpunkt ein Ereignis zu erleben, gegeben es ist noch nicht passiert): Bei Weibull steigt oder fällt das Risiko als reine Potenzfunktion der Zeit unbegrenzt weiter (k&gt;1: Verschleiß/Alterung, k&lt;1: „Kinderkrankheiten"), während sich die Gamma-Hazardrate langfristig immer einer konstanten Rate annähert — das Risiko „sättigt" sich dort. <strong>Wenig bekannt:</strong> Bei großem k wird die Weibull-Verteilung nicht normal, sondern leicht <strong>linksschief</strong> — Details unter „Was bedeuten die Parameter?".',
       einsatz:'<strong>Reliability Engineering:</strong> Materialermüdung, Ausfallzeiten technischer Bauteile (daher der Name „Weibull-Analyse" in der Qualitätssicherung). <strong>Survival-Analyse:</strong> Überlebenszeiten in der Medizin, besonders wenn das Risiko mit der Zeit monoton steigt (Krankheitsprogression) oder fällt. <strong>Sonstiges:</strong> Windgeschwindigkeiten, extreme Wetterereignisse, gelegentlich als Alternative zur Lognormal für Reaktionszeiten.<br><br><strong>Abgrenzung zur Gamma-Verteilung:</strong> Beide passen oft ähnlich gut, wenn nur die Form der Marginalverteilung zählt — die Wahl wird meist erst relevant, wenn man explizit über die Hazard-Funktion nachdenkt (konstant vs. monoton unbegrenzt) oder eine geschlossene CDF für zensierte Daten braucht (dann: Weibull, siehe unten).',
-      parameter:'<strong>Zwei verschiedene Schreibweisen — je nach Verwendung:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> Als Likelihood (Schieberegler: μ, k):</strong> Die brms-Likelihood-Parametrisierung.<br>• <strong>μ (Mittelwert):</strong> Direkt der erwartete Outcome-Wert, modelliert über den log-Link.<br>• <strong>k (Shape):</strong> Steuert die Form — k&lt;1: monoton fallend mit sinkendem Risiko; k=1: Exponential; k≈2: Rayleigh-artig, glockenförmig; k&gt;3.6: nähert sich der Normalverteilung an.<br>→ Intern rechnet brms um: Skala (klassisch λ) = μ / Γ(1+1/k).<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Klassische/Stan-Notation <code>weibull(k, λ)</code>:</strong> Wird in brms für <code>prior(weibull(...), ...)</code> verwendet — <em>nicht</em> für die Likelihood!<br>• <strong>k (Shape):</strong> Identisch zur brms-Notation — derselbe Parameter, dieselbe Zahl.<br>• <strong>λ (Skala):</strong> Mittelwert = λ·Γ(1+1/k) — <em>kein</em> direkter Wert wie μ, sondern über die Gammafunktion verzerrt.<br>→ <em>Merkhilfe:</em> Wie bei Gamma gilt: In <code>family=weibull()</code> modelliert brms μ über log-Link; in <code>prior(weibull(k,λ), ...)</code> ist es die klassische (k,λ)-Notation.',
+      parameter:'<strong>Zwei verschiedene Schreibweisen — je nach Verwendung:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> Als Likelihood (Schieberegler: μ, k):</strong> Die brms-Likelihood-Parametrisierung.<br>• <strong>μ (Mittelwert):</strong> Direkt der erwartete Outcome-Wert, modelliert über den log-Link.<br>• <strong>k (Shape):</strong> Steuert die Form — k&lt;1: monoton fallend mit sinkendem Risiko; k=1: Exponential; k≈2: Rayleigh-artig, glockenförmig; bei k≈3.6 annähernd symmetrisch (Schiefe ≈ 0); für noch größere k wird sie <strong>nicht normal, sondern leicht linksschief</strong> — im Grenzfall k→∞ konvergiert sie (standardisiert) gegen die gespiegelte Gumbel-Verteilung der Extremwerttheorie, mit Schiefe ≈ −1.14, nicht gegen 0.<br>→ Intern rechnet brms um: Skala (klassisch λ) = μ / Γ(1+1/k).<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Klassische/Stan-Notation <code>weibull(k, λ)</code>:</strong> Wird in brms für <code>prior(weibull(...), ...)</code> verwendet — <em>nicht</em> für die Likelihood!<br>• <strong>k (Shape):</strong> Identisch zur brms-Notation — derselbe Parameter, dieselbe Zahl.<br>• <strong>λ (Skala):</strong> Mittelwert = λ·Γ(1+1/k) — <em>kein</em> direkter Wert wie μ, sondern über die Gammafunktion verzerrt.<br>→ <em>Merkhilfe:</em> Wie bei Gamma gilt: In <code>family=weibull()</code> modelliert brms μ über log-Link; in <code>prior(weibull(k,λ), ...)</code> ist es die klassische (k,λ)-Notation.',
       brms:'<div class="brms-role"><strong>Als Likelihood</strong> — für Ausfall-/Überlebenszeiten oder allgemein positive, rechtsschiefe Outcomes:<br><code>brm(y ~ x, data = d, family = weibull())</code><br>→ brms modelliert den Mittelwert μ über den log-Link: log(μ) = Xβ.<br>→ Der Shape-Parameter k wird automatisch mitgeschätzt — Prior z.B. <code>prior(gamma(0.01, 0.01), class = shape)</code> (diffus).<br>→ <strong>Für zensierte Überlebenszeiten besonders geeignet:</strong> <code>brm(y | cens(zensiert) ~ x, data = d, family = weibull())</code> — die geschlossene CDF macht die Zensierungslogik einfacher als bei Gamma.</div><div class="brms-role"><strong>Als Prior:</strong> Notation <code>weibull(shape, scale)</code>, d.h. klassisch (k, λ) — selten als Prior verwendet, am ehesten für Skalenparameter mit bekannter Form.</div>',
-      technik:'E[Y] = λ·Γ(1+1/k), Var(Y) = λ²·[Γ(1+2/k) − Γ(1+1/k)²]. Modus = λ·((k−1)/k)^(1/k) für k &gt; 1, sonst 0. Hazard h(x) = (k/λ)·(x/λ)^(k−1) — monoton steigend (k&gt;1), fallend (k&lt;1) oder konstant = 1/λ (k=1, Exponential). <strong>Unterschied zu Gamma:</strong> Die Gamma-Hazardrate konvergiert für x→∞ immer gegen die konstante Rate β, unabhängig vom Shape — die Weibull-Hazard dagegen divergiert (k&gt;1) oder geht gegen 0 (k&lt;1), nie konstant außer bei k=1. <em>brms:</em> <code>weibull(mu, shape)</code>, Link: <code>log</code>; intern Skala = μ/Γ(1+1/shape). Mehr zur Survival-Analyse-Perspektive im <a class="glo-link" href="Glossar.html#gl-weibull-verteilung" target="_blank">Glossar</a>.'
+      technik:'E[Y] = λ·Γ(1+1/k), Var(Y) = λ²·[Γ(1+2/k) − Γ(1+1/k)²]. Modus = λ·((k−1)/k)^(1/k) für k &gt; 1, sonst 0. Hazard h(x) = (k/λ)·(x/λ)^(k−1) — monoton steigend (k&gt;1), fallend (k&lt;1) oder konstant = 1/λ (k=1, Exponential). Schiefe wechselt bei k≈3.602 das Vorzeichen (rechts- zu linksschief) und konvergiert für k→∞ gegen ≈ −1.14 statt gegen 0 — Grenzverteilung ist die gespiegelte Gumbel-Verteilung, nicht die Normalverteilung. <strong>Unterschied zu Gamma:</strong> Die Gamma-Hazardrate konvergiert für x→∞ immer gegen die konstante Rate β, unabhängig vom Shape — die Weibull-Hazard dagegen divergiert (k&gt;1) oder geht gegen 0 (k&lt;1), nie konstant außer bei k=1. <em>brms:</em> <code>weibull(mu, shape)</code>, Link: <code>log</code>; intern Skala = μ/Γ(1+1/shape). Mehr zur Survival-Analyse-Perspektive im <a class="glo-link" href="Glossar.html#gl-weibull-verteilung" target="_blank">Glossar</a>.'
     }
   },
 
