@@ -2939,7 +2939,7 @@ const TERMS = [
   def:'η² systematically overestimates variance explained in the population, because it also books random sample mean differences as "explained" variance — especially with small samples and many groups. ω² and ε² correct for this by subtracting from the effect SS the share expected under H₀ from error variance alone. For a one-way ANOVA, ω² = (SS_effect − df_effect · MS_error) / (SS_total + MS_error) and ε² = (SS_effect − df_effect · MS_error) / SS_total. Partial variants exist for multi-factor designs. Negative estimates are possible and are reported as 0.',
   formula:'ω² = (SS_eff − df_eff·MS_e) / (SS_tot + MS_e);   ε² = (SS_eff − df_eff·MS_e) / SS_tot<br><span style="font-family:\'DM Mono\',monospace;font-size:.76rem;color:var(--ink2)">R:  effectsize::omega_squared(aov_fit)   |   effectsize::epsilon_squared(aov_fit)</span>',
   intuition:'The relationship is the same as between R² and adjusted R²: η² describes the sample, ω² and ε² estimate the population. With n = 20 per group and three groups, an η² of .08 may correspond to an ω² of about .05 — the difference matters for power analyses and meta-analyses. It vanishes as the sample grows. ε² is somewhat simpler, ω² usually minimally less biased in simulations; both are preferable to η².',
-  related:[{id:'eta-quadrat',label:'η² (Eta Squared)'},{id:'r2',label:'R²'},{id:'anova',label:'ANOVA'},{id:'cohens-f2',label:'Cohen\'s f²'},{id:'hedges-g',label:'Hedges’ g'}]
+  related:[{id:'eta-quadrat',label:'η² (Eta Squared)'},{id:'saq',label:'SS (SAQ)'},{id:'mq',label:'MS (MQ)'},{id:'r2',label:'R²'},{id:'anova',label:'ANOVA'},{id:'cohens-f2',label:'Cohen\'s f²'},{id:'hedges-g',label:'Hedges’ g'}]
 },
 
 /* ── P ── */
