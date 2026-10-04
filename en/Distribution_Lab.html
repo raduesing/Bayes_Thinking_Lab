@@ -564,6 +564,7 @@ function logGamma(z){
   return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);
 }
 function logBeta(a,b){ return logGamma(a)+logGamma(b)-logGamma(a+b); }
+function gammaFn(z){ return Math.exp(logGamma(z)); }
 
 function erf(x){
   const s=x<0?-1:1; x=Math.abs(x);
@@ -578,6 +579,11 @@ function normalPDF(x,mu,sig){ if(sig<=0)return 0; return phi((x-mu)/sig)/sig; }
 function gammaPDF(x,alpha,rate){ // rate = 1/scale
   if(x<=0||alpha<=0||rate<=0)return 0;
   return Math.exp((alpha-1)*Math.log(x)-rate*x+alpha*Math.log(rate)-logGamma(alpha));
+}
+function weibullPDF(x,k,lambda){
+  if(x<=0||k<=0||lambda<=0)return 0;
+  const z=x/lambda;
+  return (k/lambda)*Math.pow(z,k-1)*Math.exp(-Math.pow(z,k));
 }
 function betaPDF(x,a,b){
   if(x<=0||x>=1||a<=0||b<=0)return 0;
@@ -645,7 +651,7 @@ function hurdleDiscreteMoments(baseMean,baseVar,f0,hu){
 
 const CATS = [
   {label:'Continuous\nunbounded', dists:['normal','student_t','skew_normal']},
-  {label:'Continuous\npositive', dists:['lognormal','shifted_lognormal','gamma','exponential','exgaussian','inv_gaussian','chi_sq','f_dist','hurdle_gamma','hurdle_lognormal']},
+  {label:'Continuous\npositive', dists:['lognormal','shifted_lognormal','gamma','exponential','weibull','exgaussian','inv_gaussian','chi_sq','f_dist','hurdle_gamma','hurdle_lognormal']},
   {label:'Bounded [0,1]', dists:['beta','bernoulli','zi_beta','zoib']},
   {label:'Count data', dists:['poisson','negbin','binomial','beta_binomial','zero_inflated_poisson','zero_inflated_negbinomial','zero_inflated_binomial','hurdle_poisson','hurdle_negbinomial']},
   {label:'Ordinal', dists:['cumprobit','cumlogit']},
@@ -822,7 +828,7 @@ const DISTS = {
       einsatz:'<strong>Waiting times:</strong> Time until the next doctor visit, time to recovery, time until the next equipment failure. <strong>Clinical studies:</strong> Treatment duration, length of hospital stay. <strong>Biology:</strong> Hormone concentrations in blood (always positive, often right-skewed). <strong>Costs:</strong> Cost per patient, treatment costs — always positive, never negative. <strong>Key characteristic:</strong> The Gamma distribution fits whenever data are positive and right-skewed — and is more flexible than Lognormal because the shape parameter fundamentally changes the form.',
       parameter:'<strong>Two different parameterisations — depending on context:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> As likelihood (sliders: μ, φ):</strong> The brms likelihood parameterisation.<br>• <strong>μ (mean):</strong> Directly the expected outcome value. <em>Example:</em> μ = 3 → mean waiting time of 3 hours. This value is modelled via the log link.<br>• <strong>φ (shape):</strong> Controls the form. φ = 1 → Exponential-like. φ = 2–3 → visibly bell-shaped. φ = 10+ → nearly symmetric around μ. Var(Y) = μ²/φ — the larger φ, the less spread.<br>→ Internally brms converts: shape = φ, rate = φ/μ.<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> As prior — classical notation <code>gamma(α, β)</code>:</strong> When Gamma is used as a prior for another parameter (e.g. for ν or σ), the syntax is <code>prior(gamma(α, β), ...)</code> with <strong>α = shape</strong> and <strong>β = rate</strong> — <em>not</em> μ and φ!<br>• Mean = α/β, so: <code>gamma(2, 0.1)</code> → mean = 2/0.1 = 20.<br>• <em>Memory aid:</em> In <code>prior()</code> always classical (shape, rate); in the <code>family = Gamma()</code> likelihood brms models μ via log link.<br><br><strong>Classical parameterisation (sliders: α, β):</strong> α = shape (= φ), β = rate (= φ/μ).',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — for positive, right-skewed outcomes:<br><code>brm(y ~ x, data = d, family = Gamma(link = "log"))</code><br>→ brms models the mean μ via the log link: log(μ) = Xβ.<br>→ The shape parameter φ is estimated automatically — prior: <code>prior(exponential(1), class = shape)</code><br>→ Coefficient interpretation: exp(β) = multiplicative effect on μ.<br>→ <em>Note:</em> Stan works internally with shape and rate = shape/μ — this is implementation-internal, not the user API.</div><div class="brms-role"><strong>As prior</strong> — notation <code>gamma(shape, rate)</code>, i.e. classical:<br><code>prior(gamma(2, 0.1), class = nu)</code> → prior for ν in Student-t (mean = 20, allows small to large ν)<br><code>prior(gamma(0.01, 0.01), class = shape)</code> → very diffuse prior for shape parameter<br>→ <em>Important:</em> In <code>prior(gamma(α, β), ...)</code>, α = shape, β = rate. This is a <strong>different notation</strong> from the likelihood parameterisation (μ, φ)!</div>',
-      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ = α/β². Mode = (α−1)/β = μ·(φ−1)/φ for φ > 1. Special cases: Exponential = Gamma(α=1, β=λ); Chi²(k) = Gamma(α=k/2, β=1/2). <strong>Internally in Stan/brms:</strong> shape = φ (= α), rate = φ/μ (= β) — this is the Stan notation; the brms likelihood API shows the user μ and shape.'
+      technik:'E[Y] = μ = α/β, Var(Y) = μ²/φ = α/β². Mode = (α−1)/β = μ·(φ−1)/φ for φ > 1. Special cases: Exponential = Gamma(α=1, β=λ); Chi²(k) = Gamma(α=k/2, β=1/2). <strong>Internally in Stan/brms:</strong> shape = φ (= α), rate = φ/μ (= β) — this is the Stan notation; the brms likelihood API shows the user μ and shape. <strong>Cf. Weibull:</strong> shares the same exponential special case, but has a different hazard function (the Gamma hazard converges to a constant rate as x→∞, the Weibull hazard does not) — see the Weibull card in this category.'
     }
   },
 
@@ -850,7 +856,45 @@ const DISTS = {
       einsatz:'Time between two phone calls at a call centre, lifetime of devices without wear (light bulbs, simple electronics), time until the next doctor visit at a constant health risk, radioactive decay. <strong>Key characteristic:</strong> The Exponential distribution describes waiting times when the risk of an event is always the same — regardless of how long you have already been waiting. An old device without wear has the same failure probability per hour as a new one.',
       parameter:'<strong>Two different notations — depending on use:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> brms parametrization (μ):</strong> brms directly models the mean. <em>Example:</em> μ = 0.5 hours → mean waiting time 30 minutes.<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical notation (λ):</strong> How many events occur on average per time unit — the rate. Conversion: μ = 1/λ. <em>Example:</em> λ = 2 calls/hour → mean waiting time = 1/2 hour = 30 minutes. <em>Example:</em> λ = 0.1 → mean waiting time = 10 hours, rare events.<br><br><strong>Watch out, a genuine gotcha:</strong> unlike Poisson/Bernoulli, μ and λ here are NOT simply the same number under a different name — μ = 1/λ is a reciprocal! A coefficient that doubles μ halves the rate λ.<br><br><strong>Intuition (memorylessness):</strong> Imagine guessing — "when will the next call come?". Without additional information your best estimate is always the same distance in the future, regardless of whether you just started waiting or have been waiting for a long time.',
       brms:'<div class="brms-role"><strong>As likelihood</strong> — a standalone family, directly available:<br><code>brm(y ~ x, data = d, family = exponential(link = "log"))</code><br>→ brms models μ (the mean, NOT the rate λ) via the log link.<br>→ Only one parameter — no dispersion parameter, no distributional model possible.<br>→ Equivalent to <code>family = Gamma(link="log")</code> with shape fixed to 1, but usable directly as its own family.</div><div class="brms-role"><strong>As prior:</strong> Frequently used for positive parameters, independent of the likelihood usage above:<br><code>prior(exponential(1), class = sigma)</code> — weakly informative prior for standard deviations<br><code>prior(exponential(1), class = shape)</code> — for shape/dispersion parameters in Gamma/NegBin<br>→ Here the number in <code>exponential(1)</code> is the classical rate λ = 1 (mean = 1), since <code>prior()</code> uses Stan\'s native parametrization — just like Skew-Normal, this means something different from the μ of the likelihood above.</div>',
-      technik:'Memorylessness: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ = μ, Var = 1/λ² = μ². If events follow Poisson(λ) per time unit, inter-arrival times are Exponential(λ). <em>brms likelihood:</em> <code>exponential(mu)</code> — mean, not rate. <em>brms prior function:</em> <code>exponential(lambda)</code> — classical rate.'
+      technik:'Memorylessness: P(Y > s+t | Y > s) = P(Y > t). E[Y] = 1/λ = μ, Var = 1/λ² = μ². If events follow Poisson(λ) per time unit, inter-arrival times are Exponential(λ). <em>brms likelihood:</em> <code>exponential(mu)</code> — mean, not rate. <em>brms prior function:</em> <code>exponential(lambda)</code> — classical rate. Also the special case of both the Gamma (α=1) and the Weibull distribution (k=1) — see the Weibull card in this category for a comparison of the two families.'
+    }
+  },
+
+  weibull:{
+    name:'Weibull', group:1,
+    brmsNotation:'Y ~ Weibull(μ, k)', classicNotation:'Y ~ Weibull(k, λ)',
+    brmsBtnLabel:'brms (μ, k)', classicBtnLabel:'Classical (k, λ)',
+    hasBrmsToggle:true,
+    // k is identical in both parameterizations (like α for Skew-Normal) — one slider only.
+    // mu=2, k=2 (brms) gives mean+5·sd ≈ 7.2 — close to the ≈7.4 default range of the
+    // other group-1 distributions (comparable x-axis when switching with X-Fix on).
+    paramsBrms:[
+      {id:'mu', label:'μ (mean)', min:0.2, max:10, step:0.1, val:2,   fmt:v=>v.toFixed(2)},
+      {id:'k',  label:'k (shape)', min:0.3, max:8,  step:0.1, val:2,   fmt:v=>v.toFixed(1)},
+    ],
+    paramsClassic:[
+      {id:'k',      label:'k (shape)', min:0.3, max:8,  step:0.1, val:2,    fmt:v=>v.toFixed(1)},
+      {id:'lambda', label:'λ (scale)', min:0.1, max:10, step:0.1, val:2.26, fmt:v=>v.toFixed(2)},
+    ],
+    toCanonical:(p,brms)=> brms ? {k:p.k, lambda:p.mu/gammaFn(1+1/p.k)} : {k:p.k, lambda:p.lambda},
+    pdf:(x,c)=>weibullPDF(x,c.k,c.lambda),
+    supportFn:(c)=>{
+      const g1=gammaFn(1+1/c.k), g2=gammaFn(1+2/c.k);
+      const mu=c.lambda*g1, sig=c.lambda*Math.sqrt(Math.max(0,g2-g1*g1));
+      return [0, Math.max(0.5, mu+5*sig)];
+    },
+    meanFn:c=>c.lambda*gammaFn(1+1/c.k),
+    varianceFn:c=>{const g1=gammaFn(1+1/c.k), g2=gammaFn(1+2/c.k); return c.lambda*c.lambda*(g2-g1*g1);},
+    modeFn:c=>c.k>1 ? c.lambda*Math.pow((c.k-1)/c.k,1/c.k) : 0,
+    convertParams:(p,fromBrms)=>fromBrms
+      ?{k:p.k, lambda:p.mu/gammaFn(1+1/p.k)}
+      :{mu:p.lambda*gammaFn(1+1/p.k), k:p.k},
+    info:{
+      was:'The <strong>Weibull distribution</strong> describes positive, often right-skewed waiting times and failure times and is closely related to the Gamma distribution: both contain the exponential distribution as a special case (k=1 resp. α=1) and look superficially similar — right-skewed, flexible in shape, always positive. The key difference lies in the <em>hazard function</em> (the instantaneous risk of experiencing an event at this moment, given it hasn\'t happened yet): for Weibull, risk keeps rising or falling as a pure power function of time without bound (k&gt;1: wear/aging, k&lt;1: "infant mortality"), whereas the Gamma hazard rate always approaches a constant rate in the long run — the risk "saturates" there.',
+      einsatz:'<strong>Reliability engineering:</strong> material fatigue, failure times of technical components (hence the name "Weibull analysis" in quality assurance). <strong>Survival analysis:</strong> survival times in medicine, especially when risk rises or falls monotonically over time (disease progression). <strong>Other:</strong> wind speeds, extreme weather events, occasionally used as an alternative to Lognormal for reaction times.<br><br><strong>Distinguishing from the Gamma distribution:</strong> both often fit similarly well when only the shape of the marginal distribution matters — the choice usually only becomes relevant once you explicitly think about the hazard function (constant vs. monotonically unbounded) or need a closed-form CDF for censored data (then: Weibull, see below).',
+      parameter:'<strong>Two different parameterisations — depending on context:</strong><br><br><strong><span style="font-size:1.5rem;font-weight:600">①</span> As likelihood (sliders: μ, k):</strong> The brms likelihood parameterisation.<br>• <strong>μ (mean):</strong> Directly the expected outcome value, modelled via the log link.<br>• <strong>k (shape):</strong> Controls the shape — k&lt;1: monotonically decreasing with falling risk; k=1: Exponential; k≈2: Rayleigh-like, bell-shaped; k&gt;3.6: approaches the normal distribution.<br>→ Internally brms converts: scale (classical λ) = μ / Γ(1+1/k).<br><br><strong><span style="font-size:1.5rem;font-weight:600">②</span> Classical/Stan notation <code>weibull(k, λ)</code>:</strong> Used in brms for <code>prior(weibull(...), ...)</code> — <em>not</em> for the likelihood!<br>• <strong>k (shape):</strong> Identical to the brms notation — the same parameter, the same number.<br>• <strong>λ (scale):</strong> Mean = λ·Γ(1+1/k) — <em>not</em> a direct value like μ, but distorted through the gamma function.<br>→ <em>Memory aid:</em> As with Gamma: in <code>family=weibull()</code> brms models μ via the log link; in <code>prior(weibull(k,λ), ...)</code> it is the classical (k,λ) notation.',
+      brms:'<div class="brms-role"><strong>As likelihood</strong> — for failure/survival times or positive, right-skewed outcomes in general:<br><code>brm(y ~ x, data = d, family = weibull())</code><br>→ brms models the mean μ via the log link: log(μ) = Xβ.<br>→ The shape parameter k is estimated automatically — prior e.g. <code>prior(gamma(0.01, 0.01), class = shape)</code> (diffuse).<br>→ <strong>Particularly well suited for censored survival times:</strong> <code>brm(y | cens(censored) ~ x, data = d, family = weibull())</code> — the closed-form CDF makes the censoring logic simpler than with Gamma.</div><div class="brms-role"><strong>As prior:</strong> notation <code>weibull(shape, scale)</code>, i.e. classical (k, λ) — rarely used as a prior, most likely for scale parameters with a known shape.</div>',
+      technik:'E[Y] = λ·Γ(1+1/k), Var(Y) = λ²·[Γ(1+2/k) − Γ(1+1/k)²]. Mode = λ·((k−1)/k)^(1/k) for k &gt; 1, else 0. Hazard h(x) = (k/λ)·(x/λ)^(k−1) — monotonically increasing (k&gt;1), decreasing (k&lt;1), or constant = 1/λ (k=1, Exponential). <strong>Difference from Gamma:</strong> the Gamma hazard rate always converges to the constant rate β as x→∞, regardless of shape — the Weibull hazard instead diverges (k&gt;1) or goes to 0 (k&lt;1), never constant except at k=1. <em>brms:</em> <code>weibull(mu, shape)</code>, link: <code>log</code>; internally scale = μ/Γ(1+1/shape). More on the survival-analysis perspective in the <a class="glo-link" href="Glossar.html#gl-weibull-verteilung" target="_blank">Glossary</a>.'
     }
   },
 
