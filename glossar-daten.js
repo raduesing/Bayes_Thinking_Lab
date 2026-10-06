@@ -3222,4 +3222,66 @@ const TERMS = [
   related:[{id:'missing-data',label:'Missing Data (MCAR/MAR/MNAR)'},{id:'listwise-deletion',label:'Listwise Deletion'},{id:'multiple-imputation',label:'Multiple Imputation'}]
 },
 
+/* ── Ergänzung: Evaluation(-sforschung) ── */
+{ id:'programmtheorie', cats:['eval'], az:'P', name:'Programmtheorie', longname:'Explizite/implizite Wirkannahmen hinter einer Maßnahme',
+  def:'Die Programmtheorie beschreibt die — oft nur implizite — Theorie, die einer Intervention zugrunde liegt: Warum wird eine Maßnahme genau so durchgeführt, und welche Effekte erwartet man sich davon? Sie bildet die zweite von fünf hierarchischen Ebenen von Evaluationsfragen nach Rossi, Lipsey & Freeman (2004), nach der Bedürfnisebene (need assessment) und vor der Prozessebene (Programmprozesse). Eine Evaluation der Programmtheorie prüft, ob die expliziten und impliziten Annahmen der Intervention auf plausiblen und empirisch bestätigten Grundlagen beruhen.',
+  intuition:'Zeigt eine Maßnahme keine Effekte, kann das mehrere Ursachen haben: Vielleicht wurde sie schlecht umgesetzt (Implementationsfehler, siehe Programmprozesse) — oder die Programmtheorie selbst war von vornherein unzureichend, d.h. der angenommene Wirkmechanismus greift schlicht nicht. Beispiel: Ein Antigewaltprogramm für jugendliche Straffällige, das auf die Steigerung des Selbstwertgefühls setzt, bleibt wirkungslos, wenn die Forschung zeigt, dass geringes Selbstwertgefühl gar nicht mit höherem Rückfallrisiko zusammenhängt — die Programmtheorie war falsch, unabhängig davon, wie sauber das Programm umgesetzt wurde.',
+  related:[{id:'programmprozesse',label:'Programmprozesse'},{id:'impact-assessment',label:'Impact Assessment'},{id:'efficiency-assessment',label:'Efficiency Assessment'}]
+},
+{ id:'programmprozesse', cats:['eval'], az:'P', name:'Programmprozesse', longname:'Prozessebene der Evaluationsfragen (Rossi et al., 2004)',
+  def:'Die Ebene der Programmprozesse prüft, ob eine Maßnahme tatsächlich so umgesetzt wird wie geplant und ob sie überhaupt die intendierte Zielgruppe erreicht. Sie bildet die dritte von fünf hierarchischen Ebenen von Evaluationsfragen nach Rossi, Lipsey & Freeman (2004), zwischen Programmtheorie und Effekten (Impact Assessment).',
+  intuition:'Beispiel: Bei einer kostenlosen Nachmittagsbetreuung für Schlüsselkinder könnte man auf Prozessebene fragen, wie hoch die Anwesenheitsrate ist (Standard: weniger als 2% unentschuldigtes Fehlen) und ob die vorgeschriebene Betreuung tatsächlich stattfindet (z.B. mindestens 45 Minuten Hausaufgabenbetreuung). Bleiben später erwartete Effekte aus, lohnt sich zuerst der Blick auf diese Ebene: Vielleicht war die Programmtheorie richtig, aber die Umsetzung mangelhaft — ein Implementationsfehler.',
+  related:[{id:'programmtheorie',label:'Programmtheorie'},{id:'impact-assessment',label:'Impact Assessment'},{id:'efficiency-assessment',label:'Efficiency Assessment'}]
+},
+{ id:'impact-assessment', cats:['eval'], az:'I', name:'Impact Assessment', longname:'Effekte-Ebene der Evaluationsfragen (Rossi et al., 2004)',
+  def:'Impact Assessment (Effekte-Ebene) prüft, ob eine Maßnahme ihre Ziele tatsächlich erreicht — und ob dabei keine unerwünschten Nebeneffekte auftreten. Es bildet die vierte von fünf hierarchischen Ebenen von Evaluationsfragen nach Rossi, Lipsey & Freeman (2004), nach den Programmprozessen und vor der Effizienzebene (Efficiency Assessment).',
+  intuition:'Beispiel: Verbessert sich die schulische Leistung betreuter Schlüsselkinder tatsächlich — etwa um mindestens eine Note in den Hauptfächern? Wichtig: Ein positiver Effekt lässt sich erst sinnvoll interpretieren, wenn die vorgelagerten Ebenen stimmen — sonst weiß man nicht, ob ein ausbleibender Effekt an der Programmtheorie, den Programmprozessen oder tatsächlich fehlender Wirksamkeit liegt.',
+  related:[{id:'efficiency-assessment',label:'Efficiency Assessment'},{id:'programmtheorie',label:'Programmtheorie'},{id:'programmprozesse',label:'Programmprozesse'}]
+},
+{ id:'efficiency-assessment', cats:['eval'], az:'E', name:'Efficiency Assessment', longname:'Effizienz-Ebene der Evaluationsfragen (Rossi et al., 2004)',
+  def:'Efficiency Assessment (Effizienzebene) prüft, ob die eingesetzten Ressourcen effizient genutzt werden, d.h. ob das Verhältnis von Aufwand und Ertrag stimmt — und ob es eventuell Alternativmaßnahmen mit einer besseren Kosten-Nutzen-Relation gäbe. Es bildet die fünfte und oberste von fünf hierarchischen Ebenen von Evaluationsfragen nach Rossi, Lipsey & Freeman (2004).',
+  intuition:'Beispiel: Wäre eine Betreuung durch ehrenamtliche Helfer — inklusive Anwerbung, Training und Supervision — günstiger als durch Lehrkräfte, bei vergleichbarer Leistung der Kinder? Diese Ebene setzt voraus, dass die Maßnahme auf den vorherigen Ebenen bereits positiv bewertet wurde — Effizienz ohne nachgewiesene Wirksamkeit zu optimieren wäre sinnlos.',
+  related:[{id:'impact-assessment',label:'Impact Assessment'},{id:'programmtheorie',label:'Programmtheorie'},{id:'programmprozesse',label:'Programmprozesse'}]
+},
+{ id:'parteiliche-evaluation', cats:['eval'], az:'P', name:'Parteiliche Diagnostik/Evaluation', longname:'Nur eine Perspektive zählt (in der Regel zu vermeiden)',
+  def:'Bei einer parteilichen Diagnostik oder Evaluation ist ausschließlich eine einzige Perspektive für die Bewertung entscheidend — entweder die Sicht der Auftraggeber, oder, im Sinne von Empowerment, ausschließlich die Sicht der Betroffenen. Eine solche einseitige Ausrichtung ist in der Regel zu vermeiden, da sie Ergebnisse systematisch verzerren kann.',
+  intuition:'Das Gegenteil sind partizipatorische/kollaborative und pluralistische Ansätze, die bewusst mehrere Perspektiven einbeziehen. Parteilichkeit ist nicht automatisch unwissenschaftlich — aber sie sollte eine bewusste, transparent kommunizierte Entscheidung sein, kein blinder Fleck.',
+  related:[{id:'partizipatorische-evaluation',label:'Partizipatorische/kollaborative Evaluation'},{id:'pluralistische-evaluation',label:'Pluralistische Evaluation'}]
+},
+{ id:'partizipatorische-evaluation', cats:['eval'], az:'P', name:'Partizipatorische bzw. kollaborative Diagnostik/Evaluation', longname:'Perspektiven mehrerer Gruppen werden einbezogen',
+  def:'Bei einer partizipatorischen bzw. kollaborativen Diagnostik oder Evaluation werden die Perspektiven verschiedener Gruppen berücksichtigt, und die relevanten Akteure werden aktiv an der Durchführung beteiligt. Das Ergebnis ist im Idealfall ein Kompromiss zwischen den unterschiedlichen Sichtweisen.',
+  intuition:'Im Vergleich zur parteilichen Evaluation, die nur eine Perspektive gelten lässt, versucht dieser Ansatz, mehrere Stakeholder — etwa Auftraggeber, Betroffene und weitere Interessengruppen — gemeinsam an einen Tisch zu bringen. Das erhöht typischerweise die Akzeptanz der Ergebnisse, kann aber auch aufwendiger und konfliktanfälliger sein als eine pluralistische Evaluation, bei der jede Perspektive separat bedient wird.',
+  related:[{id:'parteiliche-evaluation',label:'Parteiliche Evaluation'},{id:'pluralistische-evaluation',label:'Pluralistische Evaluation'}]
+},
+{ id:'pluralistische-evaluation', cats:['eval'], az:'P', name:'Pluralistische Diagnostik/Evaluation', longname:'Separate Durchführung aus jeder berücksichtigten Perspektive',
+  def:'Bei einer pluralistischen Diagnostik oder Evaluation wird die Untersuchung für jede berücksichtigte Perspektive separat durchgeführt — statt wie bei der partizipatorischen Evaluation einen gemeinsamen Kompromiss anzustreben.',
+  intuition:'Dieser Ansatz vermeidet, dass sich unterschiedliche Sichtweisen gegenseitig verwässern — jede Gruppe bekommt sozusagen "ihr eigenes" Ergebnis. Der Preis dafür ist höherer Aufwand und am Ende möglicherweise mehrere, nicht ohne Weiteres vereinbare Bewertungen desselben Gegenstands.',
+  related:[{id:'parteiliche-evaluation',label:'Parteiliche Evaluation'},{id:'partizipatorische-evaluation',label:'Partizipatorische/kollaborative Evaluation'}]
+},
+{ id:'inputevaluation', cats:['eval'], az:'I', name:'Inputevaluation', longname:'Bewertung der Rahmenbedingungen einer Maßnahme',
+  def:'Die Inputevaluation bewertet die Rahmenbedingungen einer Maßnahme, bevor oder während diese anläuft — etwa welche Ressourcen zur Verfügung stehen und wie hoch die Qualität des eingesetzten Materials ist. Sie ist eine von drei Ausrichtungen der Evaluation nach dem Zeitpunkt im Prozess, neben Prozess- und Outputevaluation.',
+  intuition:'Typische Fragen: Was sind die Rahmenbedingungen? Welche Ressourcen stehen zur Verfügung? Wie ist die Qualität des verwendeten Materials? Die Inputevaluation setzt an, bevor überhaupt Ergebnisse vorliegen können — sie prüft die Startbedingungen, nicht die Wirkung.',
+  related:[{id:'prozessevaluation',label:'Prozessevaluation'},{id:'outputevaluation',label:'Outputevaluation/Ergebnisevaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'prozessevaluation', cats:['eval'], az:'P', name:'Prozessevaluation', longname:'Begleitende Bewertung während der Durchführung',
+  def:'Die Prozessevaluation ist die begleitende Bewertung einer Intervention während ihrer Durchführungsphase. Ihre Ergebnisse können deshalb formativ genutzt werden, also noch während des laufenden Prozesses zur Verbesserung der Maßnahme beitragen.',
+  intuition:'Prozess- und Outputevaluation beschreiben, zu welchem Zeitpunkt gemessen wird — das ist nicht dasselbe wie formativ/summativ, was die Intention der Evaluation beschreibt (fortlaufende Verbesserung vs. abschließende Bewertung). Beide Dimensionen lassen sich kombinieren, bleiben aber konzeptuell getrennt: Eine Prozessevaluation wird typischerweise formativ genutzt, muss es aber nicht zwingend sein.',
+  related:[{id:'inputevaluation',label:'Inputevaluation'},{id:'outputevaluation',label:'Outputevaluation/Ergebnisevaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'outputevaluation', cats:['eval'], az:'O', name:'Outputevaluation / Ergebnisevaluation', longname:'Was hat eine Maßnahme letztendlich gebracht?',
+  def:'Die Outputevaluation, auch Ergebnisevaluation genannt, fragt danach, was eine Maßnahme letztendlich gebracht hat — sie bewertet also das Ergebnis am Ende des Interventionszeitraums, im Gegensatz zur begleitenden Prozessevaluation oder der vorgelagerten Inputevaluation.',
+  intuition:'Eine Outputevaluation wird typischerweise summativ genutzt — als abschließende Bewertung, ob eine Maßnahme ihre Ziele erreicht hat. Wichtig ist aber, Zeitpunkt (Input/Prozess/Output) und Intention (formativ/summativ) begrifflich nicht zu vermischen: Beide Unterscheidungen legen den Fokus auf unterschiedliche Aspekte derselben Evaluation.',
+  related:[{id:'inputevaluation',label:'Inputevaluation'},{id:'prozessevaluation',label:'Prozessevaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'summative-evaluation', cats:['eval'], az:'S', name:'Summative Diagnostik/Evaluation', longname:'Abschließende Bewertung',
+  def:'Eine summative Diagnostik oder Evaluation ist eine abschließende Bewertung — etwa von Produkten, der Wirksamkeit einer Maßnahme oder der Leistung von Personen. Dabei kann entweder global (als Gesamturteil) oder analytisch (einzelne Aspekte getrennt) bewertet werden.',
+  intuition:'Summativ und formativ beschreiben die Intention während der Durchführung — eine abschließende Bewertung vs. eine fortlaufende, verbessernde Begleitung. Das ist nicht dasselbe wie Prozess- und Outputevaluation, die beschreiben, zu welchem Zeitpunkt gemessen wird. Beide Dimensionen lassen sich kombinieren: Eine Pilotphase wird meist formativ evaluiert, die daraus resultierende, modifizierte Maßnahme dann summativ.',
+  related:[{id:'formative-evaluation',label:'Formative Evaluation'},{id:'inputevaluation',label:'Inputevaluation'},{id:'prozessevaluation',label:'Prozessevaluation'},{id:'outputevaluation',label:'Outputevaluation/Ergebnisevaluation'}]
+},
+{ id:'formative-evaluation', cats:['eval'], az:'F', name:'Formative Diagnostik/Evaluation', longname:'Kontinuierliche, entwicklungsbegleitende Bewertung',
+  def:'Eine formative Diagnostik oder Evaluation ist eine kontinuierliche, entwicklungsbegleitende Bewertung (formativ = formend). Sie hat eine Feedbackfunktion, ermöglicht die schnelle Identifizierung von Stärken und Schwächen und kann direkt zu Optimierungen oder Modifikationen der Maßnahme führen — im Zweifel werden sogar deren Ziele noch einmal angepasst.',
+  intuition:'Formativ und summativ lassen sich kombinieren: In einer Pilotphase evaluiert man meist formativ, um die Maßnahme zu verbessern — erst die daraus resultierende, modifizierte Maßnahme wird dann summativ bewertet. Formativ/summativ beschreibt dabei die Intention der Evaluation, nicht den Zeitpunkt (dafür stehen Input-/Prozess-/Outputevaluation) — beide Unterscheidungen sind leicht zu verwechseln, aber konzeptuell unabhängig voneinander.',
+  related:[{id:'summative-evaluation',label:'Summative Evaluation'},{id:'inputevaluation',label:'Inputevaluation'},{id:'prozessevaluation',label:'Prozessevaluation'},{id:'outputevaluation',label:'Outputevaluation/Ergebnisevaluation'}]
+},
+
 ];

@@ -3135,4 +3135,66 @@ const TERMS = [
   related:[{id:'missing-data',label:'Missing Data (MCAR/MAR/MNAR)'},{id:'listwise-deletion',label:'Listwise Deletion'},{id:'multiple-imputation',label:'Multiple Imputation'}]
 },
 
+/* ── Supplement: Evaluation Research ── */
+{ id:'programmtheorie', cats:['eval'], az:'P', name:'Program Theory', longname:'Explicit/implicit assumptions about why an intervention should work',
+  def:'Program theory describes the — often only implicit — theory underlying an intervention: why is a measure carried out in exactly this way, and what effects are expected from it? It forms the second of five hierarchical levels of evaluation questions after Rossi, Lipsey and Freeman (2004), following the needs-assessment level and preceding the process level (program process). Evaluating the program theory checks whether the intervention explicit and implicit assumptions rest on plausible, empirically supported grounds.',
+  intuition:'If a measure shows no effects, this can have several causes: perhaps it was poorly implemented (an implementation failure, see program process) — or the program theory itself was inadequate from the start, i.e. the assumed causal mechanism simply does not hold. Example: an anti-violence program for juvenile offenders that targets raising self-esteem stays ineffective if the research shows that low self-esteem is not actually related to higher recidivism risk — the program theory was wrong, regardless of how cleanly the program was implemented.',
+  related:[{id:'programmprozesse',label:'Program Process'},{id:'impact-assessment',label:'Impact Assessment'},{id:'efficiency-assessment',label:'Efficiency Assessment'}]
+},
+{ id:'programmprozesse', cats:['eval'], az:'P', name:'Program Process', longname:'Process level of evaluation questions (Rossi et al., 2004)',
+  def:'The program-process level checks whether a measure is actually implemented as planned and whether it reaches the intended target group at all. It forms the third of five hierarchical levels of evaluation questions after Rossi, Lipsey and Freeman (2004), between program theory and effects (impact assessment).',
+  intuition:'Example: for a free afternoon care program for latchkey children, a process-level question might be how high the attendance rate is (standard: less than 2% unexcused absence) and whether the prescribed care is actually delivered (e.g. at least 45 minutes of homework support). If expected effects fail to materialize later, it is worth checking this level first: maybe the program theory was right, but the implementation was lacking — an implementation failure.',
+  related:[{id:'programmtheorie',label:'Program Theory'},{id:'impact-assessment',label:'Impact Assessment'},{id:'efficiency-assessment',label:'Efficiency Assessment'}]
+},
+{ id:'impact-assessment', cats:['eval'], az:'I', name:'Impact Assessment', longname:'Effects level of evaluation questions (Rossi et al., 2004)',
+  def:'Impact assessment checks whether a measure actually achieves its goals — and whether no unintended side effects occur in the process. It forms the fourth of five hierarchical levels of evaluation questions after Rossi, Lipsey and Freeman (2004), after program process and before the efficiency level (efficiency assessment).',
+  intuition:'Example: does the academic performance of supported latchkey children actually improve — say, by at least one grade point in the core subjects on average? Important: a positive effect can only be meaningfully interpreted once the upstream levels hold — otherwise one cannot tell whether a missing effect is due to the program theory, the program process, or genuinely absent effectiveness.',
+  related:[{id:'efficiency-assessment',label:'Efficiency Assessment'},{id:'programmtheorie',label:'Program Theory'},{id:'programmprozesse',label:'Program Process'}]
+},
+{ id:'efficiency-assessment', cats:['eval'], az:'E', name:'Efficiency Assessment', longname:'Efficiency level of evaluation questions (Rossi et al., 2004)',
+  def:'Efficiency assessment checks whether the resources used are deployed efficiently, i.e. whether the ratio of effort to benefit is reasonable — and whether alternative measures might offer a better cost-benefit ratio. It forms the fifth and topmost of five hierarchical levels of evaluation questions after Rossi, Lipsey and Freeman (2004).',
+  intuition:'Example: would care provided by volunteer helpers — including recruitment, training and supervision — be cheaper than care by teachers, at comparable levels of child performance? This level presupposes that the measure has already been positively evaluated on the previous levels — optimizing efficiency without demonstrated effectiveness would be pointless.',
+  related:[{id:'impact-assessment',label:'Impact Assessment'},{id:'programmtheorie',label:'Program Theory'},{id:'programmprozesse',label:'Program Process'}]
+},
+{ id:'parteiliche-evaluation', cats:['eval'], az:'P', name:'Partisan Diagnostics/Evaluation', longname:'Only one perspective counts (generally to be avoided)',
+  def:'In partisan (biased) diagnostics or evaluation, only a single perspective is decisive for the assessment — either the view of the commissioning party, or, in the sense of empowerment, exclusively the view of those affected. Such a one-sided orientation should generally be avoided, since it can systematically bias results.',
+  intuition:'The opposite are participatory/collaborative and pluralistic approaches, which deliberately incorporate multiple perspectives. Being partisan is not automatically unscientific — but it should be a conscious, transparently communicated choice, not a blind spot.',
+  related:[{id:'partizipatorische-evaluation',label:'Participatory/Collaborative Evaluation'},{id:'pluralistische-evaluation',label:'Pluralistic Evaluation'}]
+},
+{ id:'partizipatorische-evaluation', cats:['eval'], az:'P', name:'Participatory or Collaborative Diagnostics/Evaluation', longname:'Perspectives of multiple groups are incorporated',
+  def:'In participatory or collaborative diagnostics or evaluation, the perspectives of various groups are taken into account, and the relevant stakeholders are actively involved in carrying it out. Ideally, the result is a compromise between the different viewpoints.',
+  intuition:'Compared to partisan evaluation, which only lets one perspective count, this approach tries to bring multiple stakeholders — e.g. the commissioning party, those affected, and other interest groups — to the same table. This typically increases acceptance of the results, but can also be more effortful and conflict-prone than a pluralistic evaluation, where each perspective is served separately.',
+  related:[{id:'parteiliche-evaluation',label:'Partisan Evaluation'},{id:'pluralistische-evaluation',label:'Pluralistic Evaluation'}]
+},
+{ id:'pluralistische-evaluation', cats:['eval'], az:'P', name:'Pluralistic Diagnostics/Evaluation', longname:'Separate execution from each perspective considered',
+  def:'In pluralistic diagnostics or evaluation, the investigation is carried out separately for each perspective considered — rather than pursuing a shared compromise as in participatory evaluation.',
+  intuition:'This approach avoids different viewpoints diluting one another — each group effectively gets its own result. The price is higher effort and, in the end, possibly several assessments of the same object that are not easily reconciled.',
+  related:[{id:'parteiliche-evaluation',label:'Partisan Evaluation'},{id:'partizipatorische-evaluation',label:'Participatory/Collaborative Evaluation'}]
+},
+{ id:'inputevaluation', cats:['eval'], az:'I', name:'Input Evaluation', longname:'Assessment of a measure framework conditions',
+  def:'Input evaluation assesses the framework conditions of a measure, before or while it is getting underway — e.g. which resources are available and how high the quality of the materials used is. It is one of three evaluation orientations by point in time within the process, alongside process and output evaluation.',
+  intuition:'Typical questions: what are the framework conditions? Which resources are available? What is the quality of the materials used? Input evaluation starts before any results can even exist yet — it checks the starting conditions, not the effect.',
+  related:[{id:'prozessevaluation',label:'Process Evaluation'},{id:'outputevaluation',label:'Output/Outcome Evaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'prozessevaluation', cats:['eval'], az:'P', name:'Process Evaluation', longname:'Accompanying assessment during implementation',
+  def:'Process evaluation is the accompanying assessment of an intervention during its implementation phase. Its results can therefore be used formatively, i.e. contribute to improving the measure while it is still underway.',
+  intuition:'Process and output evaluation describe at which point in time measurement happens — that is not the same as formative/summative, which describes the intention of the evaluation (ongoing improvement vs. a final assessment). The two dimensions can be combined but remain conceptually distinct: a process evaluation is typically used formatively, but does not have to be.',
+  related:[{id:'inputevaluation',label:'Input Evaluation'},{id:'outputevaluation',label:'Output/Outcome Evaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'outputevaluation', cats:['eval'], az:'O', name:'Output Evaluation / Outcome Evaluation', longname:'What did a measure ultimately achieve?',
+  def:'Output evaluation, also called outcome evaluation, asks what a measure ultimately achieved — it assesses the result at the end of the intervention period, in contrast to the accompanying process evaluation or the upstream input evaluation.',
+  intuition:'Output evaluation is typically used summatively — as a final assessment of whether a measure achieved its goals. Importantly, point in time (input/process/output) and intention (formative/summative) should not be conflated: both distinctions focus on different aspects of the same evaluation.',
+  related:[{id:'inputevaluation',label:'Input Evaluation'},{id:'prozessevaluation',label:'Process Evaluation'},{id:'summative-evaluation',label:'Summative Evaluation'},{id:'formative-evaluation',label:'Formative Evaluation'}]
+},
+{ id:'summative-evaluation', cats:['eval'], az:'S', name:'Summative Diagnostics/Evaluation', longname:'Final assessment',
+  def:'Summative diagnostics or evaluation is a final assessment — e.g. of products, the effectiveness of a measure, or the performance of individuals. The assessment can be either global (an overall judgment) or analytic (separate aspects assessed individually).',
+  intuition:'Summative and formative describe the intention during implementation — a final assessment vs. an ongoing, improvement-oriented accompaniment. That is not the same as process and output evaluation, which describe at which point in time measurement happens. Both dimensions can be combined: a pilot phase is usually evaluated formatively, and the resulting, modified measure is then evaluated summatively.',
+  related:[{id:'formative-evaluation',label:'Formative Evaluation'},{id:'inputevaluation',label:'Input Evaluation'},{id:'prozessevaluation',label:'Process Evaluation'},{id:'outputevaluation',label:'Output/Outcome Evaluation'}]
+},
+{ id:'formative-evaluation', cats:['eval'], az:'F', name:'Formative Diagnostics/Evaluation', longname:'Continuous, development-accompanying assessment',
+  def:'Formative diagnostics or evaluation is a continuous, development-accompanying assessment (formative means "forming"). It has a feedback function, enables the quick identification of strengths and weaknesses, and can directly lead to optimizations or modifications of the measure — in some cases even its goals get adjusted along the way.',
+  intuition:'Formative and summative can be combined: in a pilot phase, evaluation is usually formative, to improve the measure — only the resulting, modified measure is then assessed summatively. Formative/summative describes the intention of the evaluation, not the point in time (that is what input/process/output evaluation is for) — the two distinctions are easy to confuse but conceptually independent of each other.',
+  related:[{id:'summative-evaluation',label:'Summative Evaluation'},{id:'inputevaluation',label:'Input Evaluation'},{id:'prozessevaluation',label:'Process Evaluation'},{id:'outputevaluation',label:'Output/Outcome Evaluation'}]
+},
+
 ];
