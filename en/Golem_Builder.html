@@ -797,7 +797,7 @@ canvas {
         </div>
         <button class="btn" onclick="snapToGrid()" style="font-size:.72rem;" title="Align all nodes to grid">⊞ Ausrichten</button>
         <button class="btn" onclick="exportPNG()" style="font-size:.72rem;" title="Download DAG as PNG">↓ PNG</button>
-        <button class="btn" onclick="exportAPA()" style="font-size:.72rem;" title="DAG as PNG with white background (APA format)">↓ APA</button>
+        <button class="btn" onclick="exportAPA()" style="font-size:.72rem;" title="Export DAG as a black-and-white APA-style figure (tightly cropped, print-ready)">↓ APA</button>
         <button class="btn" onclick="exportDagJSON()" style="font-size:.72rem;" title="Save the whole DAG (nodes, edges, coefficients, distributions) as a file — load it again later to keep working">↓ DAG</button>
         <button class="btn" onclick="document.getElementById('dagFileInput').click()" style="font-size:.72rem;" title="Load a previously saved DAG file (overwrites the current canvas)">↑ DAG</button>
         <input type="file" id="dagFileInput" accept="application/json,.json" style="display:none">
@@ -4395,33 +4395,119 @@ function exportPNG() {
   link.click();
 }
 
+// A real APA figure: its own render path instead of a theme-switch hack.
+// Redraws state.nodes/state.edges directly — independent of the current
+// theme (in light mode --bg is a warm cream #f0ead8 plus grid dots, NOT
+// white, which is why the old export looked like the regular canvas in the
+// middle despite its "white" margin). Pure black on white, no grid, a
+// sans-serif font (APA 7 figure guideline), cropped tightly to the DAG
+// instead of the whole (usually much larger) canvas, at a fixed,
+// DPR-independent resolution for crisp print output.
 function exportAPA() {
-  const wasDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  if (wasDark) {
-    document.documentElement.setAttribute('data-theme', 'light');
-    resizeCanvas();
-  }
-  setTimeout(() => {
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.width / dpr, H = canvas.height / dpr;
-    const margin = 30;
-    const exp = document.createElement('canvas');
-    exp.width = (W + margin * 2) * dpr;
-    exp.height = (H + margin * 2) * dpr;
-    const ec = exp.getContext('2d');
-    ec.scale(dpr, dpr);
-    ec.fillStyle = '#ffffff';
-    ec.fillRect(0, 0, W + margin * 2, H + margin * 2);
-    ec.drawImage(canvas, margin, margin, W, H);
-    const link = document.createElement('a');
-    link.download = 'DAG_APA.png';
-    link.href = exp.toDataURL('image/png');
-    link.click();
-    if (wasDark) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-      resizeCanvas();
+  if (state.nodes.length === 0) { showToast('No DAG to export — add nodes first.'); return; }
+
+  const PAD = 40;
+  const SCALE = 3;
+  const FONT = `'Arial', 'Helvetica', sans-serif`;
+  const BLACK = '#000000';
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  state.nodes.forEach(n => {
+    minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + NODE_W); maxY = Math.max(maxY, n.y + NODE_H);
+  });
+  const W = (maxX - minX) + PAD * 2;
+  const H = (maxY - minY) + PAD * 2;
+
+  const exp = document.createElement('canvas');
+  exp.width = Math.round(W * SCALE);
+  exp.height = Math.round(H * SCALE);
+  const ec = exp.getContext('2d');
+  ec.scale(SCALE, SCALE);
+  ec.translate(PAD - minX, PAD - minY);
+
+  ec.fillStyle = '#ffffff';
+  ec.fillRect(minX - PAD, minY - PAD, W, H);
+
+  // Edges
+  state.edges.forEach(edge => {
+    const fn = state.nodes.find(n => n.id === edge.from);
+    const tn = state.nodes.find(n => n.id === edge.to);
+    if (!fn || !tn) return;
+    const ep = getEdgeEndpoints(fn, tn);
+    drawArrow(ec, ep.x1, ep.y1, ep.x2, ep.y2, BLACK);
+  });
+
+  // Nodes
+  state.nodes.forEach(node => {
+    const x = node.x, y = node.y;
+    const isExposure = state.exposure === node.id;
+    const isOutcome = state.outcome === node.id;
+    const isAdjSet = state.highlightAdjSet.has(node.id);
+    const isCollider = state.highlightColliders.has(node.id);
+    const isLatent = !!node.latent;
+
+    // Same state priority as the interactive canvas, just in grayscale
+    let fillColor = '#ffffff';
+    if (isLatent) fillColor = '#f4f4f4';
+    if (isAdjSet) fillColor = '#d9d9d9';
+    if (isCollider && !isOutcome && !isExposure) fillColor = '#b0b0b0';
+    if (isOutcome) fillColor = '#e8e8e8';
+
+    let lineWidth = 1.5;
+    if (isExposure) lineWidth = 2.5;
+    if (isCollider && !isOutcome && !isExposure) lineWidth = 2;
+    if (isAdjSet) lineWidth = 2;
+    if (isOutcome) lineWidth = 2.5;
+
+    ec.save();
+    if (isLatent) {
+      const cx2 = x + NODE_W/2, cy2 = y + NODE_H/2;
+      const r = NODE_H/2 + 4;
+      ec.beginPath();
+      ec.ellipse(cx2, cy2, NODE_W/2 + 2, r, 0, 0, Math.PI*2);
+      ec.fillStyle = fillColor;
+      ec.fill();
+      ec.setLineDash([5, 4]);
+      ec.strokeStyle = BLACK;
+      ec.lineWidth = lineWidth;
+      ec.stroke();
+      ec.setLineDash([]);
+    } else {
+      roundRect(ec, x, y, NODE_W, NODE_H, NODE_R);
+      ec.fillStyle = fillColor;
+      ec.fill();
+      ec.strokeStyle = BLACK;
+      ec.lineWidth = lineWidth;
+      ec.stroke();
     }
-  }, 80);
+    ec.restore();
+
+    ec.font = isLatent ? `italic 500 13px ${FONT}` : `500 13px ${FONT}`;
+    ec.fillStyle = BLACK;
+    ec.textAlign = 'center';
+    ec.textBaseline = 'middle';
+    const label = truncateCanvasLabel(ec, node.name, NODE_W - 12);
+    ec.fillText(label, x + NODE_W/2, y + NODE_H/2);
+
+    if (isExposure) {
+      ec.font = `bold 9px ${FONT}`;
+      ec.fillText('X', x + NODE_W - 10, y + 8);
+    }
+    if (isOutcome) {
+      ec.font = `bold 9px ${FONT}`;
+      ec.fillText('Y', x + NODE_W - 10, y + 8);
+    }
+    if (isLatent && !isExposure && !isOutcome) {
+      ec.font = `bold 9px ${FONT}`;
+      ec.fillText('U', x + NODE_W - 8, y + 8);
+    }
+  });
+
+  const link = document.createElement('a');
+  link.download = 'DAG_APA.png';
+  link.href = exp.toDataURL('image/png');
+  link.click();
 }
 
 // ── SAVE / LOAD DAG (full state: structure + coefficients + distributions) ────────────
