@@ -2053,16 +2053,22 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95){
 
 // ── Discrete ──────────────────────────────────────────────────
 function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95){
-  const [klo,khi]=d.kRangeFn(PARAMS);
+  // Use cp (canonical params — already converted from brms/classic slider values by
+  // renderDist()), never the raw global PARAMS: for e.g. Beta-Binomial's brms mode,
+  // PARAMS is {n,mu,phi} but pmf/meanFn/varianceFn expect the canonical {n,a,b} — calling
+  // them with raw PARAMS silently returns null/NaN for every value (no distribution
+  // shown at all). This previously worked by coincidence for Neg. Binomial's brms mode
+  // only, because its toCanonical happens to be an identity map there.
+  const [klo,khi]=d.kRangeFn(cp);
   const ks=[];
   for(let k=klo;k<=khi;k++) ks.push(k);
-  const pmfs=ks.map(k=>d.pmf(k,PARAMS));
+  const pmfs=ks.map(k=>d.pmf(k,cp));
   const ymax=Math.max(...pmfs)*1.12||0.1;
 
   // Compute moments + the central-95% interval in one pass — moved ahead of the bar
   // drawing below so bars inside [lo95K,hi95K] can get the darker CI95 fill directly.
-  const mean=d.meanFn(PARAMS);
-  const variance=d.varianceFn(PARAMS);
+  const mean=d.meanFn(cp);
+  const variance=d.varianceFn(cp);
   let modeK=klo; let maxPmf=0;
   pmfs.forEach((p,i)=>{if(p>maxPmf){maxPmf=p; modeK=ks[i];}});
   const mode=modeK;
