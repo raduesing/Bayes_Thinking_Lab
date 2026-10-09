@@ -102,6 +102,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;heigh
 input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--a6);
   border-radius:50%;border:none;cursor:pointer}
 
+/* Clickable examples */
+.example-btns{display:flex;flex-wrap:wrap;gap:.4rem}
+.example-btn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.32rem .55rem;
+  background:var(--paper);border:1.3px solid var(--border);color:var(--ink2);
+  cursor:pointer;transition:all .13s;border-radius:3px}
+.example-btn:hover{border-color:var(--a6);color:var(--a6)}
+.example-badge{margin-top:.6rem;padding-top:.55rem;border-top:1px solid var(--grid);
+  display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap;
+  font-family:'DM Mono',monospace;font-size:.67rem;color:var(--a6)}
+.example-reset-btn{font-family:'DM Mono',monospace;font-size:.65rem;padding:.25rem .5rem;
+  background:var(--paper);border:1.3px solid var(--a6);color:var(--a6);
+  cursor:pointer;border-radius:3px}
+.example-reset-btn:hover{background:var(--a6);color:var(--paper)}
+
 /* brms toggle */
 .brms-row{display:flex;gap:1px;background:var(--grid);margin:.28rem 0 .65rem}
 .brms-btn{flex:1;padding:.32rem .3rem;border:none;background:var(--paper);
@@ -248,6 +262,15 @@ canvas#dist-canvas{display:block;width:100%}
     <div class="scard">
       <div class="dl-sect-lbl">Parameter</div>
       <div id="param-sliders"></div>
+    </div>
+
+    <div class="scard" id="examples-card" style="display:none">
+      <div class="dl-sect-lbl">Beispiele</div>
+      <div id="example-btns" class="example-btns"></div>
+      <div id="example-badge" class="example-badge" style="display:none">
+        <span id="example-badge-label"></span>
+        <button class="example-reset-btn" onclick="resetToDefault()">↺ Zurücksetzen</button>
+      </div>
     </div>
 
     <div class="scard">
@@ -668,6 +691,10 @@ const DISTS = {
     pdf:(x,p)=>normalPDF(x,p.mu,p.sigma),
     supportFn:p=>[p.mu-4.5*p.sigma, p.mu+4.5*p.sigma],
     meanFn:p=>p.mu, varianceFn:p=>p.sigma*p.sigma, modeFn:p=>p.mu,
+    examples:[
+      {label:'Körpergrößen (erw. Frauen)', params:{mu:170, sigma:7}},
+      {label:'IQ-Werte',                   params:{mu:100, sigma:15}},
+    ],
     info:{
       was:'Die <strong>Normalverteilung</strong> (Gauß\'sche Glockenkurve) ist symmetrisch um ihren Mittelwert, unbegrenzt auf beiden Seiten, und gehorcht der klassischen Glockenform. Sie ist das Fundament linearer Modelle — die Fehlerterme werden als normalverteilt angenommen.',
       einsatz:'Körpergrößen (z.B. μ = 170 cm, σ = 7 cm bei erwachsenen Frauen), IQ-Werte (μ = 100, σ = 15 per Definition), Messfehler in physikalischen Experimenten, Prüfungsnoten, Blutdruck, Reaktionszeiten in einfachen Aufgaben. Das <strong>Grundprinzip:</strong> Immer wenn ein Ergebnis durch viele kleine, unabhängige Einflüsse entsteht, die sich addieren, erscheint die Normalverteilung — egal ob Körpergröße durch hunderte genetische Faktoren oder Messfehler durch viele kleine Störquellen. <strong>Typischer Einsatz in brms:</strong> Standardmodell für kontinuierliche Outcomes ohne natürliche Grenzen.',
@@ -1519,6 +1546,16 @@ function selectCat(idx){
 // values AND the frozen x-axis (if X-Fix was on) exactly as they left them.
 let DIST_STATE={};
 
+// Clickable real-world examples (e.g. "IQ-Werte" → μ=100,σ=15) that lie far outside a
+// distribution's default slider range. Keyed by distribution key, like DIST_STATE above,
+// so applying an example and switching away/back behaves consistently with the existing
+// per-distribution memory — but kept separate since these two concerns (remembered slider
+// position vs. a temporarily widened slider RANGE) are independent of each other.
+// SLIDER_RANGE_OVERRIDE[key][paramId] = {min,max} widened to fit an applied example's
+// value; ACTIVE_EXAMPLE_LABEL[key] = the label shown in the badge, or absent if none applied.
+let SLIDER_RANGE_OVERRIDE={};
+let ACTIVE_EXAMPLE_LABEL={};
+
 function saveDistState(){
   const d=DISTS[DIST_KEY];
   DIST_STATE[DIST_KEY]={
@@ -1558,6 +1595,7 @@ function selectDist(key){
   if(remembered){ PARAMS={...remembered.params}; } else { initParams(); }
   buildSliders();
   updateInfo();
+  renderExamples();
   // X-Fix (on/off) is a GLOBAL setting and is never reset here. The actual frozen
   // x-axis RANGE, however, is remembered PER DISTRIBUTION (not shared globally) —
   // continuous-unbounded and continuous-positive/bounded distributions should never
@@ -1617,7 +1655,10 @@ function buildSliders(){
   const container=document.getElementById('param-sliders');
   container.innerHTML='';
   const pList=d.hasBrmsToggle?(BRMS_MODE?d.paramsBrms:d.paramsClassic):d.params;
+  const ov=SLIDER_RANGE_OVERRIDE[DIST_KEY]||{};
   pList.forEach(p=>{
+    const r=ov[p.id];
+    const min=r?Math.min(r.min,p.min):p.min, max=r?Math.max(r.max,p.max):p.max;
     const div=document.createElement('div');
     div.className='param-row';
     div.innerHTML=`
@@ -1625,10 +1666,69 @@ function buildSliders(){
         <span class="param-lbl">${p.label}</span>
         <span class="param-val" id="pv-${p.id}">${p.fmt(PARAMS[p.id])}</span>
       </div>
-      <input type="range" id="sl-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}"
+      <input type="range" id="sl-${p.id}" min="${min}" max="${max}" step="${p.step}"
         value="${PARAMS[p.id]}" oninput="onSlider('${p.id}')">`;
     container.appendChild(div);
   });
+}
+
+// ── Clickable examples ──────────────────────────────────────────
+function renderExamples(){
+  const d=DISTS[DIST_KEY];
+  const card=document.getElementById('examples-card');
+  if(!d.examples||!d.examples.length){ card.style.display='none'; return; }
+  card.style.display='';
+  const btnsEl=document.getElementById('example-btns');
+  btnsEl.innerHTML=d.examples.map((ex,i)=>
+    `<button class="example-btn" onclick="applyExample('${DIST_KEY}',${i})">${ex.label}</button>`
+  ).join('');
+  const activeLabel=ACTIVE_EXAMPLE_LABEL[DIST_KEY];
+  const badge=document.getElementById('example-badge');
+  if(activeLabel){
+    badge.style.display='';
+    document.getElementById('example-badge-label').textContent='Beispiel: '+activeLabel;
+  } else {
+    badge.style.display='none';
+  }
+}
+
+function applyExample(key,idx){
+  const d=DISTS[key];
+  const ex=d.examples[idx];
+  if(DIST_KEY!==key){ selectDist(key); }
+  if(d.hasBrmsToggle&&ex.mode){ BRMS_MODE=(ex.mode==='brms'); }
+
+  // Widen (never shrink) each affected slider's range just enough to fit the example
+  // value, so the slider stays usable afterward instead of clipping the value silently.
+  const pList=d.hasBrmsToggle?(BRMS_MODE?d.paramsBrms:d.paramsClassic):d.params;
+  const ov=SLIDER_RANGE_OVERRIDE[key]=SLIDER_RANGE_OVERRIDE[key]||{};
+  pList.forEach(p=>{
+    if(ex.params[p.id]===undefined) return;
+    const v=ex.params[p.id];
+    const margin=Math.max(Math.abs(v)*0.1,(p.max-p.min)*0.1);
+    ov[p.id]={min:Math.min(p.min,v-margin), max:Math.max(p.max,v+margin)};
+  });
+
+  Object.assign(PARAMS,ex.params);
+  X_FIXED=false; FIXED_XRANGE=null; // let the axis size itself to the example naturally
+  ACTIVE_EXAMPLE_LABEL[key]=ex.label;
+
+  updateNotation();
+  buildSliders();
+  updateXFixButton();
+  renderExamples();
+  saveDistState();
+  renderDist();
+}
+
+function resetToDefault(){
+  delete SLIDER_RANGE_OVERRIDE[DIST_KEY];
+  delete ACTIVE_EXAMPLE_LABEL[DIST_KEY];
+  initParams();
+  buildSliders();
+  renderExamples();
+  saveDistState();
+  renderDist();
 }
 
 function onSlider(id){
