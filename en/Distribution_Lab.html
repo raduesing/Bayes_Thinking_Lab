@@ -1707,6 +1707,30 @@ function renderDist(){
   }
 }
 
+// ── Axis helpers ──────────────────────────────────────────────
+// "Nice" round-number tick positions (classic 1/2/5 × 10^k step algorithm) instead of
+// naively splitting [lo,hi] into N equal fractions. Several distributions in the
+// "Continuous positive" group have their default parameters deliberately tuned so their
+// support ends up near the same x-value (e.g. Gamma's μ=1.9 default vs Log-Normal's
+// exp(2)≈7.389, see the comment at the Gamma definition) so they're visually comparable —
+// but those raw bounds are never bit-identical. Splitting into equal fractions turned that
+// tiny difference into visibly different tick labels (e.g. 2.9 vs 3.0 vs 3.1 at "the same"
+// relative position). Snapping to nice steps makes ticks share the same round numbers
+// whenever the ranges are close, not just when they're exactly equal.
+function niceTicks(lo,hi,targetCount){
+  const span=hi-lo;
+  if(!(span>0)) return {ticks:[lo],step:1};
+  const rawStep=span/targetCount;
+  const mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
+  const norm=rawStep/mag;
+  const niceNorm=norm<1.5?1:norm<3?2:norm<7?5:10;
+  const step=niceNorm*mag;
+  const start=Math.ceil(lo/step)*step;
+  const ticks=[];
+  for(let v=start; v<=hi+step*1e-9; v+=step) ticks.push(Math.round(v/step)*step);
+  return {ticks: ticks.length?ticks:[lo], step};
+}
+
 // ── Continuous ────────────────────────────────────────────────
 function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   let xlo,xhi;
@@ -1737,11 +1761,11 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   // Background + grid
   ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
   ctx.strokeStyle=DARK?'#1e242e':'#ddd5c6'; ctx.lineWidth=1;
-  const nxTick=6, nyTick=5;
-  for(let i=0;i<=nxTick;i++){
-    const x=xlo+i*(xhi-xlo)/nxTick;
+  const nyTick=5;
+  const {ticks:xTicks,step:xStep}=niceTicks(xlo,xhi,6);
+  xTicks.forEach(x=>{
     ctx.beginPath(); ctx.moveTo(toX(x),m.t); ctx.lineTo(toX(x),H-m.b); ctx.stroke();
-  }
+  });
   for(let i=0;i<=nyTick;i++){
     const y=i*ymax/nyTick;
     ctx.beginPath(); ctx.moveTo(m.l,toY(y)); ctx.lineTo(W-m.r,toY(y)); ctx.stroke();
@@ -1750,12 +1774,11 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   // Axis labels
   ctx.fillStyle=DARK?'#a8c4d8':'#5a5248';
   ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
-  const nXLbl=5;
-  for(let i=0;i<=nXLbl;i++){
-    const v=xlo+i*(xhi-xlo)/nXLbl;
-    const s=Math.abs(v)<0.001&&v!==0?'0':v.toFixed(Math.abs(v)<1?2:(Math.abs(v)<10?1:0));
+  const xDecimals=Math.max(0,Math.ceil(-Math.log10(xStep)-1e-9));
+  xTicks.forEach(v=>{
+    const s=Math.abs(v)<xStep*1e-6&&v!==0?'0':v.toFixed(xDecimals);
     ctx.fillText(s, toX(v), H-m.b+15);
-  }
+  });
   ctx.textAlign='right';
   for(let i=1;i<=nyTick;i++){
     const v=i*ymax/nyTick;
