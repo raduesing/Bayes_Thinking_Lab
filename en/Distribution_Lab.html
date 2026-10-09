@@ -713,8 +713,8 @@ const DISTS = {
     brmsBtnLabel:'brms (μ, σ, α)', classicBtnLabel:'Classical/Azzalini (ξ, ω, α)',
     hasBrmsToggle:true,
     paramsBrms:[
-      {id:'mu',    label:'μ (mean)', min:-5,  max:5,  step:0.1, val:0.76, fmt:v=>v.toFixed(2)},
-      {id:'sigma', label:'σ (SD)',   min:0.1, max:5,  step:0.1, val:0.65, fmt:v=>v.toFixed(2)},
+      {id:'mu',    label:'μ (mean)', min:-5,  max:5,  step:0.1, val:0,    fmt:v=>v.toFixed(2)},
+      {id:'sigma', label:'σ (SD)',   min:0.1, max:5,  step:0.1, val:1,    fmt:v=>v.toFixed(2)},
       {id:'alpha', label:'α (skewness)', min:-10, max:10, step:0.5, val:3, fmt:v=>v.toFixed(1)},
     ],
     paramsClassic:[
@@ -734,7 +734,19 @@ const DISTS = {
       const z=(x-p.xi)/p.omega;
       return 2*phi(z)*Phi(p.alpha*z)/p.omega;
     },
-    supportFn:p=>[p.xi-4.5*p.omega, p.xi+4.5*p.omega],
+    // Window based on the ACTUAL mean/SD (mean ± 4.5·SD — same convention as Normal/
+    // Student-t), not on the Azzalini ξ/ω scale directly: ω inflates well beyond the
+    // true SD as |α| grows (at a fixed SD, more of ω gets "spent" on the skew
+    // transform), so xi±4.5·omega was needlessly wide for skewed shapes — e.g. at
+    // μ=0,σ=1,α=3 it came out to ±6.9 even though ±4.5 already contains everything
+    // visually relevant (verified visually). Reduces to the old xi±4.5·omega exactly
+    // at α=0 (d=0 → mean=xi, sd=omega).
+    supportFn:p=>{
+      const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha);
+      const mean=p.xi+p.omega*d*Math.sqrt(2/Math.PI);
+      const sd=p.omega*Math.sqrt(Math.max(0,1-2*d*d/Math.PI));
+      return [mean-4.5*sd, mean+4.5*sd];
+    },
     meanFn:p=>{const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha); return p.xi+p.omega*d*Math.sqrt(2/Math.PI);},
     varianceFn:p=>{const d=p.alpha/Math.sqrt(1+p.alpha*p.alpha); return p.omega*p.omega*(1-2*d*d/Math.PI);},
     modeFn:null, // numerical
