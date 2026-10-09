@@ -128,6 +128,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--a6);
 .moment-chk input[type=checkbox]{width:12px;height:12px;cursor:pointer;accent-color:var(--a6)}
 .mdot{display:inline-block;width:18px;height:2px;border-radius:1px;vertical-align:middle}
 .mdot.mn{background:var(--a2)} .mdot.md{background:var(--a3)} .mdot.mo{background:var(--a5)}
+.mdot.ci{height:9px;border-radius:2px;background:var(--density-color);opacity:.6}
 
 /* stats */
 .stats-block{}
@@ -279,6 +280,14 @@ canvas#dist-canvas{display:block;width:100%}
     <div class="scard">
       <div class="dl-sect-lbl">Kennwerte</div>
       <div class="stats-block" id="stats-block"></div>
+    </div>
+
+    <div class="scard">
+      <div class="dl-sect-lbl">Zusätzliche Darstellung</div>
+      <label class="moment-chk">
+        <input type="checkbox" id="chk-ci95" onchange="renderDist()">
+        <span class="mdot ci"></span> Mittlere 95% (Wahrscheinlichkeitsmasse)
+      </label>
     </div>
   </div>
 
@@ -1850,15 +1859,16 @@ function renderDist(){
   const showMean=document.getElementById('chk-mean').checked;
   const showMedian=document.getElementById('chk-median').checked;
   const showMode=document.getElementById('chk-mode').checked;
+  const showCI95=document.getElementById('chk-ci95').checked;
 
   if(d.discrete){
-    drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
+    drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95);
   } else if(d.mixed){
     drawMixed(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
   } else if(d.ordinal){
     drawOrdinal(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
   } else {
-    drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode);
+    drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95);
   }
 }
 
@@ -1887,7 +1897,7 @@ function niceTicks(lo,hi,targetCount){
 }
 
 // ── Continuous ────────────────────────────────────────────────
-function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
+function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95){
   let xlo,xhi;
   if(X_FIXED&&FIXED_XRANGE){
     [xlo,xhi]=FIXED_XRANGE;
@@ -1916,6 +1926,26 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
   const toX=v=>m.l+(v-xlo)/(xhi-xlo)*Wp;
   const toY=v=>H-m.b-(v/ymax)*Hp;
+
+  // Compute moments + the central-95% interval in one pass over the cumulative density —
+  // moved ahead of all drawing so the CI95 band (drawn right after the PDF fill, below)
+  // already has lo95/hi95 available.
+  const mean=d.meanFn?d.meanFn(cp):NaN;
+  const variance=d.varianceFn?d.varianceFn(cp):null;
+  let mode;
+  if(d.modeFn!==null){ mode=d.modeFn(cp); }
+  else { let mx=-1,mxi=0; ys.forEach((y,i)=>{if(isFinite(y)&&y>mx){mx=y;mxi=i;}}); mode=xs[mxi]; }
+  let median=NaN, lo95=NaN, hi95=NaN;
+  let cumSum=0, total=0;
+  for(let i=0;i<=N;i++) total+=isFinite(ys[i])&&ys[i]>=0?ys[i]*dx:0;
+  for(let i=0;i<=N;i++){
+    if(!isFinite(ys[i])||ys[i]<0) continue;
+    cumSum+=ys[i]*dx;
+    const frac=cumSum/total;
+    if(isNaN(lo95)&&frac>=0.025) lo95=xs[i];
+    if(isNaN(median)&&frac>=0.5) median=xs[i];
+    if(isNaN(hi95)&&frac>=0.975) hi95=xs[i];
+  }
 
   // Background + grid
   ctx.fillStyle=DARK?'#0c0f14':'#faf6ee'; ctx.fillRect(0,0,W,H);
@@ -1964,6 +1994,31 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   ctx.closePath();
   const a6=cv('--density-color'); ctx.fillStyle=a6+'40'; ctx.fill();
   const a6dark=darken(a6,.35);
+
+  // CI95 band — the mean/median/mode-style highlight for the central 95% of the
+  // probability mass, drawn as a more saturated re-fill of just that x-slice so it
+  // reads as "the same curve, darker in the middle" rather than a separate overlay.
+  if(showCI95&&isFinite(lo95)&&isFinite(hi95)&&hi95>lo95){
+    ctx.beginPath();
+    ctx.moveTo(toX(lo95), toY(0));
+    for(let i=0;i<=N;i++){
+      if(xs[i]<lo95||xs[i]>hi95) continue;
+      const yc=Math.min(ys[i], ymax*1.5);
+      ctx.lineTo(toX(xs[i]), isFinite(yc)&&yc>=0?toY(yc):toY(0));
+    }
+    ctx.lineTo(toX(hi95), toY(0));
+    ctx.closePath();
+    ctx.fillStyle=a6+'95'; ctx.fill();
+    ctx.save(); ctx.strokeStyle=a6dark; ctx.lineWidth=1; ctx.setLineDash([2,2]);
+    [lo95,hi95].forEach(v=>{
+      const px=toX(v);
+      ctx.beginPath(); ctx.moveTo(px,m.t); ctx.lineTo(px,H-m.b); ctx.stroke();
+    });
+    ctx.restore();
+    ctx.fillStyle=a6dark; ctx.font='10.5px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('95%', toX((lo95+hi95)/2), m.t+13);
+  }
+
   // PDF line
   ctx.beginPath();
   let started=false;
@@ -1974,23 +2029,6 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     started?ctx.lineTo(px,py):(ctx.moveTo(px,py),started=true);
   }
   ctx.strokeStyle=a6dark; ctx.lineWidth=2; ctx.stroke();
-
-  // Compute moments
-  const mean=d.meanFn?d.meanFn(cp):NaN;
-  const variance=d.varianceFn?d.varianceFn(cp):null;
-  // Mode: analytical or numerical (max of PDF)
-  let mode;
-  if(d.modeFn!==null){ mode=d.modeFn(cp); }
-  else { let mx=-1,mxi=0; ys.forEach((y,i)=>{if(isFinite(y)&&y>mx){mx=y;mxi=i;}}); mode=xs[mxi]; }
-  // Median: numerical from cumulative sum
-  let median=NaN;
-  let cumSum=0, total=0;
-  for(let i=0;i<=N;i++) total+=isFinite(ys[i])&&ys[i]>=0?ys[i]*dx:0;
-  for(let i=0;i<=N;i++){
-    if(!isFinite(ys[i])||ys[i]<0) continue;
-    cumSum+=ys[i]*dx;
-    if(cumSum/total>=0.5){median=xs[i]; break;}
-  }
 
   // Draw moment lines
   const MOMENTS=[
@@ -2014,12 +2052,28 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
 }
 
 // ── Discrete ──────────────────────────────────────────────────
-function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
+function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode,showCI95){
   const [klo,khi]=d.kRangeFn(PARAMS);
   const ks=[];
   for(let k=klo;k<=khi;k++) ks.push(k);
   const pmfs=ks.map(k=>d.pmf(k,PARAMS));
   const ymax=Math.max(...pmfs)*1.12||0.1;
+
+  // Compute moments + the central-95% interval in one pass — moved ahead of the bar
+  // drawing below so bars inside [lo95K,hi95K] can get the darker CI95 fill directly.
+  const mean=d.meanFn(PARAMS);
+  const variance=d.varianceFn(PARAMS);
+  let modeK=klo; let maxPmf=0;
+  pmfs.forEach((p,i)=>{if(p>maxPmf){maxPmf=p; modeK=ks[i];}});
+  const mode=modeK;
+  let cdf=0, medianK=khi, lo95K=klo, hi95K=khi;
+  let medianFound=false, lo95Found=false, hi95Found=false;
+  for(let i=0;i<ks.length;i++){
+    cdf+=pmfs[i];
+    if(!lo95Found&&cdf>=0.025){ lo95K=ks[i]; lo95Found=true; }
+    if(!medianFound&&cdf>=0.5){ medianK=ks[i]; medianFound=true; }
+    if(!hi95Found&&cdf>=0.975){ hi95K=ks[i]; hi95Found=true; }
+  }
 
   const Wp=W-m.l-m.r, Hp=H-m.t-m.b;
   const toX=v=>m.l+(v-klo+0.5)/(khi-klo+1)*Wp;
@@ -2057,28 +2111,23 @@ function drawDiscrete(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
   ctx.strokeStyle=DARK?'#3a5060':'#c5bba8'; ctx.lineWidth=1.2;
   ctx.strokeRect(m.l,m.t,Wp,Hp);
 
-  // Bars
+  // Bars — bars inside the central-95% interval get a more saturated fill when CI95
+  // is toggled on, same idea as the continuous chart's darker band re-fill.
   const bW=Math.max(2,(Wp/(khi-klo+1))*0.65);
   const a6=cv('--density-color'); const a6dark=darken(a6,.35);
   pmfs.forEach((pmf,i)=>{
     const cx=toX(ks[i]);
     const bh=pmf/ymax*Hp;
-    ctx.fillStyle=a6+'55';
+    const inBand=showCI95&&ks[i]>=lo95K&&ks[i]<=hi95K;
+    ctx.fillStyle=inBand?a6+'95':a6+'55';
     ctx.fillRect(cx-bW/2, H-m.b-bh, bW, bh);
     ctx.strokeStyle=a6dark; ctx.lineWidth=1.5;
     ctx.strokeRect(cx-bW/2, H-m.b-bh, bW, bh);
   });
-
-  // Compute moments
-  const mean=d.meanFn(PARAMS);
-  const variance=d.varianceFn(PARAMS);
-  // Mode: highest PMF
-  let modeK=klo; let maxPmf=0;
-  pmfs.forEach((p,i)=>{if(p>maxPmf){maxPmf=p; modeK=ks[i];}});
-  const mode=modeK;
-  // Median: smallest k where CDF >= 0.5
-  let cdf=0, medianK=khi;
-  for(let i=0;i<ks.length;i++){ cdf+=pmfs[i]; if(cdf>=0.5){medianK=ks[i]; break;} }
+  if(showCI95){
+    ctx.fillStyle=a6dark; ctx.font='10.5px DM Mono,monospace'; ctx.textAlign='center';
+    ctx.fillText('95%', (toX(lo95K)+toX(hi95K))/2, m.t+13);
+  }
 
   // Moment lines
   ctx.save(); ctx.setLineDash([5,4]); ctx.lineWidth=1.5;
