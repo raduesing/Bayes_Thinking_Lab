@@ -1427,6 +1427,31 @@ function applyGroup1Floor(key,hi){
   return GROUP1_COMPARABLE.includes(key)?Math.max(hi,GROUP1_SHARED_XHI):hi;
 }
 
+// Same idea for the "Continuous unbounded" group (Normal/Student-t/Skew-Normal): here
+// it's a symmetric half-width around each distribution's own centre rather than a
+// one-sided floor, since these aren't all anchored at 0 (Skew-Normal's default mean sits
+// at μ≈0.76, not 0). Normal/Student-t's defaults are tuned to the *exact* same [-4.5,4.5]
+// (see the Student-t comment above), but Skew-Normal's equivalent half-width works out to
+// ≈4.476 — close, but just on the other side of niceTicks()'s 1-vs-2 step threshold
+// (rawStep 1.5 vs 1.492 at targetCount=6), so it was getting roughly twice as many ticks
+// as the other two even though the visible span was nearly identical.
+const GROUP0_COMPARABLE=['normal','student_t','skew_normal'];
+const GROUP0_SHARED_HALF=Math.max(...GROUP0_COMPARABLE.map(key=>{
+  const d=DISTS[key];
+  const pList=d.hasBrmsToggle?d.paramsBrms:d.params;
+  const defaults={}; pList.forEach(p=>{ defaults[p.id]=p.val; });
+  const cp=d.hasBrmsToggle?d.toCanonical(defaults,true):defaults;
+  const [lo,hi]=d.supportFn(cp);
+  return (hi-lo)/2;
+}));
+function applyGroup0Floor(key,lo,hi){
+  if(!GROUP0_COMPARABLE.includes(key)) return [lo,hi];
+  const half=(hi-lo)/2;
+  if(half>=GROUP0_SHARED_HALF) return [lo,hi];
+  const center=(lo+hi)/2;
+  return [center-GROUP0_SHARED_HALF, center+GROUP0_SHARED_HALF];
+}
+
 // ── UI Setup ───────────────────────────────────────────────────
 function initUI(){
   // Build category tabs
@@ -1546,7 +1571,10 @@ function computeCurrentSupport(d){
   if(d.hasBrmsToggle) cp=d.toCanonical(PARAMS,BRMS_MODE);
   let [xlo,xhi]=d.supportFn(cp);
   if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
-  else { xhi=applyGroup1Floor(DIST_KEY,xhi); }
+  else {
+    xhi=applyGroup1Floor(DIST_KEY,xhi);
+    [xlo,xhi]=applyGroup0Floor(DIST_KEY,xlo,xhi);
+  }
   return [xlo,xhi];
 }
 
@@ -1763,7 +1791,10 @@ function drawContinuous(ctx,W,H,m,d,cp,showMean,showMedian,showMode){
     const support=d.supportFn(cp);
     [xlo,xhi]=support;
     if(xlo===0&&xhi===1){ xlo=-0.02; xhi=1.02; }
-    else { xhi=applyGroup1Floor(DIST_KEY,xhi); }
+    else {
+      xhi=applyGroup1Floor(DIST_KEY,xhi);
+      [xlo,xhi]=applyGroup0Floor(DIST_KEY,xlo,xhi);
+    }
   }
 
   const N=400;
