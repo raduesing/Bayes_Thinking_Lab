@@ -876,6 +876,34 @@ function init() {
   buildDistList();
   buildExamples();
   selectDist(DISTS[0].id);
+  applyUrlParams();
+}
+
+// Erlaubt Deep-Links aus anderen Tools direkt in den GLM-Modus, z.B.
+// Bayesian_Prior_Lab.html?glm=slope&dist=normal&mu=0&sigma=2.5 — landet sofort im
+// GLM-Modus mit der gewünschten Verteilung/Parametrisierung und Intercept- oder
+// Slope-Ansicht vorausgewählt, statt dass man das manuell nachklicken muss.
+function applyUrlParams() {
+  const qs = new URLSearchParams(location.search);
+  const glmParam = qs.get('glm'); // 'intercept' | 'slope'
+  if (glmParam !== 'intercept' && glmParam !== 'slope') return;
+  const distId = qs.get('dist') || 'normal';
+  const mu = qs.has('mu') ? +qs.get('mu') : 0;
+  const sig = qs.has('sigma') ? +qs.get('sigma') : 2.5;
+  if (DISTS.some(d => d.id === distId)) loadExample(distId, {mu, sig});
+  if (!GLM_ACTIVE) toggleGLM();
+  toggleGLMParam(glmParam);
+  const link = qs.get('link');
+  if (link === 'logit' || link === 'log') {
+    GLM_LINK = link;
+    const sel = document.getElementById('glm-link-sel');
+    if (sel) sel.value = link;
+    updateGLMInputs();
+    drawPlot();
+  }
+  // ?logx=1 aktiviert direkt die log-x-Ansicht auf der Response-Skala (Odds/Rate Ratio
+  // symmetrisch um 1) — sinnvoll v.a. beim Slope-Deep-Link, wo diese Ansicht die Pointe ist.
+  if (qs.get('logx') === '1' && !RESPONSE_LOGX) toggleLogX();
 }
 
 function buildDistList() {
