@@ -85,7 +85,7 @@ html{font-size:18px}
     flex-shrink: 0;
     line-height: normal;
   }
-  #shell{flex:1;overflow-y:auto;min-height:0}
+  #shell{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column}
   .header-titles { display: flex; flex-direction: column; gap: 0; }
   header h1 {
     font-family: 'Fraunces', Georgia, serif;
@@ -121,6 +121,7 @@ html{font-size:18px}
     border-bottom: 1px solid var(--border);
     align-items: center;
     flex-wrap: wrap;
+    flex-shrink: 0;
   }
 
   .tab-group { display: flex; gap: 4px; }
@@ -164,7 +165,8 @@ html{font-size:18px}
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
-    height: calc(100vh - 130px);
+    flex: 1;
+    min-height: 320px;
   }
 
   .panel {
@@ -208,7 +210,7 @@ html{font-size:18px}
 
   .legend {
     position: absolute;
-    bottom: 30px; right: 16px;
+    bottom: 8px; right: 16px;
     display: flex;
     flex-direction: column;
     gap: 5px;
@@ -224,40 +226,71 @@ html{font-size:18px}
   .legend-row { display: flex; align-items: center; gap: 7px; }
   .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
 
-  /* Info box — opposite corner to legend */
-  .infobox {
-    position: absolute;
-    bottom: 30px; left: 16px;
-    max-width: 230px;
+  /* Shared info footer — one model summary for both panels, replaces the
+     former per-panel infoboxes so the same content isn't shown twice. */
+  .shared-info-wrap {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 40px 16px;
+  }
+  .shared-info-arrows {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    max-width: 920px;
+  }
+  .shared-info-arrows .arrow {
+    flex: 1;
+    text-align: center;
+    color: var(--accent1);
+    font-size: 1.05rem;
+    line-height: 1;
+    opacity: 0.55;
+  }
+  .shared-info-caption {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+    padding: 3px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--floatbox-bg);
+  }
+  .shared-infobox {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 22px;
+    padding: 11px 22px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    font-family: 'DM Mono', monospace;
     font-size: 0.75rem;
     color: var(--muted);
-    font-family: 'DM Mono', monospace;
-    background: var(--floatbox-bg-strong);
-    padding: 10px 13px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    pointer-events: none;
-    line-height: 1.55;
   }
-  .infobox .ib-title {
-    font-size: 0.75rem;
+  .shared-infobox .si-name {
+    font-size: 0.78rem;
+    font-weight: 600;
     color: var(--accent1);
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    margin-bottom: 6px;
-    text-transform: uppercase;
+    border: 1px solid var(--accent1);
+    border-radius: 6px;
+    padding: 3px 10px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
   }
-  .infobox .ib-row {
-    display: flex; gap: 6px; margin-bottom: 3px;
-  }
-  .ib-label { color: var(--accent3); min-width: 58px; }
-  .ib-val   { color: var(--text); }
-  .infobox .ib-sep {
-    border: none; border-top: 1px solid var(--border);
-    margin: 6px 0;
-  }
-  .infobox .ib-note {
+  .shared-infobox .si-item { display: flex; gap: 6px; white-space: nowrap; }
+  .si-label { color: var(--accent3); }
+  .si-val   { color: var(--text); }
+  .shared-infobox .si-note {
     color: #4b5563; font-size: 0.75rem; line-height: 1.4;
+    margin-left: auto;
   }
 
   /* Data-points toggle button */
@@ -411,16 +444,22 @@ em{font-style:italic;color:var(--a6)}
 <div class="viz-grid">
   <div class="panel" id="panel1">
     <div class="panel-label"><span>01</span> Balken-Histogramm</div>
-    <div class="infobox" id="infobox1"></div>
-    <div class="legend" id="legend1"></div>
     <div class="hint">🖱 Drehen / Zoom</div>
   </div>
   <div class="panel" id="panel2">
-    <div class="panel-label"><span>02</span> Kurven / Flächen</div>
-    <div class="infobox" id="infobox2"></div>
+    <div class="panel-label"><span>02</span> Verteilungsprofil</div>
     <div class="legend" id="legend2"></div>
     <div class="hint">🖱 Drehen / Zoom</div>
   </div>
+</div>
+
+<div class="shared-info-wrap">
+  <div class="shared-info-arrows">
+    <span class="arrow">↑</span>
+    <span class="shared-info-caption">Gleiche Verteilung – zwei Darstellungen</span>
+    <span class="arrow">↑</span>
+  </div>
+  <div class="shared-infobox" id="sharedInfobox"></div>
 </div>
 
 </div><!-- /shell -->
@@ -958,11 +997,9 @@ function buildBars(scene) {
   lx.position.set(5.8, 0.1, 0); scene.add(lx);
   const ly = makeTextSprite('P(Y=k)', '#aaaaaa', '#6b7280');
   ly.position.set(-0.5, 4.8, 0); scene.add(ly);
-  const lz = makeTextSprite('k (Outcome)', '#81c784', '#16a34a');
+  const lz = makeTextSprite('y (Outcome)', '#81c784', '#16a34a');
   lz.position.set(0, 0.1, zLabelZ()); scene.add(lz);
 
-  updateInfobox(1);
-  updateLegend(1, xs);
 }
 
 // ─── Version 2: Curve Surfaces ────────────────────────────────────────────────
@@ -1041,24 +1078,23 @@ function buildCurves(scene) {
   const lz = makeTextSprite('y (Outcome)', '#81c784', '#16a34a');
   lz.position.set(0, 0.1, zLabelZ()); scene.add(lz);
 
-  updateInfobox(2);
+  updateInfobox();
   updateLegend(2, xs);
 }
 
-function updateInfobox(panelIdx) {
-  const el = document.getElementById(`infobox${panelIdx}`);
+function updateInfobox() {
+  const el = document.getElementById('sharedInfobox');
   const info = MODEL_INFO[model];
+  if (!el) return;
   if (!info) { el.innerHTML = ''; return; }
   el.innerHTML = `
-    <div class="ib-title">${info.name}</div>
-    <div class="ib-row"><span class="ib-label">Familie</span><span class="ib-val">${info.family}</span></div>
-    <div class="ib-row"><span class="ib-label">Link</span><span class="ib-val">${info.link}</span></div>
-    <div class="ib-row"><span class="ib-label">Link-Fn</span><span class="ib-val">${info.linkFn}</span></div>
-    <div class="ib-row"><span class="ib-label">Varianz</span><span class="ib-val">${info.varFn}</span></div>
-    <hr class="ib-sep">
-    <div class="ib-row"><span class="ib-label">Prädiktor</span><span class="ib-val">${info.eta}</span></div>
-    <hr class="ib-sep">
-    <div class="ib-note">${info.note}</div>`;
+    <div class="si-name">${info.name}</div>
+    <div class="si-item"><span class="si-label">Familie</span><span class="si-val">${info.family}</span></div>
+    <div class="si-item"><span class="si-label">Link</span><span class="si-val">${info.link}</span></div>
+    <div class="si-item"><span class="si-label">Link-Fn</span><span class="si-val">${info.linkFn}</span></div>
+    <div class="si-item"><span class="si-label">Varianz</span><span class="si-val">${info.varFn}</span></div>
+    <div class="si-item"><span class="si-label">Prädiktor</span><span class="si-val">${info.eta}</span></div>
+    <div class="si-note">${info.note}</div>`;
 }
 
 function updateLegend(panelIdx, xs) {
