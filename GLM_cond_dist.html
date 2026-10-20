@@ -88,7 +88,8 @@ html{font-size:18px}
   .play-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.35rem .8rem;border:1.5px solid var(--accent2);background:transparent;cursor:pointer;color:var(--accent2);transition:all .15s;letter-spacing:.05em;white-space:nowrap;}
   .play-btn:hover,.play-btn.playing{background:var(--accent2);color:var(--bg);}
   .speed-wrap{flex:1;}
-  .speed-label{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.18rem;}
+  .speed-label{display:flex;justify-content:space-between;align-items:baseline;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.18rem;}
+  .speed-label .param-val{color:var(--accent);}
 
   /* ── CHARTS ── */
   .charts-col{display:flex;flex-direction:column;gap:1.1rem;}
@@ -115,6 +116,8 @@ html{font-size:18px}
   .param-table tr.hl td{font-weight:500;background:var(--panel);}
   .param-table td.emph{color:var(--accent);font-weight:500;}
   .param-table td.emph2{color:var(--accent2);}
+  .param-table tbody tr{cursor:default;transition:background .1s;}
+  .param-table tbody tr:hover{background:var(--panel);}
 
   .info-strip{padding:.75rem .95rem;background:var(--panel);border-left:3px solid var(--accent2);font-size:.78rem;line-height:1.65;color:var(--ink2);}
   
@@ -157,6 +160,27 @@ html{font-size:18px}
 .hp-seq li:nth-child(3)::before{content:'③'}
 .hp-next{margin-top:.75rem;padding:.4rem .55rem;border-left:3px solid var(--accent2);
          background:var(--panel);font-size:.65rem;color:var(--ink2)}
+
+/* ── INTRO STRIP (compact) ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.55rem 1rem;margin-bottom:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.intro-strip em{color:var(--accent2);font-style:normal}
+.intro-strip strong{color:var(--ink)}
+.intro-strip .tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem .7rem;
+  border:1.5px solid var(--accent2);background:transparent;cursor:pointer;color:var(--accent2);
+  transition:all .15s;white-space:nowrap}
+.intro-strip .tbtn:hover{background:var(--accent2);color:var(--bg)}
+
+/* ── INTRO BOX (collapsible) ── */
+.intro-box{background:var(--paper);border:1.5px solid var(--accent2);
+  padding:1rem 1.3rem;margin-bottom:.85rem;font-family:'DM Mono',monospace;
+  font-size:.75rem;color:var(--ink2);line-height:1.9;box-shadow:2px 2px 0 var(--shadow)}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin-bottom:.55rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.35rem;font-family:'Fraunces',Georgia,serif;}
+.intro-box .ib-head em{color:var(--accent2);font-style:italic}
+.intro-box b, .intro-box strong{color:var(--ink)}
+.intro-box em{color:var(--accent2);font-style:normal}
 </style>
 </head>
 <body>
@@ -178,6 +202,36 @@ html{font-size:18px}
 
 
 <div id="shell">
+
+<!-- ══════════ INTRO STRIP ══════════════════════════════ -->
+<div class="intro-strip">
+  <div>
+    <strong>Bedingte Verteilung P(Y|x)</strong> — die Verteilung von Y <em>für einen festen x-Wert</em>, nicht die Rohverteilung der AV
+    &nbsp;·&nbsp; <em>sie liegt um die Regressionslinie, nicht um den Gesamtmittelwert</em>
+  </div>
+  <button class="tbtn" id="intro-toggle-btn" onclick="toggleIntroDetail()" style="flex-shrink:0">Konzept erklären ▸</button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">Was ist eine <em>bedingte Verteilung</em>?</div>
+    Die <strong>Rohverteilung</strong> einer abhängigen Variable (AV) — z.B. ein Histogramm aller
+    beobachteten y-Werte, unabhängig von jedem Prädiktor — ist <strong>nicht</strong> das, was ein GLM modelliert.
+    <br><br>
+    Ein GLM nimmt an: Für <strong>jeden Wert von x</strong> existiert eine eigene Verteilung von Y —
+    die <strong>bedingte Verteilung</strong> P(Y|x). Ihre Lage (der Erwartungswert) folgt der
+    Regressionslinie/-kurve; ihre Form (Varianz, Schiefe) kann sich mit x ändern. Was du links in
+    der Grafik siehst, ist also ein <strong>Schnitt</strong> durch die gemeinsame Verteilung von (X, Y)
+    bei einem festen x — die Streuung <em>um</em> die Regressionslinie, nicht die Streuung der
+    Rohdaten insgesamt.
+    <br><br>
+    <b>Wo findet man sie in der Praxis?</b> Es ist die Verteilung, die ein Modell für die Residuen
+    bei gegebenem x vorhersagt — z.B. eine einzelne "Scheibe" eines <em>Posterior Predictive
+    Check</em>-Plots, oder die Verteilung, aus der in <code>brms</code>/<code>lme4</code> die
+    <code>family</code>-Angabe (z.B. <code>poisson()</code>, <code>Gamma(link="log")</code>) bei
+    festem Prädiktorwert simuliert würde.
+  </div>
+</div>
 
 <!-- ═══════════════ LERNSCHICHT 1: SZENARIEN ═══════════════ -->
 <div id="scenario-strip">
@@ -214,8 +268,8 @@ html{font-size:18px}
     <div class="play-row">
       <button class="play-btn" id="playBtn" onclick="togglePlay()">▶ PLAY</button>
       <div class="speed-wrap">
-        <div class="speed-label">Geschwindigkeit</div>
-        <input type="range" id="speedSlider" min="300" max="2000" step="100" value="900">
+        <div class="speed-label"><span>Tempo</span><span class="param-val" id="speed-val">–</span></div>
+        <input type="range" id="speedSlider" min="1" max="10" step="1" value="7">
       </div>
     </div>
   </div>
@@ -762,6 +816,26 @@ let chartLeft = null, chartRight = null;
 let playInterval = null, playIdx = 0;
 
 // ── PLAY ─────────────────────────────────────────────────────────────────────
+// Slider-Stufe 1 (langsam) .. 10 (schnell) -> Intervall in ms (höhere Stufe = kürzeres Intervall = schneller)
+const SPEED_MS_SLOW = 2000, SPEED_MS_FAST = 300;
+function speedLevelToMs(level) {
+  return Math.round(SPEED_MS_SLOW - (level - 1) * (SPEED_MS_SLOW - SPEED_MS_FAST) / 9);
+}
+function currentSpeedMs() {
+  return speedLevelToMs(parseInt(document.getElementById('speedSlider').value) || 7);
+}
+function updateSpeedLabel() {
+  document.getElementById('speed-val').textContent = currentSpeedMs() + ' ms';
+}
+function startPlayInterval(ms) {
+  if (playInterval) clearInterval(playInterval);
+  const m = MODELS[currentModel];
+  playInterval = setInterval(() => {
+    playIdx = (playIdx + 1) % m.xValues.length;
+    highlightX = m.xValues[playIdx];
+    renderAll();
+  }, ms);
+}
 function togglePlay() {
   const btn = document.getElementById('playBtn');
   if (playInterval) {
@@ -772,14 +846,13 @@ function togglePlay() {
     const m = MODELS[currentModel];
     playIdx = m.xValues.indexOf(highlightX);
     if(playIdx === -1) playIdx = 0;
-    const speed = parseInt(document.getElementById('speedSlider').value) || 900;
-    playInterval = setInterval(() => {
-      playIdx = (playIdx + 1) % m.xValues.length;
-      highlightX = m.xValues[playIdx];
-      renderAll();
-    }, speed);
+    startPlayInterval(currentSpeedMs());
   }
 }
+document.getElementById('speedSlider').addEventListener('input', function() {
+  updateSpeedLabel();
+  if (playInterval) startPlayInterval(currentSpeedMs()); // Tempo live anpassen, auch während des Abspielens
+});
 
 // ── INIT & RENDER ────────────────────────────────────────────────────────────
 function initTabs() {
@@ -920,18 +993,45 @@ function renderAll() {
   const tbody = document.getElementById('param-tbody'); tbody.innerHTML = '';
   m.xValues.forEach((x, i) => {
     const e = b0+b1*x, p = m.getParam(e,extras), ey = m.getEY(p,extras), isHL = x===highlightX;
-    tbody.innerHTML += `<tr class="${isHL?'hl':''}">
+    tbody.innerHTML += `<tr class="${isHL?'hl':''}" onmouseenter="previewX(${x})" onmouseleave="previewX(null)">
       <td style="color:${COLORS[i%COLORS.length]};font-weight:600">x = ${x}</td>
       <td class="emph2">${e.toFixed(3)}</td><td class="emph">${m.paramStr(p)}</td><td>${ey.toFixed(3)}</td></tr>`;
   });
   document.getElementById('info-strip').innerHTML = m.description;
 }
 
+// ── TABELLEN-HOVER: Vorschau einer Zeile in beiden Charts ────────────────────
+// Beim Überfahren einer Zeile wird die zugehörige Verteilung (links) und der
+// Punkt auf der Regressionsgeraden (rechts) hervorgehoben, ohne die tatsächliche
+// Auswahl (highlightX) zu verändern. Beim Verlassen springt die Ansicht zurück.
+function previewX(x) {
+  const m = MODELS[currentModel];
+  const effX = (x !== null && m.xValues.includes(x)) ? x : highlightX;
+  const xIndex = m.xValues.indexOf(effX);
+  const hlColor = xIndex !== -1 ? COLORS[xIndex % COLORS.length] : COLORS[0];
+  const eta = b0 + b1*effX, param = m.getParam(eta, extras);
+
+  document.getElementById('hl-x-label').textContent = effX;
+  document.getElementById('hl-x-label').style.color = hlColor;
+  document.getElementById('ps-eta').textContent = eta.toFixed(3);
+  document.getElementById('ps-param-val').textContent = param.toFixed(3);
+  document.getElementById('param-info').style.borderColor = hlColor + '70';
+
+  if (chartLeft) {
+    chartLeft.data.datasets = m.buildDatasets(m, b0, b1, m.xValues, extras, effX, true);
+    chartLeft.update('none');
+  }
+  if (chartRight) {
+    chartRight.data.datasets = m.buildDatasets(m, b0, b1, m.xValues, extras, effX, false);
+    chartRight.update('none');
+  }
+}
+
 // ── EVENT LISTENERS ──────────────────────────────────────────────────────────
 document.getElementById('b0').addEventListener('input', renderAll);
 document.getElementById('b1').addEventListener('input', renderAll);
 
-initTabs(); initModel(); renderAll();
+initTabs(); initModel(); renderAll(); updateSpeedLabel();
 </script>
 </body>
 </html>
@@ -1116,7 +1216,7 @@ const SCENARIOS = {
   schlafstoerungen: {
     title: 'Schlafstörungen', badge: 'NEG.BIN.',
     model: 'negbin', b0: 1.0, b1: 0.6,
-    extras: { alpha: 0.8 }, hlX: 0.75,
+    extras: { alpha: 0.8 }, hlX: 0,
     context: 'Die Anzahl der Schlafstörungen pro Monat wird durch den Stresslevel vorhergesagt. Klinische Zähldaten zeigen oft mehr Streuung als der Mittelwert (Überdispersion), weil individuelle Unterschiede die Varianz zusätzlich erhöhen.',
     paramDesc: 'β₀ = 1.00 · β₁ = 0.60 · α (Dispersion) = 0.80',
     reveal: '<strong>Warum Neg. Binomial?</strong> Bei Überdispersion (Varianz > Mittelwert) unterschätzt Poisson die Streuung und produziert zu schmale Konfidenzintervalle. Die NB ergänzt den Dispersionsparameter α: Var = μ + αμ². Erhöhe α von 0.05 auf 1.5 und beobachte in der Ridgeline-Ansicht, wie die Verteilungen breiter werden.'
@@ -1124,7 +1224,7 @@ const SCENARIOS = {
   therapieerfolg: {
     title: 'Therapieerfolg', badge: 'BINOMIAL',
     model: 'binomial', b0: 0.0, b1: 0.8,
-    extras: { ntrials: 12 }, hlX: 0.75,
+    extras: { ntrials: 12 }, hlX: 0,
     context: 'Die Anzahl erfolgreicher Therapiesitzungen (von 12) wird durch die Qualität der therapeutischen Beziehung vorhergesagt. Die Outcomes sind diskret, nicht-negativ und nach oben durch n = 12 begrenzt. Eine bessere Therapeuten-Klienten-Beziehung erhöht die Erfolgswahrscheinlichkeit.',
     paramDesc: 'β₀ = 0.00 · β₁ = 0.80 · n (Versuche) = 12',
     reveal: '<strong>Warum Binomial?</strong> Die Outcomes liegen in [0, n] — das verbietet OLS, der ins Unendliche extrapoliert. Der Logit-Link modelliert p ∈ (0, 1). Aktiviere das PI: Die Bänder schnüren sich an den Rändern zusammen, weil Var = np(1−p) gegen 0 geht, wenn p → 0 oder p → 1.'
@@ -1132,7 +1232,7 @@ const SCENARIOS = {
   therapieerfolg_bern: {
     title: 'Therapieerfolg (ja/nein)', badge: 'BERNOULLI',
     model: 'bernoulli', b0: 0.2, b1: 0.9,
-    extras: {}, hlX: 0.75,
+    extras: {}, hlX: 0,
     context: 'Eine Therapiesitzung gilt als "erfolgreich" (1) oder "nicht erfolgreich" (0). Die Erfolgswahrscheinlichkeit wird durch die Therapiedauer (z-standardisiert) vorhergesagt. Das ist der Bernoulli-Spezialfall der Binomialverteilung mit n = 1 — das einfachste binäre Outcome-Modell.',
     paramDesc: 'β₀ = 0.20 · β₁ = 0.90 · n = 1 (Bernoulli = Bin(1, p))',
     reveal: '<strong>Bernoulli als Spezialfall:</strong> Bin(n=1, p) = Bernoulli(p). Das PMF zeigt nur zwei Balken: P(Y=0) = 1−p und P(Y=1) = p. Die S-Kurve (Logit-Link) garantiert p ∈ (0,1). Im Unterschied zur Binomialverteilung mit n > 1 gibt es hier keine "Anzahl Erfolge" — nur Erfolg oder Misserfolg. Vergleiche: Lade das <em>Therapieerfolg</em>-Szenario und setze n = 1 dort — du siehst dieselbe Kurve!'
@@ -1156,7 +1256,7 @@ const SCENARIOS = {
   therapiezufriedenheit_ord: {
     title: 'Therapiezufriedenheit', badge: 'ORDINAL',
     model: 'ordinal', b0: -0.5, b1: 0.9,
-    extras: { ncat: 4 }, hlX: 0.75,
+    extras: { ncat: 4 }, hlX: 0,
     context: 'Nach Abschluss einer Psychotherapie bewerten Klienten ihre Zufriedenheit auf einer 4-stufigen Skala (1 = unzufrieden, 4 = sehr zufrieden). Der Prädiktor ist die Anzahl der abgeschlossenen Sitzungen (z-standardisiert). Mehr Sitzungen sollten zu höherer Zufriedenheit führen — also mehr Wahrscheinlichkeitsmasse bei höheren Kategorien.',
     paramDesc: 'β₀ = −0.50 · β₁ = 0.90 · K = 4 Kategorien',
     reveal: '<strong>Proportional Odds:</strong> β₁ = 0.90 gilt für alle K−1 Schwellenübergänge gleichzeitig. Das ist die <em>proportional odds</em> Annahme: Eine Einheit mehr Sitzungen erhöht die Log-Odds für Y > k um den gleichen Betrag β₁, unabhängig von k. In brms: <code>brm(zuf | thres(3) ~ sitzungen, family=cumulative("logit"))</code>. Beobachte im Ridgeline-Plot, wie sich die gesamte Verteilung gleichmäßig nach rechts verschiebt.'
@@ -1468,6 +1568,14 @@ document.addEventListener('click', function(e) {
 initScenarioBar();
 updateReflection();
 
+// ── Intro-Box (Konzepterklärung) ────────────────────────────────
+let introOpen = false;
+function toggleIntroDetail() {
+  introOpen = !introOpen;
+  document.getElementById('intro-detail').style.display = introOpen ? 'block' : 'none';
+  document.getElementById('intro-toggle-btn').textContent = introOpen ? 'Konzept ausblenden ▾' : 'Konzept erklären ▸';
+}
+
 // ── Floating Help Panel ────────────────────────────────────────
 let helpOpen = false;
 function toggleHelp(){
@@ -1496,7 +1604,7 @@ document.addEventListener('click', e => {
     <div class="hp-sect">Der lineare Prädiktor η</div>
     η = β₀ + β₁·x kann jeden Wert annehmen. Die Linkfunktion transformiert ihn
     in den zulässigen Parameterbereich:<br><br>
-    <strong>Log-Link:</strong> <em>λ = e^η</em> — immer positiv (<a class="glo-link" href="Glossar.html#gl-poisson-verteilung" target="_blank" title="Die Poisson-Verteilung modelliert die Anzahl von Ereignissen in einem festen Intervall, wenn Ereignisse unabhängig mit konstanter Rate λ auftreten.">Poisson</a>, <a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="Die Gamma-Verteilung ist eine stetige Verteilung für positive reelle Werte, parametrisiert durch Formparameter α (shape) und Ratenparameter β (rate).">Gamma</a>)<br>
+    <strong>Log-Link:</strong> <em>e^η</em> — immer positiv. Bezeichnung des Parameters je nach Familie unterschiedlich: bei <a class="glo-link" href="Glossar.html#gl-poisson-verteilung" target="_blank" title="Die Poisson-Verteilung modelliert die Anzahl von Ereignissen in einem festen Intervall, wenn Ereignisse unabhängig mit konstanter Rate λ auftreten.">Poisson</a> ist es die Rate <em>λ = e^η</em>, bei <a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="Die Gamma-Verteilung ist eine stetige Verteilung für positive reelle Werte, parametrisiert durch Formparameter α (shape) und Ratenparameter β (rate).">Gamma</a> der Erwartungswert <em>μ = e^η</em> — beide Male derselbe Link, aber unterschiedliche Parametrisierung<br>
     <strong><a class="glo-link" href="Glossar.html#gl-logit" target="_blank" title="Der Logit ist die Link-Funktion der logistischen Regression: logit(p) = log(p/(1−p)), bildet Wahrscheinlichkeiten (0,1) auf die reelle Zahlengerade ab." style="color:inherit">Logit-Link:</a></strong> <em>p = 1/(1+e^−η)</em> — immer in (0,1) (<a class="glo-link" href="Glossar.html#gl-bernoulli" target="_blank" title="Die Bernoulli-Verteilung beschreibt ein Zufallsexperiment mit genau zwei möglichen Ausgängen: Erfolg (p) und Misserfolg (1−p).">Bernoulli</a>, <a class="glo-link" href="Glossar.html#gl-binomialverteilung" target="_blank" title="Die Binomialverteilung beschreibt die Anzahl der Erfolge k in n unabhängigen Bernoulli-Versuchen mit je gleicher Erfolgswahrscheinlichkeit p.">Binomial</a>)<br>
     <strong>Identität:</strong> <em>μ = η</em> — das klassische LM (<a class="glo-link" href="Glossar.html#gl-normalverteilung" target="_blank" title="Die Normalverteilung ist die zentrale stetige Wahrscheinlichkeitsverteilung der Statistik, parametrisiert durch Mittelwert μ und Standardabweichung σ.">Normal</a>)
 
