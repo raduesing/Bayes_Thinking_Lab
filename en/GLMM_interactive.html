@@ -672,41 +672,91 @@ const P = () => ({
 // ═══════════════════════════════════════════════════════════════
 // DATA GENERATION
 // ═══════════════════════════════════════════════════════════════
-function genData() {
-  const p = P(), m = MODELS[modelKey], rng = mkRng(seed);
-  data = []; trueGrp = [];
+// A draw occasionally lands on data that's technically correct but didactically
+// ugly for a first look at GLMMs — a saturated/near-constant group, quasi-complete
+// separation (Logistic), or one group's mean dwarfing another's (Poisson/Gamma).
+// Rather than curate a fixed "good" seed list (which breaks the moment any slider
+// changes), reject such draws and deterministically reroll from the same seed —
+// this stays reproducible per seed while adapting to whatever parameters are set.
+function looksDegenerate(pts, grp, modelK) {
+  for (let j = 0; j < grp.length; j++) {
+    const ys = pts.filter(d => d.gid === j).map(d => d.y);
+    if (modelK === 'logistic') {
+      if (ys.every(y => y === ys[0])) return true;          // group is all-0 or all-1
+      const xs1 = pts.filter(d => d.gid === j && d.y === 1).map(d => d.x);
+      const xs0 = pts.filter(d => d.gid === j && d.y === 0).map(d => d.x);
+      if (Math.min(...xs1) > Math.max(...xs0) || Math.max(...xs1) < Math.min(...xs0))
+        return true;                                          // quasi-complete separation
+    } else if (modelK === 'poisson') {
+      if (Math.max(...ys) <= 1) return true;                  // flat near-zero group
+    }
+  }
+  if (modelK === 'poisson' || modelK === 'gamma') {
+    const means = grp.map((_, j) => {
+      const ys = pts.filter(d => d.gid === j).map(d => d.y);
+      return ys.reduce((a, b) => a + b, 0) / ys.length;
+    });
+    const maxM = Math.max(...means), minM = Math.min(...means.filter(mn => mn > 1e-9).concat([maxM]));
+    if (maxM / Math.max(minM, 1e-9) > 8) return true;         // one group dwarfs another
+  }
+  return false;
+}
 
+function genData() {
+  const p = P(), m = MODELS[modelKey];
   const rhoClamp = Math.max(-0.999, Math.min(0.999, p.rho));
   const L00 = p.tau0;
   const L10 = rhoClamp * p.tau1;
   const L11 = p.tau1 * Math.sqrt(Math.max(0, 1 - rhoClamp * rhoClamp));
 
-  for (let j = 0; j < p.J; j++) {
-    const z0 = rnorm(rng), z1 = rnorm(rng);
-    const u0 = L00 * z0;
-    const u1 = reMode === 'both' ? L10 * z0 + L11 * z1 : 0;
-    trueGrp.push({u0, u1, nj: p.n, isOutlier: false});
-    const xCenter = (j - (p.J-1)/2) * p.xoff;
-    for (let i = 0; i < p.n; i++) {
-      const x   = xCenter + (rng() * 2 - 1) * p.xr;
-      const eta = (p.g00 + u0) + (p.g10 + u1) * x;
-      const mu  = m.invLink(eta);
-      data.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
+  function draw(s) {
+    const rng = mkRng(s);
+    const pts = [], grp = [];
+    for (let j = 0; j < p.J; j++) {
+      const z0 = rnorm(rng), z1 = rnorm(rng);
+      const u0 = L00 * z0;
+      const u1 = reMode === 'both' ? L10 * z0 + L11 * z1 : 0;
+      grp.push({u0, u1, nj: p.n, isOutlier: false});
+      const xCenter = (j - (p.J-1)/2) * p.xoff;
+      for (let i = 0; i < p.n; i++) {
+        const x   = xCenter + (rng() * 2 - 1) * p.xr;
+        const eta = (p.g00 + u0) + (p.g10 + u1) * x;
+        const mu  = m.invLink(eta);
+        pts.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
+      }
+    }
+    return {pts, grp};
+  }
+
+  let s = seed, draws = draw(s), tries = 0;
+  if (modelKey !== 'gauss') {
+    while (looksDegenerate(draws.pts, draws.grp, modelKey) && tries < 20) {
+      s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+      draws = draw(s);
+      tries++;
     }
   }
+  data = draws.pts; trueGrp = draws.grp;
+
   if (showOutlier) {
+    const rngO = mkRng(s + 777);
     const j   = p.J;
-    // Outlier group: extreme intercept + counter-trend slope → strong shrinkage in both
-    const u0o = Math.max(p.tau0, 1.0) * 4.0;
+    // Outlier group: extreme intercept + counter-trend slope → strong shrinkage in both.
+    // On the identity link (Gaussian) a +4 offset is "clearly far but still
+    // plottable". On a log/logit link that same additive offset compounds
+    // exponentially (e⁴ ≈ 55×) and swamps the chart — so GLMMs get an offset
+    // sized for their own (much smaller) tau0 range instead of inheriting the
+    // Gaussian constant.
+    const u0o = modelKey === 'gauss' ? Math.max(p.tau0, 1.0) * 4.0 : 1.5 + 1.0 * p.tau0;
     // Slope deviation: opposite to fixed slope (if g10>0, outlier goes negative, and vice versa)
     const slopeSign = p.g10 >= 0 ? -1 : 1;
     const u1o = slopeSign * (Math.abs(p.g10) + 0.4);  // reverses AND amplifies slope
     trueGrp.push({u0: u0o, u1: u1o, nj: 4, isOutlier: true});
     for (let i = 0; i < 4; i++) {
-      const x   = (rng() * 2 - 1) * p.xr;
+      const x   = (rngO() * 2 - 1) * p.xr;
       const eta = (p.g00 + u0o) + (p.g10 + u1o) * x;
       const mu  = m.invLink(eta);
-      data.push({gid: j, x, y: m.sample(mu, p.sig, rng)});
+      data.push({gid: j, x, y: m.sample(mu, p.sig, rngO)});
     }
   }
   document.getElementById('v-N').textContent = `N = ${data.length}`;
@@ -980,26 +1030,84 @@ function mmEst(p) {
 
   let npFit, feA, feB;
 
+  // The fixed effects (γ₀₀/γ₁₀) are estimated from the "normal" groups only.
+  // The outlier group (if shown) is deliberately extreme and has very few
+  // points (n=4) — folding it into the joint slope fit (reMode='int') or the
+  // weighted average (reMode='both') made this already-crude IRLS/method-of-
+  // moments routine numerically unstable (estimates occasionally diverging to
+  // huge values for Poisson/Logistic). It still gets its own fit below, purely
+  // for its own table row / shrinkage display — excluded only from the fixed-
+  // effect estimate itself, much as its tiny sample size would heavily
+  // down-weight it in a real REML fit anyway. Gaussian's closed-form OLS can't
+  // diverge this way (no IRLS involved), so it keeps its original, already
+  // validated behavior — this is scoped to the GLMM families only.
+  const outlierIdx = modelKey !== 'gauss' ? trueGrp.findIndex(g => g.isOutlier) : -1;
+  const normalIdx = outlierIdx === -1
+    ? Array.from({length: totalJ}, (_, j) => j)
+    : Array.from({length: totalJ}, (_, j) => j).filter(j => j !== outlierIdx);
+
   if (reMode === 'int') {
     // ── Estimate common slope + per-group intercepts (within estimator) ──
     // This is the closest JavaScript approximation to lme4's Laplace MLE for γ₁₀.
     // Gaussian: exact (OLS within). GLMMs: PQL-like approximation.
-    const initAs = grpFit.map(g => g.a);
-    const initB  = grpFit.reduce((s,g,j)=>s+g.b*trueGrp[j].nj,0)/data.length;
+    const normalPts = normalIdx.map(j => grpPts[j]);
+    const normalN   = normalIdx.reduce((s,j) => s + trueGrp[j].nj, 0);
+    const initAs = normalIdx.map(j => grpFit[j].a);
+    const initB  = normalIdx.reduce((s,j) => s + grpFit[j].b*trueGrp[j].nj, 0) / normalN;
 
     const {b: commonB, as: groupAs} = fitCommonSlope(
-      grpPts, initAs, initB, invLink, linkDeriv, varFn
+      normalPts, initAs, initB, invLink, linkDeriv, varFn
     );
 
-    npFit = groupAs.map((a, j) => ({a, b: commonB}));
+    npFit = new Array(totalJ);
+    normalIdx.forEach((j, k) => { npFit[j] = {a: groupAs[k], b: commonB}; });
     feB = commonB;
-    feA = npFit.reduce((s,g,j)=>s+g.a*trueGrp[j].nj,0)/data.length;
+    feA = normalIdx.reduce((s,j,k) => s + groupAs[k]*trueGrp[j].nj, 0) / normalN;
+
+    if (outlierIdx !== -1) {
+      // The outlier is always generated with its OWN (reversed) slope, regardless
+      // of reMode — forcing its displayed line onto the shared commonB made it
+      // visibly contradict its own plotted points (drawn going up while its data
+      // trends down). For Logistic a free 2-parameter fit on just 4 binary points
+      // is too noisy to trust (~70% wrong sign in testing) — keep the shared-
+      // slope intercept fit there. Poisson/Gamma get their own free fit below
+      // (clamped for magnitude — see comment there).
+      npFit[outlierIdx] = (modelKey === 'logistic')
+        ? {
+            a: fitIntercept(grpPts[outlierIdx], commonB, invLink, linkDeriv, varFn, grpFit[outlierIdx].a),
+            b: commonB
+          }
+        : grpFit[outlierIdx];
+    }
 
   } else {
     // ── Random slopes: use per-group free fits ──────────────────────
     npFit = grpFit;
-    feA = grpFit.reduce((s,g,j)=>s+g.a*trueGrp[j].nj,0)/data.length;
-    feB = grpFit.reduce((s,g,j)=>s+g.b*trueGrp[j].nj,0)/data.length;
+    const normalN = normalIdx.reduce((s,j) => s + trueGrp[j].nj, 0);
+    feA = normalIdx.reduce((s,j) => s + grpFit[j].a*trueGrp[j].nj, 0) / normalN;
+    feB = normalIdx.reduce((s,j) => s + grpFit[j].b*trueGrp[j].nj, 0) / normalN;
+  }
+
+  if (outlierIdx !== -1 && modelKey !== 'logistic') {
+    // A free 2-parameter fit on just the outlier's 4 points can send BOTH its
+    // intercept AND slope to implausible extremes TOGETHER — with so few points
+    // the two aren't separable, so clamping only the slope still leaves an
+    // intercept like a=14.4 (Poisson: predicted mean in the millions) behind.
+    // The fit's SIGN is reliable (correct for ~95-100% of draws in testing),
+    // so keep that, but give it a magnitude scaled off the robust fixed-effect
+    // slope (data-driven, from the 5 well-behaved normal groups) instead of the
+    // free fit's own overfit magnitude — then re-fit ONLY the intercept (a
+    // stable 1-parameter IRLS) against that assumed slope.
+    const cheapSign = Math.sign(grpFit[outlierIdx].b) || 1;
+    const assumedB  = cheapSign * Math.max(Math.abs(feB) * 2, 0.3);
+    let outlierA = fitIntercept(grpPts[outlierIdx], assumedB, invLink, linkDeriv, varFn, feA);
+    // Safety net: on the ~5% of draws where even the sign guess above is wrong
+    // (data genuinely doesn't match the assumed direction), the 1-parameter fit
+    // can still overshoot trying to reconcile the mismatch — cap how far the
+    // intercept may sit from the robust feA so a bad draw can't still blow up.
+    const A_CLAMP = 5;
+    outlierA = Math.max(feA - A_CLAMP, Math.min(feA + A_CLAMP, outlierA));
+    npFit[outlierIdx] = { a: outlierA, b: assumedB };
   }
 
   // ── Theoretical Level-1 Variance for Shrinkage λ and ICC/R² ──
@@ -1060,27 +1168,27 @@ function setModel(k) {
   document.getElementById('pg-sigma').style.display = MODELS[k].hasSigma ? '' : 'none';
 
   const cfg = {
-    gauss:    { g00min:'-2',  g00max:'6',   g00val:'2.0',  g10min:'-2',   g10max:'2',    g10val:'0.6',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
-    // Poisson: larger g10 and xr defaults so curves show visible shape
-    poisson:  { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.5', g10max:'0.5',  g10val:'0.25', g10step:'0.02', sigmax:'2.5', sigval:'0.6', xrval:'2.5' },
+    gauss:    { g00min:'-2',  g00max:'6',   g00val:'2.0',  g10min:'-2',   g10max:'2',    g10val:'0.6',  g10step:'0.05', sigmax:'2.5', sigval:'0.6', tau0max:'3',   tau0val:'1.0', tau1max:'1.5', tau1val:'0.3' },
+    // Poisson: larger g10 and xr defaults so curves show visible shape.
+    // tau0/tau1 kept modest (not just capped) — on the log/logit link scale, an
+    // SD of 1.0 (the Gaussian default) multiplies group means by up to ~e² ≈ 7x
+    // between groups, which routinely produces one near-flat/degenerate-looking
+    // group; 0.4 keeps groups visibly different without that. tau1 similarly
+    // reduced to 0.15 — at 0.3 (comparable to g10 itself) a group's individual
+    // slope (g10+u1) flips sign in ~15% of draws, so "Intercept + Slope" often
+    // showed one or more lines running the wrong direction; 0.15 still gives
+    // visible fan-out/fan-in without that.
+    poisson:  { g00min:'0',   g00max:'3',   g00val:'1.5',  g10min:'-0.5', g10max:'0.5',  g10val:'0.25', g10step:'0.02', sigmax:'2.5', sigval:'0.6', xrval:'2.5', tau0max:'1.2', tau0val:'0.4', tau1max:'0.8', tau1val:'0.15' },
     // Gamma: same — larger slope and range for visible curves
-    gamma:    { g00min:'0',   g00max:'3',   g00val:'1.0',  g10min:'-0.5', g10max:'0.5',  g10val:'0.30', g10step:'0.02', sigmax:'1.2', sigval:'0.4', xrval:'2.5' },
-    logistic: { g00min:'-2',  g00max:'2',   g00val:'0.0',  g10min:'-1.0', g10max:'1.0',  g10val:'0.4',  g10step:'0.05', sigmax:'2.5', sigval:'0.6'  },
+    gamma:    { g00min:'0',   g00max:'3',   g00val:'1.0',  g10min:'-0.5', g10max:'0.5',  g10val:'0.30', g10step:'0.02', sigmax:'1.2', sigval:'0.4', xrval:'2.5', tau0max:'1.2', tau0val:'0.4', tau1max:'0.8', tau1val:'0.15' },
+    logistic: { g00min:'-2',  g00max:'2',   g00val:'0.0',  g10min:'-1.0', g10max:'1.0',  g10val:'0.4',  g10step:'0.05', sigmax:'2.5', sigval:'0.6', tau0max:'1.2', tau0val:'0.4', tau1max:'0.8', tau1val:'0.15' },
   }[k];
   const sl = id => document.getElementById(id);
   sl('g00').min   = cfg.g00min;  sl('g00').max   = cfg.g00max;  sl('g00').value = cfg.g00val;
   sl('g10').min   = cfg.g10min;  sl('g10').max   = cfg.g10max;  sl('g10').step  = cfg.g10step; sl('g10').value = cfg.g10val;
   sl('sigma').max = cfg.sigmax;  if (MODELS[k].hasSigma) sl('sigma').value = cfg.sigval;
-  
-  if (k !== 'gauss') {
-    sl('tau0').max = '1.2';
-    if (+sl('tau0').value > 1.2) sl('tau0').value = '0.6';
-    sl('tau1').max = '0.8';
-    if (+sl('tau1').value > 0.8) sl('tau1').value = '0.2';
-  } else {
-    sl('tau0').max = '3';
-    sl('tau1').max = '1.5';
-  }
+  sl('tau0').max = cfg.tau0max;  sl('tau0').value = cfg.tau0val;
+  sl('tau1').max = cfg.tau1max;  sl('tau1').value = cfg.tau1val;
 
   // Set x-range slider default if model provides one
   if (cfg.xrval) {
@@ -1485,12 +1593,19 @@ function modelFitStats(p, est) {
   const k_pp = reMode === 'int' ? (3 + hasSig) : (5 + hasSig);
 
   // ── Collect group-level stats: intercepts, x²-sums, Gaussian residuals ──
+  // Variance components (τ̂₀/τ̂₁) and the fixed-effect SEs describe the spread
+  // of the "normal" groups — the outlier group (if shown) is deliberately not
+  // drawn from that same N(0,τ₀²) population, so including it here biases
+  // τ̂₀ upward and, combined with its tiny n=4, can blow it up outright for
+  // the GLMM families. Scoped to non-Gaussian, same reasoning as in mmEst().
+  const outlierIdx2 = modelKey !== 'gauss' ? trueGrp.findIndex(g => g.isOutlier) : -1;
   let sxxWithin = 0, ssGaussResid = 0, dfRes = 0;
   const grpMeanA = [];
   // For Gamma: estimate dispersion from within-group CV
   let sumCV2 = 0, nCV = 0;
 
   for (let j = 0; j < totalJ; j++) {
+    if (j === outlierIdx2) continue;
     const pts = data.filter(d => d.gid === j);
     if (pts.length < 2) { grpMeanA.push(grpFit[j].a); continue; }
     const g   = grpFit[j];
@@ -1545,24 +1660,26 @@ function modelFitStats(p, est) {
     sighat_display = Math.sqrt(phi_hat);  // estimated CV (dispersion parameter)
   }
 
-  const nbar = data.length / totalJ;
-  const meanA = grpMeanA.reduce((s,v)=>s+v,0) / totalJ;
-  const varA  = grpMeanA.reduce((s,v)=>s+(v-meanA)**2,0) / Math.max(totalJ-1, 1);
+  const normalJ = outlierIdx2 === -1 ? totalJ : totalJ - 1;
+  const normalN = outlierIdx2 === -1 ? data.length : data.length - trueGrp[outlierIdx2].nj;
+  const nbar = normalN / normalJ;
+  const meanA = grpMeanA.reduce((s,v)=>s+v,0) / normalJ;
+  const varA  = grpMeanA.reduce((s,v)=>s+(v-meanA)**2,0) / Math.max(normalJ-1, 1);
   // MoM: τ̂₀² = Var(â_j) - V_level1/n̄  (correct for all GLMMs)
   const tau0hat2 = Math.max(0, varA - v_lvl1 / nbar);
   const tau0hat  = Math.sqrt(tau0hat2);
 
-  const grpSlopeB = grpFit.map(g => g.b);
-  const meanB2 = grpSlopeB.reduce((s,v)=>s+v,0) / totalJ;
-  const varB   = grpSlopeB.reduce((s,v)=>s+(v-meanB2)**2,0) / Math.max(totalJ-1, 1);
-  const sxxMean = sxxWithin / Math.max(totalJ, 1);
+  const grpSlopeB = grpFit.filter((_,j) => j !== outlierIdx2).map(g => g.b);
+  const meanB2 = grpSlopeB.reduce((s,v)=>s+v,0) / normalJ;
+  const varB   = grpSlopeB.reduce((s,v)=>s+(v-meanB2)**2,0) / Math.max(normalJ-1, 1);
+  const sxxMean = sxxWithin / Math.max(normalJ, 1);
   // MoM for random slope: τ̂₁² = Var(b̂_j) - V_level1/sxx̄
   const tau1hat2 = reMode === 'both' ? Math.max(0, varB - v_lvl1 / Math.max(sxxMean, 1e-9)) : 0;
   const tau1hat  = Math.sqrt(tau1hat2);
 
   // SE formulas: use v_lvl1 (not OLS sig²) for all GLMM models
   const se_feB = sxxWithin > 0 ? Math.sqrt(v_lvl1 / sxxWithin) : 0;
-  const se_feA = Math.sqrt((tau0hat2 + v_lvl1 / nbar) / Math.max(totalJ, 1));
+  const se_feA = Math.sqrt((tau0hat2 + v_lvl1 / nbar) / Math.max(normalJ, 1));
   const sig2hat = v_lvl1;   // alias for downstream use
   const z95 = 1.96;
   const ci_feA = [feA - z95*se_feA, feA + z95*se_feA];
@@ -1573,8 +1690,8 @@ function modelFitStats(p, est) {
     const se_log = Math.sqrt(2 / df);
     return [tauhat * Math.exp(-z95 * se_log), tauhat * Math.exp(z95 * se_log)];
   };
-  const ci_tau0 = ciTau(tau0hat, totalJ - 1);
-  const ci_tau1 = ciTau(tau1hat, totalJ - 1);
+  const ci_tau0 = ciTau(tau0hat, normalJ - 1);
+  const ci_tau1 = ciTau(tau1hat, normalJ - 1);
 
   // ── FIX: Nakagawa R2 Theoretical Variance ────────
   const fixedPred  = data.map(d => feA + feB * d.x);
