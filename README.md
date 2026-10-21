@@ -13,7 +13,7 @@
 
 ### 🌐 [www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)
 
-**23 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
+**24 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -33,13 +33,13 @@ The **Bayes Thinking Lab (BTL)** moves away from the "black-box" approach of sta
 
 ## 🗺 The Learning Path
 
-The lab is organized into five sections that build on each other. Work through them in order, or jump in wherever your current knowledge begins.
+The lab is organized into six sections that build on each other. Work through them in order, or jump in wherever your current knowledge begins.
 
 | Section | What you will learn | Key Tools |
 | :--- | :--- | :--- |
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | Distribution Lab · GLM Conditional Distributions · GLM 3D · Interactive GLMM |
-| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Why Bayes? · Thinking Simulator · Prior Lab · MCMC Visualizer · Bayes Interactive |
+| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Why Bayes? · Thinking Simulator · Likelihood Compass · Prior Lab · MCMC Visualizer · Bayes Interactive |
 | **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
 | **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Advanced Model Builder · Prior & Posterior PC · LOO Lab |
 | **V · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · G-Comp Builder · Decision Lab · Decision Maker |
@@ -78,7 +78,8 @@ The lab is organized into five sections that build on each other. Work through t
 
 * **Why Bayes?** — What can a Bayesian posterior tell you that a p-value can't? A two-act comparison: frequentist output first, then an interactive posterior with a movable effect threshold and a live prior-update — no R required. Makes concrete why a credible interval is not a confidence interval.
 * **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
-* **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode** (new in v1.0): enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios) — via a **mathematically exact Jacobian transformation** (change-of-variables theorem), not an approximation.
+* **Likelihood Compass** — Before the first prior is set, a different decision has to be made: which distribution family actually fits the data-generating process — not just the histogram. A guided decision tree leads from reaction times, sum scores, and count data to a reasoned shortlist. Check candidates against your own dataset via Maximum Likelihood (AIC/BIC), then jump straight to the brms reference: required parameters, priors, and go-to defaults per family.
+* **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode**: enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios) — via a **mathematically exact Jacobian transformation** (change-of-variables theorem), not an approximation.
 
 <p align="center"><img src="images/Prior_Lab.gif" width="580"></p>
 
@@ -154,7 +155,7 @@ No setup required.
 | Level | Recommended Entry Point | Tools to Explore |
 | :--- | :--- | :--- |
 | **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · **Distribution Lab** · Prior Lab (CI-Solver) · Bayes Interactive |
-| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
+| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Likelihood Compass · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
 | **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PC · LOO Lab · Causal Calculator · G-Comp Builder · Decision Maker |
 
 ---
