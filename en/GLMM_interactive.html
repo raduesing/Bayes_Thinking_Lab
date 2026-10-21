@@ -102,12 +102,19 @@
   .shrink-track{height:5px;background:var(--grid);border-radius:3px;overflow:hidden;}
   .shrink-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent3));transition:width .35s;}
 
-  .data-row{display:flex;align-items:center;gap:.45rem;margin-top:.35rem;}
-  .regen-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.25rem .65rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;}
+  .data-actions{margin-top:.5rem;display:flex;flex-direction:column;gap:.4rem;}
+  .data-actions-row{display:flex;gap:.4rem;}
+  .data-actions-row .regen-btn{flex:1;}
+  .regen-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.3rem .65rem;border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;text-align:center;}
   .regen-btn:hover{background:var(--accent);color:white;border-color:var(--accent);}
-  .nlabel{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);}
+  .regen-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:500;}
+  .regen-btn.primary:hover{opacity:.85;}
+  .nlabel{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);text-align:center;opacity:.8;}
 
-  .formula-box{background:var(--panel);border-left:3px solid var(--accent2);padding:.55rem .72rem;font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.85;color:var(--ink);white-space:pre-wrap;}
+  .formula-box{background:var(--panel);border-left:3px solid var(--accent2);padding:.6rem .75rem;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink);}
+  .fb-line{line-height:1.7;}
+  .fb-link{margin-bottom:.5rem;}
+  .fb-dist{border-top:1px dashed var(--grid);padding-top:.4rem;}
   .fxd{color:var(--accent);font-weight:500;}
   .rnd{color:var(--accent2);font-weight:500;}
   .gry{color:var(--ink2);}
@@ -381,11 +388,13 @@
         </div>
         <input type="range" id="xoff" min="0" max="3" step="0.1" value="0">
       </div>
-      <div class="data-row">
-        <button class="regen-btn" onclick="regen()">⟳ New Data</button>
-        <button class="regen-btn" onclick="downloadCSV()" title="Download simulated data as CSV" style="border-color:var(--accent3);color:var(--accent3)">↓ CSV</button>
-        <button class="regen-btn" id="btn-simpson" onclick="setSimpson()" style="border-color:var(--warn);color:var(--warn)" title="Load Simpson scenario">⚠ Simpson</button>
-        <span class="nlabel" id="v-N">N = 60</span>
+      <div class="data-actions">
+        <button class="regen-btn primary" onclick="regen()">⟳ New Data</button>
+        <div class="data-actions-row">
+          <button class="regen-btn" onclick="downloadCSV()" title="Download simulated data as CSV" style="border-color:var(--accent3);color:var(--accent3)">↓ CSV</button>
+          <button class="regen-btn" id="btn-simpson" onclick="setSimpson()" style="border-color:var(--warn);color:var(--warn)" title="Load Simpson scenario">⚠ Simpson</button>
+        </div>
+        <div class="nlabel" id="v-N">N = 60</div>
       </div>
     </div>
 
@@ -645,7 +654,7 @@ const MODELS = {
     invLink: η => 1 / (1 + Math.exp(-η)),
     sample: (p, sig, rng) => rng() < p ? 1 : 0,
     yLabel: 'y (0/1)',
-    formulaLink: 'logit(p) = η  →  p = σ(η)',
+    formulaLink: 'logit(p) = η  →  p = 1/(1+e⁻ᶯ)',
     formulaDist: 'Y|x,u ~ Bernoulli(p)',
     hasSigma: false,
     yPositive: false,
@@ -1123,13 +1132,22 @@ function mmEst(p) {
   if (modelKey === 'logistic') {
     v_lvl1_est = Math.PI * Math.PI / 3;                           // ≈ 3.290
   } else if (modelKey === 'poisson') {
-    // Use actual data mean count for Nakagawa approximation (more stable than exp(feA))
-    const lambdaBarEst = Math.max(data.reduce((s,d)=>s+d.y,0)/Math.max(data.length,1), 0.1);
+    // Use actual data mean count for Nakagawa approximation (more stable than exp(feA)).
+    // Excludes the outlier group (if shown) — its deliberately inflated/deflated
+    // mean otherwise skews this "typical within-group noise" estimate, which is
+    // shared by EVERY group's shrinkage weight (lam0/lam1 below) — e.g. an
+    // inflated λ̄ deflates v_lvl1_est, which overstates lam0 for every group and
+    // specifically undershrinks the outlier's own (small-n, noisy) estimate.
+    const lambdaPts = outlierIdx === -1 ? data : data.filter(d => d.gid !== outlierIdx);
+    const lambdaBarEst = Math.max(lambdaPts.reduce((s,d)=>s+d.y,0)/Math.max(lambdaPts.length,1), 0.1);
     v_lvl1_est = Math.log(1 + 1 / lambdaBarEst);
   } else if (modelKey === 'gamma') {
-    // Estimate dispersion φ from within-group CV² (data-driven, changes with new data)
+    // Estimate dispersion φ from within-group CV² (data-driven, changes with new data).
+    // Outlier excluded for the same reason as Poisson above (within-group CV is
+    // scale-invariant so the bias is small here, but stay consistent).
     let sv2 = 0, nc = 0;
     for (let j = 0; j < trueGrp.length; j++) {
+      if (j === outlierIdx) continue;
       const pts = data.filter(d => d.gid === j);
       if (pts.length < 3) continue;
       const my = pts.reduce((s,d)=>s+d.y,0)/pts.length;
@@ -1227,11 +1245,11 @@ function updateFormula(p) {
     distLines.push(`<span class="rnd">u₁ⱼ</span> <span class="gry">~ N(0,${p.tau1.toFixed(2)}²)</span>`);
     distLines.push(`<span class="gry">   Cor(u₀,u₁) = ${p.rho.toFixed(2)}</span>`);
   }
-  distLines.push(`<span class="gry">   ${m.formulaDist}</span>`);
+  distLines.push(`<span class="gry">${m.formulaDist}</span>`);
   document.getElementById('formula-box').innerHTML =
-    `η = <span class="fxd">${p.g00.toFixed(2)} + ${p.g10.toFixed(2)}·x</span> + ${reParts.join(' + ')}\n` +
-    `<span class="gry">${m.formulaLink}</span>\n` +
-    distLines.join('\n');
+    `<div class="fb-line">η = <span class="fxd">${p.g00.toFixed(2)} + ${p.g10.toFixed(2)}·x</span> + ${reParts.join(' + ')}</div>` +
+    `<div class="fb-line fb-link gry">${m.formulaLink}</div>` +
+    `<div class="fb-dist">${distLines.map(l => `<div class="fb-line">${l}</div>`).join('')}</div>`;
 }
 
 function checkSimpson(cpFit, grpFit) {
@@ -1927,14 +1945,6 @@ function updateResults(p, est) {
     + '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;line-height:1.55">'
     + 'λ=100%: Partial ≈ No Pooling &nbsp;·&nbsp; λ=0%: Partial ≈ Grand Mean</div>';
   html += section('SHRINKAGE λ = τ₀²/(τ₀²+σ²/nⱼ)', shrinkBody);
-
-  var modeDescr = {
-    pp: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial pooling is the estimation strategy in hierarchical models: group-specific parameters are estimated neither completely separately nor completely aggregated.">Partial Pooling</a> (LMM): ' + g00 + '=' + feA.toFixed(3) + ', ' + g10 + '=' + feB.toFixed(3)
-      + '. R²_marg=' + (fit.R2m*100).toFixed(1) + '%, R²_cond=' + (fit.R2c*100).toFixed(1) + '%.',
-    np: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="No pooling estimates each group completely separately — the opposite of partial pooling.">No Pooling</a>: Each group has its own estimate (k=' + fit.k_np + ' parameters). <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better.">AIC</a>=' + fit.np_stats.aic.toFixed(1) + '.',
-    cp: '<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Complete pooling aggregates all groups into a single estimate — the opposite of partial pooling.">Complete Pooling</a>: One line for all. AIC=' + fit.cp_stats.aic.toFixed(1) + (simpsonRisk ? ' — ⚠ <a class="glo-link" href="Glossar.html#gl-simpsons-paradox" target="_blank" title="Simpson\'s paradox describes the situation where a statistical association points in one direction in the aggregate data but reverses within every subgroup.">Simpson</a> risk!' : '') + '.'
-  };
-  html += '<div class="info-strip" style="margin-top:.4rem">' + modeDescr[poolMode] + '</div>';
 
   document.getElementById('results-panel').innerHTML = html;
 
