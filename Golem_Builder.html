@@ -3489,6 +3489,18 @@ function emitPathProductBlock(lines, { X, Y, xName, mediators, adjIds, coefName,
   realPaths.forEach(path => {
     const suffix = path.slice(1, -1).map(getNodeName).join('_');
     sobelSuffixes.push(suffix);
+    // The product a×b only has a clean interpretation when every edge-coefficient along
+    // the path lives on the same scale. If the mediators/outcome mix GLM families (e.g. a
+    // Bernoulli mediator feeding a Poisson/Gaussian outcome), Sobel/Aroian multiply
+    // coefficients from different link scales (log-odds × log-rate × raw units, ...) —
+    // flag this per path, since joint-significance (the primary/recommended test above)
+    // is unaffected by it (it only checks each edge's own Wald p-value).
+    const pathFamilies = new Set(path.slice(1).map(nodeGlmmFamily));
+    if (pathFamilies.size > 1) {
+      lines.push(`    # ⚠ Pfad mischt Link-Skalen (${[...pathFamilies].join(', ')}) — das Produkt a×b`);
+      lines.push('    # (Sobel/Aroian unten) multipliziert Koeffizienten unterschiedlicher Skalen und');
+      lines.push('    # ist daher nicht direkt interpretierbar. Joint-Significance bleibt unberührt.');
+    }
     const estVars = [], seVars = [];
     for (let i = 0; i < path.length - 1; i++) {
       const predName = getNodeName(path[i]), targetName = getNodeName(path[i+1]);
