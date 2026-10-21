@@ -1485,6 +1485,7 @@ function lme4Family(l){
 // ────────────────────────────────────────────────────────────
 // LIKELIHOOD EXTRAS
 // ────────────────────────────────────────────────────────────
+let _prevLik='gaussian';
 function onLikChange(){
   const lik=document.getElementById('likSel').value;
   const el=document.getElementById('extraParams');
@@ -1494,6 +1495,17 @@ function onLikChange(){
   if(['gamma','beta','negbinomial'].includes(lik)) html+=`<label>φ</label><input class="inp inp-sm" id="extraPhi" type="number" step="0.5" min="0.1" value="2">`;
   if(lik==='binomial') html+=`<label>N_trials</label><input class="inp inp-sm" id="extraNtrials" type="number" step="1" min="1" value="10" oninput="updateFormula()">`;
   el.innerHTML=html;
+
+  // Cell means/SDs are always stored on the model (η) scale, whose meaning depends
+  // on the link function — the SAME number means something completely different
+  // across families (e.g. a Gaussian mean of 50 silently reread as a Bernoulli
+  // logit gives p≈1.0). Reset on an actual family change so every cell restarts
+  // at a sane η=0 default instead of reinterpreting stale values.
+  if(lik!==_prevLik){
+    ST.means={}; ST.sds={};
+    _prevLik=lik;
+    showToast('Zellmittelwerte zurückgesetzt (neue Verteilung = neue Skala)');
+  }
 
   const nonGaussWithin=ST.within.length>0&&lik!=='gaussian';
   note.textContent='Hinweis: Korrelationsstruktur (Tab 2) wirkt bei Nicht-Gauß als Gauß-Approximation auf η-Ebene (s. Korrelationsmatrix-Tab).';
@@ -2774,7 +2786,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     if(!isIdentityLink(lik)){
       bRows.forEach(bc=>{
         const bk=cellKey(bc);
-        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0);
+        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0,ST.sds[bk]??1);
         if(defLine) lines.push(defLine);
       });
       lines.push('');
@@ -2807,7 +2819,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
     const useEtaColNF = clActive && !isIdentityLink(lik);
-    const etaDefNF=rEtaDef('eta',lik,ST.means['all']??0);
+    const etaDefNF=rEtaDef('eta',lik,ST.means['all']??0,sd);
     if(etaDefNF){ lines.push(etaDefNF); lines.push(''); }
     lines.push(`dat <- data.frame(`);
     if(useEtaColNF){
@@ -3368,7 +3380,7 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     if(!isIdentityLink(lik)){
       bRows.forEach(bc=>{
         const bk=cellKey(bc);
-        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0);
+        const defLine=rEtaDef('eta_'+bc.join('_'),lik,ST.means[bk]??0,ST.sds[bk]??1);
         if(defLine) L.push(`#   ${defLine}`);
       });
       L.push('#');
@@ -3398,7 +3410,7 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     const sd=(ST.sds['all']??1).toFixed(2);
     const pwUseEtaColNoFactor = clActive && !isIdentityLink(lik);
     if(!isIdentityLink(lik)){
-      const defLine=rEtaDef('eta',lik,ST.means['all']??0);
+      const defLine=rEtaDef('eta',lik,ST.means['all']??0,sd);
       if(defLine){ L.push(`#   ${defLine}`); L.push('#'); }
       if(pwUseEtaColNoFactor) L.push(`#   d <- data.frame(.eta = rep(eta, n)${lik==='lognormal'?`, .sigma = rep(${sd}, n)`:''})`);
       else L.push(`#   d <- data.frame(Y = ${rSamplePointFromEtaVar('n','eta',lik,extra,sd)})`);
@@ -3662,10 +3674,14 @@ function rYFromEtaCol(lik, extra){
 }
 
 // Convert η (model scale) to response-scale value for display in R code comments.
-function etaToResponse(lik, mu){
+// sd is only used for lognormal, where E[Y] = exp(η + σ²/2) — matches etaToRaw()'s
+// mean-corrected formula so the R comment shows the same number as the browser's
+// "E[Y]" preview, instead of the uncorrected exp(η) (= median).
+function etaToResponse(lik, mu, sd){
   const v=+mu;
   switch(lik){
-    case 'poisson': case 'negbinomial': case 'gamma': case 'lognormal': return Math.exp(v);
+    case 'lognormal': { const s=+sd||0; return Math.exp(v+s*s/2); }
+    case 'poisson': case 'negbinomial': case 'gamma': return Math.exp(v);
     case 'bernoulli': case 'binomial': case 'beta': return 1/(1+Math.exp(-v));
     default: return v;
   }
@@ -3684,14 +3700,16 @@ function fmtResp(resp){
 // Generate R assignment line "etaVar <- linkFn(resp)   # comment" for non-identity links.
 // mu must be the raw float from ST.means (not pre-rounded) to preserve user-entered precision.
 // Returns null for identity-link families (no hidden transformation to show).
-function rEtaDef(etaVarName, lik, mu){
+function rEtaDef(etaVarName, lik, mu, sd){
   if(isIdentityLink(lik)) return null;
-  const respStr=fmtResp(etaToResponse(lik,mu));
+  const respStr=fmtResp(etaToResponse(lik,mu,sd));
   let linkExpr, comment;
   if(lik==='poisson'||lik==='negbinomial'||lik==='gamma'){
     linkExpr=`log(${respStr})`; comment=`# E[Y] = ${respStr}; log-link`;
   } else if(lik==='lognormal'){
-    linkExpr=`log(${respStr})`; comment=`# median = ${respStr}; log-link`;
+    // η = log(E[Y]) − σ²/2, so the log(...) here is NOT simply log(respStr) —
+    // it must back out the σ²/2 correction baked into respStr (E[Y], not the median).
+    linkExpr=`log(${respStr}) - ${(+sd||0).toFixed(2)}^2/2`; comment=`# E[Y] = ${respStr}; log-link`;
   } else {
     linkExpr=`qlogis(${respStr})`; comment=`# E[Y] = ${respStr}; logit-link`;
   }
