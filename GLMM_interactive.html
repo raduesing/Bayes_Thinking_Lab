@@ -1522,8 +1522,6 @@ function buildMain(p, est) {
     }
   }
 
-  if (charts.main) charts.main.destroy();
-
   const allY = data.map(d => d.y).sort((a,b) => a-b);
   const q02  = allY[Math.floor(allY.length * 0.02)] ?? allY[0];
   const q98  = allY[Math.ceil(allY.length  * 0.98) - 1] ?? allY[allY.length-1];
@@ -1544,33 +1542,46 @@ function buildMain(p, est) {
     yMin = optYMin; yMax = optYMax;
   }
 
-  charts.main = new Chart(document.getElementById('mainChart').getContext('2d'), {
-    type:'scatter', data:{datasets:ds},
-    options:{
-      responsive:true, maintainAspectRatio:false, animation:{duration:150},
-      onHover: (e, elements) => {
-         let gid = null;
-         if (elements.length > 0) {
-             const dsIdx = elements[0].datasetIndex;
-             gid = charts.main.data.datasets[dsIdx].gid;
-         }
-         if (gid !== undefined) highlightGroup(gid);
-      },
-      plugins:{legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>ctx.raw?.x!==undefined?` x=${ctx.raw.x.toFixed(2)}, y=${ctx.raw.y.toFixed(2)}`:''}}
-      },
-      scales:{
-        x:{type:'linear', min: xMin, max: xMax,
-          title:{display:true, text:'Prädiktor x', font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{top:5}},
-          grid:{color:css('--chart-grid')},
-          ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:8}},
-        y:{min: yMin, max: yMax,
-          title:{display:true, text:m.yLabel, font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{bottom:5}},
-          grid:{color:css('--chart-grid')},
-          ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:7}}
-      }
+  const chartOptions = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:150},
+    onHover: (e, elements) => {
+       let gid = null;
+       if (elements.length > 0) {
+           const dsIdx = elements[0].datasetIndex;
+           gid = charts.main.data.datasets[dsIdx].gid;
+       }
+       if (gid !== undefined) highlightGroup(gid);
+    },
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:ctx=>ctx.raw?.x!==undefined?` x=${ctx.raw.x.toFixed(2)}, y=${ctx.raw.y.toFixed(2)}`:''}}
+    },
+    scales:{
+      x:{type:'linear', min: xMin, max: xMax,
+        title:{display:true, text:'Prädiktor x', font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{top:5}},
+        grid:{color:css('--chart-grid')},
+        ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:8}},
+      y:{min: yMin, max: yMax,
+        title:{display:true, text:m.yLabel, font:{family:'DM Mono',size:13,weight:'500'}, color:css('--chart-tick'), padding:{bottom:5}},
+        grid:{color:css('--chart-grid')},
+        ticks:{font:{family:'DM Mono',size:11}, color:css('--chart-tick'), maxTicksLimit:7}}
     }
-  });
+  };
+
+  if (charts.main) {
+    // Update the existing chart instead of destroy()+new Chart(): Chart.js
+    // then interpolates points/lines to their new positions instead of
+    // replaying the 150ms grow-in animation from empty on every render —
+    // smoother, and avoids a visible flash on every slider release/tab
+    // switch. chartOptions is rebuilt fresh above on every call (same as the
+    // create path below), so colors/min/max/labels never go stale.
+    charts.main.data.datasets = ds;
+    Object.assign(charts.main.options, chartOptions);
+    charts.main.update();
+  } else {
+    charts.main = new Chart(document.getElementById('mainChart').getContext('2d'), {
+      type:'scatter', data:{datasets:ds}, options: chartOptions
+    });
+  }
 
   let lhtml = '';
   for (let j=0;j<totalJ;j++) {
@@ -2201,8 +2212,20 @@ function renderAll() {
 // ═══════════════════════════════════════════════════════════════
 // LISTENERS + INIT
 // ═══════════════════════════════════════════════════════════════
-['g00','g10','tau0','tau1','sigma','rho'].forEach(id =>
-  document.getElementById(id).addEventListener('input', ()=>{ genData(); renderAll(); }));
+// FIX: same lag fix as the data-generation sliders below — regenerating
+// data + refitting every model on every single 'input' tick (fires per
+// pixel while dragging) was the main cause of visible jank. Only update the
+// label live during drag; the expensive genData()+renderAll() runs once,
+// on 'change' (drop).
+['g00','g10','tau0','tau1','sigma','rho'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+     document.getElementById('v-'+id).textContent = (+el.value).toFixed(2);
+  });
+  el.addEventListener('change', () => {
+     genData(); renderAll();
+  });
+});
 
 // FIX: Bei Datengenerierungs-Slidern während Drag nur Label updaten,
 // Rerendering erst bei Drop ('change'), um Lag zu vermeiden.
