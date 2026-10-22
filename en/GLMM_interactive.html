@@ -515,7 +515,10 @@
   </div><div class="charts-col">
 
     <div class="chart-panel">
-      <div class="panel-label">MAIN PLOT — DATA &amp; REGRESSION LINES</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.24rem">
+        <div class="panel-label" style="margin-bottom:0">MAIN PLOT — DATA &amp; REGRESSION LINES</div>
+        <button class="icon-btn" id="btn-fixy" onclick="toggleFixY()" title="Fix the y-axis — no more automatic rescaling">📌 Fix Y</button>
+      </div>
       <div class="panel-title" id="main-title">Partial Pooling: <em>Group lines with shrinkage</em></div>
       <div class="simp-warn" id="simp-warn">
         <span>⚠</span><span>Simpson risk: Complete pooling line shows a <b>different direction</b> than the within-group effects — do not ignore the group structure!</span>
@@ -627,6 +630,8 @@ let showTrue   = false;
 let showOutlier = false;
 let activeGid = null;
 let lastCatP = null, lastCatEst = null;
+let yFixed = false;
+let fixedYRange = null;
 
 function toggleTrue() {
   showTrue = !showTrue;
@@ -638,6 +643,14 @@ function toggleOutlier() {
   document.getElementById('btn-outlier').classList.toggle('ib-on', showOutlier);
   document.getElementById('outlier-note-cat').style.display = showOutlier ? 'inline' : 'none';
   genData(); renderAll();
+}
+function toggleFixY() {
+  yFixed = !yFixed;
+  document.getElementById('btn-fixy').classList.toggle('ib-on', yFixed);
+  // Turning off clears the captured range so the next render goes back to
+  // optimal (data-driven) scaling instead of staying pinned to the old one.
+  if (!yFixed) fixedYRange = null;
+  renderAll();
 }
 
 function highlightGroup(gid) {
@@ -1508,8 +1521,20 @@ function buildMain(p, est) {
   const q98  = allY[Math.ceil(allY.length  * 0.98) - 1] ?? allY[allY.length-1];
   const yRange = Math.max(q98 - q02, 1e-3);
   const yMargin = yRange * 0.18;
-  const yMin = MODELS[modelKey].yPositive ? Math.max(0, q02 - yMargin) : q02 - yMargin;
-  const yMax = q98 + yMargin;
+  const optYMin = MODELS[modelKey].yPositive ? Math.max(0, q02 - yMargin) : q02 - yMargin;
+  const optYMax = q98 + yMargin;
+
+  // Fix Y: on the render right after the toggle is switched on, fixedYRange
+  // is still null — capture the current optimal range once and keep reusing
+  // it on every later render until the toggle is switched off (which clears
+  // fixedYRange again, see toggleFixY()).
+  let yMin, yMax;
+  if (yFixed) {
+    if (!fixedYRange) fixedYRange = { min: optYMin, max: optYMax };
+    yMin = fixedYRange.min; yMax = fixedYRange.max;
+  } else {
+    yMin = optYMin; yMax = optYMax;
+  }
 
   charts.main = new Chart(document.getElementById('mainChart').getContext('2d'), {
     type:'scatter', data:{datasets:ds},
