@@ -41,13 +41,32 @@ body{
 }
 
 /* ── HEADER (einheitlich, identisch zu Bayesian_model_architect) ── */
+/* #header-stack (topbar + intro-strip + collapsible intro-box) is the
+   sticky element now, not #topbar alone — its total rendered height is
+   what --topbar-h must track, see setTopbarHeight(). */
+#header-stack{position:sticky;top:0;z-index:200}
 #topbar{
-  position:sticky;top:0;z-index:200;
   background:var(--paper);border-bottom:1.5px solid var(--border);
   padding:.5rem 1.1rem;
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
   gap:.5rem;line-height:normal;
 }
+/* ── INTRO STRIP / BOX (collapsible, same pattern as other BTL tools) ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.5rem 1.1rem;background:var(--panel);border-bottom:1.5px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.intro-strip strong{color:var(--ink)}
+.intro-strip em{color:var(--a6);font-style:normal}
+.intro-strip .tbtn{border-color:var(--a6);color:var(--a6);flex-shrink:0}
+.intro-strip .tbtn:hover{background:var(--a6);color:var(--paper)}
+.intro-box{background:var(--paper);border-bottom:1.5px solid var(--a6);
+  padding:.85rem 1.1rem;font-family:'DM Mono',monospace;font-size:.75rem;
+  color:var(--ink2);line-height:1.8}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin-bottom:.4rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.3rem;font-family:'Fraunces',Georgia,serif}
+.intro-box .ib-head.ib-head2{margin-top:.75rem}
+.intro-box b,.intro-box strong{color:var(--ink)}
+.intro-box em{color:var(--a6);font-style:normal}
 .hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
 .hdr-h1 em{font-style:italic;color:var(--a6)}
 .hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
@@ -350,6 +369,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 <body>
 
 <!-- TOP BAR -->
+<div id="header-stack">
 <div id="topbar">
   <div>
     <div class="hdr-h1">Prior <em>Lab</em></div>
@@ -363,6 +383,32 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
     <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
+
+<!-- ══════════ INTRO STRIP ══════════════════════════════ -->
+<div class="intro-strip">
+  <div>
+    <strong>Prior Lab</strong> übersetzt inhaltliche Vorstellungen (z. B. ein 95%-Glaubwürdigkeitsintervall) in brms-Prior-Parameter — mit direkter brms-Syntax.
+  </div>
+  <button class="tbtn" id="intro-toggle-btn" onclick="toggleIntroDetail()">Konzept erklären ▸</button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">Worum geht es hier?</div>
+    Priors sind Teil des Modells — aber ihre Parameter (μ, σ, α, β, …) sind selten direkt interpretierbar. Das Prior Lab übersetzt stattdessen inhaltliche Grenzen („mein Effekt liegt zu 95% zwischen −2 und +5") über den <strong>CI-Solver</strong> automatisch in die passenden Verteilungsparameter — direkt copy-paste-bereit als brms-Syntax.
+
+    <div class="ib-head ib-head2">So gehst du vor</div>
+    <strong>1. Verteilung wählen</strong> (links) — nach Parametertyp: unbegrenzt / positiv / [0,1]<br>
+    <strong>2. CI-Solver nutzen</strong>: inhaltliche Grenzen eingeben → Parameter automatisch berechnet<br>
+    <strong>3. brms-Syntax kopieren</strong> — passt sich live an
+
+    <div class="ib-head ib-head2">Spezialfall: GLM-Modus</div>
+    Bei GLMs (Logit-/Log-Link) liegen deine inhaltlichen Vorstellungen (Wahrscheinlichkeiten, Odds Ratios, Raten) auf einer <em>anderen</em> Skala als der Prior selbst. Der <strong>GLM-Modus</strong> (Button beim CI-Solver unten) zeigt Modell- und Response-Skala nebeneinander — Details dazu im eigenen „ℹ GLM-Modus Hilfe"-Button direkt dort.
+    <br><br>
+    Ausführlichere Erklärungen (Prior-Typen, typische Defaults, Literatur) findest du unter „ℹ Hilfe" oben rechts.
+  </div>
+</div>
+</div><!-- /header-stack -->
 
 <!-- MAIN GRID -->
 <div id="app">
@@ -577,6 +623,10 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
     <button class="hp-close" onclick="toggleGLMHelp()">×</button>
   </div>
   <div class="hp-body">
+    <div class="hp-sect" style="color:var(--a1)">Warum GLM-Modus?</div>
+    <p>Der GLM-Modus macht sichtbar, was sonst unsichtbar bleibt: wie sich ein Prior, den du auf der <strong>Modellskala</strong> (Logit/Log) festlegst, auf der <strong>Response-Skala</strong> (Wahrscheinlichkeit, Rate, Odds Ratio) tatsächlich auswirkt — und umgekehrt. Das ist der Kern guter Prior-Wahl bei GLMs: ein Prior, der auf der Modellskala harmlos aussieht, kann auf der Response-Skala völlig unplausible Werte implizieren (Beispiele unten).</p>
+    <p>Diese Seite-an-Seite-Visualisierung von Modell- und Response-Skala für denselben Prior ist eine Besonderheit des Prior Lab — auch über die eingebettete Version im <a class="glo-link" href="Bayesian_PP_Check.html" target="_blank" style="color:inherit">Prior Predictive Check</a> verfügbar, aber in keinem anderen Tool dieses Labs. Der direkte Vergleich macht den sonst abstrakten Skalen-Unterschied greifbar, <em>bevor</em> du den Prior in brms einträgst.</p>
+
     <div class="hp-sect" style="color:var(--a1)">Das Grundproblem</div>
     <p>Priors in <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms ist ein R-Paket für Bayesianische Regressionsmodelle mit Stan-Backend, mit lme4-artiger Formelsyntax." style="color:inherit">brms</a> müssen auf der <strong>Modellskala</strong> formuliert werden (Logit oder Log) — du denkst aber in Wahrscheinlichkeiten und Raten. Diese Skalen sind <em>nicht linear</em>: Normal(0,&nbsp;10) auf Logit klingt vage, drückt aber fast alle Prior-Masse an die Extremwerte p≈0% und p≈100%.</p>
     <p>Der <strong>Solver</strong> schlägt diese Brücke: Du formulierst deine inhaltlichen Grenzen auf der Ausgangsskala — der Solver liefert die passenden Prior-Parameter auf der Modellskala, die du direkt in brms verwenden kannst.</p>
@@ -630,7 +680,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
       — OR zwischen 0.7 und 4.0 ist plausibel"<br>
       → Eingabe: OR 0.70 bis 4.0<br>
       → log(0.70) ≈ −0.36 | log(4.0) ≈ 1.39<br>
-      → Solver: <strong>Normal(0.52, 0.44)</strong> auf Logit-Skala<br>
+      → Solver: <strong>Normal(0.51, 0.44)</strong> auf Logit-Skala<br>
       μ &gt; 0, weil der Prior leicht Richtung positiver Effekt lehnt ✓
     </div>
     <p><strong>Log-Link → Rate Ratio (RR) = exp(β):</strong></p>
@@ -1906,11 +1956,20 @@ function drawResponsePanel() {
 }
 
 function setTopbarHeight(){
-  const h = document.getElementById('topbar').offsetHeight;
+  const h = document.getElementById('header-stack').offsetHeight;
   document.documentElement.style.setProperty('--topbar-h', h+'px');
 }
 window.addEventListener('resize', () => { setTopbarHeight(); drawPlot(); });
 document.addEventListener('DOMContentLoaded', () => { setTopbarHeight(); init(); });
+
+// ── Intro strip toggle ────────────────────────────────────────
+let introOpen = false;
+function toggleIntroDetail(){
+  introOpen = !introOpen;
+  document.getElementById('intro-detail').style.display = introOpen ? 'block' : 'none';
+  document.getElementById('intro-toggle-btn').textContent = introOpen ? 'Konzept ausblenden ▾' : 'Konzept erklären ▸';
+  setTopbarHeight();
+}
 
 // ── Floating Help Panel ────────────────────────────────────
 let helpOpen = false;

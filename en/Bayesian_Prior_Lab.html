@@ -41,13 +41,29 @@ body{
 }
 
 /* ── HEADER (einheitlich, identisch zu Bayesian_model_architect) ── */
+#header-stack{position:sticky;top:0;z-index:200}
 #topbar{
-  position:sticky;top:0;z-index:200;
   background:var(--paper);border-bottom:1.5px solid var(--border);
   padding:.5rem 1.1rem;
   display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
   gap:.5rem;line-height:normal;
 }
+/* ── INTRO STRIP / BOX (collapsible, same pattern as other BTL tools) ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.5rem 1.1rem;background:var(--panel);border-bottom:1.5px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.intro-strip strong{color:var(--ink)}
+.intro-strip em{color:var(--a6);font-style:normal}
+.intro-strip .tbtn{border-color:var(--a6);color:var(--a6);flex-shrink:0}
+.intro-strip .tbtn:hover{background:var(--a6);color:var(--paper)}
+.intro-box{background:var(--paper);border-bottom:1.5px solid var(--a6);
+  padding:.85rem 1.1rem;font-family:'DM Mono',monospace;font-size:.75rem;
+  color:var(--ink2);line-height:1.8}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin-bottom:.4rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.3rem;font-family:'Fraunces',Georgia,serif}
+.intro-box .ib-head.ib-head2{margin-top:.75rem}
+.intro-box b,.intro-box strong{color:var(--ink)}
+.intro-box em{color:var(--a6);font-style:normal}
 .hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
 .hdr-h1 em{font-style:italic;color:var(--a6)}
 .hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
@@ -326,6 +342,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 <body>
 
 <!-- TOP BAR -->
+<div id="header-stack">
 <div id="topbar">
   <div>
     <div class="hdr-h1">Prior <em>Lab</em></div>
@@ -339,6 +356,32 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
     <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
   </div>
 </div>
+
+<!-- ══════════ INTRO STRIP ══════════════════════════════ -->
+<div class="intro-strip">
+  <div>
+    <strong>Prior Lab</strong> translates substantive beliefs (e.g. a 95% credible interval) into brms prior parameters — with ready-to-use brms syntax.
+  </div>
+  <button class="tbtn" id="intro-toggle-btn" onclick="toggleIntroDetail()">Explain the concept ▸</button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">What is this about?</div>
+    Priors are part of the model — but their parameters (μ, σ, α, β, …) are rarely directly interpretable. Prior Lab instead translates substantive bounds ("my effect is 95% likely to lie between −2 and +5") via the <strong>CI-Solver</strong> automatically into the matching distribution parameters — ready to copy-paste as brms syntax.
+
+    <div class="ib-head ib-head2">How to proceed</div>
+    <strong>1. Choose a distribution</strong> (left) — by parameter type: unbounded / positive / [0,1]<br>
+    <strong>2. Use the CI-Solver</strong>: enter substantive bounds → parameters computed automatically<br>
+    <strong>3. Copy the brms syntax</strong> — updates live
+
+    <div class="ib-head ib-head2">Special case: GLM mode</div>
+    For GLMs (logit/log link), your substantive beliefs (probabilities, odds ratios, rates) live on a <em>different</em> scale than the prior itself. <strong>GLM mode</strong> (button at the CI-Solver below) shows the model scale and response scale side by side — details in its own "ℹ GLM mode help" button right there.
+    <br><br>
+    For more detailed explanations (prior types, typical defaults, literature), see "ℹ Help" top right.
+  </div>
+</div>
+</div><!-- /header-stack -->
 
 <!-- MAIN GRID -->
 <div id="app">
@@ -553,6 +596,10 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
     <button class="hp-close" onclick="toggleGLMHelp()">×</button>
   </div>
   <div class="hp-body">
+    <div class="hp-sect" style="color:var(--a1)">Why GLM Mode?</div>
+    <p>GLM mode makes visible what otherwise stays invisible: how a prior you set on the <strong>model scale</strong> (logit/log) actually plays out on the <strong>response scale</strong> (probability, rate, odds ratio) — and vice versa. That's the core of good prior choice for GLMs: a prior that looks harmless on the model scale can imply completely implausible values on the response scale (examples below).</p>
+    <p>This side-by-side visualization of model and response scale for the same prior is a feature unique to Prior Lab — also available via the embedded version in the <a class="glo-link" href="Bayesian_PP_Check.html" target="_blank" style="color:inherit">Prior Predictive Check</a>, but not found in any other tool in this lab. Seeing the two scales side by side makes the otherwise abstract scale difference tangible <em>before</em> you enter the prior into brms.</p>
+
     <div class="hp-sect" style="color:var(--a1)">The Core Problem</div>
     <p>Priors in <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms is an R package for Bayesian regression models with a Stan backend, using lme4-style formula syntax." style="color:inherit">brms</a> must be specified on the <strong>model scale</strong> (logit or log) — but you think in probabilities and rates. These scales are <em>non-linear</em>: Normal(0,&nbsp;10) on the logit scale sounds vague, but pushes almost all prior mass to the extremes p≈0% and p≈100%.</p>
     <p>The <strong>solver</strong> bridges this gap: you specify your substantive bounds on the outcome scale — the solver returns the matching prior parameters on the model scale, ready to use in brms.</p>
@@ -606,7 +653,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
       — OR between 0.7 and 4.0 is plausible"<br>
       → Input: OR 0.70 to 4.0<br>
       → log(0.70) ≈ −0.36 | log(4.0) ≈ 1.39<br>
-      → Solver: <strong>Normal(0.52, 0.44)</strong> on logit scale<br>
+      → Solver: <strong>Normal(0.51, 0.44)</strong> on logit scale<br>
       μ &gt; 0, because the prior leans slightly toward positive effects ✓
     </div>
     <p><strong>Log-link → Rate Ratio (RR) = exp(β):</strong></p>
@@ -1880,11 +1927,20 @@ function drawResponsePanel() {
 }
 
 function setTopbarHeight(){
-  const h = document.getElementById('topbar').offsetHeight;
+  const h = document.getElementById('header-stack').offsetHeight;
   document.documentElement.style.setProperty('--topbar-h', h+'px');
 }
 window.addEventListener('resize', () => { setTopbarHeight(); drawPlot(); });
 document.addEventListener('DOMContentLoaded', () => { setTopbarHeight(); init(); });
+
+// ── Intro strip toggle ────────────────────────────────────────
+let introOpen = false;
+function toggleIntroDetail(){
+  introOpen = !introOpen;
+  document.getElementById('intro-detail').style.display = introOpen ? 'block' : 'none';
+  document.getElementById('intro-toggle-btn').textContent = introOpen ? 'Hide concept ▾' : 'Explain the concept ▸';
+  setTopbarHeight();
+}
 
 // ── Floating Help Panel ────────────────────────────────────
 let helpOpen = false;
