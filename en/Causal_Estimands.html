@@ -318,7 +318,7 @@ input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
     </div>
     <canvas id="scatterCanvas" style="display:block;width:100%;max-width:100%"></canvas>
     <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.4rem;line-height:1.6">
-      The two <strong>tilted lines</strong> are the Y-values conditional on L — that's what G-Computation uses. The two <strong style="color:var(--naive-col)">dotted horizontal lines</strong> are the raw group averages Ȳ|A=1 and Ȳ|A=0, which ignore L entirely — their gap <em>is</em> the naive comparison. Because A=1 occurs more often at high L, the upper horizontal line sits too high: it measures not just the tutorial effect but also the head-start in prior knowledge. The green ticks at L=0 mark how much of that gap is actually due to the tutorial once L is held constant (info box top-left).
+      The two <strong>tilted lines</strong> are the Y-values conditional on L — that's what G-Computation uses. The two <strong style="color:var(--naive-col)">dotted horizontal lines</strong> are the raw group averages Ȳ|A=1 and Ȳ|A=0, which ignore L entirely — their gap <em>is</em> the naive comparison. <span id="scatter-caption-dynamic"></span> The green ticks at L=0 mark how much of that gap is actually due to the tutorial once L is held constant (info box top-left).
     </div>
   </div>
 
@@ -811,6 +811,7 @@ function drawScatter(data,olsBeta,wi) {
       ctx.fillStyle=j===0?cNaive:j===1?cGC:cInk3;
       ctx.fillText(t,bx+9,by+14+j*14);
     });
+    updateScatterCaption(data,meanY1,meanY0,gapAt0);
   }
 
   ctx.strokeStyle=cInk3;ctx.lineWidth=1;
@@ -826,6 +827,44 @@ function drawScatter(data,olsBeta,wi) {
   const legX=W-legPad-legMaxW-legGap-legSw;
   ctx.fillStyle=cT;ctx.fillRect(legX,mt+3,legSw,legSw);ctx.fillText('A=1',legX+legSw+legGap,mt+11);
   ctx.fillStyle=cC;ctx.fillRect(legX,mt+18,legSw,legSw);ctx.fillText('A=0',legX+legSw+legGap,mt+26);
+}
+
+// The caption under the scatter plot used to hardcode "A=1 occurs more often
+// at high L, the upper line sits too high" — true only for the default
+// slider signs. γ_A/γ_Y can each be set negative (sliders go -2.5..2.5), so
+// the confounding direction (and therefore which group has higher L, and
+// whether the naive comparison over- or underestimates) can flip. This
+// rebuilds the explanatory sentence from the actual realized data/bias
+// every time the plot redraws, instead of asserting one fixed direction.
+function updateScatterCaption(data,meanY1,meanY0,gapAt0) {
+  const el=document.getElementById('scatter-caption-dynamic');
+  if(!el) return;
+  const {L,A,gammaY}=data;
+  const meanL1=arr_mean(L.filter((_,i)=>A[i]===1));
+  const meanL0=arr_mean(L.filter((_,i)=>A[i]===0));
+  const dL=meanL1-meanL0;
+  const bias=(meanY1-meanY0)-gapAt0;
+
+  let aTxt;
+  if(dL>0.15) aTxt='more often at high L';
+  else if(dL<-0.15) aTxt='more often at low L';
+  else aTxt='about equally often across the whole L range';
+
+  let yTxt;
+  if(gammaY>0.1) yTxt='increases with L';
+  else if(gammaY<-0.1) yTxt='decreases with L';
+  else yTxt='barely depends on L';
+
+  let concl;
+  if(Math.abs(bias)<0.08){
+    concl=`At this setting both lines sit close to the causal estimate at L=0 — little confounding bias.`;
+  } else if(bias>0){
+    concl=`That makes the naive comparison overestimate the tutorial effect: it mixes the true effect with the prior-knowledge advantage of the group treated more often.`;
+  } else {
+    concl=`That makes the naive comparison underestimate the tutorial effect (or overstate a negative one): it mixes the true effect with the prior-knowledge disadvantage of the group treated more often.`;
+  }
+
+  el.textContent=`Because A=1 occurs ${aTxt}, and the outcome ${yTxt}, the gap between the dotted lines captures more than just the tutorial effect. ${concl}`;
 }
 
 // ─── Posterior G-Computation ──────────────────────────────────────

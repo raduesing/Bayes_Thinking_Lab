@@ -319,7 +319,7 @@ input[type=range]::-webkit-slider-thumb:hover{background:var(--accent)}
     </div>
     <canvas id="scatterCanvas" style="display:block;width:100%;max-width:100%"></canvas>
     <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.4rem;line-height:1.6">
-      Die beiden <strong>schrägen Linien</strong> sind die Y-Werte, bedingt auf L — das nutzt G-Computation. Die beiden <strong style="color:var(--naive-col)">gepunkteten waagerechten Linien</strong> sind die rohen Gruppendurchschnitte Ȳ|A=1 und Ȳ|A=0, die L komplett ignorieren — ihr Abstand <em>ist</em> der naive Vergleich. Weil A=1 öfter bei hohem L vorkommt, liegt die obere waagerechte Linie zu hoch: Sie misst nicht nur den Tutorial-Effekt, sondern auch den Vorkenntnis-Vorsprung. Die grünen Striche bei L=0 markieren, wie viel von diesem Abstand tatsächlich auf das Tutorial zurückgeht, wenn man L konstant hält (Infobox oben links).
+      Die beiden <strong>schrägen Linien</strong> sind die Y-Werte, bedingt auf L — das nutzt G-Computation. Die beiden <strong style="color:var(--naive-col)">gepunkteten waagerechten Linien</strong> sind die rohen Gruppendurchschnitte Ȳ|A=1 und Ȳ|A=0, die L komplett ignorieren — ihr Abstand <em>ist</em> der naive Vergleich. <span id="scatter-caption-dynamic"></span> Die grünen Striche bei L=0 markieren, wie viel von diesem Abstand tatsächlich auf das Tutorial zurückgeht, wenn man L konstant hält (Infobox oben links).
     </div>
   </div>
 
@@ -812,6 +812,7 @@ function drawScatter(data,olsBeta,wi) {
       ctx.fillStyle=j===0?cNaive:j===1?cGC:cInk3;
       ctx.fillText(t,bx+9,by+14+j*14);
     });
+    updateScatterCaption(data,meanY1,meanY0,gapAt0);
   }
 
   ctx.strokeStyle=cInk3;ctx.lineWidth=1;
@@ -827,6 +828,44 @@ function drawScatter(data,olsBeta,wi) {
   const legX=W-legPad-legMaxW-legGap-legSw;
   ctx.fillStyle=cT;ctx.fillRect(legX,mt+3,legSw,legSw);ctx.fillText('A=1',legX+legSw+legGap,mt+11);
   ctx.fillStyle=cC;ctx.fillRect(legX,mt+18,legSw,legSw);ctx.fillText('A=0',legX+legSw+legGap,mt+26);
+}
+
+// The caption under the scatter plot used to hardcode "A=1 kommt öfter bei
+// hohem L vor, die obere Linie liegt zu hoch" — true only for the default
+// slider signs. γ_A/γ_Y can each be set negative (sliders go -2.5..2.5), so
+// the confounding direction (and therefore which group has higher L, and
+// whether the naive comparison over- or underestimates) can flip. This
+// rebuilds the explanatory sentence from the actual realized data/bias
+// every time the plot redraws, instead of asserting one fixed direction.
+function updateScatterCaption(data,meanY1,meanY0,gapAt0) {
+  const el=document.getElementById('scatter-caption-dynamic');
+  if(!el) return;
+  const {L,A,gammaY}=data;
+  const meanL1=arr_mean(L.filter((_,i)=>A[i]===1));
+  const meanL0=arr_mean(L.filter((_,i)=>A[i]===0));
+  const dL=meanL1-meanL0;
+  const bias=(meanY1-meanY0)-gapAt0;
+
+  let aTxt;
+  if(dL>0.15) aTxt='häufiger bei hohem L';
+  else if(dL<-0.15) aTxt='häufiger bei niedrigem L';
+  else aTxt='hier ähnlich häufig über das ganze L-Spektrum';
+
+  let yTxt;
+  if(gammaY>0.1) yTxt='mit L steigt';
+  else if(gammaY<-0.1) yTxt='mit L sinkt';
+  else yTxt='kaum von L abhängt';
+
+  let concl;
+  if(Math.abs(bias)<0.08){
+    concl=`In dieser Einstellung liegen beide Linien nah an der kausalen Schätzung bei L=0 — kaum Konfundierungs-Bias.`;
+  } else if(bias>0){
+    concl=`Dadurch überschätzt der naive Vergleich den Tutorial-Effekt: er mischt den echten Effekt mit dem Vorkenntnis-Vorteil der Gruppe, die öfter behandelt wird.`;
+  } else {
+    concl=`Dadurch unterschätzt der naive Vergleich den Tutorial-Effekt (bzw. übertreibt einen negativen): er mischt den echten Effekt mit dem Vorkenntnis-Nachteil der Gruppe, die öfter behandelt wird.`;
+  }
+
+  el.textContent=`Weil A=1 ${aTxt} vorkommt und das Outcome ${yTxt}, misst der Abstand der gepunkteten Linien nicht nur den Tutorial-Effekt. ${concl}`;
 }
 
 // ─── Posterior G-Computation ──────────────────────────────────────
