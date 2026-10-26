@@ -160,18 +160,24 @@
   .info-strip strong{color:var(--ink);}
 
   /* Results panel */
-  .res-section{margin-bottom:.7rem;padding-bottom:.55rem;border-bottom:1px solid var(--grid);}
-  .res-section:last-child{border-bottom:none;margin-bottom:0;}
-  .res-label{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2);margin-bottom:.35rem;}
+  .res-section{background:var(--panel);border:1px solid var(--grid);border-left:3px solid var(--accent2);padding:.5rem .65rem .55rem;margin-bottom:.5rem;}
+  .res-section:last-child{margin-bottom:0;}
+  .res-label{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);font-weight:500;margin-bottom:.4rem;padding-bottom:.32rem;border-bottom:1px dashed var(--grid);display:flex;align-items:center;gap:.4rem;}
+  .res-num{display:inline-flex;align-items:center;justify-content:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--accent2);color:var(--bg);font-size:.62rem;font-weight:700;flex-shrink:0;}
   .res-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.18rem;gap:.5rem;}
   .res-row span:first-child{flex:1;}
   .res-val{font-weight:500;color:var(--ink);white-space:nowrap;}
   .res-val.active-mode{color:var(--accent2);font-weight:700;}
   .re-table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.75rem;margin-top:.2rem;}
   .re-table th{color:var(--ink2);font-weight:400;letter-spacing:.04em;padding:.18rem .3rem;border-bottom:1px solid var(--grid);text-align:left;}
-  .re-table td{padding:.2rem .3rem;border-bottom:1px solid var(--grid);color:var(--ink);transition: opacity .2s;}
+  .re-table th:not(:first-child),.re-table td:not(:first-child){text-align:right;}
+  .re-table td{padding:.22rem .3rem;border-bottom:1px solid var(--grid);color:var(--ink);transition: opacity .2s;}
+  .re-table tbody tr:last-child td{border-bottom:none;}
   .re-table tbody tr{transition: opacity .2s, background .2s;}
-  .re-table tbody tr:hover{background:var(--panel);}
+  .re-table tbody tr:hover{background:var(--bg);}
+  .re-table td.res-est,.res-est{color:var(--accent3);font-weight:500;}
+  .re-table td.res-true,.res-true{color:var(--accent);}
+  .re-table td.res-dim,.res-dim{color:var(--ink2);font-weight:400;}
   .grp-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.3rem;vertical-align:middle;}
 
   canvas{max-width:100%;display:block;}
@@ -677,7 +683,7 @@ function highlightGroup(gid) {
   }
 
   // Highlight Table
-  const rows = document.querySelectorAll('.re-table tbody tr');
+  const rows = document.querySelectorAll('#re-table-body tr');
   rows.forEach((tr, j) => {
     tr.style.opacity = (gid === null || j === gid) ? '1' : '0.25';
     tr.style.background = (gid === j) ? 'var(--panel)' : '';
@@ -1964,25 +1970,19 @@ function updateResults(p, est) {
   const simpsonRisk = Math.sign(cpSlope) !== Math.sign(withinSlope)
                       && Math.abs(cpSlope) > 0.05 && Math.abs(withinSlope) > 0.05;
 
-  function fmtCI(lo, hi) {
-    return '<span style="color:var(--accent3);font-size:.75rem">[' + lo.toFixed(3) + ', ' + hi.toFixed(3) + ']</span>';
+  function ciStr(lo, hi) {
+    return '[' + lo.toFixed(3) + ', ' + hi.toFixed(3) + ']';
   }
-  function fmtCItau(ci) {
-    if (!ci) return '<span style="color:var(--ink2);font-size:.75rem"><span class="gk gk-hat">τ</span>≈0 (nicht schätzbar)</span>';
-    return '<span style="color:var(--accent3);font-size:.75rem">[' + ci[0].toFixed(3) + ', ' + ci[1].toFixed(3) + ']</span>';
+  function ciTauStr(ci) {
+    if (!ci) return '<span class="gk gk-hat">τ</span>≈0';
+    return ciStr(ci[0], ci[1]);
   }
-  function fmtAIC(s, active) {
-    var cls = active ? 'res-val active-mode' : 'res-val';
-    return '<span class="' + cls + '">' + s.aic.toFixed(1) + '</span>';
-  }
-  function row(label, val, extraStyle) {
-    var style = extraStyle || '';
-    return '<div class="res-row" style="' + style + '"><span>' + label + '</span><span class="res-val">' + val + '</span></div>';
-  }
-  function subrow(label, val) {
-    return '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">' + label + '</span>' + val + '</div>';
-  }
+  var resSectionN = 0;
   function section(label, body) {
+    resSectionN++;
+    return '<div class="res-section"><div class="res-label"><span class="res-num">' + resSectionN + '</span>' + label + '</div>' + body + '</div>';
+  }
+  function sectionPlain(label, body) {
     return '<div class="res-section"><div class="res-label">' + label + '</div>' + body + '</div>';
   }
 
@@ -2024,126 +2024,128 @@ function updateResults(p, est) {
   const gHat = '<span class="gk gk-hat">γ</span>';
   const g00  = '<span style="color:' + FE_COLOR + '">' + gHat + '₀₀</span>';
   const g10  = '<span style="color:' + FE_COLOR + '">' + gHat + '₁₀</span>';
-  const intLabel   = isLogistic ? g00 + ' · Intercept auf Log-Odds-Skala (x=0)'
-                   : isLog      ? g00 + ' · Intercept (log-Skala)'
-                   :              g00 + ' · Grand Intercept';
-  const slopeLabel = isLogistic ? g10 + ' · Slope auf Log-Odds-Skala'
-                   : isLog      ? g10 + ' · Slope (log-Skala)'
-                   :              g10 + ' · Fixed Slope';
-  const expIntRow = isLogistic
-    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">' +
-      'exp(' + g00 + ') = Baseline-Odds = ' + Math.exp(feA).toFixed(3) +
-      ' → Baseline-Wkt. = ' + (pBase*100).toFixed(1) + '%' +
-      '</span></div>'
-    : isLog
-    ? '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2)">exp(' + g00 + ') = Baseline-Mittelwert = ' + Math.exp(feA).toFixed(3) + '</span></div>'
-    : '';
-  const expSlopeRow = isLogistic
-    ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Odds Ratio (OR) = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
-      '<span class="res-val" style="color:var(--accent2)">OR</span></div>' +
-      '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">' +
-      'Pro Einheit ↑x multiplizieren sich die Odds um ' + Math.exp(feB).toFixed(3) +
-      (Math.exp(feB) > 1 ? ' (positiver Effekt)' : ' (negativer Effekt)') +
-      '</span></div>'
-    : isPoisson
-    ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Incidence Rate Ratio (IRR) = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
-      '<span class="res-val" style="color:var(--accent2)">IRR</span></div>' +
-      '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">' +
-      'Pro Einheit ↑x ändert sich die Rate um Faktor ' + Math.exp(feB).toFixed(3) +
-      '</span></div>'
-    : isGamma
-    ? '<div class="res-row" style="margin-top:-.1rem">' +
-      '<span style="color:var(--accent2)">Multiplikativer Effekt = exp(' + g10 + ') = <b>' + Math.exp(feB).toFixed(3) + '</b></span>' +
-      '<span class="res-val" style="color:var(--accent2)">×μ</span></div>'
-    : '';
+  const scaleTag = isLogistic ? ' <span class="res-dim">(Log-Odds)</span>'
+                  : isLog      ? ' <span class="res-dim">(log)</span>'
+                  :              '';
 
-  var feBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.3rem">'
-    + 'SE aus Within-Group-Residuen · <span style="color:var(--accent3)">■ geschätzt</span> &nbsp;<span style="color:var(--accent)">■ wahr = Datengenerator</span></div>'
-    + '<div class="res-row"><span>' + intLabel + '</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + feA.toFixed(3) + '</span></div>'
-    + expIntRow
-    + subrow('SE=' + fit.se_feA.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr γ₀₀=' + p.g00.toFixed(3) + '</span>', fmtCI(fit.ci_feA[0], fit.ci_feA[1]))
-    + '<div class="res-row" style="margin-top:.3rem"><span>' + slopeLabel + '</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + feB.toFixed(3) + '</span></div>'
-    + expSlopeRow
-    + subrow('SE=' + fit.se_feB.toFixed(3) + ' &nbsp; 95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr γ₁₀=' + p.g10.toFixed(3) + '</span>', fmtCI(fit.ci_feB[0], fit.ci_feB[1]));
+  var feTable = '<table class="re-table"><thead><tr><th>Parameter</th><th>Geschätzt</th><th>SE</th><th>95%-KI</th><th>Wahr</th></tr></thead><tbody>'
+    + '<tr><td>' + g00 + ' Intercept' + scaleTag + '</td>'
+    + '<td class="res-est">' + feA.toFixed(3) + '</td>'
+    + '<td class="res-dim">' + fit.se_feA.toFixed(3) + '</td>'
+    + '<td class="res-dim">' + ciStr(fit.ci_feA[0], fit.ci_feA[1]) + '</td>'
+    + '<td class="res-true">' + p.g00.toFixed(3) + '</td></tr>'
+    + '<tr><td>' + g10 + ' Slope' + scaleTag + '</td>'
+    + '<td class="res-est">' + feB.toFixed(3) + '</td>'
+    + '<td class="res-dim">' + fit.se_feB.toFixed(3) + '</td>'
+    + '<td class="res-dim">' + ciStr(fit.ci_feB[0], fit.ci_feB[1]) + '</td>'
+    + '<td class="res-true">' + p.g10.toFixed(3) + '</td></tr>'
+    + '</tbody></table>';
+
+  var expRows = '';
+  var expNote = '';
+  if (isLogistic) {
+    expRows += '<tr><td>Baseline-Wkt. (x=0)</td><td class="res-est">' + (pBase*100).toFixed(1) + '%</td></tr>'
+      + '<tr><td>Odds Ratio = exp(' + g10 + ')</td><td class="res-est">' + Math.exp(feB).toFixed(3) + '</td></tr>';
+    expNote = 'Pro Einheit ↑x multiplizieren sich die Odds um ' + Math.exp(feB).toFixed(3)
+      + (Math.exp(feB) > 1 ? ' (positiver Effekt).' : ' (negativer Effekt).');
+  } else if (isPoisson) {
+    expRows += '<tr><td>Baseline-Mittelwert (x=0)</td><td class="res-est">' + Math.exp(feA).toFixed(3) + '</td></tr>'
+      + '<tr><td>Incidence Rate Ratio = exp(' + g10 + ')</td><td class="res-est">' + Math.exp(feB).toFixed(3) + '</td></tr>';
+    expNote = 'Pro Einheit ↑x ändert sich die Rate um Faktor ' + Math.exp(feB).toFixed(3) + '.';
+  } else if (isGamma) {
+    expRows += '<tr><td>Baseline-Mittelwert (x=0)</td><td class="res-est">' + Math.exp(feA).toFixed(3) + '</td></tr>'
+      + '<tr><td>Mult. Effekt = exp(' + g10 + ')</td><td class="res-est">×' + Math.exp(feB).toFixed(3) + '</td></tr>';
+  }
+  var expTable = expRows ? '<table class="re-table" style="margin-top:.35rem"><tbody>' + expRows + '</tbody></table>' : '';
+
+  var feBody = '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-bottom:.3rem">'
+    + 'SE aus Within-Group-Residuen · <span class="res-est">■ geschätzt</span> &nbsp;<span class="res-true">■ wahr = Datengenerator</span></div>'
+    + feTable + expTable
+    + (expNote ? '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-top:.3rem">' + expNote + '</div>' : '');
   if (simpsonRisk) {
-    feBody += '<div class="res-row" style="margin-top:.3rem;padding-top:.3rem;border-top:1px solid var(--grid)">'
+    feBody += '<div style="margin-top:.35rem;padding-top:.32rem;border-top:1px dashed var(--grid);display:flex;justify-content:space-between;font-family:\'DM Mono\',monospace;font-size:.75rem">'
       + '<span style="color:var(--warn)">CP-Slope (verzerrt!)</span>'
-      + '<span class="res-val" style="color:var(--warn)">' + cpSlope.toFixed(3) + '</span></div>';
+      + '<span style="color:var(--warn);font-weight:700">' + cpSlope.toFixed(3) + '</span></div>';
   }
   html += section('FIXED EFFECTS — Schätzung &amp; 95%-KI (Wald)', feBody);
 
-  var vcBody = '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.3rem">'
-    + 'Schätzung aus Daten (Method of Moments) · '
-    + '<span style="color:var(--accent3)">■ geschätzt</span> &nbsp;'
-    + '<span style="color:var(--accent)">■ wahr = Datengenerator</span></div>'
-    + '<div class="res-row"><span><span class="gk gk-hat">τ</span>₀ · SD Random Intercept</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + fit.tau0hat.toFixed(3) + '</span></div>'
-    + subrow('95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr τ₀=' + p.tau0.toFixed(3) + '</span>', fmtCItau(fit.ci_tau0));
+  var vcRows = '<tr><td><span class="gk gk-hat">τ</span>₀ · SD Rand. Intercept</td>'
+    + '<td class="res-est">' + fit.tau0hat.toFixed(3) + '</td>'
+    + '<td class="res-dim">' + ciTauStr(fit.ci_tau0) + '</td>'
+    + '<td class="res-true">' + p.tau0.toFixed(3) + '</td></tr>';
   if (reMode === 'both') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">τ</span>₁ · SD Random Slope</span>'
-      + '<span class="res-val" style="color:var(--accent3)">' + fit.tau1hat.toFixed(3) + '</span></div>'
-      + subrow('95%-KI &nbsp;·&nbsp; <span style="color:var(--accent)">wahr τ₁=' + p.tau1.toFixed(3) + '</span>', fmtCItau(fit.ci_tau1))
-      + '<div class="res-row" style="margin-top:.3rem"><span>ρ · Korrelation u₀↔u₁</span>'
-      + '<span class="res-val" style="color:var(--ink2)">– (nicht geschätzt)</span></div>'
-      + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr ρ=' + p.rho.toFixed(2) + '</span></div>';
+    vcRows += '<tr><td><span class="gk gk-hat">τ</span>₁ · SD Rand. Slope</td>'
+      + '<td class="res-est">' + fit.tau1hat.toFixed(3) + '</td>'
+      + '<td class="res-dim">' + ciTauStr(fit.ci_tau1) + '</td>'
+      + '<td class="res-true">' + p.tau1.toFixed(3) + '</td></tr>'
+      + '<tr><td>ρ · Korr. u₀↔u₁</td>'
+      + '<td class="res-dim">– (n. geschätzt)</td>'
+      + '<td class="res-dim">—</td>'
+      + '<td class="res-true">' + p.rho.toFixed(2) + '</td></tr>';
   }
+  var vcFootnote = '';
   // σ row: context-sensitive per likelihood
   if (modelKey === 'gauss') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">σ</span> · Residual SD (aus Daten)</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr σ=' + p.sig.toFixed(3) + '</span></div>';
+    vcRows += '<tr><td><span class="gk gk-hat">σ</span> · Residual SD</td>'
+      + '<td class="res-est">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</td>'
+      + '<td class="res-dim">—</td>'
+      + '<td class="res-true">' + p.sig.toFixed(3) + '</td></tr>';
   } else if (modelKey === 'gamma') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span><span class="gk gk-hat">σ</span> · Disp.-Param. CV (aus Daten)</span>'
-    + '<span class="res-val" style="color:var(--accent3)">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--accent)">wahr σ=' + p.sig.toFixed(3) + '</span><span style="color:var(--ink2)"> · V₁=' + (fit.v_lvl1||0).toFixed(3) + '</span></div>';
+    vcRows += '<tr><td><span class="gk gk-hat">σ</span> · Disp.-Param. CV</td>'
+      + '<td class="res-est">' + (fit.sighat != null ? fit.sighat.toFixed(3) : '—') + '</td>'
+      + '<td class="res-dim">—</td>'
+      + '<td class="res-true">' + p.sig.toFixed(3) + '</td></tr>';
+    vcFootnote = 'V₁ (aus Daten) = ' + (fit.v_lvl1||0).toFixed(3);
   } else if (modelKey === 'logistic') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ theoretisch (Logit-Var.)</span>'
-    + '<span class="res-val" style="color:var(--ink2)">π²/3 ≈ 3.290</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">Kein freier σ-Parameter — Bernoulli-Varianz = p(1−p)</span></div>';
+    vcFootnote = 'Kein freier σ-Parameter — Bernoulli-Varianz p(1−p). V₁ theoretisch (Logit-Var.) = π²/3 ≈ 3.290';
   } else if (modelKey === 'poisson') {
-    vcBody += '<div class="res-row" style="margin-top:.3rem"><span style="color:var(--ink2)">V₁ Nakagawa-Näherung</span>'
-    + '<span class="res-val" style="color:var(--ink2)">' + (fit.v_lvl1||0).toFixed(3) + '</span></div>'
-    + '<div class="res-row" style="margin-top:-.1rem"><span style="color:var(--ink2);font-size:.75rem">log(1+1/<span class="gk gk-bar">λ</span>) — ändert sich mit den Daten</span></div>';
+    vcFootnote = 'Kein freier σ-Parameter. V₁ (Nakagawa-Näherung, aus Daten) = log(1+1/<span class="gk gk-bar">λ</span>) = ' + (fit.v_lvl1||0).toFixed(3);
   }
-  vcBody += '<div class="res-row" style="margin-top:.3rem"><span>ICC = <span class="gk gk-hat">τ</span>₀²/(<span class="gk gk-hat">τ</span>₀²+<span class="gk gk-hat">σ</span>²)</span>'
+  var vcTable = '<table class="re-table"><thead><tr><th>Parameter</th><th>Geschätzt</th><th>95%-KI</th><th>Wahr</th></tr></thead><tbody>' + vcRows + '</tbody></table>';
+  var vcBody = '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-bottom:.3rem">'
+    + 'Method of Moments · <span class="res-est">■ geschätzt</span> &nbsp;<span class="res-true">■ wahr = Datengenerator</span></div>'
+    + vcTable
+    + (vcFootnote ? '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-top:.3rem">' + vcFootnote + '</div>' : '')
+    + '<div class="res-row" style="margin-top:.45rem;padding-top:.4rem;border-top:1px dashed var(--grid)"><span>ICC = <span class="gk gk-hat">τ</span>₀²/(<span class="gk gk-hat">τ</span>₀²+<span class="gk gk-hat">σ</span>²)</span>'
     + '<span class="res-val" style="color:var(--accent2)">' + (vpc*100).toFixed(1) + '%</span></div>'
     + '<div class="vpc-track" style="margin:.28rem 0">'
     + '<div class="vpc-between" style="width:' + Math.min(vpc*100,100).toFixed(0) + '%"></div>'
     + '<div class="vpc-resid"></div></div>'
     + '<div class="vpc-labels"><span>Zwischen-Gruppen ' + (vpc*100).toFixed(0) + '%</span>'
     + '<span>Innerhalb ' + (100-vpc*100).toFixed(0) + '%</span></div>'
-    + '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem">'
+    + '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-top:.2rem">'
     + (vpc > 0.05 ? 'ICC=' + (vpc*100).toFixed(0) + '% > 5% → LMM notwendig' : 'ICC=' + (vpc*100).toFixed(0) + '% ≈ 0 → kaum Gruppenunterschiede')
     + '</div>';
   html += section('VARIANZKOMPONENTEN — geschätzt vs. wahr', vcBody);
 
-  var r2Body = row('R²<sub>marginal</sub> (Fixed Effects)', (fit.R2m*100).toFixed(1) + '%')
-    .replace('res-val">', 'res-val" style="color:var(--accent3)">')
-    + row('R²<sub>conditional</sub> (Fixed+Random)', (fit.R2c*100).toFixed(1) + '%')
-    .replace('res-val">', 'res-val" style="color:var(--accent2)">')
-    + '<div style="height:8px;display:flex;border-radius:2px;overflow:hidden;margin:.25rem 0">'
+  var r2Table = '<table class="re-table"><tbody>'
+    + '<tr><td>R²<sub>marginal</sub> (Fixed Effects)</td><td class="res-est">' + (fit.R2m*100).toFixed(1) + '%</td></tr>'
+    + '<tr><td>R²<sub>conditional</sub> (Fixed+Random)</td><td style="color:var(--accent2);font-weight:500">' + (fit.R2c*100).toFixed(1) + '%</td></tr>'
+    + '</tbody></table>';
+  var r2Body = r2Table
+    + '<div style="height:8px;display:flex;border-radius:2px;overflow:hidden;margin:.35rem 0">'
     + '<div style="width:' + (fit.R2m*100).toFixed(0) + '%;background:var(--accent3)"></div>'
-    + '<div style="width:' + Math.max(0,(fit.R2c-fit.R2m)*100).toFixed(0) + '%;background:var(--accent2)88"></div>'
+    + '<div style="width:' + Math.max(0,(fit.R2c-fit.R2m)*100).toFixed(0) + '%;background:' + css('--accent2') + '88"></div>'
     + '<div style="flex:1;background:var(--grid)"></div></div>'
-    + '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);display:flex;gap:.7rem">'
-    + '<span style="color:var(--accent3)">■ Fixed</span><span style="color:var(--accent2)">■ Random</span><span>□ Residual</span></div>';
-  html += section('R² (Nakagawa &amp; Schielzeth 2013)', r2Body);
+    + '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;display:flex;gap:.7rem">'
+    + '<span class="res-est">■ Fixed</span><span style="color:var(--accent2)">■ Random</span><span>□ Residual</span></div>';
+  html += section('<a class="glo-link" href="Glossar.html#gl-r2-marginal-conditional" target="_blank" title="R²_marginal (nur Fixed Effects) vs. R²_conditional (Fixed+Random) — Varianzaufklärung in Mixed Models nach Nakagawa &amp; Schielzeth (2013)." style="color:inherit">R²</a> (Nakagawa &amp; Schielzeth 2013)', r2Body);
 
-  var aicBody = '<div class="res-row"><span>Complete Pooling (k=' + fit.k_cp + ')</span>'
-    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.cp_stats, poolMode==='cp')
-    + '<span class="res-val" style="color:var(--ink2);font-size:.75rem">' + fit.cp_stats.bic.toFixed(1) + '</span></span></div>'
-    + '<div class="res-row"><span>No Pooling (k=' + fit.k_np + ')</span>'
-    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.np_stats, poolMode==='np')
-    + '<span class="res-val" style="color:var(--ink2);font-size:.75rem">' + fit.np_stats.bic.toFixed(1) + '</span></span></div>'
-    + '<div class="res-row"><span>Partial Pooling/LMM (k=' + fit.k_pp + ')</span>'
-    + '<span style="display:flex;gap:.5rem">' + fmtAIC(fit.pp_stats, poolMode==='pp')
-    + '<span class="res-val" style="color:var(--ink2);font-size:.75rem">' + fit.pp_stats.bic.toFixed(1) + '</span></span></div>'
-    + '<div style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem">AIC (fett=aktiv) · BIC (grau)</div>';
-  html += section('MODELLVERGLEICH — AIC / BIC (kleiner = besser)', aicBody);
+  function cmpRow(col, active, label, k, s) {
+    var st = 'color:' + col + (active ? ';font-weight:700' : '');
+    return '<tr><td style="' + st + '">● ' + label + '</td>'
+      + '<td style="' + st + '">' + k + '</td>'
+      + '<td style="' + st + '">' + s.aic.toFixed(1) + '</td>'
+      + '<td class="res-dim">' + s.bic.toFixed(1) + '</td></tr>';
+  }
+  var aicTable = '<table class="re-table"><thead><tr><th>Strategie</th><th>k</th><th>AIC</th><th>BIC</th></tr></thead><tbody>'
+    + cmpRow(css('--accent'), poolMode==='cp', 'Complete Pooling', fit.k_cp, fit.cp_stats)
+    + cmpRow(GM_COLOR, poolMode==='np', 'No Pooling', fit.k_np, fit.np_stats)
+    + cmpRow(FE_COLOR, poolMode==='pp', 'Partial Pooling/LMM', fit.k_pp, fit.pp_stats)
+    + '</tbody></table>';
+  var aicBody = aicTable
+    + '<div class="res-dim" style="font-family:\'DM Mono\',monospace;font-size:.75rem;margin-top:.3rem">kleiner = besser · ● aktive Strategie fett</div>';
+  html += section('MODELLVERGLEICH — AIC / BIC', aicBody);
 
   function slopeRow(col, active, label, a, b) {
     var st = 'color:' + col + (active ? ';font-weight:600' : '');
@@ -2179,7 +2181,7 @@ function updateResults(p, est) {
   document.getElementById('results-panel').innerHTML = html;
   // Shrinkage-λ gehört inhaltlich zum Shrinkage-Diagramm — deshalb links
   // direkt darunter statt im rechten Ergebnis-Panel.
-  document.getElementById('shrink-panel').innerHTML = section('SHRINKAGE λ = τ₀²/(τ₀²+σ²/nⱼ)', shrinkBody);
+  document.getElementById('shrink-panel').innerHTML = sectionPlain('SHRINKAGE λ = τ₀²/(τ₀²+σ²/nⱼ)', shrinkBody);
 
   document.getElementById('grp-table-panel').innerHTML =
     '<table class="re-table"><thead><tr><th>Gr.</th><th>No-Pool â₀</th><th>Part.-Pool â₀</th><th>λ</th><th>n</th></tr></thead>'
@@ -2305,6 +2307,7 @@ document.addEventListener('keydown', e => {
     Pfeile zeigen die Zugkraft. Gruppen mit kleinem n werden stärker gezogen.<br><br>
     <strong><a class="glo-link" href="Glossar.html#gl-icc" target="_blank" title="Der Intraklassen-Korrelationskoeffizient misst, welcher Anteil der Gesamtvarianz eines Outcomes auf Gruppenunterschiede zurückzuführen ist: ICC = τ²₀/(τ²₀+σ²)." style="color:inherit">ICC</a>-Balken:</strong> τ₀²/(τ₀²+σ²) — Anteil der Varianz zwischen Gruppen.
     ICC &gt; 0.05 signalisiert, dass ein <a class="glo-link" href="Glossar.html#gl-glmm" target="_blank" title="Das Generalisierte Lineare Gemischte Modell erweitert das GLM um zufällige Effekte für gruppierte oder hierarchisch strukturierte Daten.">Mixed Model</a> nötig ist.<br><br>
+    <strong><a class="glo-link" href="Glossar.html#gl-r2-marginal-conditional" target="_blank" title="R²_marginal (nur Fixed Effects) vs. R²_conditional (Fixed+Random) — Varianzaufklärung in Mixed Models nach Nakagawa &amp; Schielzeth (2013)." style="color:inherit">R²_marginal / R²_conditional</a>:</strong> R²_marginal erklärt nur über die Fixed Effects, R²_conditional zusätzlich über die Gruppenstruktur (Random Effects) — die Differenz zeigt deren Erklärungsbeitrag. Beide Werte beziehen sich immer auf das GLMM selbst und ändern sich nicht mit der Pooling-Strategie.<br><br>
     <strong>Simpson-Warnung:</strong> erscheint, wenn Complete Pooling die Richtung
     des Slopes umkehrt — das klassische Simpson's Paradoxon.
 
