@@ -11,9 +11,20 @@ library(ggplot2)
 library(posterior)
 library(dplyr)
 library(lme4)
+# NOTE: deliberately NOT library(R.utils) — it masks shiny::validate() (used
+# below) and several base functions. Call R.utils::withTimeout() namespaced
+# instead; this only requires the package to be installed, not attached.
 
-# Allow uploads up to 100 MB (full brms objects > 100 MB should use compact export)
-options(shiny.maxRequestSize = 100 * 1024^2)
+# Upload/compute limits, tightened 2026-10-27 after repeated freezes with large full brmsfit
+# uploads: shinyapps.io instances typically share ~1 GB RAM across all concurrent sessions, and
+# a gzip-compressed .rds often inflates 3-10x once deserialized (stanfit objects compress very
+# well), so a "safe-looking" file size on disk is not a reliable proxy for in-memory risk.
+# These caps are a first line of defense; COMPUTE_TIMEOUT_S below is the main safety net since it
+# also catches models that are small enough to pass these caps but still slow to process.
+UPLOAD_SIZE_LIMIT_BYTES <- 60 * 1024^2         # hard upload cap: 60 MB on disk
+FIT_OBJECT_SIZE_LIMIT   <- 150 * 1024^2        # hard in-memory cap after readRDS(): 150 MB
+COMPUTE_TIMEOUT_S       <- 45                  # max seconds for posterior_predict()/rhat()/nuts_params()
+options(shiny.maxRequestSize = UPLOAD_SIZE_LIMIT_BYTES)
 
 # ── Design tokens (matching the Lab) ────────────────────────
 LAB_COLORS <- list(
@@ -106,11 +117,86 @@ i18n <- list(
     p5_dist = "Verteilung", p5_stats = "Kennzahlen", p5_intv = "Intervalle", p5_scat = "Streuung", p5_spec = "Spezial", p5_grp = "Gruppiert",
     # Upload
     scr_b = "R-Skript f\u00fcr Kompakt-Export:", scr_desc = "F\u00fchre dieses Skript in R aus, dann lade die erzeugte Datei hoch:",
-    scr_code = "library(brms)\n# Dein Modell:  fit <- readRDS(\"mein_modell.rds\")\n\n# Kompakt-Export fuer PPC-App\nnd   <- min(200, posterior::ndraws(fit))\nyrep <- posterior_predict(fit, ndraws = nd)\ny    <- fit$data[[as.character(fit$formula$resp)]]\nfam  <- family(fit)$family\n\n# Gruppen-Variable (optional, NULL wenn nicht vorhanden):\ndat  <- fit$data\ngroups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]\ngrp_data <- if(length(groups)>0) dat[groups] else NULL\n\nsaveRDS(list(\n  yrep    = yrep,\n  y       = y,\n  family  = fam,\n  formula = as.character(fit$formula),\n  n_obs   = nrow(fit$data),\n  grp_data = grp_data\n), \"ppc_export.rds\")",
+    scr_code = r"[library(brms)
+# Dein Modell:  fit <- readRDS("mein_modell.rds")
+
+# Kompakt-Export fuer PPC-App
+nd   <- min(200, posterior::ndraws(fit))
+yrep <- posterior_predict(fit, ndraws = nd)
+y    <- fit$data[[as.character(fit$formula$resp)]]
+fam  <- family(fit)$family
+
+# Konvergenz-Kennzahlen (klein, ermoeglichen Phase 2 auch im Kompakt-Modus):
+rhat_max    <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
+np          <- brms::nuts_params(fit)
+n_divergent <- sum(np$Value[np$Parameter == "divergent__"])
+
+# Gruppen-Variable (optional, NULL wenn nicht vorhanden):
+dat  <- fit$data
+groups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]
+grp_data <- if(length(groups)>0) dat[groups] else NULL
+
+saveRDS(list(
+  yrep        = yrep,
+  y           = y,
+  family      = fam,
+  formula     = as.character(fit$formula),
+  n_obs       = nrow(fit$data),
+  grp_data    = grp_data,
+  rhat_max    = rhat_max,
+  n_divergent = n_divergent
+), "ppc_export.rds")]",
+    full_script_b = "\u25b8 Vollst\u00e4ndiger R-Code f\u00fcr eigene PPCs",
+    full_script_desc = "Falls die App bei deinem Modell zu lange braucht oder h\u00e4ngen bleibt: f\u00fchre diesen Code direkt in R aus. Er reproduziert alle Stationen der gef\u00fchrten Tour lokal \u2014 unabh\u00e4ngig vom Server.",
+    full_script_code = r"[library(brms)
+library(bayesplot)
+library(ggplot2)
+
+fit <- readRDS("mein_modell.rds")
+
+# Falls du schon einen Kompakt-Export (ppc_export.rds) hast,
+# kannst du stattdessen direkt mit dessen yrep/y weitermachen:
+# export <- readRDS("ppc_export.rds"); yrep <- export$yrep; y <- export$y
+
+nd   <- min(200, posterior::ndraws(fit))
+yrep <- posterior_predict(fit, ndraws = nd)
+y    <- fit$data[[as.character(fit$formula$resp)]]
+
+# -- Konvergenz (= Phase 2 im Tool) --------------------------
+summary(fit)                       # R-hat, Bulk/Tail-ESS pro Parameter
+max(rhat(fit), na.rm = TRUE)       # sollte < 1.01 sein
+np <- nuts_params(fit)
+sum(np$Value[np$Parameter == "divergent__"])   # sollte 0 sein
+
+# -- Station 1: Globale Verteilung ---------------------------
+ppc_dens_overlay(y, yrep[1:50, ])
+
+# -- Station 2: Statistische Kennzahlen + Bayesianischer p-Wert --
+for (stat in c("mean", "sd", "min", "max")) {
+  fn <- get(stat)
+  print(ppc_stat(y, yrep, stat = stat) + ggtitle(stat))
+  p <- mean(apply(yrep, 1, fn) >= fn(y))
+  cat(stat, ": bayes. p =", round(p, 3), "\n")   # ~0.5 ideal
+}
+
+# -- Station 3: Fehlerstruktur -------------------------------
+ppc_error_hist(y, yrep[1:8, ])      # Residuen, sollten ~symmetrisch um 0 sein
+ppc_scatter_avg(y, yrep)            # beobachtet vs. vorhergesagt
+
+# -- Station 4: Kalibrierung (PIT-ECDF) ----------------------
+ppc_pit_ecdf(y, yrep)               # sollte nahe der Diagonalen verlaufen
+
+# -- Station 4b: Vorhersageintervalle ------------------------
+ppc_intervals(y, yrep)              # ~90% der Punkte sollten im Band liegen
+
+# -- Station 4b: Gruppierter PPC (falls eine Gruppierungsvariable existiert) --
+# group <- fit$data$DEINE_GRUPPENVARIABLE
+# ppc_dens_overlay_grouped(y, yrep, group = group)]",
     ul_lbl_c = "Kompakt-Export laden (ppc_export.rds)", ul_lbl_f = "Vollst\u00e4ndiges brms-Modell (.rds)",
     ul_ok_c = "\u2713 Kompakt-Export geladen", ul_ok_f = "\u2713 Modell erfolgreich geladen",
     ul_err_b = "\u2717 Fehler beim Laden:", ul_err_hint = "Stelle sicher, dass du ein mit <code>saveRDS()</code> gespeichertes brms-Modellobjekt hochl\u00e4dst.",
     ul_toobig = "Datei zu gro\u00df f\u00fcr den direkten Upload. Bitte verwende den Kompakt-Export.",
+    ul_timeout = "Die Berechnung hat das Zeitlimit \u00fcberschritten \u2014 das Modell ist vermutlich zu gro\u00df oder zu komplex f\u00fcr den direkten Upload. Bitte verwende den Kompakt-Export (oben) oder f\u00fchre den vollst\u00e4ndigen R-Code weiter unten lokal aus.",
     ul_processing = "Datei wird verarbeitet...",
     # Diagnosis
     diag_mode = "MODUS", diag_fam = "FAMILIE", diag_nobs = "BEOBACHTUNGEN",
@@ -127,6 +213,8 @@ i18n <- list(
     cv_divs_s1 = "adapt_delta erh\u00f6hen (z.B. control = list(adapt_delta = 0.99))",
     cv_divs_s2 = "Priors \u00fcberpr\u00fcfen \u2014 m\u00f6glicherweise zu flach",
     cv_compact = "Konvergenzdetails sind im Kompakt-Export nicht verf\u00fcgbar.",
+    cv_timeout_b = "\u26a0 Konvergenzpr\u00fcfung hat das Zeitlimit \u00fcberschritten.",
+    cv_timeout = " Das Modell ist zu gro\u00df/komplex, um R\u0302 und Divergenzen innerhalb der App zu berechnen. Nutze stattdessen den vollst\u00e4ndigen R-Code in Phase 1 (<code>summary(fit)</code>, <code>rhat(fit)</code>) direkt in R.",
     cv_badge_rhat_ok   = "R\u0302 < 1.01 \u2014 Konvergenz OK",
     cv_badge_rhat_fail = "R\u0302 = %.3f \u2014 Konvergenzproblem!",
     cv_badge_divs_ok   = "Keine Divergenzen",
@@ -280,11 +368,86 @@ i18n <- list(
     p5_dist = "Distribution", p5_stats = "Statistics", p5_intv = "Intervals", p5_scat = "Scatter", p5_spec = "Special", p5_grp = "Grouped",
     # Upload
     scr_b = "R script for compact export:", scr_desc = "Run this script in R, then upload the generated file:",
-    scr_code = "library(brms)\n# Your model:  fit <- readRDS(\"my_model.rds\")\n\n# Compact export for PPC app\nnd   <- min(200, posterior::ndraws(fit))\nyrep <- posterior_predict(fit, ndraws = nd)\ny    <- fit$data[[as.character(fit$formula$resp)]]\nfam  <- family(fit)$family\n\n# Group variable (optional, NULL if not present):\ndat  <- fit$data\ngroups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]\ngrp_data <- if(length(groups)>0) dat[groups] else NULL\n\nsaveRDS(list(\n  yrep    = yrep,\n  y       = y,\n  family  = fam,\n  formula = as.character(fit$formula),\n  n_obs   = nrow(fit$data),\n  grp_data = grp_data\n), \"ppc_export.rds\")",
+    scr_code = r"[library(brms)
+# Your model:  fit <- readRDS("my_model.rds")
+
+# Compact export for PPC app
+nd   <- min(200, posterior::ndraws(fit))
+yrep <- posterior_predict(fit, ndraws = nd)
+y    <- fit$data[[as.character(fit$formula$resp)]]
+fam  <- family(fit)$family
+
+# Convergence stats (small, enable Phase 2 in compact mode too):
+rhat_max    <- suppressWarnings(max(brms::rhat(fit), na.rm = TRUE))
+np          <- brms::nuts_params(fit)
+n_divergent <- sum(np$Value[np$Parameter == "divergent__"])
+
+# Group variable (optional, NULL if not present):
+dat  <- fit$data
+groups <- names(dat)[sapply(dat, function(x) is.factor(x)|is.character(x))]
+grp_data <- if(length(groups)>0) dat[groups] else NULL
+
+saveRDS(list(
+  yrep        = yrep,
+  y           = y,
+  family      = fam,
+  formula     = as.character(fit$formula),
+  n_obs       = nrow(fit$data),
+  grp_data    = grp_data,
+  rhat_max    = rhat_max,
+  n_divergent = n_divergent
+), "ppc_export.rds")]",
+    full_script_b = "▸ Full R code for your own PPCs",
+    full_script_desc = "If the app takes too long or hangs for your model: run this code directly in R. It reproduces every station of the guided tour locally — independent of the server.",
+    full_script_code = r"[library(brms)
+library(bayesplot)
+library(ggplot2)
+
+fit <- readRDS("my_model.rds")
+
+# If you already have a compact export (ppc_export.rds), you can
+# skip ahead and use its yrep/y directly instead:
+# export <- readRDS("ppc_export.rds"); yrep <- export$yrep; y <- export$y
+
+nd   <- min(200, posterior::ndraws(fit))
+yrep <- posterior_predict(fit, ndraws = nd)
+y    <- fit$data[[as.character(fit$formula$resp)]]
+
+# -- Convergence (= Phase 2 in the tool) ---------------------
+summary(fit)                       # R-hat, bulk/tail ESS per parameter
+max(rhat(fit), na.rm = TRUE)       # should be < 1.01
+np <- nuts_params(fit)
+sum(np$Value[np$Parameter == "divergent__"])   # should be 0
+
+# -- Station 1: Global distribution --------------------------
+ppc_dens_overlay(y, yrep[1:50, ])
+
+# -- Station 2: Summary statistics + Bayesian p-value --------
+for (stat in c("mean", "sd", "min", "max")) {
+  fn <- get(stat)
+  print(ppc_stat(y, yrep, stat = stat) + ggtitle(stat))
+  p <- mean(apply(yrep, 1, fn) >= fn(y))
+  cat(stat, ": bayesian p =", round(p, 3), "\n")   # ~0.5 is ideal
+}
+
+# -- Station 3: Error structure -------------------------------
+ppc_error_hist(y, yrep[1:8, ])      # residuals, should be ~symmetric around 0
+ppc_scatter_avg(y, yrep)            # observed vs. predicted
+
+# -- Station 4: Calibration (PIT-ECDF) ------------------------
+ppc_pit_ecdf(y, yrep)               # should stay close to the diagonal
+
+# -- Station 4b: Prediction intervals --------------------------
+ppc_intervals(y, yrep)              # ~90% of points should fall within the band
+
+# -- Station 4b: Grouped PPC (if a grouping variable exists) --
+# group <- fit$data$YOUR_GROUPING_VARIABLE
+# ppc_dens_overlay_grouped(y, yrep, group = group)]",
     ul_lbl_c = "Load compact export (ppc_export.rds)", ul_lbl_f = "Full brms model (.rds)",
     ul_ok_c = "\u2713 Compact export loaded", ul_ok_f = "\u2713 Model successfully loaded",
     ul_err_b = "\u2717 Error loading file:", ul_err_hint = "Make sure you upload a brms model object saved with <code>saveRDS()</code>.",
     ul_toobig = "File too large for direct upload. Please use the compact export.",
+    ul_timeout = "The computation exceeded the time limit — the model is likely too large or too complex for direct upload. Please use the compact export (above), or run the full R code further below locally.",
     ul_processing = "Processing file...",
     # Diagnosis
     diag_mode = "MODE", diag_fam = "FAMILY", diag_nobs = "OBSERVATIONS",
@@ -301,6 +464,8 @@ i18n <- list(
     cv_divs_s1 = "Increase adapt_delta (e.g. control = list(adapt_delta = 0.99))",
     cv_divs_s2 = "Check priors \u2014 possibly too flat",
     cv_compact = "Convergence details are not available in compact export.",
+    cv_timeout_b = "\u26a0 Convergence check exceeded the time limit.",
+    cv_timeout = " The model is too large/complex to compute R\u0302 and divergences within the app. Use the full R code in Phase 1 instead (<code>summary(fit)</code>, <code>rhat(fit)</code>) directly in R.",
     cv_badge_rhat_ok   = "R\u0302 < 1.01 \u2014 Convergence OK",
     cv_badge_rhat_fail = "R\u0302 = %.3f \u2014 Convergence problem!",
     cv_badge_divs_ok   = "No divergences",
@@ -459,23 +624,29 @@ get_family_label <- function(fit, l = "de") {
   )
 }
 
-# Auto-generate model summary text
-model_summary_text <- function(fit) {
-  fam    <- get_family_label(fit)
+# Cheap model metadata (N, predictors, chains/iters) — no posterior scan,
+# always fast regardless of model size. Kept separate from the expensive
+# convergence check below so a slow/huge model never blocks this from
+# being shown (see model_meta() / model_convergence() reactives in server).
+model_meta_text <- function(fit) {
   n_obs  <- nrow(fit$data)
   n_pred <- length(all.vars(fit$formula$formula)[-1])
   chains <- fit$fit@sim$chains
   iters  <- fit$fit@sim$iter
   warmup <- fit$fit@sim$warmup
 
-  # Convergence check
+  list(n_obs = n_obs, n_pred = n_pred, chains = chains, iters = iters, warmup = warmup)
+}
+
+# Expensive convergence diagnostics — scans the full posterior (rhat(),
+# nuts_params()), can be slow for large/complex models. Always call through
+# the timeout-wrapped model_convergence() reactive, never directly.
+model_convergence_text <- function(fit) {
   rhat_vals <- rhat(fit)
   rhat_max  <- max(rhat_vals, na.rm = TRUE)
   divs      <- sum(nuts_params(fit)$Value[nuts_params(fit)$Parameter == "divergent__"])
 
   list(
-    fam = fam, n_obs = n_obs, n_pred = n_pred,
-    chains = chains, iters = iters, warmup = warmup,
     rhat_max = rhat_max, divs = divs,
     rhat_ok = rhat_max < 1.01,
     divs_ok = divs == 0
@@ -768,10 +939,20 @@ ui <- fluidPage(
           $(document).on('shiny:connected', function() {
             Shiny.setInputValue('upload_mode', 'compact');
           });
+          function toggleDetails(id) {
+            var el = document.getElementById(id);
+            el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+          }
         ")),
 
         # Compact mode: download script
         uiOutput("compact_script_download"),
+
+        # Always available, independent of mode/upload status: full offline
+        # fallback script (see fit_data()/model_summary() — large full-model
+        # uploads can time out or exhaust server RAM; this guarantees the
+        # user can always get usable R code without depending on the app).
+        uiOutput("full_script_ui"),
 
         uiOutput("phase1_privacy_ui"),
 
@@ -1149,6 +1330,28 @@ server <- function(input, output, session) {
     )
   })
 
+  # ── Always-available offline fallback script (independent of upload
+  # mode/status — see fit_data()/model_convergence() for why this matters:
+  # a large/complex full-model upload can time out or exhaust server RAM,
+  # so this must never depend on any server-side computation succeeding) ──
+  output$full_script_ui <- renderUI({
+    t <- tr()
+    tagList(
+      tags$button(class = "details-toggle",
+        onclick = "toggleDetails('full-script-box')",
+        t$full_script_b
+      ),
+      div(id = "full-script-box", class = "details-box", style = "display:none",
+        t$full_script_desc, tags$br(), tags$br(),
+        tags$pre(
+          style = paste0("background:", LAB_COLORS$bg, ";padding:.6rem;font-size:.72rem;",
+                          "color:", LAB_COLORS$ink, ";line-height:1.6;overflow-x:auto"),
+          t$full_script_code
+        )
+      )
+    )
+  })
+
   # ── Reactive: upload label ─────────────────────────────
   output$upload_label <- renderUI({
     t <- tr()
@@ -1158,7 +1361,7 @@ server <- function(input, output, session) {
   # ── Reactive: load model ──────────────────────────────
   fit_data <- reactive({
     req(input$rds_file)
-    validate(need(input$rds_file$size < 100 * 1024^2, tr()$ul_toobig))
+    validate(need(input$rds_file$size < UPLOAD_SIZE_LIMIT_BYTES, tr()$ul_toobig))
     withProgress(message = tr()$ul_processing, {
       tryCatch({
         obj <- readRDS(input$rds_file$datapath)
@@ -1174,16 +1377,31 @@ server <- function(input, output, session) {
                compact = TRUE, family_str = fam,
                formula_str = obj$formula %||% "",
                n_obs = obj$n_obs %||% length(y),
-               grp_data = grp_data)
+               grp_data = grp_data,
+               # NULL for exports created before the rhat_max/n_divergent
+               # fields existed (backward-compatible) — UI falls back to
+               # the "not available in compact export" message in that case.
+               rhat_max = obj$rhat_max,
+               n_divergent = obj$n_divergent)
         } else {
-          # Full brms object
-          if (object.size(obj) >= 200 * 1024^2) {
+          # Full brms object. object.size() only catches the problem AFTER
+          # readRDS() already paid the cost of deserializing it, so it's a
+          # secondary guard — the withTimeout() below is the real safety net,
+          # since a model can be "small enough" to pass this check yet still
+          # take minutes to run posterior_predict()/rhat()/nuts_params() on.
+          if (object.size(obj) >= FIT_OBJECT_SIZE_LIMIT) {
             stop(tr()$ul_toobig)
           }
           fit  <- obj
           y    <- fit$data[[as.character(fit$formula$resp)]]
           nd   <- min(200, posterior::ndraws(fit))
-          yrep <- posterior_predict(fit, ndraws = nd)
+          yrep <- tryCatch(
+            R.utils::withTimeout(
+              posterior_predict(fit, ndraws = nd),
+              timeout = COMPUTE_TIMEOUT_S, onTimeout = "error"
+            ),
+            error = function(e) stop(tr()$ul_timeout)
+          )
           # Subsample for large datasets to keep plots fast
           if (length(y) > 2000) {
             idx  <- sample(seq_along(y), 2000)
@@ -1197,6 +1415,27 @@ server <- function(input, output, session) {
         list(ok = FALSE, error = conditionMessage(e))
       })
     })
+  })
+
+  # ── Cached model metadata / convergence (full-model mode only) ───────
+  # Split in two and cached via reactive() so N/predictors/chains (cheap)
+  # and R-hat/divergences (expensive, can be slow for huge models) are each
+  # computed only once per upload instead of once per render* block that
+  # needs them (previously: 3x independent, uncached, untimed calls).
+  model_meta <- reactive({
+    req(fit_data()$ok, !isTRUE(fit_data()$compact))
+    model_meta_text(fit_data()$fit)
+  })
+
+  model_convergence <- reactive({
+    req(fit_data()$ok, !isTRUE(fit_data()$compact))
+    tryCatch(
+      R.utils::withTimeout(
+        model_convergence_text(fit_data()$fit),
+        timeout = COMPUTE_TIMEOUT_S, onTimeout = "error"
+      ),
+      error = function(e) list(timeout = TRUE)
+    )
   })
 
   # Helper: get family string from fit_data
@@ -1217,11 +1456,17 @@ server <- function(input, output, session) {
     t <- tr()
     l <- lang()
     if (!fd$ok) {
+      # The timeout error already contains complete, tailored guidance
+      # (use compact export / offline script) — the generic "did you
+      # upload a valid saveRDS() file" hint would be redundant/misleading
+      # there, since the file itself was fine; only show it for other
+      # (e.g. corrupt-file) errors.
+      is_timeout <- identical(fd$error, t$ul_timeout)
       div(class = "narr-box",
         style = sprintf("border-color:%s", LAB_COLORS$a1),
         tags$b(style = sprintf("color:%s", LAB_COLORS$a1), t$ul_err_b),
-        tags$br(), fd$error, tags$br(), tags$br(),
-        HTML(t$ul_err_hint)
+        tags$br(), fd$error,
+        if (!is_timeout) tagList(tags$br(), tags$br(), HTML(t$ul_err_hint))
       )
     } else if (isTRUE(fd$compact)) {
       fam_lbl <- switch(fd$family_str %||% "gaussian",
@@ -1237,7 +1482,7 @@ server <- function(input, output, session) {
         sprintf("%s: %s \u00b7 %d %s", t$diag_fam, fam_lbl, fd$n_obs, t$diag_nobs)
       )
     } else {
-      s <- model_summary_text(fd$fit)
+      s <- model_meta()
       div(
         style = sprintf("border-left:3px solid %s;padding:.5rem .8rem;background:%s;font-size:.68rem;color:%s",
                         LAB_COLORS$a3, LAB_COLORS$panel, LAB_COLORS$ink2),
@@ -1250,6 +1495,13 @@ server <- function(input, output, session) {
       )
     }
   })
+
+  # Helper: build a convergence summary list from compact-export fields
+  # (fd$rhat_max / fd$n_divergent), for exports that include them.
+  compact_convergence <- function(fd) {
+    list(rhat_max = fd$rhat_max, divs = fd$n_divergent,
+         rhat_ok = fd$rhat_max < 1.01, divs_ok = fd$n_divergent == 0)
+  }
 
   # ── Model diagnosis ────────────────────────────────────
   output$model_diagnosis <- renderUI({
@@ -1265,14 +1517,28 @@ server <- function(input, output, session) {
         poisson = t$fam_poisson, negbinomial = t$fam_negbinomial,
         Gamma = t$fam_gamma, lognormal = t$fam_lognormal, student = t$fam_student,
         beta = t$fam_beta, fd$family_str %||% "")
-      return(div(
-        div(style = sprintf("background:%s;padding:.75rem 1rem;font-size:.68rem;margin-bottom:.75rem", LAB_COLORS$panel),
-          div(style = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem",
-            div(lbl("diag_mode"),  tags$b(t$diag_compact)),
-            div(lbl("diag_fam"),   tags$b(fam_lbl)),
-            div(lbl("diag_nobs"),  tags$b(fd$n_obs))
+      meta_row <- div(style = sprintf("background:%s;padding:.75rem 1rem;font-size:.68rem;margin-bottom:.75rem", LAB_COLORS$panel),
+        div(style = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem",
+          div(lbl("diag_mode"),  tags$b(t$diag_compact)),
+          div(lbl("diag_fam"),   tags$b(fam_lbl)),
+          div(lbl("diag_nobs"),  tags$b(fd$n_obs))
+        )
+      )
+      # Exports since 2026-10-27 include rhat_max/n_divergent — show real
+      # badges when present, fall back to the old "not available" note
+      # for older exports that don't have these fields.
+      if (!is.null(fd$rhat_max) && !is.null(fd$n_divergent)) {
+        cv <- compact_convergence(fd)
+        return(div(meta_row,
+          div(style = "margin-bottom:.5rem",
+            convergence_badge(cv$rhat_ok,
+              if (cv$rhat_ok) t$cv_badge_rhat_ok else sprintf(t$cv_badge_rhat_fail, cv$rhat_max)),
+            convergence_badge(cv$divs_ok,
+              if (cv$divs_ok) t$cv_badge_divs_ok else sprintf(t$cv_badge_divs_fail, cv$divs))
           )
-        ),
+        ))
+      }
+      return(div(meta_row,
         div(class = "narr-box",
           style = sprintf("border-color:%s;font-size:.67rem", LAB_COLORS$ink2),
           t$diag_noconv
@@ -1280,34 +1546,45 @@ server <- function(input, output, session) {
       ))
     }
 
-    s   <- model_summary_text(fit_data()$fit)
+    s   <- model_meta()
+    cv  <- model_convergence()
     fam <- get_family_label(fit_data()$fit, l)
     iters_lbl <- if (l == "de") sprintf("%d \u00d7 %d Iterationen", s$chains, s$iters - s$warmup) else sprintf("%d \u00d7 %d iterations", s$chains, s$iters - s$warmup)
     outcome_lbl <- if (l == "de") "OUTCOME-VARIABLE" else "OUTCOME VARIABLE"
 
-    div(
-      div(style = sprintf("background:%s;padding:.75rem 1rem;font-size:.68rem;margin-bottom:.75rem", LAB_COLORS$panel),
-        div(style = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem",
-          div(tags$span(style = sprintf("color:%s;font-size:.58rem;display:block", LAB_COLORS$ink2), outcome_lbl),
-              tags$b(as.character(fit_data()$fit$formula$resp))),
-          div(lbl("diag_fam"),   tags$b(fam)),
-          div(lbl("diag_nobs"),  tags$b(s$n_obs)),
-          div(lbl("diag_chains"), tags$b(iters_lbl)),
-          div(lbl("diag_rhat"),
-              tags$b(style = sprintf("color:%s", if (s$rhat_ok) LAB_COLORS$a3 else LAB_COLORS$a1),
-                     sprintf("%.3f", s$rhat_max))),
-          div(lbl("diag_divs"),
-              tags$b(style = sprintf("color:%s", if (s$divs_ok) LAB_COLORS$a3 else LAB_COLORS$a1),
-                     s$divs))
+    meta_row2 <- div(style = sprintf("background:%s;padding:.75rem 1rem;font-size:.68rem;margin-bottom:.75rem", LAB_COLORS$panel),
+      div(style = "display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem",
+        div(tags$span(style = sprintf("color:%s;font-size:.58rem;display:block", LAB_COLORS$ink2), outcome_lbl),
+            tags$b(as.character(fit_data()$fit$formula$resp))),
+        div(lbl("diag_fam"),   tags$b(fam)),
+        div(lbl("diag_nobs"),  tags$b(s$n_obs)),
+        div(lbl("diag_chains"), tags$b(iters_lbl)),
+        if (!isTRUE(cv$timeout)) div(lbl("diag_rhat"),
+            tags$b(style = sprintf("color:%s", if (cv$rhat_ok) LAB_COLORS$a3 else LAB_COLORS$a1),
+                   sprintf("%.3f", cv$rhat_max))),
+        if (!isTRUE(cv$timeout)) div(lbl("diag_divs"),
+            tags$b(style = sprintf("color:%s", if (cv$divs_ok) LAB_COLORS$a3 else LAB_COLORS$a1),
+                   cv$divs))
+      )
+    )
+
+    if (isTRUE(cv$timeout)) {
+      return(div(meta_row2,
+        div(class = "narr-box", style = sprintf("border-color:%s", LAB_COLORS$a1),
+          tags$b(style = sprintf("color:%s", LAB_COLORS$a1), t$cv_timeout_b), HTML(t$cv_timeout)
         )
-      ),
+      ))
+    }
+
+    div(
+      meta_row2,
       div(style = "margin-bottom:.5rem",
-        convergence_badge(s$rhat_ok,
-          if (s$rhat_ok) t$cv_badge_rhat_ok
-          else sprintf(t$cv_badge_rhat_fail, s$rhat_max)),
-        convergence_badge(s$divs_ok,
-          if (s$divs_ok) t$cv_badge_divs_ok
-          else sprintf(t$cv_badge_divs_fail, s$divs))
+        convergence_badge(cv$rhat_ok,
+          if (cv$rhat_ok) t$cv_badge_rhat_ok
+          else sprintf(t$cv_badge_rhat_fail, cv$rhat_max)),
+        convergence_badge(cv$divs_ok,
+          if (cv$divs_ok) t$cv_badge_divs_ok
+          else sprintf(t$cv_badge_divs_fail, cv$divs))
       )
     )
   })
@@ -1316,12 +1593,22 @@ server <- function(input, output, session) {
     req(fit_data()$ok)
     t <- tr()
     if (isTRUE(fit_data()$compact)) {
-      return(div(class = "narr-box",
-        style = sprintf("border-color:%s;font-size:.67rem", LAB_COLORS$ink2),
-        t$cv_compact
-      ))
+      fd <- fit_data()
+      if (is.null(fd$rhat_max) || is.null(fd$n_divergent)) {
+        return(div(class = "narr-box",
+          style = sprintf("border-color:%s;font-size:.67rem", LAB_COLORS$ink2),
+          t$cv_compact
+        ))
+      }
+      s <- compact_convergence(fd)
+    } else {
+      s <- model_convergence()
+      if (isTRUE(s$timeout)) {
+        return(div(class = "narr-box", style = sprintf("border-color:%s", LAB_COLORS$a1),
+          tags$b(style = sprintf("color:%s", LAB_COLORS$a1), t$cv_timeout_b), HTML(t$cv_timeout)
+        ))
+      }
     }
-    s <- model_summary_text(fit_data()$fit)
     if (s$rhat_ok && s$divs_ok) {
       div(class = "narr-box", style = sprintf("border-color:%s", LAB_COLORS$a3),
         tags$b(style = sprintf("color:%s", LAB_COLORS$a3), t$cv_ok),
