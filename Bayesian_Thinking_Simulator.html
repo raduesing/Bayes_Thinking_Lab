@@ -140,7 +140,12 @@ p{font-size:.95rem;line-height:1.65;color:var(--ink2)}
 .sc-card{background:var(--card);border:2px solid var(--border);padding:1.2rem 1.1rem;cursor:pointer;transition:all .17s;position:relative;display:flex;flex-direction:column}
 .sc-card:hover{border-color:var(--border2);box-shadow:0 3px 14px var(--shadow)}
 .sc-card.selected{border-color:var(--prior);box-shadow:0 0 0 3px var(--prior-f)}
-.sc-card.used{opacity:.4;pointer-events:none}
+.sc-card.used{opacity:.55}
+.diff-chip-row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.9rem 0 1.3rem}
+.diff-chip-label{font-size:.78rem;color:var(--ink3);margin-right:.1rem}
+.diff-chip{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;padding:.32rem .75rem;border:1.5px solid var(--border2);background:var(--card);cursor:pointer;border-radius:999px;transition:all .15s;color:var(--ink2)}
+.diff-chip:hover{border-color:var(--border);box-shadow:0 2px 8px var(--shadow)}
+.diff-chip.selected{font-weight:600;color:var(--ink)}
 .sc-emoji{font-size:1.8rem;margin-bottom:.5rem;display:block}
 .sc-title{font-family:'Lora',serif;font-weight:600;font-size:.95rem;margin-bottom:.22rem}
 .sc-sub{font-size:.75rem;color:var(--ink3);font-family:'JetBrains Mono',monospace;margin-bottom:.45rem}
@@ -224,6 +229,7 @@ input.exp-input::placeholder{color:var(--border2);font-weight:400;font-size:.95r
 
 /* Reflect */
 #reflect-chart{background:var(--bg2);border:1px solid var(--border);padding:.5rem .4rem 0;margin:1rem 0}
+.density-caption{font-size:.72rem;color:var(--ink3);text-align:right;margin:.3rem 0 .9rem}
 .study-result-box{text-align:center;padding:1.2rem;background:var(--green-f);border:2px solid var(--green);margin:1rem 0}
 .sr-val{font-family:'JetBrains Mono',monospace;font-size:1.9rem;font-weight:500;color:var(--green)}
 .sr-label{font-size:.82rem;color:var(--ink2);margin-top:.25rem}
@@ -555,8 +561,10 @@ function htmlIntro(){
 <div style="padding:.85rem 1.1rem;background:var(--sigma-bg);border-left:3px solid var(--sigma-border);font-size:.84rem;line-height:1.65;color:var(--ink2);margin:1.4rem 0">
   <strong style="color:var(--post)">Worum geht es hier?</strong><br>
   Dieser Simulator zeigt das <em>Konzept</em> des Bayesianischen Denkens:
-  <strong>Vorwissen (<a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Der Prior p(θ) ist die Wahrscheinlichkeitsverteilung über Modellparameter θ, die unser Vorwissen vor Betrachtung der Daten ausdrückt." style="color:inherit">Prior</a>) + Daten → aktualisiertes Wissen (<a class="glo-link" href="Glossar.html#gl-posterior" target="_blank" title="Der Posterior p(θ|D) ist die Wahrscheinlichkeitsverteilung über die Modellparameter θ nach Betrachtung der Daten D." style="color:inherit">Posterior</a>)</strong> — das sogenannte <em>Updating</em>.
-  <span style="font-size:.79rem;color:var(--ink3);margin-top:.35rem;display:block">Das unterscheidet sich davon, wie Priors in echten Statistikmodellen (brms, Stan) eingesetzt werden — dort basieren sie auf Literatur, Skalenkenntnissen und Regularisierung, nicht auf persönlichen Einschätzungen. Hier geht es darum zu <em>erleben</em>, wie Vorwissen und Daten zusammenspielen.</span>
+  <strong>Vorwissen (<a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Der Prior p(θ) ist die Wahrscheinlichkeitsverteilung über Modellparameter θ, die unser Vorwissen vor Betrachtung der Daten ausdrückt." style="color:inherit">Prior</a>) + Daten → aktualisiertes Wissen (<a class="glo-link" href="Glossar.html#gl-posterior" target="_blank" title="Der Posterior p(θ|D) ist die Wahrscheinlichkeitsverteilung über die Modellparameter θ nach Betrachtung der Daten D." style="color:inherit">Posterior</a>)</strong> — das sogenannte <em>Updating</em>. Faustregel für die Breite deines Priors: <strong>sehr unsicher → breiter Prior</strong> (großes σ), <strong>sehr sicher → enger Prior</strong> (kleines σ).
+  <div style="margin-top:.65rem;padding:.65rem .85rem;background:var(--card);border:1.5px solid var(--sigma-border);border-radius:4px;font-size:.81rem;line-height:1.6">
+    <strong style="color:var(--sigma-border)">Wichtig:</strong> Hier wählst du den Prior aus persönlicher Einschätzung — das dient nur dem <em>spielerischen</em> Verständnis des Grundprinzips des Zusammenspiels von Prior und Daten um den Posterior zu formen, nicht um eine echte Modellierung zu simulieren. In echten Statistikmodellen (brms, Stan) basieren Priors dagegen <strong>immer</strong> auf Literatur, Skalenkenntnissen und Regularisierung statt auf Bauchgefühl — und müssen dort stets begründbar sein, auch ihre Breite: Ein breiter Prior braucht wenig Rechtfertigung (z.B. "keine Vorstudien bekannt"), ein enger Prior — oder einer, der schon eine Richtung vorgibt — um so mehr (z.B. "gut dokumentierter Effekt aus Metaanalyse X").
+  </div>
 </div>
 <div class="sec-label mt2">Schwierigkeitsgrad — bestimmt, wie du deinen Prior angibst</div>
 <div class="diff-cards">
@@ -603,22 +611,29 @@ function htmlScenario(){
   return`
 <h2>Szenario wählen</h2>
 <p class="phase-sub">Alle Szenarien basieren auf echten veröffentlichten Studien. Das Studienergebnis bleibt bis zur Reflexion verborgen.</p>
+<div class="diff-chip-row">
+  <span class="diff-chip-label">Schwierigkeit:</span>
+  ${Object.entries(DIFFICULTY).map(([k,d])=>`
+  <span class="diff-chip${S.difficulty===k?' selected':''}" style="border-color:${S.difficulty===k?d.color:'var(--border2)'};${S.difficulty===k?`background:${d.color}1a`:''}" onclick="selDiffScenario('${k}')">${d.emoji} ${d.label}</span>`).join('')}
+</div>
 <div class="scenarios">
   ${SCENARIOS.map(s=>{
     const isUsed=used.includes(s.id);
-    return`<div class="sc-card${isUsed?' used':''}" onclick="${isUsed?'':'selectSc(\''+s.id+'\')'}">
-      ${isUsed?'<div class="used-badge">✓ Gespielt</div>':''}
+    return`<div class="sc-card${isUsed?' used':''}" onclick="selectSc('${s.id}')">
+      ${isUsed?`<div class="used-badge">✓ Gespielt — klicke, um es mit „${DIFFICULTY[S.difficulty].label}" zu wiederholen</div>`:''}
       <span class="sc-emoji">${s.emoji}</span>
       <div class="sc-title">${s.title}</div>
       <div class="sc-sub">${s.sub}</div>
       <p class="sc-desc">${s.studyDesc}</p>
       <div class="sc-context">${s.studyContext}</div>
-      <button class="btn btn-outline" style="font-size:.77rem;padding:.38rem .85rem;align-self:flex-start" onclick="event.stopPropagation();selectSc('${s.id}')">Wählen →</button>
+      <button class="btn btn-outline" style="font-size:.77rem;padding:.38rem .85rem;align-self:flex-start" onclick="event.stopPropagation();selectSc('${s.id}')">${isUsed?'↻ Wiederholen':'Wählen →'}</button>
     </div>`
   }).join('')}
 </div>`;
 }
+function selDiffScenario(k){S.difficulty=k;render();renderProgress()}
 function selectSc(id){
+  S.history=S.history.filter(h=>h.scenarioId!==id); // beim Wiederholen: alten Eintrag entfernen, sonst No-Op
   S.scenarioId=id;
   const scenario=sc();
   S.priorMu=S.difficulty==='experte'?null:scenario.sliderDefault;
@@ -974,7 +989,7 @@ function drawPPCDensities(){
   const el=document.getElementById('ppc-density-wrap');if(!el)return;
   const s=sc();const SE=se();
   const ppSig=Math.sqrt(S.priorSig**2+SE**2);
-  const W=el.clientWidth-8,H=210,m={l:42,r:14,t:20,b:42};
+  const W=el.clientWidth-8,H=210,m={l:52,r:14,t:20,b:42};
   const iW=W-m.l-m.r,iH=H-m.t-m.b;
   d3.select(el).selectAll('svg').remove();
   const svg=d3.select(el).append('svg').attr('width',W).attr('height',H)
@@ -992,6 +1007,10 @@ function drawPPCDensities(){
   const ySc=d3.scaleLinear().domain([0,yMax]).range([iH,0]);
   const line=d3.line().x(d=>xSc(d.x)).y(d=>ySc(d.y)).curve(d3.curveBasis);
   const area=d3.area().x(d=>xSc(d.x)).y0(iH).y1(d=>ySc(d.y)).curve(d3.curveBasis);
+  // Y axis
+  svg.append('g').call(d3.axisLeft(ySc).ticks(4).tickFormat(d3.format('.3~g')).tickSize(-iW))
+    .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').attr('dx','-.25em')});
+  svg.append('text').attr('transform','rotate(-90)').attr('x',-iH/2).attr('y',-38).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').text('Dichte');
   // X axis
   svg.append('g').attr('transform',`translate(0,${iH})`)
     .call(d3.axisBottom(xSc).ticks(7).tickSize(-iH))
@@ -1043,6 +1062,7 @@ function htmlData(){
   <div class="leg-item"><div class="leg-dot" style="background:var(--post)"></div><span style="color:var(--post)">Posterior</span></div>
 </div>
 <div id="tug-wrap"><div class="tow-tt" id="tow-tt"></div></div>
+<div class="density-caption">y-Achse: <a class="glo-link" href="Glossar.html#gl-dichte" target="_blank" title="Die Wahrscheinlichkeitsdichte f(x) ist die Kurvenhöhe einer stetigen Verteilung an einer Stelle x — kein Wahrscheinlichkeitswert selbst, sondern ein Maß relativer Plausibilität. Eine echte Wahrscheinlichkeit ergibt sich erst als Fläche unter der Kurve." style="color:inherit">Dichte</a> — beim Hovern siehst du die Kurvenhöhe an diesem Punkt</div>
 <div class="wbar-wrap">
   <div class="wbar-label">Das Tauziehen — Gewichte der beiden Seiten</div>
   <div class="wbar"><div class="wb-p" id="wbp" style="width:50%">Prior</div><div class="wb-d" id="wbd" style="width:50%">Daten</div></div>
@@ -1074,7 +1094,7 @@ function bindData(){setTimeout(()=>drawTug(),80)}
 function drawTug(){
   const s=sc();const p=S.posterior;const SE=se();
   const con=document.getElementById('tug-wrap');if(!con)return;
-  const Wt=con.clientWidth-8,Ht=285,m={l:42,r:16,t:38,b:50},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
+  const Wt=con.clientWidth-8,Ht=285,m={l:52,r:16,t:38,b:50},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
   d3.select(con).selectAll('svg').remove();
   const svg=d3.select(con).append('svg').attr('width',Wt).attr('height',Ht)
     .append('g').attr('transform',`translate(${m.l},${m.t})`);
@@ -1085,7 +1105,9 @@ function drawTug(){
   const poPts=xs.map(x=>({x,y:normalPDF(x,p.mu,p.sigma)}));
   const yMax=Math.max(d3.max(prPts,d=>d.y),d3.max(lkPts,d=>d.y),d3.max(poPts,d=>d.y))*1.2;
   const ySc=d3.scaleLinear().domain([0,yMax]).range([H,0]);
-  [.25,.5,.75].forEach(f=>svg.append('line').attr('x1',0).attr('x2',W).attr('y1',ySc(yMax*f*.88)).attr('y2',ySc(yMax*f*.88)).attr('stroke','var(--border)').attr('stroke-width',.35));
+  svg.append('g').call(d3.axisLeft(ySc).ticks(4).tickFormat(d3.format('.3~g')).tickSize(-W))
+    .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').attr('dx','-.25em')});
+  svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',-38).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').text('Dichte');
   svg.append('g').attr('transform',`translate(0,${H})`)
     .call(d3.axisBottom(xSc).ticks(7).tickSize(-H))
     .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9.5px').attr('font-family','JetBrains Mono,monospace').attr('dy','1em')});
@@ -1275,7 +1297,7 @@ function bindReflect(){setTimeout(()=>drawReflectChart(),80)}
 function drawReflectChart(){
   const con=document.getElementById('reflect-chart');if(!con)return;
   const s=sc();const p=S.posterior;const SE=se();
-  const Wt=con.clientWidth-8,Ht=240,m={l:42,r:16,t:20,b:46},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
+  const Wt=con.clientWidth-8,Ht=240,m={l:52,r:16,t:20,b:46},W=Wt-m.l-m.r,H=Ht-m.t-m.b;
   d3.select(con).selectAll('svg').remove();
   const svg=d3.select(con).append('svg').attr('width',Wt).attr('height',Ht)
     .append('g').attr('transform',`translate(${m.l},${m.t})`);
@@ -1286,6 +1308,9 @@ function drawReflectChart(){
   const poP=xs.map(x=>({x,y:normalPDF(x,p.mu,p.sigma)}));
   const yM=Math.max(d3.max(pp,d=>d.y),d3.max(lp,d=>d.y),d3.max(poP,d=>d.y))*1.2;
   const ySc=d3.scaleLinear().domain([0,yM]).range([H,0]);
+  svg.append('g').call(d3.axisLeft(ySc).ticks(4).tickFormat(d3.format('.3~g')).tickSize(-W))
+    .call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').attr('dx','-.25em')});
+  svg.append('text').attr('transform','rotate(-90)').attr('x',-H/2).attr('y',-38).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','8.5px').attr('font-family','JetBrains Mono,monospace').text('Dichte');
   svg.append('g').attr('transform',`translate(0,${H})`).call(d3.axisBottom(xSc).ticks(7).tickSize(-H)).call(g=>{g.select('.domain').remove();g.selectAll('.tick line').attr('stroke','var(--border)').attr('stroke-dasharray','2,3').attr('opacity',.35);g.selectAll('.tick text').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').attr('dy','1em')});
   svg.append('text').attr('x',W/2).attr('y',H+38).attr('text-anchor','middle').attr('fill','var(--ink3)').attr('font-size','9px').attr('font-family','JetBrains Mono,monospace').text(s.unit);
   const ar=d3.area().x(d=>xSc(d.x)).y0(H).y1(d=>ySc(d.y)).curve(d3.curveBasis);
