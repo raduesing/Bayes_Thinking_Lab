@@ -1394,6 +1394,15 @@ function onCILoChange() {
 }
 
 // ── Slider → CI-Solver live update ────────────────────────
+// Modell-Skala-Quantile (loVal/hiVal, immer aus CUR.cdf) -> Response-Skala,
+// damit die Solver-Felder (ci-lo/ci-hi) bei aktivem GLM-Modus konsistent mit
+// ihrer Beschriftung bleiben (Wahrsch./OR/RR/E[Y] statt roher β-Werte, die
+// z.B. bei OR auch negativ sein könnten).
+function glmToResponse(v) {
+  if (!GLM_ACTIVE) return v;
+  if (GLM_PARAM === 'slope') return Math.exp(v);               // OR bzw. RR = exp(β)
+  return GLM_LINK === 'logit' ? 1/(1+Math.exp(-v)) : Math.exp(v); // P(Y=1) bzw. E[Y]
+}
 function reflectParamsToSolver() {
   const res = document.getElementById('solver-result');
   if (!res || !res.classList.contains('show')) return;
@@ -1402,18 +1411,21 @@ function reflectParamsToSolver() {
   try {
     if (!CUR.cdf) return;
     const hiVal = findQVal(q_hi);
+    const hiResp = glmToResponse(hiVal);
     const mn = effMean(PARAMS);
     const mnStr = (typeof mn==='number'&&isFinite(mn)) ? `  E[x] = ${fmtN(mn,3)}` : '';
     const isPosShift = POS_SHIFT_DISTS.includes(CUR.id);
+    const glmNote = GLM_ACTIVE ? `<br><span style="opacity:.5;font-size:.65em">↳ Modell-Skala: ${isPosShift ? fmtN(hiVal,3) : `[${fmtN(findQVal(q_lo),3)}, ${fmtN(hiVal,3)}]`}</span>` : '';
     if (isPosShift) {
       const lb = getPosLB();
-      document.getElementById('ci-hi').value = fmtN(hiVal,3);
-      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(lb,2)}</b> (lb), <b>${fmtN(hiVal,3)}</b>]${mnStr}`;
+      document.getElementById('ci-hi').value = fmtN(hiResp,3);
+      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(lb,2)}</b> (lb), <b>${fmtN(hiResp,3)}</b>]${GLM_ACTIVE ? '' : mnStr}${glmNote}`;
     } else {
       const loVal = findQVal(q_lo);
-      document.getElementById('ci-lo').value = fmtN(loVal,3);
-      document.getElementById('ci-hi').value = fmtN(hiVal,3);
-      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(loVal,3)}</b>, <b>${fmtN(hiVal,3)}</b>]${mnStr}`;
+      const loResp = glmToResponse(loVal);
+      document.getElementById('ci-lo').value = fmtN(loResp,3);
+      document.getElementById('ci-hi').value = fmtN(hiResp,3);
+      res.innerHTML = `<span style="opacity:.55;font-size:.7em">↔ Slider-Feinjustierung:</span><br>${pct}%-CrI = [<b>${fmtN(loResp,3)}</b>, <b>${fmtN(hiResp,3)}</b>]${GLM_ACTIVE ? '' : mnStr}${glmNote}`;
     }
   } catch(e) {}
 }
