@@ -310,6 +310,13 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 #glm-note{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a4);
           opacity:.75;line-height:1.6;display:none}
 #glm-note.show{display:block}
+#glm-incompat-note{
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--a1);
+  line-height:1.65;display:none;
+  background:rgba(232,97,74,.08);border-left:3px solid var(--a1);
+  padding:.5rem .65rem;margin-bottom:.55rem;
+}
+#glm-incompat-note.show{display:block}
 #glm-param-row{display:none;gap:.35rem;margin-bottom:.5rem}
 #glm-param-row.show{display:flex}
 .glm-param-btn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.2rem .55rem;
@@ -478,6 +485,7 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
         </select>
         <button class="tbtn" id="glm-help-btn" onclick="toggleGLMHelp()" style="border-color:var(--a1);color:var(--a1);display:none;margin-left:auto">ℹ GLM Mode Help</button>
       </div>
+      <div id="glm-incompat-note"></div>
       <div id="glm-param-row">
         <button class="glm-param-btn active" id="gpb-intercept" onclick="toggleGLMParam('intercept')">Intercept</button>
         <button class="glm-param-btn" id="gpb-slope" onclick="toggleGLMParam('slope')">Slope / β</button>
@@ -771,7 +779,7 @@ const DISTS = [
   {
     id:'exponential', name:'Exponential', brms:'exponential(λ)',
     cat:'Positive',
-    desc:'Monotonically decreasing, starts at 0. Defined on x≥0 — no shift possible. E[x]=1/λ. brms default for σ. λ=1: E[σ]=1, λ=0.5: E[σ]=2. Also for ν (degrees of freedom): λ=0.033 → E[ν]≈30. Solver: lower bound always 0, only upper bound relevant.',
+    desc:'Monotonically decreasing, starts at 0. Defined on x≥0 — no shift possible. E[x]=1/λ. brms default for σ. λ=1: E[σ]=1, λ=0.5: E[σ]=2. Also for ν (degrees of freedom): λ=0.033 → E[ν]≈30. Solver: lower bound always 0, only upper bound relevant.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients (more on Exponential as a likelihood: <a class="glo-link" href="Distribution_Lab.html#exponential" target="_blank">Distribution Lab</a>).',
     use:'σ (brms default), τ, ν',
     params:[{id:'lambda',label:'λ (rate)',min:0.01,max:5,step:0.001,val:1}],
     pdf:(x,p)=>(x<0?0:p.lambda*Math.exp(-p.lambda*x)),
@@ -783,7 +791,7 @@ const DISTS = [
   {
     id:'half_normal', name:'Half-Normal', brms:'normal(0, σ)  # lb=0 auto',
     cat:'Positive',
-    desc:'Normal(0,σ) reflected to x≥0. No shift — lower bound is always 0. E[x]≈0.8σ. Weakly informative for σ and τ. Solver: specify up to where 95% of mass should reach.',
+    desc:'Normal(0,σ) reflected to x≥0. No shift — lower bound is always 0. E[x]≈0.8σ. Weakly informative for σ and τ. Solver: specify up to where 95% of mass should reach.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients.',
     use:'σ, τ (Random-Effect SD)',
     params:[{id:'sig',label:'σ (scale)',min:0.1,max:20,step:0.1,val:1}],
     pdf:(x,p)=>(x<0?0:Math.sqrt(2/Math.PI)/p.sig*Math.exp(-.5*(x/p.sig)**2)),
@@ -795,7 +803,7 @@ const DISTS = [
   {
     id:'half_student', name:'Half-Student-t', brms:'student_t(ν, 0, σ)',
     cat:'Positive',
-    desc:'Student-t with x≥0 — no shift. Heavier tails than Half-Normal: large σ values are not fully excluded. ν controls tail weight (as in Student-t above), σ determined by solver.',
+    desc:'Student-t with x≥0 — no shift. Heavier tails than Half-Normal: large σ values are not fully excluded. ν controls tail weight (as in Student-t above), σ determined by solver.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients.',
     use:'σ, τ, prior allowing extreme SDs',
     params:[{id:'nu',label:'ν (df)',min:1,max:50,step:0.5,val:3},{id:'sig',label:'σ (scale)',min:0.1,max:20,step:0.1,val:2.5}],
     pdf:(x,p)=>(x<0?0:2*jStat.studentt.pdf(x/p.sig,p.nu)/p.sig),
@@ -808,7 +816,7 @@ const DISTS = [
   {
     id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
     cat:'Positive',
-    desc:'Cauchy with x≥0 — no shift, lower bound always 0. Extremely heavy tails: even very large σ values retain probability mass. Solver: only upper bound relevant.',
+    desc:'Cauchy with x≥0 — no shift, lower bound always 0. Extremely heavy tails: even very large σ values retain probability mass. Solver: only upper bound relevant.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients.',
     use:'Very vague σ/τ priors',
     params:[{id:'sig',label:'σ (scale)',min:0.1,max:20,step:0.1,val:1}],
     pdf:(x,p)=>(x<0?0:2/(Math.PI*p.sig*(1+(x/p.sig)**2))),
@@ -820,7 +828,7 @@ const DISTS = [
   {
     id:'gamma', name:'Gamma', brms:'gamma(α, β)',
     cat:'Positive',
-    desc:'Flexible prior for positive values. E[x]=α/β. α=1: Exponential. brms default for ν.',
+    desc:'Flexible prior for positive values. E[x]=α/β. α=1: Exponential. brms default for ν.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients (more on Gamma as a likelihood: <a class="glo-link" href="Distribution_Lab.html#gamma" target="_blank">Distribution Lab</a>).',
     use:'ν (Student-t), concentration parameters',
     params:[{id:'alpha',label:'α (shape)',min:0.01,max:20,step:0.01,val:2},{id:'beta',label:'β (rate)',min:0.01,max:20,step:0.01,val:0.1}],
     pdf:(x,p)=>(x<=0?0:jStat.gamma.pdf(x,p.alpha,1/p.beta)),
@@ -832,7 +840,7 @@ const DISTS = [
   {
     id:'lognormal', name:'Log-Normal', brms:'lognormal(μ, σ)',
     cat:'Positive',
-    desc:'Use: prior for strictly positive parameters, but also e.g. regression coefficients that must remain exclusively positive (e.g. <a class="glo-link" href="Referenzen.html#ref-mcelreath-2020" target="_blank" title="McElreath, R. (2020). Statistical Rethinking, 2nd ed., CRC Press.">McElreath</a> Ch. 4, p. 94 ff.).<br>log(X) ~ Normal(μ, σ), defined on x>0. μ and σ refer to the log scale. E[x]=exp(μ+σ²/2). Solver: both bounds must be >0.',
+    desc:'Use: prior for strictly positive parameters, but also e.g. regression coefficients that must remain exclusively positive (e.g. <a class="glo-link" href="Referenzen.html#ref-mcelreath-2020" target="_blank" title="McElreath, R. (2020). Statistical Rethinking, 2nd ed., CRC Press.">McElreath</a> Ch. 4, p. 94 ff.).<br>log(X) ~ Normal(μ, σ), defined on x>0. μ and σ refer to the log scale. E[x]=exp(μ+σ²/2). Solver: both bounds must be >0.<br><br>⚠ No link to the response scale — not suitable for Intercept/Slope coefficients of a <em>standard</em> GLM (logit/log), since there the linear predictor itself is unbounded, not merely positive (more on Log-Normal: <a class="glo-link" href="Distribution_Lab.html#lognormal" target="_blank">Distribution Lab</a>).',
     use:'Strictly positive parameters, regression coefficients that must remain exclusively positive',
     params:[{id:'mu',label:'μ (log-location)',min:-5,max:5,step:0.1,val:0},{id:'sig',label:'σ (log-scale)',min:0.05,max:3,step:0.05,val:0.5}],
     pdf:(x,p)=>(x<=0?0:jStat.lognormal.pdf(x,p.mu,p.sig)),
@@ -845,7 +853,7 @@ const DISTS = [
   {
     id:'beta', name:'Beta', brms:'beta(α, β)',
     cat:'[0,1]',
-    desc:'Defined on [0,1]. For probabilities, proportions, zi/zoi/coi in brms. α=β=1: Uniform.',
+    desc:'Defined on [0,1]. For probabilities, proportions, zi/zoi/coi in brms. α=β=1: Uniform.<br><br>⚠ Only holds <em>without</em> its own predictors for this parameter (no distributional model) — it then lives directly on [0,1], with no logit transform at all. With predictors (e.g. <code>zi ~ x</code>), it becomes a logistic regression — then a Normal prior on the logit scale for Intercept/Slope, not a Beta prior directly on the proportion. More: <a class="glo-link" href="Distribution_Lab.html#beta" target="_blank">Distribution Lab — Beta</a>.',
     use:'zi, zoi, coi, phi (proportions)',
     params:[{id:'alpha',label:'α (shape 1)',min:0.1,max:20,step:0.1,val:1},{id:'beta_',label:'β (shape 2)',min:0.1,max:20,step:0.1,val:1}],
     pdf:(x,p)=>(x<0||x>1?0:jStat.beta.pdf(x,p.alpha,p.beta_)),
@@ -858,7 +866,7 @@ const DISTS = [
   {
     id:'lkj', name:'LKJ', brms:'lkj(η)',
     cat:'[-1,1]',
-    desc:'Prior for correlation matrices in random slope models. η=1: Uniform. η>1: concentrated around 0 (ρ≈0 preferred).',
+    desc:'Prior for correlation matrices in random slope models. η=1: Uniform. η>1: concentrated around 0 (ρ≈0 preferred).<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients.',
     use:'cor (Random-Slope correlations)',
     params:[{id:'eta',label:'η (concentration)',min:0.5,max:20,step:0.25,val:2}],
     pdf:(x,p)=>{if(x<=-1||x>=1)return 0;const B=jStat.betafn(p.eta,p.eta);return Math.pow(1-x*x,p.eta-1)/(2*(2*p.eta-1)*B||1);},
@@ -998,6 +1006,7 @@ function selectDist(id) {
   });
   buildParams();
   updateSolverHint();
+  checkGLMDistCompat();
   autoRange();
 }
 
@@ -1592,6 +1601,29 @@ function showToast(msg) {
 }
 
 // ── GLM Mode ───────────────────────────────────────────────
+// GLM mode assumes the chosen distribution describes a real Intercept/Slope
+// coefficient on the *unbounded* model scale (logit/log) — that only holds
+// for cat:'Unbounded' (Normal, Student-t, Skewed Normal, Cauchy). Every
+// other category represents a parameter with no link to the response scale
+// at all (sd/sigma/nu, zi/zoi/coi/phi without their own predictors,
+// correlations) — the GLM back-transform (exp/invlogit) would produce
+// implausible or meaningless values there (see also Distribution Lab,
+// Beta card, "As Prior" section).
+const GLM_INCOMPAT_MSG = {
+  'Positive': dist => `<b>${dist.name}</b> is typically used for <b>${dist.use}</b> — positive parameters such as random-effect SDs or dispersion. These have no link to the response scale; the GLM back-transform (exp/invlogit) is meaningless here.`,
+  '[0,1]': dist => `<b>${dist.name}</b> is typically used for <b>${dist.use}</b> — but only <em>without</em> its own predictors for this parameter (no distributional model). Then it already lives directly on [0,1], with no logit transform at all. Only <em>with</em> predictors (e.g. <code>zi ~ x</code>) does it become a logistic regression — then you need a Normal prior on the logit scale for Intercept/Slope, not a Beta prior directly on the proportion. Details: <a class="glo-link" href="Distribution_Lab.html#beta" target="_blank" style="color:inherit">Distribution Lab — Beta</a>.`,
+  '[-1,1]': dist => `<b>${dist.name}</b> is typically used for <b>${dist.use}</b> — correlation parameters with no link to the response scale. GLM mode doesn't apply here.`
+};
+function checkGLMDistCompat() {
+  const el = document.getElementById('glm-incompat-note');
+  if (!el) return;
+  if (GLM_ACTIVE && CUR.cat !== 'Unbounded' && GLM_INCOMPAT_MSG[CUR.cat]) {
+    el.innerHTML = `⚠ <b>Likely mismatched combination:</b> ${GLM_INCOMPAT_MSG[CUR.cat](CUR)}`;
+    el.classList.add('show');
+  } else {
+    el.classList.remove('show');
+  }
+}
 function toggleGLM() {
   GLM_ACTIVE = !GLM_ACTIVE;
   document.getElementById('glm-toggle-btn').classList.toggle('active', GLM_ACTIVE);
@@ -1601,6 +1633,7 @@ function toggleGLM() {
   document.getElementById('glm-help-btn').style.display = GLM_ACTIVE ? '' : 'none';
   if (!GLM_ACTIVE && glmHelpOpen) toggleGLMHelp();
   updateGLMInputs();
+  checkGLMDistCompat();
   drawPlot();
 }
 
@@ -1720,13 +1753,24 @@ function toggleLogX() {
   drawResponsePanel();
 }
 
-// 1-2-5 per decade — standard tick pattern for logarithmic axes (as in forest plots)
-function log125Ticks(lo, hi) {
-  const ticks = [];
+// 1-2-5 per decade — standard tick pattern for logarithmic axes (as in forest plots).
+// For very wide spans (e.g. Student-t/Cauchy with low ν or large σ in GLM mode: the OR/RR
+// range can then cover many decades) the full 1-2-5 pattern would produce far more ticks
+// than fit legibly on the axis — labels would overlap. So the pattern is adaptively thinned
+// against maxTicks: first from 1-2-5 down to powers of ten only, then by skipping decades
+// (every 2nd, 3rd, … power of ten).
+function log125Ticks(lo, hi, maxTicks=10) {
   const kMin = Math.floor(Math.log10(lo));
   const kMax = Math.ceil(Math.log10(hi));
-  for (let k = kMin; k <= kMax; k++) {
-    [1,2,5].forEach(m => {
+  const nDecades = kMax - kMin + 1;
+  let mults = [1,2,5], decStep = 1;
+  if (nDecades * 3 > maxTicks) {
+    mults = [1];
+    decStep = Math.max(1, Math.ceil(nDecades / maxTicks));
+  }
+  const ticks = [];
+  for (let k = kMin; k <= kMax; k += decStep) {
+    mults.forEach(m => {
       const v = m * Math.pow(10, k);
       if (v >= lo*0.999 && v <= hi*1.001) ticks.push(v);
     });
@@ -1820,7 +1864,7 @@ function drawResponsePanel() {
 
   const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
   const xAxis = d3.axisBottom(xSc).tickFormat(xFmt).tickSize(-Hp);
-  if (useLogX) xAxis.tickValues(log125Ticks(xDomain[0], xDomain[1])); else xAxis.ticks(5);
+  if (useLogX) xAxis.tickValues(log125Ticks(xDomain[0], xDomain[1], Math.max(4, Math.floor(Wp/65)))); else xAxis.ticks(5);
   g.append('g').attr('transform',`translate(0,${Hp})`)
    .call(xAxis)
    .call(gr=>{gr.select('.domain').remove();
