@@ -175,6 +175,23 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .link-viz-wrap{position:relative}
 #link-connectors{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 
+/* RECHENBEISPIEL / TABELLE — konkrete Zahlen zur Linkfunktion oben, live aus den
+   aktuell gefitteten Koeffizienten berechnet (siehe renderCalcExample()). Die
+   Farbpunkte vor x=0/x=1 sind bewusst dieselben wie Punkt 3/4 im Link-Plot oben
+   (sampleX=[-2,-1,0,1,2], linkPtColors()), damit Tabelle und Visualisierung
+   erkennbar zusammengehören statt zwei getrennte Darstellungen zu bleiben. */
+.calc-example-box{background:var(--paper);border:1px solid var(--border);border-top:none;padding:1rem;font-family:'DM Mono',monospace;font-size:.75rem;line-height:1.7}
+.calc-table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.75rem}
+.calc-table th,.calc-table td{border:1px solid var(--grid);padding:.4rem .65rem;text-align:left}
+.calc-table th{background:var(--panel);color:var(--ink);font-weight:600}
+.calc-table td{color:var(--ink2)}
+.calc-table tr:nth-child(even){background:color-mix(in srgb,var(--panel) 40%,transparent)}
+.calc-highlight{color:var(--a3);font-weight:600}
+.calc-step{background:var(--panel);border-left:3px solid var(--a3);padding:.5rem .75rem;margin-top:.5rem;color:var(--ink2)}
+.calc-step b{color:var(--ink)}
+.calc-ptdot{display:inline-flex;align-items:center;justify-content:center;width:1.15rem;height:1.15rem;
+  border-radius:50%;font-size:.6rem;font-weight:700;color:#18130e;margin-right:.4rem;flex-shrink:0}
+
 /* LINK TO GLM */
 .glm-link-box{background:var(--panel);border:1.5px solid var(--a3);
   padding:.65rem 1rem;font-family:'DM Mono',monospace;font-size:.75rem;
@@ -451,6 +468,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     </div>
     <canvas id="c-link-right" height="130" style="display:block;width:100%"></canvas>
   </div>
+</div>
+
+<!-- RECHENBEISPIEL / TABELLE -->
+<div class="sec-hdr">
+  <span class="sec-hdr-badge c3">Beispielrechnung</span>
+  Effekt-Interpretation mit konkreten Zahlen
+</div>
+<div class="calc-example-box" id="calc-example-area">
+  <!-- Dynamisch per JS befüllt, siehe renderCalcExample() -->
 </div>
 
 <!-- LINK TO GLM TOOLS -->
@@ -862,6 +888,7 @@ function drawAll(){
   drawResid(cachedLM, cachedGLM);
   updateStats(cachedLM, cachedGLM);
   drawLinkFn();
+  renderCalcExample();
 }
 
 function drawLinkFn(){
@@ -1018,6 +1045,130 @@ function drawLinkFn(){
   }
 
   drawLinkConnectors(ptColors);
+}
+
+// Konkrete Zahlen zur Linkfunktion oben: x=0 und x=1 entsprechen exakt den
+// Punkten 3 und 4 aus sampleX=[-2,-1,0,1,2] im Link-Plot (linkPtColors()[2]/[3],
+// vgl. drawPtNum) — der Farbpunkt+Nummer vor jeder Zeile stellt die Verbindung
+// zur Visualisierung oben her, statt zwei unverbundene Darstellungen zu zeigen.
+function renderCalcExample(){
+  const el=document.getElementById('calc-example-area');
+  if(!el||!cachedGLM) return;
+
+  const a=cachedGLM.a, b=cachedGLM.b, expB=Math.exp(b);
+  const ptColors=linkPtColors();
+  const dot=i=>`<span class="calc-ptdot" style="background:${ptColors[i]}">${i+1}</span>`;
+
+  if(currentScen===0){
+    const eta0=a, odds0=Math.exp(eta0), p0=1/(1+Math.exp(-eta0));
+    const eta1=a+b, odds1=Math.exp(eta1), p1=1/(1+Math.exp(-eta1));
+    const oddsVerb=b>=0?'steigt':'sinkt';
+    const pVerb=p1>=p0?'steigt':'sinkt';
+
+    el.innerHTML=`
+      <div><b>Logit-Link (Logistische Regression für binäre Daten)</b></div>
+      <div style="margin-top:.3rem">
+        Gefittetes Modell: <code>logit(p) = ln(p / (1 - p)) = ${a.toFixed(2)} + ${b.toFixed(2)} · x</code><br>
+        Koeffizienten: Intercept <span class="calc-highlight">α = ${a.toFixed(2)}</span>, Slope
+        <span class="calc-highlight">β = ${b.toFixed(2)}</span> &nbsp;→&nbsp;
+        Odds Ratio <span class="calc-highlight">exp(β) = ${expB.toFixed(2)}</span>
+      </div>
+
+      <table class="calc-table">
+        <thead>
+          <tr>
+            <th>Prädiktorwert (x)</th>
+            <th>Linearer Prädiktor η = α + β·x</th>
+            <th>Odds = exp(η) = p / (1 - p)</th>
+            <th>Response p = 1 / (1 + exp(-η))</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${dot(2)}<b>x = 0</b> (Baseline)</td>
+            <td>η₀ = ${a.toFixed(2)} + ${b.toFixed(2)}·(0) = <b>${eta0.toFixed(2)}</b></td>
+            <td>Odds₀ = exp(${eta0.toFixed(2)}) = <b>${odds0.toFixed(3)}</b></td>
+            <td>p₀ = <b>${(p0*100).toFixed(1)}%</b> (${p0.toFixed(3)})</td>
+          </tr>
+          <tr>
+            <td>${dot(3)}<b>x = 1</b> (+1 SD Prädiktor)</td>
+            <td>η₁ = ${a.toFixed(2)} + ${b.toFixed(2)}·(1) = <b>${eta1.toFixed(2)}</b></td>
+            <td>Odds₁ = exp(${eta1.toFixed(2)}) = <b>${odds1.toFixed(3)}</b></td>
+            <td>p₁ = <b>${(p1*100).toFixed(1)}%</b> (${p1.toFixed(3)})</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="calc-step">
+        <b>Schritt für Schritt:</b><br>
+        1. <b>Link-Skala (additiv):</b> Erhöhung von x um 1 Einheit erhöht η um
+           β = <b>${b>=0?'+':''}${b.toFixed(2)}</b>.<br>
+        2. <b>Odds-Skala (multiplikativ):</b> Die Odds werden mit dem Faktor
+           <b>exp(β) = exp(${b.toFixed(2)}) = ${expB.toFixed(2)}</b> multipliziert (Odds Ratio) —
+           die Chance zu genesen ${oddsVerb} um den Faktor <b>${expB.toFixed(2)}</b>.<br>
+        3. <b>Response-Skala (Wahrscheinlichkeit):</b> p ${pVerb} von
+           <b>${(p0*100).toFixed(1)}%</b> auf <b>${(p1*100).toFixed(1)}%</b>. Wegen der S-Kurve
+           hängt der absolute Zuwachs vom Startwert p₀ ab — derselbe Odds-Faktor bewirkt in der
+           Mitte der S-Kurve eine größere Änderung von p als an ihren Enden.
+      </div>
+    `;
+  } else if(currentScen===1||currentScen===2){
+    const familyName=currentScen===1?'Poisson (Zähldaten)':'Gamma (z.B. Reaktionszeiten)';
+    const sym=currentScen===1?'λ':'μ';
+    const respLabel=currentScen===1?'erwartete Anzahl Body Checkings':'erwartete Reaktionszeit (ms)';
+
+    const eta0=a, mu0=Math.exp(eta0);
+    const eta1=a+b, mu1=Math.exp(eta1);
+    const pctChange=(expB-1)*100;
+    const pctVerb=pctChange>=0?'steigt':'sinkt';
+    const pctVerbInf=pctChange>=0?'steigen':'sinken';
+
+    el.innerHTML=`
+      <div><b>Log-Link (${familyName})</b></div>
+      <div style="margin-top:.3rem">
+        Gefittetes Modell: <code>ln(${sym}) = ${a.toFixed(2)} + ${b.toFixed(2)} · x</code><br>
+        Koeffizienten: Intercept <span class="calc-highlight">α = ${a.toFixed(2)}</span>, Slope
+        <span class="calc-highlight">β = ${b.toFixed(2)}</span> &nbsp;→&nbsp;
+        Multiplikator <span class="calc-highlight">exp(β) = ${expB.toFixed(2)}</span>
+      </div>
+
+      <table class="calc-table">
+        <thead>
+          <tr>
+            <th>Prädiktorwert (x)</th>
+            <th>Linearer Prädiktor η = α + β·x</th>
+            <th>Response ${sym} = exp(η)</th>
+            <th>Inhaltliche Interpretation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${dot(2)}<b>x = 0</b> (Baseline)</td>
+            <td>η₀ = ${a.toFixed(2)} + ${b.toFixed(2)}·(0) = <b>${eta0.toFixed(2)}</b></td>
+            <td>${sym}₀ = exp(${eta0.toFixed(2)}) = <b>${mu0.toFixed(2)}</b></td>
+            <td>${respLabel} bei durchschnittlichem Prädiktor (x = 0)</td>
+          </tr>
+          <tr>
+            <td>${dot(3)}<b>x = 1</b> (+1 SD Prädiktor)</td>
+            <td>η₁ = ${a.toFixed(2)} + ${b.toFixed(2)}·(1) = <b>${eta1.toFixed(2)}</b></td>
+            <td>${sym}₁ = exp(${eta1.toFixed(2)}) = <b>${mu1.toFixed(2)}</b></td>
+            <td>${respLabel} ${pctVerb} um den Faktor exp(β) = <b>${expB.toFixed(2)}</b></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="calc-step">
+        <b>Schritt für Schritt:</b><br>
+        1. <b>Log-Skala (additiv):</b> Erhöhung von x um 1 Einheit erhöht ln(${sym}) um
+           β = <b>${b>=0?'+':''}${b.toFixed(2)}</b>.<br>
+        2. <b>Response-Skala (multiplikativ):</b> Der Erwartungswert ${sym} wird mit
+           <b>exp(β) = exp(${b.toFixed(2)}) = ${expB.toFixed(2)}</b> multipliziert.<br>
+        3. <b>Konkret:</b> ${mu0.toFixed(2)} · ${expB.toFixed(2)} = <b>${mu1.toFixed(2)}</b>.
+           Jede Erhöhung von x um 1 SD lässt den Erwartungswert um ca.
+           <b>${Math.abs(pctChange).toFixed(1)}%</b> ${pctVerbInf}.
+      </div>
+    `;
+  }
 }
 
 // Draws the lines linking each sample point's position in the left (eta) panel
