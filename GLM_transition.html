@@ -53,6 +53,21 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
   margin-bottom:.5rem;display:flex;align-items:center;gap:.35rem}
 .scen-tabs-label .arrow{color:var(--a3);font-weight:600}
 .scen-tabs{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:.85rem}
+
+/* Sticky scenario bar — stays visible while scrolling through a scenario's
+   content, since switching scenarios often means jumping back up otherwise.
+   Toggleable (btn-scen-pin/toggleScenSticky): some users will prefer the
+   vertical space back once they've settled on a scenario. */
+.scen-sticky-wrap{position:sticky;top:0;z-index:40;background:var(--bg);
+  padding-bottom:.5rem;border-bottom:2px solid var(--border)}
+.scen-sticky-wrap.unpinned{position:static;padding-bottom:0;border-bottom:none}
+.icon-btn{font-family:'DM Mono',monospace;font-size:.7rem;padding:.2rem .55rem;
+  border:1.5px solid var(--border);background:var(--panel);cursor:pointer;
+  color:var(--ink2);display:flex;align-items:center;gap:.3rem;transition:all .15s;
+  white-space:nowrap;margin-left:auto}
+.icon-btn:hover{border-color:var(--a3);color:var(--a3)}
+.icon-btn.ib-on{border-color:var(--a3);color:var(--a3);
+  background:color-mix(in srgb,var(--a3) 14%,var(--panel))}
 .sctab{flex:1 1 240px;font-family:'DM Mono',monospace;padding:.6rem .9rem;
   background:var(--panel);border:1.5px solid var(--border);cursor:pointer;
   text-align:left;color:var(--ink2);transition:all .15s;position:relative;
@@ -286,7 +301,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 </div>
 
 <!-- SCENARIO TABS -->
-<div class="scen-tabs-label">Szenarien – Bitte ein Szenario wählen: <span class="arrow">↓</span></div>
+<div class="scen-sticky-wrap" id="scen-sticky-wrap">
+<div class="scen-tabs-label">Szenarien – Bitte ein Szenario wählen: <span class="arrow">↓</span>
+  <button class="icon-btn ib-on" id="btn-scen-pin" onclick="toggleScenSticky()"
+    title="Szenario-Leiste beim Scrollen oben fixiert — Klick zum Lösen">📌 Fixiert</button>
+</div>
 <div class="scen-tabs">
   <button class="sctab sel" id="sctab-0" onclick="setScen(0)">
     <span class="sct-n">1</span>
@@ -312,6 +331,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     </span>
     <span class="sct-warn">⚠</span>
   </button>
+</div>
 </div>
 
 <!-- NARRATIVE -->
@@ -573,7 +593,7 @@ function toggleTheme(){
   document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
   document.getElementById('btn-theme').textContent=DARK?'☀ Light':'🌙 Dark';
   localStorage.setItem('btl-theme',DARK?'dark':'light');
-  drawAll();
+  redrawAll();
 }
 function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function col(n){return cv('--'+n);}
@@ -889,6 +909,17 @@ function drawAll(){
   else if(currentScen===1) cachedGLM=fitPoisson(xs,ys);
   else                     cachedGLM=fitGamma(xs,ys);
 
+  redrawAll();
+}
+
+// Re-renders the canvases/tables from the already-cached data+fit, without
+// drawing a new random sample. Used for anything that changes how the page
+// LOOKS (window resize/zoom, theme toggle) but not what data is shown — call
+// drawAll() instead for anything that should actually resample (new scenario,
+// new n, "Neue Daten").
+function redrawAll(){
+  if(!cachedData) return; // resize can fire before the first drawAll()
+  const {xs, ys} = cachedData;
   const {yr:sharedYr, yStep:sharedYStep}=computeSharedYRange(ys, cachedLM);
   drawLM(xs, ys, cachedLM, sharedYr, sharedYStep);
   drawGLM(xs, ys, cachedLM, cachedGLM, sharedYr, sharedYStep);
@@ -1580,6 +1611,17 @@ function setScen(i){
   drawAll();
 }
 
+function toggleScenSticky(){
+  const wrap=document.getElementById('scen-sticky-wrap');
+  const btn=document.getElementById('btn-scen-pin');
+  const pinned=wrap.classList.toggle('unpinned')===false; // true once 'unpinned' is removed again
+  btn.classList.toggle('ib-on',pinned);
+  btn.innerHTML=pinned?'📌 Fixiert':'📌 Nicht fixiert';
+  btn.title=pinned
+    ? 'Szenario-Leiste beim Scrollen oben fixiert — Klick zum Lösen'
+    : 'Szenario-Leiste scrollt normal mit — Klick zum Fixieren';
+}
+
 // ── Controls ───────────────────────────────────────────
 function updCtrl(){
   N=+document.getElementById('sl-n').value;
@@ -1587,7 +1629,7 @@ function updCtrl(){
 }
 
 // ── Init ──────────────────────────────────────────────
-window.addEventListener('resize',()=>{cachePanelWidth();drawAll();});
+window.addEventListener('resize',()=>{cachePanelWidth();redrawAll();});
 document.addEventListener('DOMContentLoaded',()=>{
   cachePanelWidth();
   setScen(0);
