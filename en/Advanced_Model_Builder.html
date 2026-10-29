@@ -714,9 +714,9 @@ conditional_effects(fit, effects = "edu")`
       '<b>Three ways that actually work</b> (none of them need stanvars): (1) write the number directly into the formula — <code>me(x, 0.32)</code>; (2) add sd_x as its own column to data (possibly recycled from a constant value) — <code>dat$sd_x &lt;- 0.32</code>; (3) pass it via <code>data2 = list(sd_x = sd_x)</code> in the brm() call, without touching the main data. A REAL column (a vector the same length as x, not recycled) is needed when the measurement error varies between observations — e.g. a different number of repeated measurements per person.',
       '<b>Where does sd_x come from, substantively?</b> Ideally from the literature on the measurement instrument — see the separate card below for the concrete calculation from a known reliability (e.g. Cronbach\'s α or test-retest reliability).',
       '<b>Alternative: mi() with a known sd.</b> me() still works, but is soft deprecated in current brms versions in favor of the more general mi() term: <code>bf(x | mi(sd_x) ~ 1)</code> takes over the same mechanism — and automatically covers genuine missing values in x too, if present. This isn\'t a coincidence: a missing value is, in the limit, just a value with infinite measurement error (no information at all about the true value) — see the "Missing data in brms — mi()" building block below.',
-      '<b>How to read the result:</b> the corrected effect appears as <code>bsp_mex1</code> — prefix "bsp" (b special) as with mo(), because me() is likewise a "special" term rather than an ordinary linear coefficient (<code>b_...</code>). This bsp_ value is already the attenuation-corrected effect — it tends to be larger than the coefficient a naive model without me() would give for the same x. With <code>save_pars(latent = TRUE)</code> you additionally get an estimated true value per observation in the posterior draws — usually only relevant for diagnostic purposes, not for interpreting the effect itself.'
+      '<b>How to read the result:</b> prefix "bsp" (b special) as with mo(), because me() is likewise a "special" term rather than an ordinary linear coefficient (<code>b_...</code>) — <b>but the rest of the name isn\'t just the predictor:</b> brms concatenates ALL arguments of the me() call, including the sd argument. <code>me(x1, 0.3)</code> becomes <code>bsp_mex10.3</code>, <code>me(x_obs, sd_x)</code> becomes <code>bsp_mex_obssd_x</code> — <b>tested with brms 2.21.0</b>. This bsp_ value is already the attenuation-corrected effect — it tends to be larger than the coefficient a naive model without me() would give for the same x. With <code>save_pars(latent = TRUE)</code> you additionally get an estimated true value per observation in the posterior draws — usually only relevant for diagnostic purposes, not for interpreting the effect itself.'
     ],
-    syntax: 'bf(y ~ me(x, sd_x))   # sd_x: number directly in the formula, OR a column in data, OR data2 = list(sd_x = ...)\n\n# Alternative (more current): via mi() with a known sd\nbf(x | mi(sd_x) ~ 1)   # covers the same mechanism + also catches genuine NAs in x automatically',
+    syntax: 'bf(y ~ me(x, sd_x))   # sd_x: number directly in the formula, OR a column in data, OR data2 = list(sd_x = ...)\n\n# Alternative (more current): via mi() with a known sd\nbf(y ~ mi(x)) + bf(x | mi(sd_x) ~ 1) + set_rescor(FALSE)   # covers the same mechanism + also catches genuine NAs in x automatically',
     apply: () => {
       ensureCap('cap-me');
       const r = RESPONSES[0];
@@ -730,8 +730,17 @@ sd_x <- 0.5
 x_obs <- x_true + rnorm(N, sd = sd_x)
 y <- 1 + 0.8*x_true + rnorm(N, sd = 0.5)
 dat <- data.frame(y, x_obs, sd_x = sd_x)
-fit <- brm(y ~ me(x_obs, sd_x), data = dat, chains = 4, cores = 4, iter = 2000, warmup = 1000, seed = 1)
-summary(fit)   # bsp_mex_obs should be closer to 0.8 than a naive lm(y ~ x_obs) estimate`
+
+# Approach 1: me(x_obs, sd_x) -- the classic way
+fit_me <- brm(y ~ me(x_obs, sd_x), data = dat,
+              chains = 4, cores = 4, iter = 2000, warmup = 1000, seed = 1)
+summary(fit_me)   # bsp_mex_obssd_x should be closer to 0.8 than a naive lm(y ~ x_obs) estimate
+
+# Approach 2 (more current): via mi() with a known sd -- covers the same mechanism,
+# tested: both approaches give nearly the same estimate on the same data
+fit_mi <- brm(bf(y ~ mi(x_obs)) + bf(x_obs | mi(sd_x) ~ 1) + set_rescor(FALSE), data = dat,
+              chains = 4, cores = 4, iter = 2000, warmup = 1000, seed = 1)
+summary(fit_mi)   # bsp_y_mix_obs (shown as "y_mix_obs" in summary()) also close to 0.8`
   },
   me_reliability: {
     title: 'Computing sd_x from reliability (SEM)',
