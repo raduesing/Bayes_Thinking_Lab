@@ -308,7 +308,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     <span class="sct-n">3</span>
     <span class="sct-txt">
       <span class="sct-title">Gamma</span>
-      <span class="sct-sub">Reaktionszeit Stroop-Test (ms)</span>
+      <span class="sct-sub">Reaktionszeit Stroop-Test (s)</span>
     </span>
     <span class="sct-warn">⚠</span>
   </button>
@@ -639,14 +639,14 @@ const SCENARIOS = [
         +'</div>'},
   },
   {
-    id:2, name:'Reaktionszeit Stroop-Test (ms)',
+    id:2, name:'Reaktionszeit Stroop-Test (s)',
     glmName:'Gamma-Modell (Log-Link)',
     lmProblem:'LM-Residuen zeigen starke Rechtsschiefe — Normalverteilung passt strukturell nicht.',
     glmSolution:'<b>Gamma + Log-Link:</b> Gamma ist per Definition positiv und modelliert Rechtsschiefe direkt; Log-Link stellt Positivität sicher.',
     residLabel:'Rechtsschiefe Residuen beim LM — Gamma-Residuen deutlich symmetrischer',
     narr:{tag:'c5',
       text:'<div class="narr-rows">'
-        +'<div class="narr-row"><div class="narr-row-lbl">Beispiel</div><div class="narr-row-body">Wie lange (ms) benötigt eine Person, um die Farbe eines körperbezogenen Wortes zu benennen (emotionaler Stroop-Test)?</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">Beispiel</div><div class="narr-row-body">Wie lange (in Sekunden) benötigt eine Person, um die Farbe eines körperbezogenen Wortes zu benennen (emotionaler Stroop-Test)?</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">Prädiktor</div><div class="narr-row-body">Angstniveau (STAI — State-Trait Anxiety Inventory, State-Skala), <b>z-transformiert</b> (x-Achse: SD-Einheiten). Höheres Angstniveau → längere Reaktionszeit erwartet.</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">Das Problem</div><div class="narr-row-body">Reaktionszeiten sind immer positiv und typisch rechtsschief. Das LM kann negative Vorhersagen produzieren und die Residuen sind systematisch nicht symmetrisch — die <a class="glo-link" href="Glossar.html#gl-normalverteilungsannahme" target="_blank" title="Die formale Annahme der linearen OLS-Regression betrifft die wahren, nicht beobachtbaren Errors ε_i: ε_i ~ N(0, σ²)." style="color:inherit">Normalverteilungsannahme</a> ist strukturell verletzt.</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">Die Lösung</div><div class="narr-row-body"><a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="Die Gamma-Verteilung ist eine stetige Verteilung für positive reelle Werte, parametrisiert durch Formparameter α und Ratenparameter β." style="color:inherit">Gamma-Verteilung</a> mit Log-Link. Gamma ist per Definition positiv, modelliert Rechtschiefe direkt, und der <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC und BIC sind frequentistische Modellgütemaße, die Anpassung und Komplexität gegeneinander abwägen: AIC = −2ℓ + 2k. Niedrigere Werte sind besser." style="color:inherit">AIC</a>-Vergleich zeigt den klaren Vorteil gegenüber dem LM.</div></div>'
@@ -707,7 +707,14 @@ function genData(){
     } else {
       // Gamma(shape=2, scale=mu/2): proper generation via Marsaglia-Tsang
       // shape=2 means clear right skew, mean=mu, variance=mu²/2
-      const mu=Math.exp(0.4+0.9*x); // mu: ~0.5 to ~5
+      // Seconds, not ms: keeps η=a+b·x inside the link-function visual's fixed
+      // [-4,4] axis (see drawLinkFn) and μ within its [0,e⁴] response axis — a
+      // ms-scale intercept (η≈6.5) broke both. The wide ~0.2s–4s range (not a
+      // narrow one) is deliberate: it keeps the low end close to the zero floor
+      // so the LM's structural problem (can predict negative RT) stays visible,
+      // and keeps the Gamma curve's exponential bend visually obvious against
+      // the LM's straight line — while the expected value never exceeds ~4s.
+      const mu=Math.exp(-0.11+0.75*x); // mu: ~0.2s to ~4s, baseline ~0.9s
       ys.push(randGamma(2, mu/2));
     }
   }
@@ -1115,7 +1122,7 @@ function renderCalcExample(){
   } else if(currentScen===1||currentScen===2){
     const familyName=currentScen===1?'Poisson (Zähldaten)':'Gamma (z.B. Reaktionszeiten)';
     const sym=currentScen===1?'λ':'μ';
-    const respLabel=currentScen===1?'erwartete Anzahl Body Checkings':'erwartete Reaktionszeit (ms)';
+    const respLabel=currentScen===1?'erwartete Anzahl Body Checkings':'erwartete Reaktionszeit (s)';
 
     const eta0=a, mu0=Math.exp(eta0);
     const eta1=a+b, mu1=Math.exp(eta1);

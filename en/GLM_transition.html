@@ -308,7 +308,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
     <span class="sct-n">3</span>
     <span class="sct-txt">
       <span class="sct-title">Gamma</span>
-      <span class="sct-sub">Reaction time Stroop test (ms)</span>
+      <span class="sct-sub">Reaction time Stroop test (s)</span>
     </span>
     <span class="sct-warn">⚠</span>
   </button>
@@ -639,14 +639,14 @@ const SCENARIOS = [
         +'</div>'},
   },
   {
-    id:2, name:'Reaction time Stroop test (ms)',
+    id:2, name:'Reaction time Stroop test (s)',
     glmName:'Gamma model (log link)',
     lmProblem:'LM residuals show strong right skew — normal distribution does not fit structurally.',
     glmSolution:'<b>Gamma + log link:</b> Gamma is by definition positive and directly models right skew; log link ensures positivity.',
     residLabel:'Right-skewed LM residuals — Gamma residuals markedly more symmetric',
     narr:{tag:'c5',
       text:'<div class="narr-rows">'
-        +'<div class="narr-row"><div class="narr-row-lbl">Example</div><div class="narr-row-body">How long (ms) does someone take to name the colour of a body-related word (emotional Stroop test)?</div></div>'
+        +'<div class="narr-row"><div class="narr-row-lbl">Example</div><div class="narr-row-body">How long (in seconds) does someone take to name the colour of a body-related word (emotional Stroop test)?</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">Predictor</div><div class="narr-row-body">Anxiety level (STAI — State-Trait Anxiety Inventory, State scale), <b>z-transformed</b> (x-axis: SD units). Higher anxiety → longer reaction time expected.</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">The problem</div><div class="narr-row-body">Reaction times are always positive and typically right-skewed. The LM can produce negative predictions and residuals are systematically non-symmetric — the <a class="glo-link" href="Glossar.html#gl-normalverteilungsannahme" target="_blank" title="The formal assumption of linear OLS regression concerns the true, unobservable errors ε_i: ε_i ~ N(0, σ²)." style="color:inherit">normal distribution assumption</a> is structurally violated.</div></div>'
         +'<div class="narr-row"><div class="narr-row-lbl">The solution</div><div class="narr-row-body"><a class="glo-link" href="Glossar.html#gl-gamma-verteilung" target="_blank" title="The Gamma distribution is a continuous distribution for positive real values, parameterized by shape α and rate β." style="color:inherit">Gamma distribution</a> with log link. Gamma is by definition positive, models right skew directly, and the <a class="glo-link" href="Glossar.html#gl-aic-bic" target="_blank" title="AIC and BIC are frequentist model fit measures trading off fit against complexity: AIC = −2l + 2k. Lower values are better." style="color:inherit">AIC</a> comparison shows the clear advantage over the LM.</div></div>'
@@ -703,7 +703,14 @@ function genData(){
     } else {
       // Gamma(shape=2, scale=mu/2): proper generation via Marsaglia-Tsang
       // shape=2 means clear right skew, mean=mu, variance=mu²/2
-      const mu=Math.exp(0.4+0.9*x); // mu: ~0.5 to ~5
+      // Seconds, not ms: keeps η=a+b·x inside the link-function visual's fixed
+      // [-4,4] axis (see drawLinkFn) and μ within its [0,e⁴] response axis — a
+      // ms-scale intercept (η≈6.5) broke both. The wide ~0.2s–4s range (not a
+      // narrow one) is deliberate: it keeps the low end close to the zero floor
+      // so the LM's structural problem (can predict negative RT) stays visible,
+      // and keeps the Gamma curve's exponential bend visually obvious against
+      // the LM's straight line — while the expected value never exceeds ~4s.
+      const mu=Math.exp(-0.11+0.75*x); // mu: ~0.2s to ~4s, baseline ~0.9s
       ys.push(randGamma(2, mu/2));
     }
   }
@@ -1111,7 +1118,7 @@ function renderCalcExample(){
   } else if(currentScen===1||currentScen===2){
     const familyName=currentScen===1?'Poisson (count data)':'Gamma (e.g. reaction times)';
     const sym=currentScen===1?'λ':'μ';
-    const respLabel=currentScen===1?'expected number of body checkings':'expected reaction time (ms)';
+    const respLabel=currentScen===1?'expected number of body checkings':'expected reaction time (s)';
 
     const eta0=a, mu0=Math.exp(eta0);
     const eta1=a+b, mu1=Math.exp(eta1);
