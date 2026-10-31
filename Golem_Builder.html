@@ -1246,6 +1246,19 @@ function isBackdoorPath(path) {
   return state.edges.some(e=>e.from===path[1]&&e.to===path[0]);
 }
 
+// A path is genuinely CAUSAL only if every single edge along it points forward
+// (X -> ... -> Y). !isBackdoorPath(path) is NOT the same thing — it only checks the
+// first edge (does it point into X?), so a mixed path like X -> M <- Z -> Y also passes
+// that check even though it reverses direction at M. Several older functions conflated
+// "not a backdoor path" with "causal path" and mis-fed mixed paths into mediator/collider
+// detection as a result (see memory: project_golem_builder_mediator_collider_bug).
+function isFullyDirectedPath(path) {
+  for (let i = 0; i < path.length - 1; i++) {
+    if (!state.edges.some(e => e.from === path[i] && e.to === path[i+1])) return false;
+  }
+  return true;
+}
+
 function isPathActive(path, Z) {
   const zSet = new Set(Z);
   for (let i=1; i<path.length-1; i++) {
@@ -1402,23 +1415,43 @@ function renderTestableImplications() {
   list.innerHTML = html;
 }
 
+// A mediator is simply a node that sits on a genuine directed path from X to Y: X can
+// reach it, and it can reach Y. This replaced an older, fragile walk over "all paths that
+// don't start with an arrow into X" (allPaths.filter(p => !isBackdoorPath(p))), which
+// mistook "doesn't start backward" for "is causal" — a path can start correctly (X -> M)
+// and still bend backward later (M <- Z), and that function would still have walked it,
+// adding a non-mediator like Z (a confounder of M and Y, unconnected to X) to the
+// mediator set. The hasDirectedPath-based check below cannot make that mistake: Z only
+// ever gets added if X can genuinely reach it AND it can genuinely reach Y.
+// See memory: project_golem_builder_mediator_collider_bug.
 function getMediators() {
   const X = state.exposure, Y = state.outcome;
   if (!X || !Y) return new Set();
-  const allPaths = findAllPaths(X, Y);
-  const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
   const mediators = new Set();
-  causalPaths.forEach(path => {
-    for (let i = 1; i < path.length - 1; i++) {
-      const [A, B, C] = [path[i-1], path[i], path[i+1]];
-      if (!isColliderTriple(A, B, C)) mediators.add(B);
-    }
+  state.nodes.forEach(n => {
+    if (n.id === X || n.id === Y) return;
+    if (hasDirectedPath(X, n.id) && hasDirectedPath(n.id, Y)) mediators.add(n.id);
   });
   return mediators;
 }
 
 function hasDirectedPath(fromId, toId) {
   const visited = new Set();
+  const stack = [fromId];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (cur === toId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    stack.push(...getChildren(cur));
+  }
+  return false;
+}
+
+// Like hasDirectedPath, but the search may not pass through avoidId — used to ask "can
+// fromId reach toId some OTHER way, not via avoidId" (see detectInstruments below).
+function hasDirectedPathAvoiding(fromId, toId, avoidId) {
+  const visited = new Set([avoidId]);
   const stack = [fromId];
   while (stack.length) {
     const cur = stack.pop();
@@ -1446,11 +1479,17 @@ function detectInstruments() {
     const allZYPaths = findAllPaths(Z, Y);
     const allPassThroughX = allZYPaths.every(path => path.includes(X));
     if (!allPassThroughX) return;
-    // Also check no common cause between Z and Y (Z independent of U confounders)
-    // via d-separation: Z ⊥⊥ Y | X in observational graph
-    // We use the simple check: Z has no parents that also cause Y (share a cause with Y outside X)
+    // Also check no common cause between Z and Y (Z independent of U confounders) via
+    // d-separation: Z ⊥⊥ Y | X in the observational graph. A parent P of Z only
+    // disqualifies Z if P reaches Y some OTHER way than through Z itself — reaching Y via
+    // P→Z→X→Y is exactly the instrument's own (allowed) mechanism, not a confound. Using
+    // plain hasDirectedPath(p, Y) here (without excluding Z from the search) rejected
+    // every instrument with any ancestor at all, since P→Z→X→Y always exists once Z→X
+    // does — confirmed empirically: an instrument Z with one harmless upstream ancestor
+    // was wrongly excluded, while that ancestor got wrongly accepted as "the" instrument
+    // instead (see memory: project_golem_builder_mediator_collider_bug).
     const parentsZ = getParents(Z);
-    const hasSharedCauseWithY = parentsZ.some(p => hasDirectedPath(p, Y) && p !== X);
+    const hasSharedCauseWithY = parentsZ.some(p => p !== X && hasDirectedPathAvoiding(p, Y, Z));
     if (hasSharedCauseWithY) return;
     instruments.push(Z);
   });
@@ -1476,7 +1515,7 @@ function detectFrontDoor() {
   if (!X || !Y) return { mediators: [], topology: null };
 
   const allPaths = findAllPaths(X, Y);
-  const causalPaths = allPaths.filter(p => !isBackdoorPath(p));
+  const causalPaths = allPaths.filter(isFullyDirectedPath);
   if (causalPaths.length === 0) return { mediators: [], topology: null };
 
   // Collect all intermediate nodes on causal paths
@@ -1518,17 +1557,44 @@ function getEffectType() {
   return el ? el.value : 'total';
 }
 
+// Nodes that must NOT be controlled: conditioning on them would open a path between X
+// and Y that is currently blocked given what's already being controlled (Zrequired) —
+// classic Berkson/collider bias, generalized to also catch conditioning on a DESCENDANT
+// of a collider (same opening effect, via isPathActive's own descendant check — the old
+// "2+ parents" heuristic this replaced couldn't catch that at all). mediatorSet is always
+// excluded from candidacy: a mediator's own "don't control" reason (for the total effect)
+// is that it blocks the causal pathway — a different issue, reported separately under its
+// own "Mediator" tag, not collider bias. See memory: project_golem_builder_mediator_collider_bug.
+function findProblematicColliders(X, Y, Zrequired, mediatorSet) {
+  const allPaths = findAllPaths(X, Y);
+  const ZrequiredArr = [...Zrequired];
+  const problematic = new Set();
+  state.nodes.forEach(n => {
+    const C = n.id;
+    if (n.latent || C === X || C === Y || Zrequired.has(C) || mediatorSet.has(C)) return;
+    const zWith = [...ZrequiredArr, C];
+    const opens = allPaths.some(p => !isPathActive(p, ZrequiredArr) && isPathActive(p, zWith));
+    if (opens) problematic.add(C);
+  });
+  return problematic;
+}
+
 function getColliders() {
   const X = state.exposure, Y = state.outcome;
   if (!X || !Y) return [];
-  const adjSetIds  = new Set(state.analysisResult?.minimal?.[0] || []);
-  const mediatorIds = new Set([...getMediators()].filter(id => id !== X && id !== Y));
-  // Heuristic: node with 2+ parents that is not confounder, mediator, X, or Y
-  return state.nodes
-    .filter(n => !n.latent && n.id !== X && n.id !== Y
-              && !adjSetIds.has(n.id) && !mediatorIds.has(n.id))
-    .filter(n => state.edges.filter(e => e.to === n.id).length >= 2)
-    .map(n => n.name);
+  const mediatorSet = new Set([...getMediators()].filter(id => id !== X && id !== Y));
+  const totalResult = findAdjustmentSets();
+  const mustControlIds = (totalResult?.minimal?.[0]) || [];
+  const effectType = getEffectType();
+  // "Direkter Effekt" mode conditions on the mediators themselves (see runAnalysis()),
+  // which can turn a mediator into an active collider on some OTHER path — fold that into
+  // the required-baseline so the collider check reflects what's actually being conditioned on.
+  const required = new Set([
+    ...(effectType === 'direct' ? mediatorSet : []),
+    ...mustControlIds,
+  ]);
+  const problematic = findProblematicColliders(X, Y, required, mediatorSet);
+  return state.nodes.filter(n => problematic.has(n.id)).map(n => n.name);
 }
 
 function hasCycle(fromId, toId) {
@@ -2164,27 +2230,27 @@ function runAnalysis() {
     mediatorIds.forEach(id => state.highlightAdjSet.add(id));
   }
 
-  // Find colliders on non-causal backdoor paths
-  const collidersOnPaths = new Set();
-  allPaths.forEach(path => {
-    for (let i=1; i<path.length-1; i++) {
-      if (isColliderTriple(path[i-1], path[i], path[i+1])) {
-        collidersOnPaths.add(path[i]);
-        state.highlightColliders.add(path[i]);
-      }
-    }
-  });
-  // Remove X, Y from colliders display
-  collidersOnPaths.delete(X); collidersOnPaths.delete(Y);
+  // Colliders ("darf nicht kontrollieren"): nodes whose conditioning would open a
+  // currently-blocked path between X and Y, given what's already being controlled
+  // (mustControlIds, plus — in "direkter Effekt" mode — the mediators, since that mode
+  // conditions on them). Mediators are never candidates (see findProblematicColliders doc).
+  const mediatorSet = new Set(mediatorIds);
+  const requiredForColliderCheck = new Set([
+    ...(effectType === 'direct' ? mediatorSet : []),
+    ...mustControlIds,
+  ]);
+  const problematicColliders = findProblematicColliders(X, Y, requiredForColliderCheck, mediatorSet);
+  problematicColliders.forEach(id => state.highlightColliders.add(id));
+  const mustNotControlIds = [...problematicColliders];
 
-  // "Can control": nodes not in any path from X to Y, not descendants of X, not X, not Y, not latent
-  const allPathNodes = new Set(allPaths.flat());
-  const canControlIds = state.nodes.map(n=>n.id).filter(id =>
-    id!==X && id!==Y && !descX.has(id) && !allPathNodes.has(id) && !result.latentIds.has(id)
+  // "Can control": every other observable, non-descendant-of-X candidate left over once
+  // must-control, mediator and problematic-collider are accounted for — derived from the
+  // SAME categorization instead of a separate "not on any path" rule, so every candidate
+  // lands in exactly one bucket (the old rule silently dropped nodes that were on some
+  // non-causal path but weren't a required confounder or a detected collider either).
+  const canControlIds = result.candidates.filter(id =>
+    !mustControlIds.includes(id) && !mediatorSet.has(id) && !problematicColliders.has(id)
   );
-
-  // Must not control: colliders that are NOT in mustControlIds (also exclude latents, X, Y — they're uncontrollable/irrelevant)
-  const mustNotControlIds = [...collidersOnPaths].filter(id => !mustControlIds.includes(id) && !result.latentIds.has(id) && id !== X && id !== Y);
 
   // mediators / effectType already computed above for canvas highlighting
 
@@ -2300,13 +2366,18 @@ function runAnalysis() {
     pathsList.innerHTML = '<div class="empty-note">Kein Pfad zwischen X und Y.</div>';
   } else {
     pathsList.innerHTML = allPaths.map(path => {
-      const isBD = isBackdoorPath(path);
+      // A path only earns "Kausal" if EVERY edge points forward — not just the first one
+      // (see isFullyDirectedPath doc). A mixed path like X -> M <- Z -> Y previously showed
+      // as "Kausal" simply because it doesn't start with an arrow into X.
+      const isCausal = isFullyDirectedPath(path);
+      const isBD = !isCausal && isBackdoorPath(path);
       const isActive = isPathActive(path, minimal[0] || []);
       const pathStr = buildPathString(path);
       const hasLatent = path.some(id => result.latentIds.has(id));
       let badges = '';
-      if (isBD) badges += '<span class="path-badge path-backdoor">Hintertür</span>';
-      else badges += '<span class="path-badge path-causal">Kausal</span>';
+      if (isCausal) badges += '<span class="path-badge path-causal">Kausal</span>';
+      else if (isBD) badges += '<span class="path-badge path-backdoor">Hintertür</span>';
+      else badges += '<span class="path-badge" style="background:var(--ink3);color:#fff;">Sonstiger Pfad</span>';
       if (isActive) badges += '<span class="path-badge path-open">Offen</span>';
       else badges += '<span class="path-badge path-blocked">Blockiert</span>';
       if (hasLatent) badges += '<span class="path-badge" style="background:var(--ink3);color:#fff;">Latent</span>';
@@ -2839,6 +2910,17 @@ function generateRCode() {
   // Detect special patterns for comment header
   const instruments = state.exposure && state.outcome ? detectInstruments() : [];
   const { mediators: frontDoorMediators, topology: fdTopology } = state.exposure && state.outcome ? detectFrontDoor() : { mediators: [], topology: null };
+  // Instrument/front-door *eligibility* is a purely graph-theoretic property that holds
+  // for almost any instrument- or mediation-shaped DAG, even ones with NO unobserved
+  // confounding at all (see generatePowerCode()'s isFrontDoor comment) — it does NOT by
+  // itself mean a latent confounder U exists. Confirmed empirically: a plain IV→X→Y DAG
+  // with zero latent nodes and zero confounding still produced "U ist latent... und
+  // konfundiert X und Y" / "Naives lm(Y~X) ist verzerrt" here, which is simply false for
+  // that DAG (OLS is unbiased there). Only mention a latent U when backdoor adjustment is
+  // actually impossible (findAdjustmentSets().unblockableLatentPaths) — the same gate
+  // generatePowerCode() already correctly uses for the equivalent decision.
+  const adjInfo = state.exposure && state.outcome ? findAdjustmentSets() : null;
+  const needsLatentWorkaround = !!(adjInfo && adjInfo.unblockableLatentPaths.length > 0);
 
   const lines = [
     '# Golem Builder — Simulierter Datensatz',
@@ -2846,15 +2928,16 @@ function generateRCode() {
     '#',
   ];
 
-  if (instruments.length > 0) {
+  if (needsLatentWorkaround && instruments.length > 0) {
+    const instrNames = instruments.map(id=>getNodeName(id)).join(', ');
     lines.push(
       '# INSTRUMENTALVARIABLE (IV) Simulation',
       '# U ist latent (ungemessen) und konfundiert X und Y.',
-      `# ${instruments.map(id=>getNodeName(id)).join(', ')} ist ein gültiges Instrument: Z→X, aber Z hat keinen direkten Effekt auf Y.`,
+      `# ${instrNames} ist ein gültiges Instrument: ${instrNames}→X, aber ${instrNames} hat keinen direkten Effekt auf Y.`,
       '# Naives lm(Y~X) ist verzerrt. IV-Schätzer korrigiert dies.',
       '#'
     );
-  } else if (frontDoorMediators.length > 0) {
+  } else if (needsLatentWorkaround && frontDoorMediators.length > 0) {
     const fdType = fdTopology === 'serial' ? 'Serielle Mediation' : 'Parallele Mediation';
     lines.push(
       `# FRONT DOOR Simulation (${fdType})`,
@@ -2863,6 +2946,10 @@ function generateRCode() {
       '# Front Door Adjustment identifiziert den kausalen Effekt ohne U zu messen.',
       '#'
     );
+  } else if (needsLatentWorkaround) {
+    // Latent confounding exists but neither a valid instrument nor a front-door-eligible
+    // mediator is available to work around it — the plain backdoor warning still applies.
+    lines.push(...(backdoorUnidentifiableWarning() || []));
   }
 
   if (STD_MODE) {
@@ -3110,6 +3197,56 @@ function buildFormulaRHS(targetId) {
   return processed.join(' + ');
 }
 
+// Interaction/moderator terms on edges INTO `nodeId` — "pid:modName", matching exactly what
+// buildNodeSimLines()/computeStdCovariances() already add to the node's true linear
+// predictor (bint * pid * modName). Shared by generateMediationCode() and
+// emitPathProductBlock() so the two fitted-model formulas never silently diverge from each
+// other or from the data-generating process (the exact class of bug found/fixed in
+// Data_Creator.html: two independently maintained copies of the same logic drifting apart —
+// see buildNodeSimLines()'s own comment). Omitting these terms misspecifies the fitted
+// model: the simulated data genuinely contains the interaction, so leaving it out of the
+// formula biases the main-effect estimate for `pid` too (classic omitted-interaction
+// confounding). Uses "pid:mod" (not "pid*mod") deliberately: buildNodeSimLines() never adds
+// a separate main effect for the moderator unless it's ALSO a direct parent in its own
+// right, so "*" would add an unwanted main-effect term the true model doesn't have.
+function intTermsFor(nodeId) {
+  return getParents(nodeId).flatMap(pid => {
+    const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
+    if (!edge) return [];
+    const modName = getEdgeModerator(edge.id);
+    const bint = getEdgeIntCoef(edge.id);
+    return (modName && bint !== 0) ? [`${getNodeName(pid)}:${modName}`] : [];
+  });
+}
+
+// Returns null if the X→Y effect IS identifiable via the (possibly empty) backdoor
+// adjustment set already computed in state.analysisResult, or an array of R comment
+// lines warning the user otherwise — i.e. when minimal.length===0, meaning NO set of
+// observable variables can block every backdoor path (at least one such path can only
+// be closed via a latent/unmeasured variable). Distinguishing this from "genuinely no
+// confounding" (minimal=[[]], an empty set that EXISTS and IS valid) matters a lot:
+// generateDagittyCode() already got this right ("kein valides Set" vs "leeres Set —
+// keine Konfundierung"), but the brms/TMB code generators didn't check it at all and
+// could silently emit "# Adjustiert für: (kein Adjustierungsset nötig)" over a model
+// that is actually confounded and unidentifiable — exactly backwards, and the generated
+// R code a user is most likely to actually run.
+function backdoorUnidentifiableWarning() {
+  const minimal = state.analysisResult ? state.analysisResult.minimal : null;
+  if (minimal && minimal.length > 0) return null; // identifiable (possibly via an empty set)
+  return [
+    '# ⚠ NICHT IDENTIFIZIERBAR per Backdoor-Adjustierung: mindestens ein Backdoor-Pfad lässt',
+    '# sich nur über eine LATENTE (unbeobachtete) Variable blockieren — kein Satz aus',
+    '# beobachtbaren Kontrollvariablen kann ihn schließen (siehe "Nicht identifizierbar"-',
+    '# Warnung in der Seitenleiste). Das Modell unten lässt sich trotzdem fitten, ABER der',
+    '# Koeffizient von X bleibt dadurch KONFUNDIERT — nicht der bereinigte kausale Effekt.',
+    '# Für Identifikation: RCT, eine gültige Instrumentalvariable, oder — falls im DAG ein',
+    '# geeigneter Mediator existiert — das Front-Door-Kriterium (siehe Monte-Carlo-',
+    '# Power-Analyse, die diesen Fall bereits automatisch erkennt und darüber schätzt,',
+    '# statt über eine normale Mediations-/Regressionsgleichung).',
+    '',
+  ];
+}
+
 // General mediation-model code generator: works for ANY causal-path topology between
 // X and Y (pure serial, pure parallel, or a hybrid mix with edges between mediators),
 // unlike the old serial-vs-parallel split which mis-modeled hybrid DAGs (a mediator
@@ -3148,6 +3285,7 @@ function generateMediationCode() {
     mediators.slice(i + 1).some(m2 => !hasDirectedPath(m1, m2) && !hasDirectedPath(m2, m1)));
 
   const lines = [];
+  lines.push(...(backdoorUnidentifiableWarning() || []));
   lines.push('# MEDIATIONSANALYSE — Bayesianisches joint model (Pearl 2009 / McElreath SR 2020)');
   lines.push(`# Mediator(en): ${medNames.join(', ')}`);
   lines.push('# Alle Gleichungen gemeinsam geschätzt für einen vollen gemeinsamen Posterior über');
@@ -3164,12 +3302,12 @@ function generateMediationCode() {
   mediators.forEach(m => {
     const mName = getNodeName(m);
     const adjParents = getParents(m).filter(p => adjIds.includes(p)).map(getNodeName);
-    const preds = [xName, ...medAncestorsOf(m).map(getNodeName), ...adjParents];
+    const preds = [...new Set([xName, ...medAncestorsOf(m).map(getNodeName), ...adjParents, ...intTermsFor(m)])];
     lines.push(`bf_${mName} <- bf(${mName} ~ 1 + ${preds.join(' + ')})`);
     bfNames.push(`bf_${mName}`);
   });
   const yAdjParents = getParents(Y).filter(p => adjIds.includes(p)).map(getNodeName);
-  const yPreds = [xName, ...medAncestorsOf(Y).map(getNodeName), ...yAdjParents];
+  const yPreds = [...new Set([xName, ...medAncestorsOf(Y).map(getNodeName), ...yAdjParents, ...intTermsFor(Y)])];
   lines.push(`bf_${yName} <- bf(${yName} ~ 1 + ${yPreds.join(' + ')})`);
   bfNames.push(`bf_${yName}`);
   if (!hasDirectXY) {
@@ -3281,6 +3419,7 @@ function generateBrmsCode() {
   const outDist = getOutcomeDist();
   const brmsFamily = { Normal: 'gaussian()', Bernoulli: 'bernoulli("logit")', Poisson: 'poisson("log")', Gamma: 'Gamma("log")' }[outDist] || 'gaussian()';
   return [
+    ...(backdoorUnidentifiableWarning() || []),
     'library(brms)',
     `# Adjustiert für: ${adjComment}`,
     '',
@@ -3304,10 +3443,23 @@ function generateTMBCode() {
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
   const { mediators: frontDoorMediators, topology: fdTopology } = X && Y ? detectFrontDoor() : { mediators: [], topology: null };
+  // IV/front-door *eligibility* is a purely graph-theoretic property that holds for
+  // almost any instrument- or mediation-shaped DAG, even ones with NO unobserved
+  // confounding at all (see generatePowerCode()'s isFrontDoor comment) — it does NOT by
+  // itself mean a latent confounder U exists or that IV/front-door is actually NEEDED.
+  // Confirmed empirically: a DAG with a perfectly ordinary, fully OBSERVABLE confounder
+  // Z (Z→X, Z→Y, no latent anything) and two parallel mediators still triggered the
+  // front-door branch below — suppressing the simple, correct, standard Y~X+M1+M2+Z
+  // backdoor-adjusted model entirely and replacing it with front-door code that talks
+  // about a "U" which doesn't exist in that DAG. Gate on the same signal
+  // generatePowerCode() already correctly uses: is backdoor adjustment actually
+  // impossible via observable variables?
+  const adjInfoForSpecial = X && Y ? findAdjustmentSets() : null;
+  const needsLatentWorkaround = !!(adjInfoForSpecial && adjInfoForSpecial.unblockableLatentPaths.length > 0);
 
   // Bei IV oder Front Door: kein Standard-Adjustierungsmodell voranstellen
   // (wäre dort irreführend, da naives Y~X wegen U verzerrt ist)
-  const hasSpecialPattern = instruments.length > 0 || frontDoorMediators.length > 0;
+  const hasSpecialPattern = needsLatentWorkaround && (instruments.length > 0 || frontDoorMediators.length > 0);
 
   const outDist = getOutcomeDist();
   const glmmFamily = { Normal: 'gaussian()', Bernoulli: 'binomial(link="logit")', Poisson: 'poisson(link="log")', Gamma: 'Gamma(link="log")' }[outDist] || 'gaussian()';
@@ -3318,6 +3470,7 @@ function generateTMBCode() {
     const rhs = buildFormulaRHS(Y);
     const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(kein Adjustierungsset nötig)';
     baseCode = [
+      ...(backdoorUnidentifiableWarning() || []),
       'library(glmmTMB)',
       `# Adjustiert für: ${adjComment}`,
       '',
@@ -3330,7 +3483,7 @@ function generateTMBCode() {
     ];
   }
 
-  if (instruments.length > 0) {
+  if (needsLatentWorkaround && instruments.length > 0) {
     const zNames = instruments.map(id => getNodeName(id));
     const zStr = zNames.join(' + ');
     const zLabel = zNames.join(', ');
@@ -3369,7 +3522,7 @@ function generateTMBCode() {
     ]);
   }
 
-  if (frontDoorMediators.length > 0) {
+  if (needsLatentWorkaround && frontDoorMediators.length > 0) {
     const medNames = frontDoorMediators.map(id => getNodeName(id));
     const fdLines = [
       '',
@@ -3499,7 +3652,7 @@ function emitPathProductBlock(lines, { X, Y, xName, mediators, adjIds, coefName,
   nodesNeedingFit.forEach(targetId => {
     const targetName = getNodeName(targetId);
     const adjParents = getParents(targetId).filter(p => adjIds.includes(p)).map(getNodeName);
-    const preds = [xName, ...medAncestorsOf(targetId).map(getNodeName), ...adjParents];
+    const preds = [xName, ...medAncestorsOf(targetId).map(getNodeName), ...adjParents, ...intTermsFor(targetId)];
     const uniquePreds = [...new Set(preds)];
     const targetFamily = nodeGlmmFamily(targetId);
     targetFormulas[targetId] = { targetName, uniquePreds, targetFamily };
@@ -4369,10 +4522,14 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
   const mediatorNames = mediatorIds.map(getName);
   const colliderNames = getColliders();
 
-  // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome, Adj-Set noch Mediator sind
+  // Optionale Variablen: sichtbare Knoten die weder Exposition, Outcome, Adj-Set, Mediator
+  // noch Collider sind (GComp_Builder.html filtert colliderNames zwar beim Import defensiv
+  // nochmal aus optionalVars heraus, aber das hier korrekt zu berechnen ist robuster, als
+  // mich auf diesen zweiten Tool-internen Schutz zu verlassen).
   const optionalVars = state.nodes
     .filter(n => !n.latent && n.id !== X && n.id !== Y
-              && !adjSetIds.includes(n.id) && !mediatorIds.includes(n.id))
+              && !adjSetIds.includes(n.id) && !mediatorIds.includes(n.id)
+              && !colliderNames.includes(n.name))
     .map(n => n.name);
 
   // Node-Positionen für Mini-DAG-Canvas
