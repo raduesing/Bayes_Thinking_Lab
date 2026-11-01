@@ -975,7 +975,8 @@ function renderPriorListUI(rows) {
   let pUI = '';
   if (isCategoricalFam) {
     pUI += `<div class="prior-note">Kategorisch (nominal) braucht pro Nicht-Referenzkategorie einen
-      eigenen, mit <code>dpar</code> getaggten Prior (z.B. <code>dpar = "mu2"</code>) — gilt auch für
+      eigenen, mit <code>dpar</code> getaggten Prior (z.B. <code>dpar = "muTreatment"</code> — brms hängt den
+      Kategorienamen selbst an "mu" an, nicht fortlaufende Zahlen) — gilt auch für
       Random-Effects-SDs. Die Kategorienanzahl hängt von deinen Daten ab, die dieser Builder nicht
       kennt. Intercept/β/Random Effects bleiben daher ohne spezifischen Prior (brms-Defaults);
       Details im Kommentar im generierten R-Code.</div>`;
@@ -1109,7 +1110,8 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
 ${f === 'categorical' ? `
 <span class="cm"># Kategorisch (nominal): kein Intercept-/β-Prior generiert, auch keine Random-Effects-Priors.</span>
 <span class="cm">#   Warum: brms schätzt bei categorical() pro Nicht-Referenzkategorie einen eigenen</span>
-<span class="cm">#   linearen Prädiktor (dpar = "mu2", "mu3", ...) — das gilt auch für sd(...)/cor(...) bei</span>
+<span class="cm">#   linearen Prädiktor (dpar = "mu" + Kategoriename, z.B. "muTreatment" — NICHT "mu2"/"mu3",</span>
+<span class="cm">#   außer die Kategorien sind selbst als 1,2,3,... kodiert) — das gilt auch für sd(...)/cor(...) bei</span>
 <span class="cm">#   Random Effects. Priors ohne dpar-Tag passen zu keinem Modellparameter und lassen brms</span>
 <span class="cm">#   mit einem Fehler abbrechen. Die Anzahl der Kategorien (und damit der nötigen dpar-Tags)</span>
 <span class="cm">#   hängt von deinen Daten ab — die dieser Builder nicht kennt. brms nutzt daher seine</span>
@@ -1631,6 +1633,25 @@ function exportToPPC() {
     betaParsed: d.preds.map(p => parsePriorStr(gPrior(d.n + '_b_' + p, 'b')))
   }));
 
+  // Fixed-mode (non-distributional) aux-parameter priors — shape/phi/ndt/alpha/zi/zoi/coi.
+  // Mirrors the `sigma` handling above, which only ever covered gaussian/student/lognormal/
+  // shifted_lognormal/skew_normal's sigma. Every other family's own aux parameter (Gamma/
+  // negbinomial shape, Beta-family phi, shifted_lognormal ndt, skew_normal alpha, the three
+  // zero/one-inflation probabilities) was never exported at all — PP-Check silently fell back
+  // to its own UI defaults instead of the prior the user actually set here. Only sent when the
+  // family HAS that param AND it's not already being sent via distPriors above.
+  const fixedAuxOf = (key, hasSet, cls, defOverride) =>
+    (hasSet.has(f) && !activeD.find(d => d.n === key))
+      ? parsePriorStr(gPrior('fixed_' + (key === 'alpha' ? 'alpha_skew' : key), cls, defOverride))
+      : null;
+  const shapeParsed = fixedAuxOf('shape', HAS_SHAPE, 'shape', DEF_PRIORS.shape);
+  const phiParsed   = fixedAuxOf('phi',   HAS_PHI,   'phi',   DEF_PRIORS.phi);
+  const ndtParsed   = fixedAuxOf('ndt',   HAS_NDT,   'ndt',   DEF_PRIORS.ndt);
+  const alphaParsed = fixedAuxOf('alpha', HAS_ALPHA_SKEW, 'alpha', DEF_PRIORS.alpha_skew);
+  const ziParsed    = fixedAuxOf('zi',    HAS_ZI,    'zi',    DEF_PRIORS.zi);
+  const zoiParsed   = fixedAuxOf('zoi',   HAS_ZOI,   'zoi',   DEF_PRIORS.zoi);
+  const coiParsed   = fixedAuxOf('coi',   HAS_COI,   'coi',   DEF_PRIORS.coi);
+
   const payload = {
     version:    2,
     source:     'brmsBuilder',
@@ -1645,6 +1666,13 @@ function exportToPPC() {
     intercept:  brmsParsToPPCLoc(intParsed),
     betas:      betaParsed.map(p => brmsParsToPPCLoc(p)),
     sigma:      sigParsed ? brmsParsToPPCSig(sigParsed) : null,
+    shape:      shapeParsed ? brmsParsToPPCSig(shapeParsed) : null,
+    phi:        phiParsed   ? brmsParsToPPCSig(phiParsed)   : null,
+    ndt:        ndtParsed   ? brmsParsToPPCSig(ndtParsed)   : null,
+    alpha:      alphaParsed ? brmsParsToPPCLoc(alphaParsed) : null,
+    zi:         ziParsed,
+    zoi:        zoiParsed,
+    coi:        coiParsed,
     distPriors,
     lmm:        hasRE,
     groupVar:   g,
@@ -2008,7 +2036,7 @@ const BRMS_HELP_HTML = `
   <li><strong>Warum?</strong> Bei <code>y ~ x</code> zentriert brms Prädiktoren intern — ein eigener Prior wirkt dann auf einen verschobenen Parameter, nicht auf deinen Wertebereich</li>
   <li>Mit <code>0 + Intercept</code> gilt <code>prior(…, class = b, coef = Intercept)</code> direkt auf der Rohskala: der Prior entspricht dem erwarteten Outcome wenn alle Prädiktoren = 0</li>
   <li><em>Ausnahme:</em> Kumulativ-ordinale Modelle (cumulative) nutzen weiterhin <code>class = Intercept</code> für die gemeinsamen Schwellenwerte</li>
-  <li><em>Kategorisch (nominal):</em> braucht pro Kategorie einen eigenen, mit <code>dpar</code> getaggten Prior (z.B. <code>dpar = "mu2"</code>) — dieser Builder generiert dafür keine spezifischen Priors, da die Kategorienanzahl von deinen Daten abhängt, siehe Kommentar im generierten Code</li>
+  <li><em>Kategorisch (nominal):</em> braucht pro Kategorie einen eigenen, mit <code>dpar</code> getaggten Prior (z.B. <code>dpar = "muTreatment"</code> — brms hängt den Kategorienamen selbst an "mu" an) — dieser Builder generiert dafür keine spezifischen Priors, da die Kategorienanzahl von deinen Daten abhängt, siehe Kommentar im generierten Code</li>
   <li><strong>Empfehlung:</strong> Prädiktoren dennoch zentrieren (<code>scale()</code> o. Ä.) — verbessert die Interpretierbarkeit des Intercepts und stabilisiert das MCMC-Sampling</li>
 </ul>
 
@@ -2065,7 +2093,7 @@ document.addEventListener('click', function(e) {
       brms-Default: <code>prior(normal(0, 2.5), class = Intercept)</code><br>
       Explizit (diese Formel): <code>prior(normal(0, 2.5), class = b, coef = Intercept)</code><br><br>
       <span class="ipm-strong">Ausnahme: Kumulativ-ordinale Modelle (cumulative) — deren gemeinsame Schwellenwerte bleiben bei <code>class = Intercept</code>, da brms sie anders behandelt.</span><br><br>
-      <span class="ipm-strong">Kategorisch (nominal) ist anders: brms schätzt pro Kategorie einen eigenen linearen Prädiktor (<code>dpar = "mu2"</code>, <code>"mu3"</code>, …). Da die Kategorienanzahl von deinen Daten abhängt, generiert dieser Builder dafür keine spezifischen Priors — brms nutzt seine eigenen Defaults, siehe Kommentar im generierten Code.</span>
+      <span class="ipm-strong">Kategorisch (nominal) ist anders: brms schätzt pro Kategorie einen eigenen linearen Prädiktor (<code>dpar = "mu" + Kategoriename</code>, z.B. <code>"muTreatment"</code> — NICHT fortlaufend "mu2", "mu3", außer die Kategorien sind selbst als 1,2,3,... kodiert). Da die Kategorienanzahl von deinen Daten abhängt, generiert dieser Builder dafür keine spezifischen Priors — brms nutzt seine eigenen Defaults, siehe Kommentar im generierten Code.</span>
     </div>
   </div>
 </div>

@@ -1664,13 +1664,20 @@ function rNegBin(mu, phi) {
   const lam = rGamma(Math.max(1e-4, phi), Math.max(1e-4, phi) / Math.max(1e-4, mu));
   return rPoisson(lam);
 }
-// Skew-Normal via centred parameterization (Azzalini 1985)
-// xi=skewness (alpha in Azzalini), mu=location, sigma=scale
+// Skew-Normal, brms's centred parameterization (cp2dp in brms source): mu/sigma are the
+// distribution's ACTUAL mean/SD (not the latent Azzalini location/scale) — confirmed against
+// brms::rskew_normal()/brms:::cp2dp(). xi is the shape (alpha in Azzalini 1985). Converting
+// to the latent (xiLoc, omega) parameters before sampling is required, or mu/sigma silently
+// stop matching the nominal UI values whenever xi != 0 (the previous version used mu/sigma
+// directly as latent location/scale, biasing the simulated mean by sigma*delta*sqrt(2/pi)).
 function rSkewNormal(mu, sigma, xi) {
   const d = xi / Math.sqrt(1 + xi*xi);
+  const b = Math.sqrt(2/Math.PI);
+  const omega = sigma / Math.sqrt(Math.max(1e-9, 1 - d*d*b*b));
+  const xiLoc = mu - omega*d*b;
   const u1 = randn(), u2 = randn();
   const x  = d * Math.abs(u1) + Math.sqrt(1 - d*d) * u2;
-  return mu + sigma * x;
+  return xiLoc + omega * x;
 }
 // Shifted Lognormal: mu/sigma on log scale, delta = shift (lb=0)
 function rShiftedLognormal(mu, sigma, delta) {
@@ -1734,7 +1741,8 @@ function drawScale(fam, p1, p2) {
 function applyLink(eta, model) {
   // Identity link
   if (model==='linear'||model==='student'||model==='lognormal'||
-      model==='shifted_lognormal'||model==='skew_normal') return eta;
+      model==='shifted_lognormal'||model==='skew_normal'||
+      model==='cumulative'||model==='categorical') return eta;
   // Logit link → probability in (0,1)
   if (model==='logistic'||model==='binomial'||model==='beta_reg'||model==='beta_binomial'||
       model==='zero_inflated_beta'||model==='zero_one_inflated_beta')
@@ -1780,9 +1788,14 @@ function sampleY(mu, sigma, model, nu, auxParams) {
     const n = Math.max(1, Math.round(aux.trials ?? 10));
     const clampMu = Math.max(0.001, Math.min(0.999, mu));
     const phi = Math.max(0.1, aux.phi ?? 1);
+    // p must be drawn ONCE per observation and shared across all n trials — the n trials
+    // of one beta-binomial observation are correlated via a single latent p, which is the
+    // entire source of its extra-binomial variance (φ's effect). Redrawing p per trial (the
+    // previous bug) made every trial independent, collapsing the simulated variance down to
+    // plain Binomial(n,mu) regardless of φ — confirmed via real-R variance comparison.
+    const p = rBetaReg(clampMu, phi);
     let count = 0;
     for (let i=0; i<n; i++) {
-      const p = rBetaReg(clampMu, phi);
       if (Math.random() < p) count++;
     }
     return count / n; // proportion for visualization
@@ -5165,18 +5178,6 @@ function _parsePriorStr(str) {
     default:            return null;
   }
 }
-// brms parsed → PPC sigma config
-function _brmsSigToPPC(p) {
-  if (!p) return { fam:'exponential', p1:1, p2:1, nu:3 };
-  switch(p.fam) {
-    case 'exponential': return { fam:'exponential',  p1:p.p1??1,   p2:1,       nu:3 };
-    case 'normal':      return { fam:'half_normal',  p1:Math.abs(p.sig||p.mu||1), p2:1, nu:3 };
-    case 'student_t':   return { fam:'half_student', p1:p.sig??1,  p2:p.nu??3, nu:p.nu??3 };
-    case 'cauchy':      return { fam:'half_cauchy',  p1:p.sig??1,  p2:1,       nu:3 };
-    case 'gamma':       return { fam:'gamma',        p1:p.p1??2,   p2:p.p2??1, nu:3 };
-    default:            return { fam:'exponential',  p1:1,         p2:1,       nu:3 };
-  }
-}
 
 // ── EXPORT: PPC → Builder ─────────────────────────────────
 window.exportToBuilder = function() {
@@ -5616,13 +5617,51 @@ window.importFromBuilder = function() {
     });
   }
 
-  // Sigma prior
-  if (d.sigma && (newModel==='linear'||newModel==='gamma'||newModel==='student')) {
-    const sp = _brmsSigToPPC(d.sigma);
+  // Sigma prior — d.sigma already arrives in PPC's own sig-fam vocabulary (Builder's
+  // brmsParsToPPCSig() converts it before sending), so it must be used directly here, NOT
+  // re-run through a second brms-vocab→PPC-vocab conversion: _brmsSigToPPC() used to be
+  // (wrongly) applied to it a second time, whose switch(fam) only matches brms's OWN family
+  // names ('normal','exponential',...) — fed the already-converted PPC names ('half_normal',
+  // 'half_student',...), every case but 'exponential'/'gamma' fell through to the default and
+  // silently replaced the real transferred prior with exponential(1). Also widened the family
+  // gate to match hasSig in applyModelUI() (lognormal/shifted_lognormal/skew_normal have a real
+  // sigma card and were being skipped; 'gamma' never has a sigma card and was wrongly included).
+  if (d.sigma && ['linear','student','lognormal','shifted_lognormal','skew_normal'].includes(newModel)) {
     const sfEl = document.getElementById('sig-fam');
-    if (sfEl) { sfEl.value = sp.fam; onSigFamChange(); }
-    setSlider('sig-p1', sp.p1 ?? 1, 'd-sp', 1);
-    if (sp.fam === 'half_student') setSlider('sig-nu', sp.nu ?? 3, 'd-snu', 1);
+    if (sfEl) { sfEl.value = d.sigma.fam; onSigFamChange(); }
+    setSlider('sig-p1', d.sigma.p1 ?? 1, 'd-sp', 1);
+    if (d.sigma.fam === 'half_student') setSlider('sig-nu', d.sigma.nu ?? 3, 'd-snu', 1);
+  }
+
+  // Fixed-mode (non-distributional) aux-parameter priors — shape/phi/ndt/alpha/zi/zoi/coi.
+  // Mirrors the sigma block above: Builder already converts to PPC's native vocabulary
+  // (brmsParsToPPCSig/brmsParsToPPCLoc) before sending, so these are used directly too.
+  // shape and phi share one fixed-mode UI slot (phi-p1, Exponential(rate) only — no family
+  // choice here unlike sigma) keyed by domKeyFor(); only p1 is used for that slot since the
+  // UI itself has no family/p2/nu input to receive the rest of a richer prior family.
+  if (dparApplies(dparStateKey('phi'))) {
+    const src = dparStateKey('phi') === 'shape' ? d.shape : d.phi;
+    if (src) setSlider('phi-p1', src.p1 ?? 1, 'd-phi-p1', 2);
+  }
+  if (d.ndt && dparApplies('ndt')) {
+    setSlider('ndt-mu',  d.ndt.mu  ?? 0,   'd-ndt-mu',  2);
+    setSlider('ndt-sig', d.ndt.sig ?? 0.3, 'd-ndt-sig', 2);
+  }
+  if (d.alpha && dparApplies('alpha')) {
+    setSlider('alpha-mu',  d.alpha.mu  ?? 0, 'd-alpha-mu',  1);
+    setSlider('alpha-sig', d.alpha.sig ?? 2, 'd-alpha-sig', 2);
+  }
+  if (d.zi && dparApplies('zi')) {
+    setSlider('zi-a', d.zi.p1 ?? 1, 'd-zi-a', 2);
+    setSlider('zi-b', d.zi.p2 ?? 1, 'd-zi-b', 2);
+  }
+  if (d.zoi && dparApplies('zoi')) {
+    setSlider('zoi-a', d.zoi.p1 ?? 1, 'd-zoi-a', 2);
+    setSlider('zoi-b', d.zoi.p2 ?? 1, 'd-zoi-b', 2);
+  }
+  if (d.coi && dparApplies('coi')) {
+    setSlider('coi-a', d.coi.p1 ?? 1, 'd-coi-a', 2);
+    setSlider('coi-b', d.coi.p2 ?? 1, 'd-coi-b', 2);
   }
 
   // LMM — note: d-reip and d-resp are the correct display IDs
