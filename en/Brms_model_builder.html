@@ -707,8 +707,8 @@ function renderPredList() {
         <span class="pred-idx">Predictor ${i+1}</span>
         ${predictorNames.length > 1 ? `<button class="pred-rm" onclick="removePredictor(${i})">✕</button>` : ''}
       </div>
-      <input type="text" value="${name}" placeholder="Variable name"
-             oninput="predictorNames[${i}]=this.value.trim()||'x${i+1}';update()">
+      <input type="text" value="${escHtml(name)}" placeholder="Variable name"
+             oninput="renamePredictor(${i}, this.value)">
       <select style="font-size:.72rem;margin-top:.25rem;width:100%;font-family:'DM Mono',monospace"
               onchange="predictorDegrees[${i}]=+this.value;update()">
         <option value="1" ${(predictorDegrees[i]||1)===1?'selected':''}>linear (degree 1)</option>
@@ -717,6 +717,70 @@ function renderPredList() {
       </select>`;
     c.appendChild(div);
   });
+}
+// Renaming a predictor used to only update predictorNames[i] — every OTHER place that
+// references a predictor by its name string (interaction terms in `inters`, the RE
+// slope-variable list, each distributional dpar's comma-separated predictor box, AND every
+// userPriors[] key built from the name — 'mu_b_<name>', '<dpar>_b_<name>', 're_sd_slp_<name>',
+// polynomial coefs 'mu_b_I(<name>^2)', interaction coefs 'mu_b_<name>:<other>') kept the OLD
+// name. That left the generated formula with stale terms like `x1:x2`/`(1+x1|g)` referencing
+// a variable that no longer exists once the user renames x1 to something meaningful —
+// confirmed fatal via real brms: "variables can neither be found in 'data'... 'x1'" — AND
+// silently dropped any custom prior the user had already typed for that predictor back to
+// the default, since it was now filed under an orphaned old key nothing reads anymore.
+function renamePredictor(i, rawVal) {
+  const oldName = predictorNames[i];
+  const newName = rawVal.trim() || ('x' + (i + 1));
+  predictorNames[i] = newName;
+  // A name colliding with another predictor/the outcome/the group variable doesn't error at
+  // save time — R formula terms are a SET, so "x1 + x1" silently collapses to one term, while
+  // this tool still generates a SEPARATE prior() row per (same-named) predictor card. brms
+  // then rejects the whole prior list outright ("Duplicated prior specifications are not
+  // allowed") — confirmed via real validate_prior(). Warn immediately rather than let the user
+  // discover it only when the generated code fails to validate.
+  const others = [...predictorNames.filter((n,j)=>j!==i),
+                   document.getElementById('outcome')?.value,
+                   document.getElementById('group-var')?.value];
+  if (others.includes(newName)) {
+    showToast(`⚠ "${newName}" is already used (outcome/group/another predictor) — priors would collide`, 'var(--accent)');
+  }
+  if (newName === oldName) { update(); return; }
+  const renameList = (str) => str.split(',').map(s => s.trim()).filter(Boolean)
+    .map(s => s === oldName ? newName : s).join(', ');
+  const renameInter = (str) => str.split(':').map(s => s.trim() === oldName ? newName : s).join(':');
+  const migrateKey = (oldKey, newKey) => {
+    if (oldKey !== newKey && userPriors[oldKey] !== undefined && userPriors[newKey] === undefined) {
+      userPriors[newKey] = userPriors[oldKey];
+      delete userPriors[oldKey];
+    }
+  };
+  const DPAR_PREFIXES = ['sigma','nu','shape','phi','ndt','alpha','zi','zoi','coi'];
+
+  // Main beta + distributional-beta priors, including polynomial terms (I(x^2)/I(x^3))
+  migrateKey('mu_b_' + oldName, 'mu_b_' + newName);
+  DPAR_PREFIXES.forEach(d => migrateKey(d + '_b_' + oldName, d + '_b_' + newName));
+  const deg = predictorDegrees[i] || 1;
+  for (let p = 2; p <= deg; p++) {
+    migrateKey(`mu_b_I(${oldName}^${p})`, `mu_b_I(${newName}^${p})`);
+  }
+
+  // RE slope-SD prior
+  migrateKey('re_sd_slp_' + oldName, 're_sd_slp_' + newName);
+
+  // Interaction-term priors — compute each old/new interaction string BEFORE inters itself
+  // is rewritten, so the migration targets the exact pre-rename key.
+  inters.forEach(ix => {
+    const newIx = renameInter(ix);
+    if (newIx !== ix) migrateKey('mu_b_' + ix, 'mu_b_' + newIx);
+  });
+  inters = inters.map(renameInter);
+
+  const slopeEl = document.getElementById('re-slope-vars');
+  if (slopeEl && slopeEl.value.trim()) slopeEl.value = renameList(slopeEl.value);
+  document.querySelectorAll('.d-pre').forEach(inp => {
+    if (inp.value.trim()) inp.value = renameList(inp.value);
+  });
+  update();
 }
 function addPredictor() {
   const n = predictorNames.length + 1;
@@ -733,12 +797,48 @@ function removePredictor(idx) {
   update();
 }
 
+// User-typed predictor/outcome/interaction names are interpolated into several innerHTML
+// template strings (the predictor-name input's value="" attribute, the sidebar prior-list
+// labels, the interaction-term tags) with NO escaping — a name containing a quote breaks out
+// of the value="" attribute (silently truncating what the user sees/can edit), and a name
+// containing a tag like "<b>" is interpreted as live HTML/injected into the DOM rather than
+// shown as text. Confirmed both live in-browser. The generated R-code display already escapes
+// </> separately (see the model_formula line below); this covers the sidebar UI spots that
+// didn't.
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 // brms renames I(x^n)-style formula terms to valid Stan parameter names by dropping
 // the parentheses and turning "^" into "E" (confirmed against brms::default_prior():
 // "I(x1^2)" -> "Ix1E2"). Prior coef="..." strings must use this sanitized form, not
 // the raw formula term, or brms rejects the prior as matching no model parameter.
 function brmsCoefName(term) {
   return term.replace(/[()]/g, '').replace(/\^/g, 'E');
+}
+
+// User-typed outcome/predictor/group names are pasted into the generated R formula as BARE
+// identifiers (e.g. `${y} ~ ${muTerms}`), not quoted strings — a perfectly ordinary name like
+// "Reaction Time" (one space) or "Income ($)" therefore produced R code that fails to even
+// parse (confirmed via real R: "unerwartetes Symbol" at the first space). R requires backtick-
+// quoting for any "non-syntactic" name (contains anything but letters/digits/./_, starts with
+// a digit, or is a reserved word) wherever it's used as a bare identifier — valid syntactic
+// names pass through unchanged since backticks around those would just be noise.
+const R_RESERVED = new Set(['if','else','repeat','while','function','for','in','next','break',
+  'TRUE','FALSE','NULL','Inf','NaN','NA','NA_integer_','NA_real_','NA_character_','NA_complex_']);
+function rName(name) {
+  const n = String(name);
+  if (/^[a-zA-Z.][a-zA-Z0-9._]*$/.test(n) && !R_RESERVED.has(n)) return n;
+  return '`' + n.replace(/`/g, '\\`') + '`';
+}
+// Same, but for a full formula TERM — handles "I(x1^2)" polynomial terms (escape the inner
+// name, not the whole "I(...)" wrapper) and "x1:x2" interaction terms (escape each side of
+// the ':' separately, not the combined string as one identifier).
+function rFormulaTerm(term) {
+  if (term.includes(':')) return term.split(':').map(rFormulaTerm).join(':');
+  const m = term.match(/^I\((.+)\^(\d+)\)$/);
+  if (m) return `I(${rName(m[1])}^${m[2]})`;
+  return rName(term);
 }
 
 // Expand predictor names to include polynomial terms: ['x1','I(x1^2)','I(x1^3)']
@@ -771,7 +871,7 @@ function removeInter(idx) { inters.splice(idx, 1); update(); }
 
 function renderInterTags() {
   document.getElementById('inter-tags').innerHTML =
-    inters.map((t,i) => `<span class="tag" onclick="removeInter(${i})">${t} ✕</span>`).join('');
+    inters.map((t,i) => `<span class="tag" onclick="removeInter(${i})">${escHtml(t)} ✕</span>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -942,9 +1042,14 @@ function computePriorRows(preds, activeD, hasRE, g, reType, slopeVars) {
       slopeVars.forEach((sv, idx) =>
         addRow('re_sd_slp_' + sv, 'τ' + (idx+1) + '\u2009sd(' + sv + ')', 'sd', sv, null,
                '\\tau_{' + (idx+1) + '}', undefined, g));
-      // Correlation prior
-      if (!userPriors['re_cor']) userPriors['re_cor'] = DEF_PRIORS.cor;
-      rows.push({ id:'re_cor', label:'ρ\u2009cor', cls:'cor', coef:null, dpar:null, sym:'\\rho' });
+      // Correlation prior — only once a slope variable is actually set. buildRCode()'s own
+      // formula gate is `reType==='slope' && slopeVars.length>0`; with slopeVars still empty
+      // (e.g. right after switching the RE-type radio to "Slope", before typing a variable)
+      // the formula falls back to a plain `(1|g)` with no cor() term at all, so a cor prior
+      // here would target a model parameter that doesn't exist — confirmed via validate_prior()
+      // ("The following priors do not correspond to any model parameter: L ~ lkj(2)").
+      if (slopeVars.length > 0 && !userPriors['re_cor']) userPriors['re_cor'] = DEF_PRIORS.cor;
+      if (slopeVars.length > 0) rows.push({ id:'re_cor', label:'ρ\u2009cor', cls:'cor', coef:null, dpar:null, sym:'\\rho' });
     }
   }
 
@@ -982,9 +1087,9 @@ function renderPriorListUI(rows) {
   }
   rows.forEach(r => {
     pUI += `<div class="prior-row">
-      <div class="prior-lbl">${clsBadge(r.cls, r.dpar)}${r.label}</div>
+      <div class="prior-lbl">${clsBadge(r.cls, r.dpar)}${escHtml(r.label)}</div>
       <input class="prior-inp" type="text" id="pi-${r.id}"
-             value="${gPrior(r.id, r.cls, r.defOverride)}"
+             value="${escHtml(gPrior(r.id, r.cls, r.defOverride))}"
              oninput="userPriors['${r.id}']=this.value;schedPriorInput()">
     </div>`;
   });
@@ -1004,15 +1109,26 @@ function buildPriorSection(preds, activeD, hasRE, g, reType, slopeVars) {
 //  R CODE GENERATION
 // ═══════════════════════════════════════════════════════════
 function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRows) {
-  const y    = document.getElementById('outcome').value || 'Y';
+  const y    = rName(document.getElementById('outcome').value || 'Y');
   const f    = gFamily();
-  const iter = document.getElementById('iter').value;
-  const warm = document.getElementById('warm').value;
-  const ch   = document.getElementById('chains').value;
-  const co   = document.getElementById('cores').value;
+  // iter/warm/chains/cores were previously inserted as raw .value strings with no parsing
+  // or validation at all — a non-numeric "cores" value produced literally invalid R syntax
+  // (`cores = ,`), and negative/zero/warmup>=iter values produced syntactically valid but
+  // nonsensical brm() calls that error at runtime. Parse + clamp to sane bounds, matching the
+  // existing defensive pattern already used for adapt_delta/max_treedepth two lines below.
+  const iter = Math.max(1, parseInt(document.getElementById('iter').value) || 2000);
+  const warm = Math.max(0, Math.min(parseInt(document.getElementById('warm').value) || 1000, iter - 1));
+  const ch   = Math.max(1, parseInt(document.getElementById('chains').value) || 4);
+  const co   = Math.max(1, parseInt(document.getElementById('cores').value) || 4);
   const back = document.getElementById('backend').value;
-  const delta = parseFloat(document.getElementById('adapt-delta')?.value || 0.80).toFixed(2);
-  const tree  = parseInt(document.getElementById('max-tree')?.value || 10);
+  // adapt_delta must be in (0,1) and max_treedepth must be a positive integer, or brms
+  // rejects the control list outright — clamp rather than pass extreme typed values through
+  // unchecked (e.g. adapt_delta=5 or max_treedepth=-3 previously went straight into the
+  // generated control=list(...) verbatim).
+  // Clamp ceiling is 0.99, not nominally-valid-but-display-breaking 0.999: toFixed(2) below
+  // rounds 0.999 to "1.00", which brms then rejects too (adapt_delta must be < 1 strictly).
+  const delta = Math.min(0.99, Math.max(0.5, parseFloat(document.getElementById('adapt-delta')?.value) || 0.80)).toFixed(2);
+  const tree  = Math.max(1, parseInt(document.getElementById('max-tree')?.value) || 10);
   const fileRaw = (document.getElementById('fit-file')?.value || '').trim();
   const fitName = (document.getElementById('fit-name')?.value || 'fit').trim() || 'fit';
   const fileLine = fileRaw ? `\n  <span class="nm">file</span>   = <span class="str">"${fileRaw}"</span>,` : '';
@@ -1034,20 +1150,21 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     : '';
 
   // formula always in bf() to avoid errors
-  const trialsV  = (document.getElementById('trials-var')?.value || 'trials').trim() || 'trials';
+  const trialsV  = rName((document.getElementById('trials-var')?.value || 'trials').trim() || 'trials');
   const trailsExpr = (f === 'beta_binomial' || f === 'binomial') ? ` | trials(${trialsV})` : '';
   const expandedPreds = expandPreds(preds, predictorDegrees);
   const isOrdinalCode = f === 'cumulative' || f === 'categorical';
-  const predTerms = [...expandedPreds, ...inters].join(' + ');
+  const predTerms = [...expandedPreds, ...inters].map(rFormulaTerm).join(' + ');
   const muTerms = isOrdinalCode
     ? (predTerms || '1')
     : (predTerms ? '0 + Intercept + ' + predTerms : '0 + Intercept');
+  const gR = rName(g);
   let reC = '';
   if (hasRE && g) {
     if (reType === 'slope' && slopeVars.length > 0) {
-      reC = ` + (1 + ${slopeVars.join(' + ')} | ${g})`;
+      reC = ` + (1 + ${slopeVars.map(rFormulaTerm).join(' + ')} | ${gR})`;
     } else {
-      reC = ` + (1 | ${g})`;
+      reC = ` + (1 | ${gR})`;
     }
   }
 
@@ -1055,7 +1172,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
   if (activeD.length > 0) {
     let lines = `bf(\n  ${y}${trailsExpr} ~ ${muTerms}${reC}`;
     activeD.forEach(d => {
-      lines += `,\n  ${d.n} ~ ${d.preds.length > 0 ? '0 + Intercept + ' + d.preds.join(' + ') : '0 + Intercept'}`;
+      lines += `,\n  ${d.n} ~ ${d.preds.length > 0 ? '0 + Intercept + ' + d.preds.map(rFormulaTerm).join(' + ') : '0 + Intercept'}`;
     });
     lines += '\n)';
     formCode = lines;
@@ -1073,7 +1190,7 @@ function buildRCode(preds, inters, activeD, hasRE, g, reType, slopeVars, priorRo
     // emit this for rows that actually carry a group (currently just the sd rows).
     const group = r.group ? `, group = "${r.group}"` : '';
     const dpar  = r.dpar ? `, dpar = "${r.dpar}"` : '';
-    return `  <span class="str">prior(${gPrior(r.id, r.cls, r.defOverride)}, ${cls}${coef}${group}${dpar})</span>`;
+    return `  <span class="str">prior(${escHtml(gPrior(r.id, r.cls, r.defOverride))}, ${cls}${coef}${group}${dpar})</span>`;
   });
 
   const famStr =
@@ -1348,7 +1465,7 @@ function fmtPriorTex(str) {
     cauchy:'Cauchy', gamma:'Gamma', lkj:'LKJ',
     half_normal:'Half\\text{-}Normal', half_student:'Half\\text{-}t',
     half_cauchy:'Half\\text{-}Cauchy',
-    beta:'Beta'
+    beta:'Beta', lognormal:'Lognormal'
   };
   const n = famTex[fam] || fam;
   return `\\operatorname{${n}}(${args})`;
@@ -1548,6 +1665,12 @@ function ppcLocToStr(p) {
     case 'normal':    return `normal(${fmt(p.mu)}, ${fmt(p.sig)})`;
     case 'student_t': return `student_t(${fmt(p.nu??3)}, ${fmt(p.mu)}, ${fmt(p.sig)})`;
     case 'cauchy':    return `cauchy(${fmt(p.mu)}, ${fmt(p.sig)})`;
+    // PP-Check's intercept/predictor prior pickers also offer Lognormal as a real, sampled
+    // choice (drawLoc() there implements it as exp(rNorm(mu,sig))) — falling through to the
+    // default below silently turned it into a symmetric, unbounded normal(mu,sig) with the
+    // same numbers, a different distribution. lognormal(mu,sigma) is valid brms prior syntax
+    // for class=b/Intercept (confirmed via validate_prior(), brms 2.21.0).
+    case 'lognormal': return `lognormal(${fmt(p.mu)}, ${fmt(p.sig)})`;
     default:          return `normal(${fmt(p.mu??0)}, ${fmt(p.sig??1)})`;
   }
 }
@@ -1561,6 +1684,11 @@ function ppcSigmaToStr(p) {
     case 'gamma':       return `gamma(${fmt(p.p1)}, ${fmt(p.p2??1)})`;
     default:            return `exponential(${fmt(p.p1??1)})`;
   }
+}
+// PPC's zi/zoi/coi fixed-mode UI is always Beta(a,b) — no family choice, unlike sigma.
+function ppcBetaToStr(p) {
+  if (!p) return 'beta(1, 1)';
+  return `beta(${fmt(p.p1??1)}, ${fmt(p.p2??1)})`;
 }
 function fmt(n) {
   const v = parseFloat(n);
@@ -1675,8 +1803,12 @@ function exportToPPC() {
     lmm:        hasRE,
     groupVar:   g,
     reStruct:   reType === 'slope' ? 'slope' : 'intercept',
-    reInt:      { fam: reIntSig.fam, p1: reIntSig.p1 },
-    reSlp:      reSlpSig ? { fam: reSlpSig.fam, p1: reSlpSig.p1 } : { fam:'half_normal', p1:1 },
+    // p2/nu included too (not just fam/p1) — dropping them silently reset a half_student
+    // RE-SD prior's real nu (e.g. student_t(5,0,0.9)) back to PP-Check's default nu=3 on
+    // import, and would do the same to a gamma RE-SD prior's rate/p2 (confirmed via a live
+    // Builder->PPC round-trip test: nu=5 sent, PPC's re-slp-nu read back as 3).
+    reInt:      { fam: reIntSig.fam, p1: reIntSig.p1, p2: reIntSig.p2, nu: reIntSig.nu },
+    reSlp:      reSlpSig ? { fam: reSlpSig.fam, p1: reSlpSig.p1, p2: reSlpSig.p2, nu: reSlpSig.nu } : { fam:'half_normal', p1:1 },
     lkjEta:     lkjParsed?.eta ?? 2,
     slopeVarIndices: slopeVars.map(sv => preds.indexOf(sv)).filter(i => i >= 0)
   };
@@ -1876,6 +2008,17 @@ function importFromPPC() {
     });
   }
   if (d.sigma) userPriors['fixed_sigma'] = ppcSigmaToStr(d.sigma);
+  // Fixed-mode (non-distributional) aux-parameter priors — mirrors this file's own
+  // exportToPPC() fix for the opposite direction. PP-Check always sends shape/phi as a plain
+  // Exponential(rate) object (its own fixed-mode UI has no family choice there, unlike sigma),
+  // ndt/alpha as Normal(mu,sig), and zi/zoi/coi as Beta(a,b).
+  if (d.shape) userPriors['fixed_shape']      = ppcSigmaToStr(d.shape);
+  if (d.phi)   userPriors['fixed_phi']        = ppcSigmaToStr(d.phi);
+  if (d.ndt)   userPriors['fixed_ndt']        = ppcLocToStr(d.ndt);
+  if (d.alpha) userPriors['fixed_alpha_skew'] = ppcLocToStr(d.alpha);
+  if (d.zi)    userPriors['fixed_zi']         = ppcBetaToStr(d.zi);
+  if (d.zoi)   userPriors['fixed_zoi']        = ppcBetaToStr(d.zoi);
+  if (d.coi)   userPriors['fixed_coi']        = ppcBetaToStr(d.coi);
 
   // Interactions
   // Interactions — always overwrite (not just when non-empty), otherwise a source model
@@ -1893,11 +2036,17 @@ function importFromPPC() {
     if (d.groupVar) document.getElementById('group-var').value = d.groupVar;
     const rt = (d.reStruct === 'slope') ? 'slope' : 'int';
     document.getElementById('re-type').value = rt;
-    if (d.reInt) userPriors['re_sd_int'] = `exponential(${fmt(d.reInt.p1 ?? 1)})`;
+    // Builder's RE-SD prior fields are plain free-text prior strings (no family selector of
+    // their own), so d.reInt/d.reSlp — PPC's sig-fam-vocabulary objects ({fam,p1,p2,nu}, exactly
+    // like d.sigma above) — need the SAME ppcSigmaToStr() conversion used for d.sigma, not a
+    // literal that silently hardcodes "exponential" regardless of what family PPC actually sent
+    // (half_normal/half_student/half_cauchy were all previously mis-imported as Exponential with
+    // the same number reinterpreted as a rate, a completely different prior).
+    if (d.reInt) userPriors['re_sd_int'] = ppcSigmaToStr(d.reInt);
     if (d.reSlp && d.slopeVarIndices && d.slopeVarIndices.length > 0) {
       const svNames = d.slopeVarIndices.map(i => predictorNames[i] || ('x'+(i+1)));
       document.getElementById('re-slope-vars').value = svNames.join(', ');
-      svNames.forEach(sv => { userPriors['re_sd_slp_'+sv] = `exponential(${fmt(d.reSlp.p1??1)})`; });
+      svNames.forEach(sv => { userPriors['re_sd_slp_'+sv] = ppcSigmaToStr(d.reSlp); });
     }
     if (d.lkjEta) userPriors['re_cor'] = `lkj(${fmt(d.lkjEta)})`;
   }

@@ -914,6 +914,11 @@ function toggleIntroDetail(){
 // ─────────────────────────────────────────────────────────
 let MODEL      = 'linear';
 let USE_LMM    = false;
+// PP-Check has no group-variable-NAME concept of its own (only an anonymous group COUNT,
+// nGrp) — remembers whatever name Builder last sent so it round-trips back unchanged on
+// export instead of silently overwriting the user's real grouping variable (e.g. "subject")
+// with the hardcoded literal "group" after a single Builder->PPC->Builder hop.
+let importedGroupVar = null;
 let USE_AB     = false;
 let DARK       = true;
 let predictors = [];
@@ -1012,7 +1017,7 @@ function dparBetaPanelsHTML(betaCfgList, idPrefix, colorVar, dparSymbol, preds) 
   return (betaCfgList||[]).map((b,i) => {
     const pred = preds[b.predIdx];
     const pname = (pred && pred.name) || `x${b.predIdx+1}`;
-    return `<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(${colorVar})">Prior: β · ${dparSymbol} · ${pname}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of the sampled β values (distributional ${dparSymbol})</div><div id="${idPrefix}b${i}-a"></div></div>`;
+    return `<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(${colorVar})">Prior: β · ${dparSymbol} · ${escHtml(pname)}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of the sampled β values (distributional ${dparSymbol})</div><div id="${idPrefix}b${i}-a"></div></div>`;
   }).join('');
 }
 function drawDparBetaPanels(draws, betaCfgList, idPrefix, dpKey, colorVar) {
@@ -1435,6 +1440,16 @@ function updateSlopeChks() {
   });
 }
 
+// Predictor names only reach this file via Builder's exportToPPC() (no direct text input
+// here) but are interpolated into several innerHTML template strings unescaped — a name
+// containing HTML (typed in Builder, e.g. "x1 <b>INJECTED</b>") is interpreted as live markup
+// here too once round-tripped, not shown as text (confirmed live; same root-cause bug as
+// Brms_model_builder.html's renderPredList()/renderPriorListUI(), fixed there too this round).
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ─────────────────────────────────────────────────────────
 //  PREDICTORS
 // ─────────────────────────────────────────────────────────
@@ -1468,7 +1483,7 @@ function renderPredictors() {
     div.className = 'pred-block';
     div.innerHTML = `
       <div class="pred-hdr">
-        <span class="pred-name">β · ${label}</span>
+        <span class="pred-name">β · ${escHtml(label)}</span>
         <button class="pred-rm" onclick="removePredictor(${p.id})">✕</button>
       </div>
       <div class="pg">
@@ -1519,7 +1534,7 @@ function renderPredictors() {
         const mSt=muH>=100?1:muH>=10?0.5:0.1;
         const sSt=sMax>=10?0.5:0.1;
         return `<div style="margin-top:.3rem;padding:.3rem .4rem;border-left:2px solid var(--accent4);margin-left:.3rem">
-          <div class="pred-hdr" style="margin-bottom:.2rem"><span class="pred-name" style="font-size:.72rem;color:var(--accent4)">β${sup} · ${label}${sup}</span></div>
+          <div class="pred-hdr" style="margin-bottom:.2rem"><span class="pred-name" style="font-size:.72rem;color:var(--accent4)">β${sup} · ${escHtml(label)}${sup}</span></div>
           <div class="pg"><div class="pl"><span class="lbl">μ (Prior)</span><span class="pv pvp" id="pbm-${p.id}-${di}">${(pb.mu||0).toFixed(1)}</span></div>
             <input type="range" min="${-muH}" max="${muH}" step="${mSt}" value="${pb.mu||0}"
                    oninput="predictors.find(x=>x.id===${p.id}).polybetas[${di}].mu=+this.value;document.getElementById('pbm-${p.id}-${di}').textContent=(+this.value).toFixed(1);if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
@@ -1701,6 +1716,33 @@ function rBetaReg(mu, phi) {
   const b = Math.max(1e-4, (1 - mu) * phi);
   return rBeta(a, b);
 }
+// Draws the upper-triangular "onion method" factor R (K x K) of a KxK LKJ(eta) correlation
+// matrix (Lewandowski/Kurowicka/Joe 2009, Algorithm 2 — same algorithm as rethinking::rlkjcorr,
+// translated 1:1 from its R source) such that R'R = the correlation matrix. R's own columns are
+// each unit-norm by construction, so R itself already doubles as the needed lower-Cholesky-style
+// loading matrix for sampling correlated draws: for z ~ iid N(0,1)^K, v = R' z has Cov(v) =
+// R'(I)R = R'R = the correlation matrix. For K=2 this reduces exactly to the single-slope
+// rho = 2*rBeta(eta,eta)-1 case above (alpha = eta + (K-2)/2 = eta when K=2) — generalizes it
+// to any number of correlated random slopes instead of leaving them independently sampled
+// (which silently ignored the LKJ prior entirely for 2+ slopes).
+function rLKJOnionFactor(K, eta) {
+  const R = Array.from({length:K}, () => new Array(K).fill(0));
+  R[0][0] = 1;
+  if (K < 2) return R;
+  let alpha = eta + (K-2)/2;
+  const r12 = 2*rBeta(alpha, alpha) - 1;
+  R[0][1] = r12;
+  R[1][1] = Math.sqrt(Math.max(0, 1 - r12*r12));
+  for (let m = 2; m <= K-1; m++) {
+    alpha -= 0.5;
+    const y = rBeta(m/2, alpha);
+    const z = Array.from({length:m}, () => randn());
+    const znorm = Math.sqrt(z.reduce((s,v)=>s+v*v,0)) || 1e-9;
+    for (let i=0;i<m;i++) R[i][m] = Math.sqrt(y) * (z[i]/znorm);
+    R[m][m] = Math.sqrt(Math.max(0, 1-y));
+  }
+  return R;
+}
 
 function drawLoc(fam, mu, sig, nu) {
   // IMPROVED: Error handling for robustness
@@ -1877,7 +1919,7 @@ function setInterVal(id, key, val, dispId, dec) {
 function renderInterTerms() {
   // Tags
   document.getElementById('inter-tags').innerHTML =
-    interTerms.map(t => `<span class="tag" onclick="removeInterTerm(${t.id})">${t.name} ✕</span>`).join('');
+    interTerms.map(t => `<span class="tag" onclick="removeInterTerm(${t.id})">${escHtml(t.name)} ✕</span>`).join('');
   // Prior sliders
   const c = document.getElementById('inter-priors'); if (!c) return;
   c.innerHTML = '';
@@ -1886,7 +1928,7 @@ function renderInterTerms() {
     const d = document.createElement('div');
     d.style.cssText = 'border:1px solid var(--grid);padding:.38rem .48rem;margin-bottom:.25rem';
     d.innerHTML = `
-      <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--accent3);margin-bottom:.25rem">β · ${t.name}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--accent3);margin-bottom:.25rem">β · ${escHtml(t.name)}</div>
       <div class="pg">
         <div class="pl"><span class="lbl">μ</span><span class="pv pvg" id="itm-${t.id}">${t.mu.toFixed(1)}</span></div>
         <input type="range" min="-5" max="5" step="0.1" value="${t.mu}"
@@ -1938,7 +1980,7 @@ function renderDistSigBetas() {
     d.innerHTML = `
       <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.28rem">
         <input type="checkbox" id="dsck-${i}" ${b.active?'checked':''} onchange="distSigBetas[${i}].active=this.checked;if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
-        β_{σ, ${pname}}
+        β_{σ, ${escHtml(pname)}}
       </label>
       <div id="dsb-detail-${i}" style="display:${b.active?'':'none'}">
         <div class="pg">
@@ -1993,7 +2035,7 @@ function renderDistNuBetas() {
     d.innerHTML = `
       <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.28rem">
         <input type="checkbox" id="dnck-${i}" ${b.active?'checked':''} onchange="distNuBetas[${i}].active=this.checked;document.getElementById('dnb-detail-${i}').style.display=this.checked?'':'none';if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
-        β_{ν, ${pname}}
+        β_{ν, ${escHtml(pname)}}
       </label>
       <div id="dnb-detail-${i}" style="display:${b.active?'':'none'}">
         <div class="pg">
@@ -2043,7 +2085,7 @@ function renderDistAuxBetas(domKey) {
     d.innerHTML = `
       <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:.75rem;margin-bottom:.28rem">
         <input type="checkbox" id="d${domKey}ck-${i}" ${b.active?'checked':''} onchange="distAuxBetas['${stateKey}'][${i}].active=this.checked;document.getElementById('d${domKey}b-detail-${i}').style.display=this.checked?'':'none';if(lastSimA){clearTimeout(lazyTimer);lazyTimer=setTimeout(render,300)}">
-        β<sub>${stateKey},${pname}</sub>
+        β<sub>${stateKey},${escHtml(pname)}</sub>
       </label>
       <div id="d${domKey}b-detail-${i}" style="display:${b.active?'':'none'}">
         <div class="pg">
@@ -2309,22 +2351,28 @@ function simulate(cfg, model) {
       const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
       if (sv.length > 0) {
         tau1 = drawScale(cfg.reSlpFam, cfg.reSlpP1, cfg.reSlpNu);
-        if (sv.length === 1) {
-          const eta  = Math.max(0.5, cfg.lkjEta);
-          const betaS = Math.sqrt(0.25/(2*eta+1));
-          const rho  = Math.max(-0.99, Math.min(0.99, 2*Math.min(0.9999,Math.max(0.0001,rNorm(0.5,betaS)))-1));
-          groupOffsets = Array.from({length:cfg.nGrp}, () => {
-            const z0=randn(), z1=randn();
-            const bs = {}; bs[sv[0]] = tau1*(rho*z0 + Math.sqrt(1-rho*rho)*z1);
-            return { b0: tau0*z0, bs };
-          });
-        } else {
-          groupOffsets = Array.from({length:cfg.nGrp}, () => {
-            const bs = {};
-            sv.forEach(k => { bs[k] = rNorm(0, tau1); });
-            return { b0: rNorm(0, tau0), bs };
-          });
-        }
+        // Correlated intercept + all random slopes jointly, via a real (1+sv.length)-dim
+        // LKJ(eta) draw — not independent sampling, which silently ignored the LKJ prior
+        // entirely whenever 2+ slopes were selected (the eta slider was then a no-op for that
+        // case). K=2 (one slope) reduces exactly to the previously-fixed rho = 2*rBeta(eta,eta)-1
+        // special case, verified identical in distribution.
+        // IMPORTANT: the correlation matrix (R) is ONE realization per prior-predictive DRAW,
+        // shared across every group within that draw — only the standard-normal z vector varies
+        // per group. Drawing a fresh R per group (the first version of this fix) made each
+        // group's offsets correlated with an independently-random R, which averages out to
+        // approximately zero correlation across groups — caught via a live round-trip check
+        // (empirical group-level correlation came out ~10x smaller than the true LKJ(eta) draw
+        // it was supposed to realize).
+        const K = 1 + sv.length;
+        const R = rLKJOnionFactor(K, Math.max(0.5, cfg.lkjEta));
+        groupOffsets = Array.from({length:cfg.nGrp}, () => {
+          const z = Array.from({length:K}, () => randn());
+          const v = new Array(K).fill(0);
+          for (let i=0;i<K;i++) { let s=0; for (let k=0;k<=i;k++) s += R[k][i]*z[k]; v[i]=s; }
+          const bs = {};
+          sv.forEach((k, j) => { bs[k] = tau1 * v[1+j]; });
+          return { b0: tau0 * v[0], bs };
+        });
       } else {
         groupOffsets = Array.from({length:cfg.nGrp}, () => ({ b0:rNorm(0,tau0), bs:{} }));
       }
@@ -3119,6 +3167,26 @@ function plotInterLines(el, draws, interIdx, interTerm, colVar) {
 function brmsCoefName(term) {
   return term.replace(/[()]/g, '').replace(/\^/g, 'E');
 }
+// Predictor/interaction names only reach this file via Builder's exportToPPC() (no direct
+// text input here), but brmsCode() pastes them into the generated R formula as BARE
+// identifiers — a name containing a space ("Reaction Time", round-tripped from Builder)
+// therefore produced R code that fails to even parse, same root-cause bug as
+// Brms_model_builder.html's buildRCode() (fixed there this round via rName()/rFormulaTerm());
+// confirmed live here too before this fix. R requires backtick-quoting for any "non-syntactic"
+// name (anything but letters/digits/./_, digit-leading, or a reserved word).
+const R_RESERVED = new Set(['if','else','repeat','while','function','for','in','next','break',
+  'TRUE','FALSE','NULL','Inf','NaN','NA','NA_integer_','NA_real_','NA_character_','NA_complex_']);
+function rName(name) {
+  const n = String(name);
+  if (/^[a-zA-Z.][a-zA-Z0-9._]*$/.test(n) && !R_RESERVED.has(n)) return n;
+  return '`' + n.replace(/`/g, '\\`') + '`';
+}
+function rFormulaTerm(term) {
+  if (term.includes(':')) return term.split(':').map(rFormulaTerm).join(':');
+  const m = term.match(/^I\((.+)\^(\d+)\)$/);
+  if (m) return `I(${rName(m[1])}^${m[2]})`;
+  return rName(term);
+}
 function brmsCode(cfg) {
   const fmMap={
     linear:               'gaussian()',
@@ -3151,14 +3219,14 @@ function brmsCode(cfg) {
     allTermNames.push(pNames[i]);
     (p.polybetas||[]).forEach((_,di) => allTermNames.push(`I(${pNames[i]}^${di+2})`));
   });
-  const xTerms = allTermNames.join(' + ');
+  const xTerms = allTermNames.map(rFormulaTerm).join(' + ');
   const interNames = (cfg.interTerms||[]).map(t=>t.name);
-  const interTermsStr = interNames.length ? ' + ' + interNames.join(' + ') : '';
+  const interTermsStr = interNames.length ? ' + ' + interNames.map(rFormulaTerm).join(' + ') : '';
 
   const slopeTerms = (() => {
     const sv = cfg.slopeVars && cfg.slopeVars.length > 0 ? cfg.slopeVars : [];
     if (sv.length === 0) return '';
-    return sv.map(k => pNames[k] || `x${k+1}`).join(' + ');
+    return sv.map(k => pNames[k] || `x${k+1}`).map(rFormulaTerm).join(' + ');
   })();
   const lmmPart = cfg.lmm ? (slopeTerms ? ` + (1 + ${slopeTerms} | group)` : ` + (1 | group)`) : '';
 
@@ -3189,7 +3257,7 @@ function brmsCode(cfg) {
     // centered (mean-x) predicted value, not to sigma at x=0 as the UI/prior above it
     // implies. See CLAUDE.md QA checklist / Brms_model_builder.html's own rationale.
     // Intercept-only (no predictor checked) is valid: just '0 + Intercept', no trailing '+'
-    const dparRHS = preds => preds.length > 0 ? `0 + Intercept + ${preds.join(' + ')}` : `0 + Intercept`;
+    const dparRHS = preds => preds.length > 0 ? `0 + Intercept + ${preds.map(rFormulaTerm).join(' + ')}` : `0 + Intercept`;
     if (distSigActive) {
       const dsPreds = (cfg.distSigBetas||[]).map(b => pNames[b.predIdx] || `x${b.predIdx+1}`);
       bfLines += `,\n  sigma ~ ${dparRHS(dsPreds)}`;
@@ -3205,7 +3273,7 @@ function brmsCode(cfg) {
     });
     formulaRHS = `bf(\n${bfLines}\n)`;
   } else {
-    const trialsV = (MODEL==='beta_binomial'||MODEL==='binomial') ? ` | trials(${(document.getElementById('trials-var')?.value||'trials').trim()||'trials'})` : '';
+    const trialsV = (MODEL==='beta_binomial'||MODEL==='binomial') ? ` | trials(${rName((document.getElementById('trials-var')?.value||'trials').trim()||'trials')})` : '';
     formulaRHS = `bf(Y${trialsV} ~ ${intercPart}${interTermsStr}${lmmPart})`;
   }
 
@@ -3218,13 +3286,14 @@ function brmsCode(cfg) {
   const isCumulative = MODEL==='cumulative';
   const isCategoricalFam = MODEL==='categorical';
   const priorLines = isCumulative
-    ? [`  <span class="str">prior(${iFam}, class = Intercept)</span>  <span class="cm">// thresholds τ_k</span>`]
+    ? [`  <span class="cm"># thresholds τ_k</span>`,
+       `  <span class="str">prior(${iFam}, class = Intercept)</span>`]
     : isCategoricalFam
-      ? [`  <span class="cm">// categorical() fits one linear predictor per non-reference outcome category —</span>`,
-         `  <span class="cm">// every prior needs dpar = "mu&lt;category&gt;" (e.g. mub, muc), not a single shared</span>`,
-         `  <span class="cm">// Intercept/β prior, so no specific priors are generated here. Run</span>`,
-         `  <span class="cm">// default_prior(model_formula, data = my_data, family = ${fm}) to see the exact</span>`,
-         `  <span class="cm">// dpar names for your outcome's categories, then add priors manually.</span>`]
+      ? [`  <span class="cm"># categorical() fits one linear predictor per non-reference outcome category —</span>`,
+         `  <span class="cm"># every prior needs dpar = "mu&lt;category&gt;" (e.g. mub, muc), not a single shared</span>`,
+         `  <span class="cm"># Intercept/β prior, so no specific priors are generated here. Run</span>`,
+         `  <span class="cm"># default_prior(model_formula, data = my_data, family = ${fm}) to see the exact</span>`,
+         `  <span class="cm"># dpar names for your outcome's categories, then add priors manually.</span>`]
       : [`  <span class="str">prior(${iFam}, class = b, coef = Intercept)</span>`];
 
   // β priors — coef quoted, class = b without quotes; includes polynomial betas
@@ -3317,11 +3386,11 @@ function brmsCode(cfg) {
   }
   if (MODEL==='shifted_lognormal' && !distAuxActive.ndt) {
     const ndtM=(aux.ndtMu||0).toFixed(1), ndtS=Math.max(0.01,aux.ndtSig||0.3).toFixed(2);
-    priorLines.push(`  <span class="str">prior(normal(${ndtM}, ${ndtS}), class = ndt)  <span class="cm">// lb=0 automatic</span></span>`);
+    priorLines.push(`  <span class="str">prior(normal(${ndtM}, ${ndtS}), class = ndt)</span>  <span class="cm"># lb=0 automatic</span>`);
   }
   if (MODEL==='skew_normal' && !distAuxActive.alpha) {
     const axM=(aux.xiMu||0).toFixed(1), axS=Math.max(0.01,aux.xiSig||2).toFixed(1);
-    priorLines.push(`  <span class="str">prior(normal(${axM}, ${axS}), class = alpha)  <span class="cm">// skewness ξ</span></span>`);
+    priorLines.push(`  <span class="str">prior(normal(${axM}, ${axS}), class = alpha)</span>  <span class="cm"># skewness ξ</span>`);
   }
   if (MODEL==='zero_inflated_beta' && !distAuxActive.zi) {
     const ziA=(aux.ziA||1).toFixed(2), ziB=(aux.ziB||1).toFixed(2);
@@ -3583,13 +3652,13 @@ function render() {
     <div class="${gridCls}">
       ${cfg.preds.map((p,i)=>{
         const bname = p.name || (cfg.preds.length===1?'x':`x${i+1}`);
-        let html = `<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β · ${bname}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled β values (degree 1)</div><div id="bt${i}-a"></div></div>`;
+        let html = `<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β · ${escHtml(bname)}</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled β values (degree 1)</div><div id="bt${i}-a"></div></div>`;
         (p.polybetas||[]).forEach((_,di)=>{
-          html+=`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: β · I(${bname}^${di+2})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled β values (degree ${di+2})</div><div id="btpoly${i}-${di}-a"></div></div>`;
+          html+=`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: β · I(${escHtml(bname)}^${di+2})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled β values (degree ${di+2})</div><div id="btpoly${i}-${di}-a"></div></div>`;
         });
         return html;
       }).join('')}
-      ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β (${t.name})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled interaction coeff.</div><div id="ix${i}-a"></div></div>`).join('')}
+      ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent3)">Prior: β (${escHtml(t.name)})</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled interaction coeff.</div><div id="ix${i}-a"></div></div>`).join('')}
       ${hasSig?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent5)">Prior: ${sigDist.on?'Intercept α · ':''}σ${ MODEL==='lognormal'||MODEL==='shifted_lognormal'?' (log scale)': MODEL==='skew_normal'?' (Scale)':'' }</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled σ values${sigDist.on?' at x=0':''}</div><div id="sg-a"></div></div>${sigDist.on?dparBetaPanelsHTML(sigDist.betas,'sg','--accent5','σ',cfg.preds):''}`:''}
       ${hasNu?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent4)">Prior: ${nuDist.on?'Intercept α · ':''}ν (Degrees of Freedom)</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled ν values${nuDist.on?' at x=0':''}</div><div id="nu-a"></div></div>${nuDist.on?dparBetaPanelsHTML(nuDist.betas,'nu','--accent4','ν',cfg.preds):''}`:''}
       ${hasPhi?`<div class="cpanel"><div class="plbl" style="margin-bottom:.18rem;color:var(--accent6)">Prior: ${phiDist.on?'Intercept · ':''}φ ${ ['negbinomial','gamma'].includes(MODEL)?'(Shape/Overdispersion)':'(Precision)' }</div><div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.22rem">KDE of sampled φ values${phiDist.on?' at x=0':''}</div><div id="phi-a"></div></div>${phiDist.on?dparBetaPanelsHTML(phiDist.betas,'phi','--accent6','φ',cfg.preds):''}`:''}
@@ -3604,7 +3673,7 @@ function render() {
     ${(cfg.interTerms||[]).length > 0 ? `
     <div class="two">
       ${(cfg.interTerms||[]).map((t,i)=>`<div class="cpanel">
-        <div class="plbl" style="margin-bottom:.18rem">Interaction effect: ${t.name}</div>
+        <div class="plbl" style="margin-bottom:.18rem">Interaction effect: ${escHtml(t.name)}</div>
         <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-bottom:.28rem;line-height:1.5">
           E[y | ${t.name.split(':')[0]}, ${t.name.split(':')[1]||''} = −1SD / 0 / +1SD]
         </div>
@@ -4260,7 +4329,12 @@ const DISTS = [
     pdf:(x,p)=>(x<0?0:2*jStat.studentt.pdf(x/p.sig,p.nu)/p.sig),
     cdf:(x,p)=>(x<0?0:2*jStat.studentt.cdf(x/p.sig,p.nu)-1),
     mean:p=>(p.nu>1?p.sig*Math.sqrt(p.nu/Math.PI)*jStat.gammafn((p.nu-1)/2)/jStat.gammafn(p.nu/2):NaN),
-    variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2)*(1-2/Math.PI):Infinity),
+    // Var = E[X^2] - E[X]^2, NOT sig^2*nu/(nu-2)*(1-2/pi) (that shortcut is only exact in the
+    // nu->Infinity Gaussian limit, where it reduces to the half-normal variance below — for
+    // finite nu it silently drops the E[X]^2 term's true nu-dependence). Confirmed via real-R
+    // Monte Carlo: at nu=3 (this tool's own recommended default) true Var=1.784 vs the old
+    // formula's 1.090, a ~39% understatement of the prior's implied spread.
+    variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2) - (p.sig*Math.sqrt(p.nu/Math.PI)*jStat.gammafn((p.nu-1)/2)/jStat.gammafn(p.nu/2))**2 : Infinity),
     support:p=>[0,Infinity],
   },
   {
@@ -4346,16 +4420,22 @@ const DISTS = [
     params:[
       {id:'eta', label:'η (Concentration)', min:0.5, max:20, step:0.25, val:2},
     ],
-    // For a single correlation from LKJ(η) with d=2: pdf ∝ (1-ρ²)^(η-1)
+    // For a single correlation from LKJ(η) with d=2: rho=2Y-1 where Y~Beta(η,η), so
+    // pdf(rho) ∝ (1-ρ²)^(η-1) with normalising constant 2^(2η-1)*B(η,η) (integral of
+    // (1-ρ²)^(η-1) over [-1,1], confirmed via real-R numerical integration: at η=2 the old
+    // "2*(2η-1)*B" denominator gave 1 instead of the true 1.333, scaling the displayed
+    // density by a wrong, η-dependent factor).
     pdf:(x,p)=>{
       if(x<=-1||x>=1)return 0;
-      // normalising constant for d=2 LKJ
       const B=jStat.betafn(p.eta,p.eta);
-      return Math.pow(1-x*x,p.eta-1)/(2*(2*p.eta-1)*B||1);
+      return Math.pow(1-x*x,p.eta-1)/(Math.pow(2,2*p.eta-1)*B||1);
     },
     cdf:(x,p)=>null,
     mean:p=>0,
-    variance:p=>(p.eta>1?1/(2*p.eta-1):null),
+    // Var(rho) = 4*Var(Y) for Y~Beta(η,η): = 4*η²/((2η)²(2η+1)) = 1/(2η+1) — always finite
+    // (ρ is bounded on [-1,1]), confirmed via real-R Monte Carlo (η=2: true 0.200 vs the old
+    // "1/(2η-1)" formula's 0.333, a ~67% overstatement of the prior's correlation spread).
+    variance:p=>1/(2*p.eta+1),
     support:p=>[-1,1],
   },
 ];
@@ -5255,6 +5335,21 @@ window.exportToBuilder = function() {
     });
   });
 
+  // Fixed-mode (non-distributional) aux-parameter priors — mirror image of Builder's own
+  // exportToPPC() fix for the opposite direction. shape/phi share PPC's single 'phi-p1'
+  // Exponential(rate)-only slider (no family choice there, unlike sigma) — routed to
+  // Builder's separate shape/phi fields based on which one MODEL actually has; ndt/alpha are
+  // Normal(mu,sig); zi/zoi/coi are Beta(a,b). Only sent when the family has that dpar AND it
+  // isn't already covered by distPriors above (mutually exclusive, same convention as sigma).
+  const auxP = getAuxParams();
+  const shapePrior = (dparApplies('shape') && !cfg.distAuxOn.shape) ? { fam:'exponential', p1: auxP.phi } : null;
+  const phiPrior   = (dparApplies('phi')   && !cfg.distAuxOn.phi)   ? { fam:'exponential', p1: auxP.phi } : null;
+  const ndtPrior   = (dparApplies('ndt')   && !cfg.distAuxOn.ndt)   ? { fam:'normal', mu: auxP.ndtMu, sig: auxP.ndtSig } : null;
+  const alphaPrior = (dparApplies('alpha') && !cfg.distAuxOn.alpha) ? { fam:'normal', mu: auxP.xiMu,  sig: auxP.xiSig }  : null;
+  const ziPrior     = (dparApplies('zi')   && !cfg.distAuxOn.zi)    ? { fam:'beta', p1: auxP.ziA,  p2: auxP.ziB }  : null;
+  const zoiPrior    = (dparApplies('zoi')  && !cfg.distAuxOn.zoi)   ? { fam:'beta', p1: auxP.zoiA, p2: auxP.zoiB } : null;
+  const coiPrior    = (dparApplies('coi')  && !cfg.distAuxOn.coi)   ? { fam:'beta', p1: auxP.coiA, p2: auxP.coiB } : null;
+
   const payload = {
     version:    2,
     source:     'ppc',
@@ -5268,9 +5363,16 @@ window.exportToBuilder = function() {
     intercept:  intPrior,
     betas:      betaPriors,
     sigma:      sigPrior,
+    shape:      shapePrior,
+    phi:        phiPrior,
+    ndt:        ndtPrior,
+    alpha:      alphaPrior,
+    zi:         ziPrior,
+    zoi:        zoiPrior,
+    coi:        coiPrior,
     distPriors,
     lmm:        cfg.lmm,
-    groupVar:   'group',
+    groupVar:   importedGroupVar || 'group',
     reStruct:   cfg.reStruct === 'slope' ? 'slope' : 'intercept',
     reInt:      { fam: cfg.reIntFam, p1: cfg.reIntP1 },
     reSlp:      { fam: cfg.reSlpFam, p1: cfg.reSlpP1 },
@@ -5664,6 +5766,8 @@ window.importFromBuilder = function() {
     setSlider('coi-b', d.coi.p2 ?? 1, 'd-coi-b', 2);
   }
 
+  if (d.groupVar) importedGroupVar = d.groupVar;
+
   // LMM — note: d-reip and d-resp are the correct display IDs
   const lmmOk = newModel==='linear' || newModel==='student';
   if (d.lmm !== undefined && lmmOk) {
@@ -5682,13 +5786,21 @@ window.importFromBuilder = function() {
           cb.checked = d.slopeVarIndices.includes(parseInt(cb.value));
         });
       }
+      // fam must be applied (and its onChange fired, to show/hide the nu row — mirrors
+      // sig-fam/onSigFamChange() above) BEFORE setting nu, or a half_student nu value has
+      // nowhere visible to land; nu itself was previously never read from d.reInt/d.reSlp at
+      // all, silently resetting any custom half_student RE-SD prior's nu back to the UI's
+      // default of 3 on every Builder->PPC import (confirmed via a live round-trip: nu=5 sent
+      // by Builder, PPC showed nu=3) — Builder's own export now sends it (see exportToPPC()).
       if (d.reInt) {
+        if (d.reInt.fam) { const el=document.getElementById('re-int-fam'); if(el){ el.value=d.reInt.fam; onReIntFamChange(); } }
         setSlider('re-int-p1', d.reInt.p1 ?? 1, 'd-reip', 1);
-        if (d.reInt.fam) { const el=document.getElementById('re-int-fam'); if(el) el.value=d.reInt.fam; }
+        if (d.reInt.fam === 'half_student') setSlider('re-int-nu', d.reInt.nu ?? 3, 'd-reinu', 1);
       }
       if (d.reSlp) {
+        if (d.reSlp.fam) { const el=document.getElementById('re-slp-fam'); if(el){ el.value=d.reSlp.fam; onReSlpFamChange(); } }
         setSlider('re-slp-p1', d.reSlp.p1 ?? 1, 'd-resp', 1);
-        if (d.reSlp.fam) { const el=document.getElementById('re-slp-fam'); if(el) el.value=d.reSlp.fam; }
+        if (d.reSlp.fam === 'half_student') setSlider('re-slp-nu', d.reSlp.nu ?? 3, 'd-reslnu', 1);
       }
       if (d.lkjEta) setSlider('re-lkj', d.lkjEta, 'd-lkj', 1);
     }
