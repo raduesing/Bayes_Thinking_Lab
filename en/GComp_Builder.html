@@ -908,10 +908,14 @@ function classifyVars(d) {
 }
 
 function chip(v, roleClass, title) {
-  // Unified clickable chip; active state derived from current formula at render time
+  // Unified clickable chip; active state derived from current formula at render time.
+  // No inline onclick: an onclick="...('${v}')" attribute is HTML-entity-decoded BEFORE the
+  // browser compiles it as JS, so even a quote-escaped v can still break out of the inline JS
+  // string once decoded — data-var + a real addEventListener (wired in renderVarRoles(), which
+  // also HTML-escapes v as the DOM is just rebuilt) avoids that class of bug entirely.
   const p = parseFormula(document.getElementById('inFormula').value);
   const inFml = p ? p.vars.includes(v) : false;
-  return `<span class="var-chip ${roleClass}${inFml ? ' active' : ''}" data-var="${escAttr(v)}" onclick="toggleVar(this,'${escAttr(v)}')" title="${escAttr(title)}">${v}</span>`;
+  return `<span class="var-chip ${roleClass}${inFml ? ' active' : ''}" data-var="${escHtml(v)}" title="${escHtml(title)}">${escHtml(v)}</span>`;
 }
 
 function renderVarRoles(roles) {
@@ -970,6 +974,9 @@ function renderVarRoles(roles) {
   }
 
   cont.innerHTML = html;
+  cont.querySelectorAll('.var-chip').forEach(el => {
+    el.addEventListener('click', () => toggleVar(el, el.dataset.var));
+  });
 
   // Mediator effect type box
   const hasMed = med.length > 0;
@@ -1056,19 +1063,42 @@ function getFields() {
 
 function parseFormula(fml) {
   if (!fml) return null;
-  const m = fml.match(/([A-Za-z_\.][A-Za-z0-9_\.]*)\s*~\s*([\s\S]+)/);
+  // Non-greedy "everything up to the FIRST ~" — NOT a restrictive identifier character
+  // class. The previous pattern required the LHS to already look like a single syntactic R
+  // identifier (no spaces), so for a multi-word outcome name like "FEV1 Score ~ x + Age" it
+  // didn't fail to match — unanchored regex search silently found a match starting mid-string
+  // instead, returning lhs="Score" (just the LAST word) and quietly dropping "FEV1 " — the
+  // wrong outcome name was then baked into the actual generated model-fitting formula via
+  // rFormula() below. Confirmed live: m[1] was "Score" for that exact input.
+  const m = fml.match(/^(.+?)~([\s\S]+)/);
   if (!m) return null;
   const lhs = m[1].trim();
   const rhs = m[2].trim();
-  const reTerms = rhs.match(/\([^)]+\)/g) || [];
-  const fixedPart = rhs.replace(/\([^)]+\)/g, '').trim();
-  const terms = fixedPart.split('+').map(t=>t.trim()).filter(Boolean);
+  if (!lhs || !rhs) return null;
+  // Random-effects terms are specifically "(...|...)" (lme4/brms syntax). The previous
+  // regex matched ANY "(...)" group, so a perfectly ordinary polynomial/transform term like
+  // "I(age^2)" was misidentified as a random-effects term: it got stripped out of the fixed
+  // part entirely (silently losing "age" from var-extraction and leaving a dangling bogus "I"
+  // token), AND it wrongly set hasRE=true for a model with no random effect at all — which
+  // then appended a spurious "re_formula = NA" to every generated marginaleffects() call.
+  // tokenizeRHS() (used elsewhere in this file for the chip add/remove toggle) already splits
+  // on top-level "+" while respecting parenthesis depth, so reuse it here instead of a naive
+  // paren-strip, keeping non-RE parenthesized terms like "I(age^2)" intact as single terms.
+  const allTerms = tokenizeRHS(rhs);
+  const reTerms = allTerms.filter(t => /^\(.*\|.*\)$/.test(t));
+  const terms = allTerms.filter(t => !reTerms.includes(t));
   const interactions = terms.filter(t => /[\*:]/.test(t));
   const vars = new Set();
-  terms.forEach(t => t.split(/[\*:]/).forEach(v => {
-    const c = v.trim();
-    if (c && !['1','0','-1'].includes(c)) vars.add(c);
-  }));
+  terms.forEach(t => {
+    // "I(age^2)" -> extract "age" (strip the I(...) wrapper and a trailing ^power) so the
+    // underlying variable is still recognized by the formula/adj-set validation and the chip
+    // active-state highlighting, instead of being lost or kept as the whole opaque term.
+    const inner = t.match(/^I\((.+)\)$/)?.[1] ?? t;
+    inner.split(/[\*:]/).forEach(v => {
+      const c = v.replace(/\^\d+$/, '').trim();
+      if (c && !['1','0','-1'].includes(c)) vars.add(c);
+    });
+  });
   return { lhs, rhs, vars: [...vars], interactions, reTerms, hasRE: reTerms.length > 0 };
 }
 
@@ -1152,6 +1182,12 @@ function generateLive() {
     document.getElementById('codePanel').style.display = 'none';
     return;
   }
+  // Backtick-escaped variants for every spot these names are used as BARE R identifiers
+  // (column refs, list()/transform() argument tags, object names) — exp/out/mod/dat stay
+  // RAW for comments and quoted-string contexts (R string literals have no identifier
+  // syntax restrictions, so e.g. variables = "${exp}" or a "${exp}.csv" filename never
+  // needed escaping and must keep showing the real name there).
+  const expR = rName(exp), modR = rName(mod), datR = rName(dat);
 
   const p = parseFormula(fml);
   const isBrms    = mtype === 'brms';
@@ -1183,7 +1219,7 @@ function generateLive() {
   if (fml && re && !fml.includes(re)) fullFml = `${fml} + ${re}`;
 
   const familyStr = document.getElementById('inFamily').value.trim() || 'gaussian()';
-  const fmlForFit = fullFml || (exp && out ? `${out} ~ ${exp}` : `outcome ~ exposure`);
+  const fmlForFit = rFormula(fullFml || (exp && out ? `${out} ~ ${exp}` : `outcome ~ exposure`));
 
   let c = '';
   c += `library(marginaleffects)\nlibrary(ggplot2)\nlibrary(patchwork)\n\n`;
@@ -1191,14 +1227,14 @@ function generateLive() {
   // Model fitting template
   c += `# ══ STEP 1: FIT MODEL ════════════════════════════════════════════════════════\n`;
   if (isBinary && isFactor) {
-    c += `${dat}$${exp} <- as.factor(${dat}$${exp})  # factor encoding — required for levels() calls below\n`;
+    c += `${datR}$${expR} <- as.factor(${datR}$${expR})  # factor encoding — required for levels() calls below\n`;
   }
   if (mtype === 'brms') {
-    c += `${mod} <- brm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr},\n  chains  = 4, iter = 2000, warmup = 1000,\n  cores   = parallel::detectCores()\n)\n\n`;
+    c += `${modR} <- brm(\n  formula = ${fmlForFit},\n  data    = ${datR},\n  family  = ${familyStr},\n  chains  = 4, iter = 2000, warmup = 1000,\n  cores   = parallel::detectCores()\n)\n\n`;
   } else if (mtype === 'glmmTMB') {
-    c += `${mod} <- glmmTMB(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr}\n)\n\n`;
+    c += `${modR} <- glmmTMB(\n  formula = ${fmlForFit},\n  data    = ${datR},\n  family  = ${familyStr}\n)\n\n`;
   } else {
-    c += `${mod} <- glm(\n  formula = ${fmlForFit},\n  data    = ${dat},\n  family  = ${familyStr}\n)\n\n`;
+    c += `${modR} <- glm(\n  formula = ${fmlForFit},\n  data    = ${datR},\n  family  = ${familyStr}\n)\n\n`;
   }
 
   c += `# ══ STEP 2: G-COMPUTATION ════════════════════════════════════════════════════\n`;
@@ -1221,44 +1257,44 @@ function generateLive() {
   if (isBinary) {
     // Factor mode vs. manual v0/v1
     const varSpec   = isFactor
-      ? `list(${exp} = levels(${dat}$${exp}))`
-      : `list(${exp} = c(${v0}, ${v1}))`;
+      ? `list(${expR} = levels(${datR}$${expR}))`
+      : `list(${expR} = c(${v0}, ${v1}))`;
     const subsetTrt = isFactor
-      ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[2])`
-      : `subset(${dat}, ${exp} == ${v1})`;
+      ? `subset(${datR}, ${expR} == levels(${datR}$${expR})[2])`
+      : `subset(${datR}, ${expR} == ${v1})`;
     const subsetCtl = isFactor
-      ? `subset(${dat}, ${exp} == levels(${dat}$${exp})[1])`
-      : `subset(${dat}, ${exp} == ${v0})`;
+      ? `subset(${datR}, ${expR} == levels(${datR}$${expR})[1])`
+      : `subset(${datR}, ${expR} == ${v0})`;
     const cfTrt     = isFactor
-      ? `transform(${dat}, ${exp} = factor(levels(${dat}$${exp})[2], levels=levels(${dat}$${exp})))`
-      : `transform(${dat}, ${exp} = ${v1})`;
+      ? `transform(${datR}, ${expR} = factor(levels(${datR}$${expR})[2], levels=levels(${datR}$${expR})))`
+      : `transform(${datR}, ${expR} = ${v1})`;
     const cfCtl     = isFactor
-      ? `transform(${dat}, ${exp} = factor(levels(${dat}$${exp})[1], levels=levels(${dat}$${exp})))`
-      : `transform(${dat}, ${exp} = ${v0})`;
+      ? `transform(${datR}, ${expR} = factor(levels(${datR}$${expR})[1], levels=levels(${datR}$${expR})))`
+      : `transform(${datR}, ${expR} = ${v0})`;
 
     if (showATE) {
       c += `# ── ATE — Average Treatment Effect (full population) ───────────────────────\n`;
-      c += `ate <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\nprint(ate)\n\n`;
+      c += `ate <- avg_comparisons(\n  ${modR},\n  variables  = ${varSpec},\n  newdata    = ${datR},\n  conf_level = 0.95${reArg}\n)\nprint(ate)\n\n`;
     }
     if (showATT) {
       c += `# ── ATT — Average Treatment Effect on the Treated ──────────────────────────\n`;
-      c += `att <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${subsetTrt},\n  conf_level = 0.95${reArg}\n)\nprint(att)\n\n`;
+      c += `att <- avg_comparisons(\n  ${modR},\n  variables  = ${varSpec},\n  newdata    = ${subsetTrt},\n  conf_level = 0.95${reArg}\n)\nprint(att)\n\n`;
     }
     if (showATU) {
       c += `# ── ATU — Average Treatment Effect on the Untreated ────────────────────────\n`;
-      c += `atu <- avg_comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${subsetCtl},\n  conf_level = 0.95${reArg}\n)\nprint(atu)\n\n`;
+      c += `atu <- avg_comparisons(\n  ${modR},\n  variables  = ${varSpec},\n  newdata    = ${subsetCtl},\n  conf_level = 0.95${reArg}\n)\nprint(atu)\n\n`;
     }
 
     // Counterfactual predictions (individual-level for density plot)
     c += `# ── Counterfactual predictions (individual-level, for distribution plot) ────\n`;
     c += `# predictions() returns one row per observation — required for geom_density()\n`;
-    c += `pred_1 <- predictions(${mod}, newdata = ${cfTrt}${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
-    c += `pred_0 <- predictions(${mod}, newdata = ${cfCtl}${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
+    c += `pred_1 <- predictions(${modR}, newdata = ${cfTrt}${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
+    c += `pred_0 <- predictions(${modR}, newdata = ${cfCtl}${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
 
     // Conditional effect
     if (showCond && moderator) {
       c += `# ── Conditional Effect (effect heterogeneity over ${moderator}) ────────────────\n`;
-      c += `cond <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  condition  = "${moderator}",\n  conf_level = 0.95${reArg}\n)\nprint(cond)\n\n`;
+      c += `cond <- comparisons(\n  ${modR},\n  variables  = ${varSpec},\n  condition  = "${moderator}",\n  conf_level = 0.95${reArg}\n)\nprint(cond)\n\n`;
     } else if (showCond && !moderator) {
       c += `# ── Conditional Effect — please specify moderator variable above ───────────\n\n`;
     }
@@ -1282,8 +1318,8 @@ function generateLive() {
       c += `  theme_minimal(base_size=13) + theme(legend.position="none")\n\n`;
     }
 
-    const grpTrt = isFactor ? `levels(${dat}$${exp})[2]` : `"${exp} = ${v1}"`;
-    const grpCtl = isFactor ? `levels(${dat}$${exp})[1]` : `"${exp} = ${v0}"`;
+    const grpTrt = isFactor ? `levels(${datR}$${expR})[2]` : `"${exp} = ${v1}"`;
+    const grpCtl = isFactor ? `levels(${datR}$${expR})[1]` : `"${exp} = ${v0}"`;
 
     // Plot 2 + 2b: patchwork — counterfactuals left, ICE right, shared row order
     c += `# 2 — Counterfactual potential outcomes + ICE (patchwork, shared sort order)\n`;
@@ -1309,7 +1345,7 @@ function generateLive() {
     c += `  theme(legend.position = "bottom")\n\n`;
 
     c += `# Right plot: ICE = Ŷ(1) − Ŷ(0), same row order\n`;
-    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = ${varSpec},\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n`;
+    c += `ite_df <- comparisons(\n  ${modR},\n  variables  = ${varSpec},\n  newdata    = ${datR},\n  conf_level = 0.95${reArg}\n)\n`;
     c += `ite_df$.rank <- rank_vec                    # same sort order as left plot\n\n`;
 
     c += `p_ice <- ggplot(ite_df, aes(x = estimate, y = .rank)) +\n`;
@@ -1335,7 +1371,7 @@ function generateLive() {
 
     if (showCond && moderator) {
       c += `# 3 — Conditional effect: effect heterogeneity over ${moderator}\n`;
-      c += `plot_comparisons(${mod}, variables=${varSpec}, condition="${moderator}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
+      c += `plot_comparisons(${modR}, variables=${varSpec}, condition="${moderator}"${hasRE && isBrms ? ', re_formula=NA' : ''}) +\n`;
       c += `  labs(title=paste("Conditional effect of '${exp}'"),\n`;
       c += `       subtitle="Effect heterogeneity — moderator '${moderator}'",\n`;
       c += `       y=paste("Causal effect on '${out}'"), x="${moderator}") +\n`;
@@ -1344,33 +1380,45 @@ function generateLive() {
 
   } else {
     // METRIC
-    const cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
-                 ctype === 'sd'   ? '"sd"'     : `c(${manLo||'lo'}, ${manHi||'hi'})`;
     const clbl = ctype === 'range' ? 'Min → Max' : ctype === 'iqr' ? 'Q1 → Q3 (IQR)' :
                  ctype === 'sd'   ? '±1 SD'     : `${manLo} → ${manHi}`;
 
     // x_lo / x_hi R expressions for counterfactual patchwork
     let xLoR, xHiR;
-    if      (ctype === 'range')  { xLoR = `min(${dat}$${exp})`;                      xHiR = `max(${dat}$${exp})`; }
-    else if (ctype === 'iqr')    { xLoR = `quantile(${dat}$${exp}, 0.25)`;           xHiR = `quantile(${dat}$${exp}, 0.75)`; }
-    else if (ctype === 'sd')     { xLoR = `mean(${dat}$${exp}) - sd(${dat}$${exp})`; xHiR = `mean(${dat}$${exp}) + sd(${dat}$${exp})`; }
+    if      (ctype === 'range')  { xLoR = `min(${datR}$${expR})`;                      xHiR = `max(${datR}$${expR})`; }
+    else if (ctype === 'iqr')    { xLoR = `quantile(${datR}$${expR}, 0.25)`;           xHiR = `quantile(${datR}$${expR}, 0.75)`; }
+    else if (ctype === 'sd')     { xLoR = `mean(${datR}$${expR}) - sd(${datR}$${expR})`; xHiR = `mean(${datR}$${expR}) + sd(${datR}$${expR})`; }
     else                         { xLoR = manLo || 'lo';                              xHiR = manHi || 'hi'; }
+
+    // marginaleffects' own `variables = list(X = "sd")` shorthand does NOT compute the
+    // "mean-SD -> mean+SD" contrast this UI's own label/help text promise ("±1 SD" /
+    // "mean-SD -> mean+SD") — confirmed via real R (marginaleffects 0.## installed here): its
+    // "sd" string actually contrasts (x + sd/2) - (x - sd/2), a window HALF as wide (mean-SD/2
+    // to mean+SD/2). A user reading "±1 SD" and interpreting the resulting ate_k number as "the
+    // effect of moving a full SD in each direction" would silently get a number that's really
+    // only a half-SD-each-direction contrast, exactly half the claimed quantity. Build the
+    // interval explicitly from xLoR/xHiR (already the correct mean∓SD expression, shared with
+    // the counterfactual-prediction code below) instead of relying on marginaleffects'
+    // differently-scoped shortcut — same explicit-c(lo,hi) style already used for the "manual"
+    // contrast type.
+    const cval = ctype === 'range' ? '"minmax"' : ctype === 'iqr' ? '"iqr"' :
+                 ctype === 'sd'   ? `c(${xLoR}, ${xHiR})` : `c(${manLo||'lo'}, ${manHi||'hi'})`;
 
     const showATTK  = document.getElementById('ckATTK').checked;
     const cutType   = document.querySelector('input[name=ccut]:checked')?.value || 'median';
     const cutManVal = document.getElementById('inCutMan')?.value.trim() || '';
-    const cutExpr   = cutType === 'median' ? `median(${dat}$${exp})` : (cutManVal || `median(${dat}$${exp})`);
+    const cutExpr   = cutType === 'median' ? `median(${datR}$${expR})` : (cutManVal || `median(${datR}$${expR})`);
 
     c += `# ── AME — Average Marginal Effect (per 1 unit of ${exp}) ──────────────────────\n`;
     c += `# AME: average partial derivative dE[Y]/dX across all observations.\n`;
     c += `# Answers: "By how much does ${out} change per one unit increase in ${exp}?"\n`;
-    c += `ame <- avg_slopes(\n  ${mod},\n  variables  = "${exp}",\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\nprint(ame)\n\n`;
+    c += `ame <- avg_slopes(\n  ${modR},\n  variables  = "${exp}",\n  newdata    = ${datR},\n  conf_level = 0.95${reArg}\n)\nprint(ame)\n\n`;
 
     c += `# ── ate_k — Causal contrast: ${clbl} ───────────────────────────────────────────\n`;
     c += `# ate_k = E[Y(x_hi) − Y(x_lo)]: each person is "seen" twice\n`;
     c += `# (once with X=x_lo, once with X=x_hi), then averaged.\n`;
     c += `# This is true G-Computation — not a "typical person" estimate.\n`;
-    c += `ate_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\nprint(ate_k)\n\n`;
+    c += `ate_k <- avg_comparisons(\n  ${modR},\n  variables  = list(${expR} = ${cval}),\n  newdata    = ${datR},\n  conf_level = 0.95${reArg}\n)\nprint(ate_k)\n\n`;
 
     if (showATTK) {
       c += `# ── ATT/ATU analogue (artificial cutoff) ────────────────────────────────────\n`;
@@ -1378,25 +1426,25 @@ function generateLive() {
       c += `# att_k: contrast (${clbl}) — observations with X ≥ cutoff only\n`;
       c += `# atu_k: contrast (${clbl}) — observations with X < cutoff only\n`;
       c += `cut_val <- ${cutExpr}\n`;
-      c += `att_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = subset(${dat}, ${exp} >= cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(att_k)\n\n`;
-      c += `atu_k <- avg_comparisons(\n  ${mod},\n  variables  = list(${exp} = ${cval}),\n  newdata    = subset(${dat}, ${exp} < cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(atu_k)\n\n`;
+      c += `att_k <- avg_comparisons(\n  ${modR},\n  variables  = list(${expR} = ${cval}),\n  newdata    = subset(${datR}, ${expR} >= cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(att_k)\n\n`;
+      c += `atu_k <- avg_comparisons(\n  ${modR},\n  variables  = list(${expR} = ${cval}),\n  newdata    = subset(${datR}, ${expR} < cut_val),\n  conf_level = 0.95${reArg}\n)\nprint(atu_k)\n\n`;
     }
 
     c += `# ── Dose-response curve (true G-Computation) ───────────────────────────────\n`;
     c += `# variables=list() sets X to each grid value for ALL observations and averages\n`;
     c += `# — true marginalisation over the full confounder distribution.\n`;
-    c += `dose_grid <- seq(min(${dat}$${exp}), max(${dat}$${exp}), length.out = 100)\n`;
-    c += `pred_k <- avg_predictions(\n  ${mod},\n  variables = list(${exp} = dose_grid)${reArg}\n)\n\n`;
+    c += `dose_grid <- seq(min(${datR}$${expR}), max(${datR}$${expR}), length.out = 100)\n`;
+    c += `pred_k <- avg_predictions(\n  ${modR},\n  variables = list(${expR} = dose_grid)${reArg}\n)\n\n`;
 
     c += `# ── Individual counterfactual outcomes + ICE ────────────────────────────────\n`;
     c += `x_lo <- ${xLoR}\nx_hi <- ${xHiR}\n`;
-    c += `cf_lo <- predictions(${mod}, newdata = transform(${dat}, ${exp} = x_lo)${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
-    c += `cf_hi <- predictions(${mod}, newdata = transform(${dat}, ${exp} = x_hi)${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
+    c += `cf_lo <- predictions(${modR}, newdata = transform(${datR}, ${expR} = x_lo)${hasRE && isBrms ? ', re_formula = NA' : ''})\n`;
+    c += `cf_hi <- predictions(${modR}, newdata = transform(${datR}, ${expR} = x_hi)${hasRE && isBrms ? ', re_formula = NA' : ''})\n\n`;
 
     c += `# ══ VISUALISATION ════════════════════════════════════════════════════════════\n\n`;
 
     c += `# 1 — Dose-response curve\n`;
-    c += `ggplot(pred_k, aes(x = ${exp}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
+    c += `ggplot(pred_k, aes(x = ${expR}, y = estimate, ymin = conf.low, ymax = conf.high)) +\n`;
     c += `  geom_ribbon(alpha = 0.18, fill = "#7a3a8a") +\n`;
     c += `  geom_line(color = "#7a3a8a", linewidth = 1) +\n`;
     c += `  labs(title = "G-Computation: Counterfactual dose-response curve",\n`;
@@ -1437,7 +1485,7 @@ function generateLive() {
     c += `  theme_minimal(base_size = 13) + theme(legend.position = "none")\n\n`;
 
     c += `# 3 — Marginal slope (linearity check)\n`;
-    c += `plot_slopes(${mod}, variables = "${exp}", condition = "${exp}"${hasRE && isBrms ? ', re_formula = NA' : ''}) +\n`;
+    c += `plot_slopes(${modR}, variables = "${exp}", condition = "${exp}"${hasRE && isBrms ? ', re_formula = NA' : ''}) +\n`;
     c += `  geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +\n`;
     c += `  labs(title = "Marginal effect along exposure (linearity check)",\n`;
     c += `       subtitle = "Constant = linear effect; non-constant = nonlinear / interaction",\n`;
@@ -1463,7 +1511,7 @@ function generateLive() {
     c += `       x = "${out}", y = NULL, color = NULL) +\n`;
     c += `  theme_minimal(base_size = 13) + theme(legend.position = "bottom")\n\n`;
 
-    c += `ite_df <- comparisons(\n  ${mod},\n  variables  = list(${exp} = c(x_lo, x_hi)),\n  newdata    = ${dat},\n  conf_level = 0.95${reArg}\n)\n`;
+    c += `ite_df <- comparisons(\n  ${modR},\n  variables  = list(${expR} = c(x_lo, x_hi)),\n  newdata    = ${datR},\n  conf_level = 0.95${reArg}\n)\n`;
     c += `ite_df$.rank <- rank_vec\n\n`;
 
     c += `p_ice <- ggplot(ite_df, aes(x = estimate, y = .rank)) +\n`;
@@ -1565,8 +1613,56 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2200);
 }
-function escAttr(s) { return s.replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// var-chip's DAG-imported variable names (from Golem Builder, which places zero restriction
+// on node names) were previously interpolated into chip()'s innerHTML completely unescaped
+// as the chip's own text content — a name containing "<b>INJECTED</b>" rendered as a real,
+// live DOM element, confirmed in-browser. escAttr() only covered quote characters (enough to
+// not break out of an HTML attribute) but never escaped "<"/">"/"&", so it couldn't protect
+// a text-content position at all. Replaced with full escHtml(), used for both the attributes
+// AND the visible chip label.
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+// R requires backtick-quoting any "non-syntactic" identifier (space, punctuation, digit-
+// leading, reserved word) wherever it's used as a bare symbol. Exposure/outcome/adjustment-
+// set/model-object/dataframe names here come straight from free-text inputs (typed directly,
+// or imported from Golem Builder, which itself places zero restriction on node names) and
+// were pasted into the generated R code completely unescaped — e.g. "dat$Blood Pressure",
+// a guaranteed parse error, confirmed via real R (same root-cause bug class as
+// Brms_model_builder.html's rName()/rFormulaTerm(), which this mirrors).
+const R_RESERVED = new Set(['if','else','repeat','while','function','for','in','next','break',
+  'TRUE','FALSE','NULL','Inf','NaN','NA','NA_integer_','NA_real_','NA_character_','NA_complex_']);
+function rName(name) {
+  const n = String(name);
+  if (/^[a-zA-Z.][a-zA-Z0-9._]*$/.test(n) && !R_RESERVED.has(n)) return n;
+  return '`' + n.replace(/`/g, '\\`') + '`';
+}
+// A formula TERM: "I(x1^2)" (escape the inner name, not the wrapper), "x1:x2"/"x1*x2"
+// interactions (escape each side separately), or a plain bare name.
+function rFormulaTerm(term) {
+  if (term.includes(':')) return term.split(':').map(rFormulaTerm).join(':');
+  if (term.includes('*')) return term.split('*').map(s => rFormulaTerm(s.trim())).join(' * ');
+  const m = term.match(/^I\((.+)\^(\d+)\)$/);
+  if (m) return `I(${rName(m[1])}^${m[2]})`;
+  return rName(term);
+}
+// Rewrites a full "Y ~ x1 + I(x2^2) + x1:x2 + (1|g)" formula term-by-term through rName(), so
+// free-typed/imported names that need backticks get them consistently, while an
+// already-syntactic formula passes through unchanged. Random-effects terms "(...|...)" are
+// passed through verbatim (not rewritten) — a known, narrower residual gap (an RE group
+// variable with a non-syntactic name would still need manual backtick-quoting), same scope
+// discipline as the "data-frame names must themselves be syntactic" residual limitation
+// already documented for Brms_model_builder.html's identical fix.
+function rFormula(fml) {
+  const p = parseFormula(fml);
+  if (!p) return fml;
+  const fixedTerms = tokenizeRHS(p.rhs).filter(t => !p.reTerms.includes(t)).map(rFormulaTerm);
+  const rhsStr = [...fixedTerms, ...p.reTerms].join(' + ') || '1';
+  return `${rName(p.lhs)} ~ ${rhsStr}`;
+}
 </script>
 </body>
 </html>

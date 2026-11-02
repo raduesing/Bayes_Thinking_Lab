@@ -1874,7 +1874,7 @@ function renderSummary() {
   }).join('');
 
   // Summary R-code
-  let rcode = `library(bayestestR)\ndraws <- read.csv("draws.csv")\n\n`;
+  let rcode = `library(bayestestR)\n${rDrawsPreamble()}\n\n`;
   RESULTS.forEach(r => {
     const lbl = r.slot.label || 'Variable';
     rcode += `# ── ${lbl} ─────────────────────────────────────────\n`;
@@ -1894,10 +1894,30 @@ function renderSummary() {
   populateReportSelect();
 }
 
+// R's own read.csv()/make.names() sanitizes non-syntactic column names DIFFERENTLY from
+// sanitizeColName() above (e.g. "b[(Intercept)]" -> "b..Intercept.." via dots, not
+// "b__Intercept__" via underscores) — common for rstanarm/raw-Stan draw exports, which use
+// brackets/spaces/dots in parameter names. A formula built in-browser against the "safe" chip
+// names would silently reference a column that doesn't exist once pasted into R. Fix: read
+// with check.names=FALSE (keep the raw headers) and re-apply this exact same sanitization
+// algorithm in R, so the two sides agree. Verified byte-for-byte identical to buildColMap()'s
+// output via real R (gsub/sub/make.unique, same order and collision-suffix behavior as the
+// JS seen{}-counter logic above) across a set of representative brms/rstanarm column names.
+function rDrawsPreamble() {
+  return `draws <- read.csv("draws.csv", check.names = FALSE)
+.safe_names <- function(x) {
+  s <- gsub("[^a-zA-Z0-9_]", "_", x)
+  s <- sub("^([0-9])", "_\\\\1", s)
+  s[s == "" | s == "_"] <- "col"
+  make.unique(s, sep = "_")
+}
+names(draws) <- .safe_names(names(draws))`;
+}
+
 function genRCode(r) {
   const lbl = sanitizeLabel(r.slot.label || 'variable');
   return `library(bayestestR)
-draws <- read.csv("draws.csv")
+${rDrawsPreamble()}
 
 # ${r.slot.label || r.slot.formula}
 ${lbl} <- with(draws, ${r.slot.formula})
@@ -1969,7 +1989,7 @@ function exportTableHTML() {
     const decStyle = d.decision.includes('Effekt') ? 'color:#1a5e1a' :
       d.decision.includes('null') ? 'color:#1a3a6e' : 'color:#7a4200';
     return `<tr>
-      <td>${d.label}${d.unit ? ` <em>[${d.unit}]</em>` : ''}</td>
+      <td>${escHtml(d.label)}${d.unit ? ` <em>[${escHtml(d.unit)}]</em>` : ''}</td>
       <td style="text-align:right">${d.n.toLocaleString()}</td>
       <td style="text-align:right">${d.median.toFixed(3)}</td>
       <td style="text-align:right">${d.hdiLo.toFixed(3)}</td>
