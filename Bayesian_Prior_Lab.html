@@ -941,14 +941,35 @@ function init() {
 // Bayesian_Prior_Lab.html?glm=slope&dist=normal&mu=0&sigma=2.5 — landet sofort im
 // GLM-Modus mit der gewünschten Verteilung/Parametrisierung und Intercept- oder
 // Slope-Ansicht vorausgewählt, statt dass man das manuell nachklicken muss.
+// Baut ein params-Objekt für loadExample() aus der Query-String: primär generisch über die
+// ECHTEN Parameter-ids der Zielverteilung (z.B. ?dist=gamma&alpha=2&beta=0.1,
+// ?dist=exponential&lambda=0.5) — plus eine abwärtskompatible mu=/sigma=-Kurzform (sigma→'sig')
+// für Normal/Student-t/Half-Normal/Half-Student-t, auf der die meisten bestehenden Deep-Links
+// (Prior Compass Register 1/2/Wizard) aufbauen.
+function buildDistParamsFromQS(qs, distDef) {
+  const params = {};
+  if (distDef) {
+    distDef.params.forEach(p => { if (qs.has(p.id)) params[p.id] = +qs.get(p.id); });
+  }
+  if (qs.has('mu') && !('mu' in params) && (!distDef || distDef.params.some(p => p.id === 'mu'))) params.mu = +qs.get('mu');
+  if (qs.has('sigma') && !('sig' in params) && (!distDef || distDef.params.some(p => p.id === 'sig'))) params.sig = +qs.get('sigma');
+  return params;
+}
 function applyUrlParams() {
   const qs = new URLSearchParams(location.search);
   const glmParam = qs.get('glm'); // 'intercept' | 'slope'
-  if (glmParam !== 'intercept' && glmParam !== 'slope') return;
   const distId = qs.get('dist') || 'normal';
-  const mu = qs.has('mu') ? +qs.get('mu') : 0;
-  const sig = qs.has('sigma') ? +qs.get('sigma') : 2.5;
-  if (DISTS.some(d => d.id === distId)) loadExample(distId, {mu, sig});
+  const distDef = DISTS.find(d => d.id === distId);
+  const hasAnyDistParam = qs.has('dist') || qs.has('mu') || qs.has('sigma') ||
+    (distDef && distDef.params.some(p => qs.has(p.id)));
+  if (glmParam !== 'intercept' && glmParam !== 'slope') {
+    // Kein GLM-Deep-Link angefragt — trotzdem eine konkrete Verteilung/Parametrisierung
+    // übernehmen, falls mitgegeben (z.B. Prior Compass Register 2 bei Gaussian/Identity-Link,
+    // wo es keinen GLM-Modus gibt, oder ein reiner σ-Vorschlag wie Half-Normal/Gamma/Exponential).
+    if (hasAnyDistParam && distDef) loadExample(distId, buildDistParamsFromQS(qs, distDef));
+    return;
+  }
+  if (distDef) loadExample(distId, buildDistParamsFromQS(qs, distDef));
   if (!GLM_ACTIVE) toggleGLM();
   toggleGLMParam(glmParam);
   const link = qs.get('link');
