@@ -105,6 +105,11 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
 .eq-term.sel.c-bin{color:var(--a5);border-bottom-color:var(--a5)}
 .eq-term.sel.c-sigma{color:var(--a4);border-bottom-color:var(--a4)}
 .eq-hint{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink3);margin-top:.6rem}
+.dv-info{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.8;
+  margin:-.3rem 0 1.1rem;padding:.6rem .85rem;border-left:3px solid var(--border);
+  background:color-mix(in srgb,var(--ink3) 5%,transparent)}
+.dv-info b{color:var(--ink)}
+.dv-info .dv-cut{display:inline-block;margin-right:1rem;white-space:nowrap}
 
 .pcard{background:var(--panel);border:1.5px solid var(--border);padding:1.1rem 1.3rem}
 .pcard-title{font-family:'Fraunces',Georgia,serif;font-size:1.1rem;font-weight:600;margin-bottom:.15rem}
@@ -319,6 +324,8 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
     <div class="eq-hint">Klicke auf β₀, β₁·X₁, β₂·X₂ oder σ</div>
   </div>
 
+  <div class="dv-info" id="dv-info"></div>
+
   <div class="pcard" id="pcard"></div>
 
 </div>
@@ -402,20 +409,21 @@ let curFam = 'gaussian';
 // Begründung gezeigt); (4) distNote — welche Verteilungsform passt und warum (hängt vom
 // natürlichen Wertebereich des Parameters ab, nicht nur von Geschmack).
 const SLOPE_DIST_NOTE = 'Slopes sind unbeschränkt — sie können positiv oder negativ sein. Normal oder Student-t sind der Standard, mit μ=0, solange keine Richtung begründet werden kann.';
-const INT_DIST_NOTE = 'Intercepts sind unbeschränkt — jede unimodale, symmetrische Verteilung über ℝ passt, meist Normal oder Student-t (letztere für mehr Toleranz gegenüber Ausreißern).';
+const INT_DIST_NOTE = 'Intercepts sind unbeschränkt — meist passt eine symmetrische Verteilung wie Normal oder Student-t (letztere für mehr Toleranz gegenüber Ausreißern). Liegt aber eine konkrete, begründete Vorannahme vor, dass die Unsicherheit selbst asymmetrisch ist, kann auch eine schiefe Verteilung wie Skew-Normal sinnvoll sein (probier es z.B. beim BDI-II-Intercept aus) — Symmetrie ist kein Muss, nur der Standardfall.';
 const SIGMA_DIST_NOTE = 'σ muss positiv sein — ein Normal-Prior wäre hier UNGEEIGNET, da er auch negativen Streuungswerten Wahrscheinlichkeit zuweisen würde. Half-Normal und Exponential sind bei 0 am dichtesten (passend für den regularisierenden Standardfall); Gamma und Log-Normal können auch abseits von 0 einen Peak haben (passend, wenn eine konkrete informierte Erwartung vorliegt).';
 
 const DV_DATA = {
   iq: {
     label: 'IQ', name: 'Intelligenzquotient', unit: 'IQ-Punkte',
     mean: 100, sd: 15, lo: 55, hi: 145,
+    scaleInfo: 'IQ-Werte sind auf <b>M = 100, SD = 15</b> normiert. Der übliche Normalbereich (±1 SD) liegt bei <b>85–115</b>; deutliche Abweichungen außerhalb gelten diagnostisch als auffällig.',
     metric: { name: 'Lernzeit', unit: 'Std./Woche', perUnit: 'zusätzliche Lernstunde/Woche', incLabel: '1 Stunde/Woche', lo: 0, hi: 20, dirNote: 'in welche Richtung Lernzeit den IQ beeinflusst' },
     binary: { name: 'Förderprogramm', l0: 'kein Programm', l1: 'Teilnahme', dirNote: 'in welche Richtung das Förderprogramm den IQ beeinflusst' },
     int: {
       what: 'Erwarteter IQ-Wert, wenn Lernzeit = 0 Std. und keine Programmteilnahme — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. Zentrierung an). Wichtig: der Intercept beschreibt den MITTELWERT der Stichprobe bei diesen Prädiktorwerten, und der Prior dazu drückt aus, wie sicher wir uns über diesen Mittelwert sind. Das ist nicht dasselbe wie die Streuung der Stichprobe — die wird separat durch σ erfasst.',
       plausRange: 'IQ ist durch die Testnormierung auf ca. 55–145 begrenzt (±3 SD).',
       stdPrior: { fam:'normal', mu:100, sd:5, text: 'Bewusst ENGER als die Populationsstreuung (SD=15): IQ-Tests sind per Konstruktion auf einen Populationsmittelwert von 100 normiert — schon vor jedem Blick auf die Daten ist daher ziemlich sicher, dass auch der Mittelwert einer neuen Stichprobe nah bei 100 liegt. Diese Sicherheit betrifft den Mittelwert, nicht einzelne Messwerte (dafür ist der eigene Prior von σ zuständig) — ein Standardprior darf solches Struktur-Wissen über die Skala also durchaus schon nutzen, ohne dadurch zu einem begründungspflichtigen informativen Prior zu werden.' },
-      infPrior: { fam:'normal', mu:110, sd:8, text: 'Wenn die Stichprobe bekanntermaßen überdurchschnittlich ist (z.B. Universitätsstudierende, die im Schnitt ca. 110 erreichen), wäre dieser engere, verschobene Prior gerechtfertigt — aber nur mit dieser Begründung.' },
+      infPrior: { fam:'normal', mu:110, sd:8, text: 'Wenn die Stichprobe bekanntermaßen überdurchschnittlich ist (z.B. Universitätsstudierende, die im Schnitt ca. 110 erreichen), wäre dieser verschobene Prior gerechtfertigt — aber nur mit dieser Begründung. Wir lassen aber auch eine größere Unsicherheit zu, sodass wir den typischen Durchschnitt und Werte leicht darunter ebenfalls für plausibel halten.' },
       distNote: INT_DIST_NOTE
     },
     metricParam: {
@@ -443,6 +451,7 @@ const DV_DATA = {
   z: {
     label: 'Z-Wert', name: 'Standardisierter Score (z)', unit: 'z-Einheiten',
     mean: 0, sd: 1, lo: -3, hi: 3,
+    scaleInfo: 'Als konkreten Inhalt nehmen wir hier eine <b>z-standardisierte kognitive Leistungsfähigkeit</b> an (z.B. ein Aufmerksamkeits- oder Gedächtnistest) — per Definition M = 0, SD = 1 in der Referenzstichprobe. Erst mit diesem inhaltlichen Anker lassen sich die Prädiktoren sinnvoll beurteilen: Schlafstunden und eine Schlaf-Intervention (Experimental- vs. Kontrollgruppe) sollten ja plausibel genau auf so ein kognitives Maß wirken.',
     metric: { name: 'Schlafstunden', unit: 'Std./Nacht', perUnit: 'zusätzliche Schlafstunde', incLabel: '1 Stunde/Nacht', lo: 4, hi: 10, dirNote: 'in welche Richtung Schlafstunden den z-Wert beeinflusst' },
     binary: { name: 'Bedingung', l0: 'Kontrollgruppe', l1: 'Experimentalgruppe', dirNote: 'in welche Richtung die Bedingung den z-Wert beeinflusst' },
     int: {
@@ -477,13 +486,17 @@ const DV_DATA = {
   bdi: {
     label: 'BDI-II', name: 'Beck Depression Inventory II (Summenscore)', unit: 'BDI-II-Punkte',
     mean: 15, sd: 10, lo: 0, hi: 63,
+    scaleInfo: 'Schweregrad-Grenzen nach BDI-II-Manual bzw. S3-Leitlinie Depression: <span class="dv-cut">&lt; 13 keine Depression / klinisch unauffällig</span><span class="dv-cut">13–19 leichtes depressives Syndrom</span><span class="dv-cut">20–28 mittelgradiges depressives Syndrom</span><span class="dv-cut">≥ 29 schweres depressives Syndrom</span>',
     metric: { name: 'Stressniveau', unit: 'Skala 0–10', perUnit: 'zusätzlichen Stress-Skalenpunkt', incLabel: '1 Skalenpunkt', lo: 0, hi: 10, dirNote: 'in welche Richtung Stressniveau den BDI-II-Score beeinflusst' },
     binary: { name: 'Depressive Episode in den letzten 12 Monaten', eqName: 'Episode(12M)', l0: 'keine Episode in den letzten 12 Monaten', l1: 'Episode in den letzten 12 Monaten', dirNote: 'in welche Richtung eine depressive Episode in den letzten 12 Monaten den BDI-II-Score beeinflusst' },
     int: {
       what: 'Erwarteter BDI-II-Score, wenn Stressniveau = 0 und keine depressive Episode in den letzten 12 Monaten — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. Zentrierung an).',
       plausRange: 'Der BDI-II-Summenscore ist per Konstruktion auf [0, 63] beschränkt (21 Items à 0–3 Punkte).',
       stdPrior: { fam:'normal', mu:15, sd:7, text: 'Zentriert auf einen für gemischte (nicht rein-klinische) Stichproben plausiblen Referenzwert, mit einer SD, die innerhalb der Konstruktionsgrenzen [0,63] bleibt.' },
-      infPrior: { fam:'normal', mu:18, sd:6, text: 'Stellen wir uns vor, es handle sich schon um eine klinische Stichprobe. Das Intercept gibt die erwartete durchschnittliche Ausprägung an, wenn die Prädiktoren = 0 sind — also (zentriert) durchschnittliches Stressniveau, aber keine depressive Episode in den letzten 12 Monaten (also Personen in Remission, nicht Personen ganz ohne depressive Vorgeschichte). Residuale subklinische Symptome sind auch in Remission häufig, daher wäre ein gegenüber der Allgemeinbevölkerung leicht erhöhter, aber deutlich unterhalb akuter Symptomatik liegender Prior gerechtfertigt.' },
+      infPrior: [
+        { fam:'normal', mu:18, sd:6, text: 'Stellen wir uns vor, es handle sich schon um eine klinische Stichprobe. Das Intercept gibt die erwartete durchschnittliche Ausprägung an, wenn die Prädiktoren = 0 sind — also (zentriert) durchschnittliches Stressniveau, aber keine depressive Episode in den letzten 12 Monaten (also Personen in Remission, nicht Personen ganz ohne depressive Vorgeschichte). Residuale subklinische Symptome sind auch in Remission häufig, daher wäre ein gegenüber der Allgemeinbevölkerung leicht erhöhter, aber deutlich unterhalb akuter Symptomatik liegender Prior gerechtfertigt.' },
+        { fam:'skew_normal', alpha:5, xi:3.218986, omega:9.717581, text: 'Ein informativer Prior muss nicht normalverteilt sein. Andere Story: wir wissen bei dieser Stichprobe nicht, ob sich überproportional viele Personen mit depressiver Symptomatik freiwillig gemeldet haben — höhere Durchschnittswerte lassen sich also nicht ausschließen. Wir sind aber überzeugt, dass die meisten Teilnehmenden aus einer eher gesunden Population stammen. Eine rechtsschiefe Skew-Normal-Verteilung bildet das ab: mehr Gewicht auf niedrigeren, unauffälligen Werten, mit einem langen Ausläufer zu höheren (symptomatischeren) Werten hin.' }
+      ],
       distNote: INT_DIST_NOTE
     },
     metricParam: {
@@ -689,7 +702,12 @@ function renderDvPicker() {
     `<button class="dv-btn${id===curDv?' sel':''}" onclick="selectDv('${id}')">${d.label} <span style="opacity:.6">(${d.name})</span></button>`
   ).join('');
 }
-function selectDv(id) { curDv = id; renderDvPicker(); renderEquation(); renderParamCard(); }
+function selectDv(id) { curDv = id; renderDvPicker(); renderEquation(); renderDvInfo(); renderParamCard(); }
+
+function renderDvInfo() {
+  const d = DV_DATA[curDv];
+  document.getElementById('dv-info').innerHTML = d.scaleInfo || '';
+}
 
 function renderEquation() {
   const d = DV_DATA[curDv];
@@ -739,6 +757,7 @@ function distLabel(spec) {
   if (spec.fam === 'student_t') return `Student-t(ν=${fmtP(spec.nu)}, ${fmtP(spec.mu)}, ${fmtP(spec.sd)})`;
   if (spec.fam === 'half_student') return `Half-Student-t(ν=${fmtP(spec.nu)}, 0, ${fmtP(spec.scale)})`;
   if (spec.fam === 'exponential') return `Exponential(λ=${fmtP(spec.rate)})`;
+  if (spec.fam === 'skew_normal') return `Skew-Normal(α=${fmtP(spec.alpha)}, ξ=${fmtP(spec.xi)}, ω=${fmtP(spec.omega)})`;
   return `Normal(${fmtP(spec.mu)}, ${fmtP(spec.sd)})`;
 }
 function distInterval(spec) {
@@ -746,7 +765,16 @@ function distInterval(spec) {
   if (spec.fam === 'student_t') return { lo: spec.mu - STUDENT_T3_975 * spec.sd, hi: spec.mu + STUDENT_T3_975 * spec.sd };
   if (spec.fam === 'half_student') return { lo: 0, hi: STUDENT_T3_975 * spec.scale };
   if (spec.fam === 'exponential') return { lo: 0, hi: -Math.log(0.05) / spec.rate }; // exakt: 95.-Perzentil
+  if (spec.fam === 'skew_normal') return {
+    lo: skewNormalQuantile(0.025, spec.xi, spec.omega, spec.alpha),
+    hi: skewNormalQuantile(0.975, spec.xi, spec.omega, spec.alpha)
+  };
   return { lo: spec.mu - 2 * spec.sd, hi: spec.mu + 2 * spec.sd };
+}
+function distPeak(spec) {
+  if (DENS_ZERO_PEAK_FAMS.includes(spec.fam)) return 0;
+  if (spec.fam === 'skew_normal') return skewNormalMean(spec.xi, spec.omega, spec.alpha);
+  return spec.mu;
 }
 // ── Dichteplots für Standard-/Informativer-Prior (SVG, kein Chart-Library) ──
 // Lanczos-Näherung für die Gammafunktion (g=7, n=9 Koeffizienten) — Standardrezept,
@@ -789,6 +817,44 @@ function exponentialPDF(x, rate) {
   if (x < 0) return 0;
   return rate * Math.exp(-rate * x);
 }
+// Skew-Normal (Azzalini 1985), dieselbe Direkt-Parametrisierung (ξ Lage, ω Skala, α Schiefe)
+// wie Bayesian_Prior_Lab.html's "skewed_normal"/brms' skew_normal(ξ,ω,α) — bewusst identische
+// PDF-Formel, damit ein Deep-Link später konsistent dieselbe Verteilung zeigen würde. Da die
+// Skew-Normal-CDF keine elementare geschlossene Form hat, wird sie hier numerisch über die PDF
+// integriert (Trapezregel) statt über Owen's T — für eine Dichteplot-Visualisierung ausreichend
+// präzise, keine Performance-kritische Stelle (einmalig pro Render).
+function erf(x) {
+  const sign = x < 0 ? -1 : 1; x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1) * t * Math.exp(-x*x);
+  return sign * y;
+}
+function normalCDF(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
+function skewNormalPDF(x, xi, omega, alpha) {
+  const z = (x - xi) / omega;
+  return 2 / omega * normalPDF(z, 0, 1) * normalCDF(alpha * z);
+}
+function skewNormalCDF(x, xi, omega, alpha) {
+  const lo = xi - 12 * omega;
+  if (x <= lo) return 0;
+  const N = 400, h = (x - lo) / N;
+  let sum = 0.5 * (skewNormalPDF(lo, xi, omega, alpha) + skewNormalPDF(x, xi, omega, alpha));
+  for (let i = 1; i < N; i++) sum += skewNormalPDF(lo + i * h, xi, omega, alpha);
+  return sum * h;
+}
+function skewNormalQuantile(p, xi, omega, alpha) {
+  let lo = xi - 12 * omega, hi = xi + 12 * omega;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (skewNormalCDF(mid, xi, omega, alpha) < p) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function skewNormalMean(xi, omega, alpha) {
+  const delta = alpha / Math.sqrt(1 + alpha * alpha);
+  return xi + omega * delta * Math.sqrt(2 / Math.PI);
+}
 const DENS_ZERO_PEAK_FAMS = ['halfnormal', 'half_student', 'exponential'];
 function densityXRange(spec) {
   if (spec.fam === 'halfnormal') return { lo: 0, hi: 3 * spec.scale };
@@ -796,6 +862,10 @@ function densityXRange(spec) {
   if (spec.fam === 'student_t') return { lo: spec.mu - 1.3 * STUDENT_T3_975 * spec.sd, hi: spec.mu + 1.3 * STUDENT_T3_975 * spec.sd };
   if (spec.fam === 'half_student') return { lo: 0, hi: 1.3 * STUDENT_T3_975 * spec.scale };
   if (spec.fam === 'exponential') return { lo: 0, hi: -Math.log(0.01) / spec.rate };
+  if (spec.fam === 'skew_normal') return {
+    lo: skewNormalQuantile(0.005, spec.xi, spec.omega, spec.alpha),
+    hi: skewNormalQuantile(0.995, spec.xi, spec.omega, spec.alpha)
+  };
   return { lo: spec.mu - 3.2 * spec.sd, hi: spec.mu + 3.2 * spec.sd };
 }
 function densityValue(spec, x) {
@@ -804,6 +874,7 @@ function densityValue(spec, x) {
   if (spec.fam === 'student_t') return studentTPDF(x, spec.nu, spec.mu, spec.sd);
   if (spec.fam === 'half_student') return halfStudentPDF(x, spec.nu, spec.scale);
   if (spec.fam === 'exponential') return exponentialPDF(x, spec.rate);
+  if (spec.fam === 'skew_normal') return skewNormalPDF(x, spec.xi, spec.omega, spec.alpha);
   return normalPDF(x, spec.mu, spec.sd);
 }
 function densityPlotHTML(spec, opts) {
@@ -819,7 +890,7 @@ function densityPlotHTML(spec, opts) {
   const linePts = pts.map(p => `${((p.x-lo)/(hi-lo)*W).toFixed(2)},${(H-(p.y/maxY)*H).toFixed(2)}`).join(' ');
   const areaPts = `0,${H} ${linePts} ${W},${H}`;
   const iv = distInterval(spec);
-  const peak = DENS_ZERO_PEAK_FAMS.includes(spec.fam) ? 0 : spec.mu;
+  const peak = distPeak(spec);
   const ivLoPct = Math.max(0, Math.min(100, (iv.lo - lo) / (hi - lo) * 100));
   const ivHiPct = Math.max(0, Math.min(100, (iv.hi - lo) / (hi - lo) * 100));
   const peakPct = Math.max(0, Math.min(100, (peak - lo) / (hi - lo) * 100));
@@ -833,7 +904,7 @@ function densityPlotHTML(spec, opts) {
     </svg>
     <div class="dens-ticks">
       <span style="left:${ivLoPct}%">${fmtP(iv.lo)}</span>
-      <span style="left:${peakPct}%" class="dens-peak">${fmtP(peak)}</span>
+      <span style="left:${peakPct}%" class="dens-peak">${spec.fam === 'skew_normal' ? `E[Y]=${fmtP(peak)}` : fmtP(peak)}</span>
       <span style="left:${ivHiPct}%">${fmtP(iv.hi)}</span>
     </div>
   </div>`;
@@ -849,7 +920,10 @@ function quoteHTML(spec, ctx) {
     : '';
   const thumbRule = isHeavyTail ? `±${fmtP(STUDENT_T3_975)}×σ bei Student-t (ν=${fmtP(spec.nu)})` : '±2×SD bei Normalverteilung';
   let body;
-  if (spec.fam === 'halfnormal' || spec.fam === 'half_student' || spec.fam === 'exponential') {
+  if (spec.fam === 'skew_normal') {
+    const mean = fmtP(skewNormalMean(spec.xi, spec.omega, spec.alpha));
+    body = `Ich bin überzeugt, dass die meisten Teilnehmenden aus einer eher gesunden Population stammen — daher ist mehr Gewicht auf niedrigeren Werten. Ich kann aber nicht ausschließen, dass auch überdurchschnittlich viele Personen mit depressiver Symptomatik freiwillig teilgenommen haben, daher ein langer Ausläufer zu höheren Werten. Der Erwartungswert liegt bei E[Y]≈${mean} ${ctx.unit}, aber ich halte es für 95% plausibel, dass der Wert zwischen ${lo} und ${hi} ${ctx.unit} liegt — schief statt symmetrisch, weil meine Unsicherheit selbst asymmetrisch ist.`;
+  } else if (spec.fam === 'halfnormal' || spec.fam === 'half_student' || spec.fam === 'exponential') {
     body = `Ich glaube, kleinere Werte sind wahrscheinlicher als größere, schließe aber keinen positiven Wert aus. Ich halte es für ungefähr 95% plausibel, dass der Wert zwischen ${lo} und ${hi} ${ctx.unit} liegt.${heavyTailNote}`;
   } else if (ctx.zeroCentered) {
     body = `Ich weiß nicht, ${ctx.dirNote}, daher ist der Prior auf Null zentriert. Ich halte es für 95% plausibel, dass der tatsächliche Wert im Bereich ${lo} und ${hi} ${ctx.unit} liegt (Daumenregel: ${thumbRule}).${heavyTailNote}`;
@@ -867,6 +941,19 @@ function quoteHTML(spec, ctx) {
 function paramBodyHTML(p, ctx) {
   const stdCtx = Object.assign({}, ctx, { zeroCentered: ctx.zeroCenteredStd });
   const infCtx = Object.assign({}, ctx, { zeroCentered: false });
+  // p.infPrior darf ein einzelnes Objekt ODER ein Array mehrerer Beispiele sein (z.B. um zu
+  // zeigen, dass ein informativer Prior nicht immer normalverteilt sein muss).
+  const infList = Array.isArray(p.infPrior) ? p.infPrior : [p.infPrior];
+  const infRows = infList.map((inf, i) => {
+    const label = infList.length > 1
+      ? `Informativer Prior ${i+1} <span style="opacity:.7">(optional, NICHT Standard)</span>`
+      : `Informativer Prior <span style="opacity:.7">(optional, NICHT Standard)</span>`;
+    return `<div class="pc-row"><div class="pc-lbl">${label}</div><div class="pc-body">
+      <b>${distLabel(inf)}</b> — ${inf.text}
+      ${densityPlotHTML(inf, { color: ctx.accent, dashed: true })}
+      ${quoteHTML(inf, infCtx)}
+    </div></div>`;
+  }).join('');
   return `
     <div class="pc-row"><div class="pc-lbl">Wertebereich</div><div class="pc-body">${p.plausRange}</div></div>
     <div class="pc-row"><div class="pc-lbl">Standardprior</div><div class="pc-body">
@@ -874,11 +961,7 @@ function paramBodyHTML(p, ctx) {
       ${densityPlotHTML(p.stdPrior, { color: ctx.accent })}
       ${quoteHTML(p.stdPrior, stdCtx)}
     </div></div>
-    <div class="pc-row"><div class="pc-lbl">Informativer Prior <span style="opacity:.7">(optional, NICHT Standard)</span></div><div class="pc-body">
-      <b>${distLabel(p.infPrior)}</b> — ${p.infPrior.text}
-      ${densityPlotHTML(p.infPrior, { color: ctx.accent, dashed: true })}
-      ${quoteHTML(p.infPrior, infCtx)}
-    </div></div>
+    ${infRows}
     <div class="pc-row"><div class="pc-lbl">Verteilungsform</div><div class="pc-body">${p.distNote}</div></div>
   `;
 }
@@ -1380,6 +1463,7 @@ function toggleTheme() {
   document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
   renderDvPicker();
   renderEquation();
+  renderDvInfo();
   renderParamCard();
   renderFamPicker();
   renderFamBox();
