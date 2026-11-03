@@ -914,14 +914,34 @@ function init() {
 // Bayesian_Prior_Lab.html?glm=slope&dist=normal&mu=0&sigma=2.5 — lands directly in
 // GLM mode with the desired distribution/parametrization and Intercept or Slope view
 // preselected, instead of requiring manual clicks.
+// Builds a params object for loadExample() from the query string: primarily generic, via the
+// target distribution's REAL parameter ids (e.g. ?dist=gamma&alpha=2&beta=0.1,
+// ?dist=exponential&lambda=0.5) — plus a backward-compatible mu=/sigma= shorthand (sigma->'sig')
+// for Normal/Student-t/Half-Normal/Half-Student-t, which most existing deep links build on.
+function buildDistParamsFromQS(qs, distDef) {
+  const params = {};
+  if (distDef) {
+    distDef.params.forEach(p => { if (qs.has(p.id)) params[p.id] = +qs.get(p.id); });
+  }
+  if (qs.has('mu') && !('mu' in params) && (!distDef || distDef.params.some(p => p.id === 'mu'))) params.mu = +qs.get('mu');
+  if (qs.has('sigma') && !('sig' in params) && (!distDef || distDef.params.some(p => p.id === 'sig'))) params.sig = +qs.get('sigma');
+  return params;
+}
 function applyUrlParams() {
   const qs = new URLSearchParams(location.search);
   const glmParam = qs.get('glm'); // 'intercept' | 'slope'
-  if (glmParam !== 'intercept' && glmParam !== 'slope') return;
   const distId = qs.get('dist') || 'normal';
-  const mu = qs.has('mu') ? +qs.get('mu') : 0;
-  const sig = qs.has('sigma') ? +qs.get('sigma') : 2.5;
-  if (DISTS.some(d => d.id === distId)) loadExample(distId, {mu, sig});
+  const distDef = DISTS.find(d => d.id === distId);
+  const hasAnyDistParam = qs.has('dist') || qs.has('mu') || qs.has('sigma') ||
+    (distDef && distDef.params.some(p => qs.has(p.id)));
+  if (glmParam !== 'intercept' && glmParam !== 'slope') {
+    // No GLM deep link requested — still apply a concrete distribution/parametrization if
+    // given (e.g. Prior Compass Register 2 with Gaussian/identity link, where there is no GLM
+    // mode, or a plain sigma recommendation like Half-Normal/Gamma/Exponential).
+    if (hasAnyDistParam && distDef) loadExample(distId, buildDistParamsFromQS(qs, distDef));
+    return;
+  }
+  if (distDef) loadExample(distId, buildDistParamsFromQS(qs, distDef));
   if (!GLM_ACTIVE) toggleGLM();
   toggleGLMParam(glmParam);
   const link = qs.get('link');
