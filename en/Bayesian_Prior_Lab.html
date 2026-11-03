@@ -1220,6 +1220,20 @@ function drawPlot() {
   const thresh = (hi-lo)*0.005;
   const sameVal = (typeof mn==='number'&&isFinite(mn)&&md!==null&&isFinite(md)&&Math.abs(mn-md)<thresh);
 
+  // Mean and Median labels can land arbitrarily close together (or even at the same height)
+  // as parameters change, since both are positioned independently of the other's curve height.
+  // A fixed pixel-proximity threshold + fixed offset (previous version) doesn't guarantee no
+  // overlap. SVG getBBox() is NOT a reliable basis for this either - it reliably returns an
+  // empty bbox for freshly-rendered text in some browser/automation contexts (verified).
+  // Instead this is computed purely analytically from the fixed monospace font: with 'DM Mono'
+  // at 13px, character width is constant (~0.6x font size), so text width is exactly
+  // predictable without any DOM measurement.
+  const CHAR_W = 13 * 0.6, ROW_H = 18;
+  function lblSpan(xPos, right, label) {
+    const w = label.length * CHAR_W;
+    return right ? [xPos - 4 - w, xPos - 4] : [xPos + 4, xPos + 4 + w];
+  }
+  let mnInfo = null; // {span:[x0,x1], lblY}
   if (typeof mn==='number' && isFinite(mn) && mn>=lo && mn<=hi) {
     let mnDensY=0;
     try { const v=effPDF(mn,PARAMS); mnDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
@@ -1232,20 +1246,25 @@ function drawPlot() {
     g.append('text').attr('x',mnRight?mnPx-4:mnPx+4).attr('y',mnLblY)
      .attr('text-anchor',mnRight?'end':'start')
      .attr('fill',a3).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(mnLbl);
+    mnInfo = { span: lblSpan(mnPx, mnRight, mnLbl), lblY: mnLblY };
   }
   if (!sameVal && md!==null && isFinite(md) && md>=lo && md<=hi) {
     let mdDensY=0;
     try { const v=effPDF(md,PARAMS); mdDensY=isFinite(v)&&v>=0?Math.min(v,yMax):0; } catch(e){}
     const mdTopPx=mdDensY>0?ySc(mdDensY):0;
     const mdPx=xSc(md), mdRight=mdPx>Wp*0.7;
-    const mnPx2=(typeof mn==='number'&&isFinite(mn))?xSc(mn):-9999;
-    const close=Math.abs(mdPx-mnPx2)<50;
-    const mdLblY=Math.max(mdTopPx-5,28)+(close?16:0);
+    const mdLbl=`Med. = ${fmtN(md,3)}`;
+    let mdLblY=Math.max(mdTopPx-5,28);
+    if (mnInfo) {
+      const mdSpan = lblSpan(mdPx, mdRight, mdLbl);
+      const overlapX = mdSpan[0] < mnInfo.span[1] && mdSpan[1] > mnInfo.span[0];
+      if (overlapX) mdLblY = mnInfo.lblY + ROW_H;
+    }
     g.append('line').attr('x1',mdPx).attr('x2',mdPx).attr('y1',mdTopPx).attr('y2',Hp)
      .attr('stroke',a1).attr('stroke-width',1.5).attr('stroke-dasharray','2,4').attr('opacity',.85);
     g.append('text').attr('x',mdRight?mdPx-4:mdPx+4).attr('y',mdLblY)
      .attr('text-anchor',mdRight?'end':'start')
-     .attr('fill',a1).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(`Med. = ${fmtN(md,3)}`);
+     .attr('fill',a1).attr('font-size','13px').attr('font-family','DM Mono,monospace').text(mdLbl);
   }
 
   // Title + description
