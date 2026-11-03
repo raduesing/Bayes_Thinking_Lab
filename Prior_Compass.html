@@ -22,6 +22,13 @@
 html{font-size:18px}
 body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
      height:100vh;overflow:hidden;display:flex;flex-direction:column;transition:background .25s,color .25s}
+/* Mit geöffnetem Konzept kann die Box sehr hoch werden — dann soll die GANZE Seite scrollen
+   (statt dass #shell auf 0 zusammengedrückt wird und der Rest unerreichbar bleibt). */
+body.intro-scroll{height:auto;min-height:100vh;overflow-y:auto}
+/* #shell's own flex:1/overflow-y:auto combo doesn't resolve sanely once the body itself is
+   auto-height (indefinite-height flex column + flex-basis:0 + a nested overflow:auto child is
+   a known sizing quirk) — neutralize it so #shell is just normal flow, body does the scrolling. */
+body.intro-scroll #shell{flex:none;overflow:visible;height:auto}
 
 /* ── HEADER ── */
 #topbar{background:var(--paper);border-bottom:1.5px solid var(--border);
@@ -265,9 +272,15 @@ body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
 <div id="intro-detail" style="display:none">
   <div class="intro-box">
     <div class="ib-head">Worum geht es hier?</div>
-    Ein <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Ein Prior ist die Wahrscheinlichkeitsverteilung, die vor dem Blick auf die Daten für einen Modellparameter angenommen wird — er drückt aus, welche Werte plausibel erscheinen, bevor die Evidenz dazukommt.">Prior</a> ist keine abstrakte Formel, die man sich irgendwo aussucht — er ist eine Aussage über <b>einen konkreten Parameter deines Modells</b>, in <b>dessen Einheit</b>, mit einem <b>plausiblen Wertebereich</b>. Bevor diese drei Dinge klar sind, ist jede Verteilungswahl im Prior Lab Rätselraten: man kann zwar irgendeine Normal(0,1) eintippen, aber ohne zu wissen, was dieser Parameter in der eigenen Studie bedeutet und welche Werte er überhaupt annehmen könnte, bleibt unklar, ob 0,1 eng, breit, plausibel oder absurd ist.<br><br>
-    Ein Prior hat dabei fast immer zwei mögliche Rollen, die klar getrennt werden sollten: er kann rein <b>regularisieren</b> — das Modell daran hindern, im MCMC-Sampling in völlig unplausible Regionen abzudriften, ohne eine Richtung vorwegzunehmen — oder er kann <b>echtes Vorwissen</b> einbringen (aus Vorstudien, Metaanalysen, Theorie), das die Schätzung gezielt in eine begründete Richtung lenkt. Die meisten Priors in der Praxis sind die erste Sorte; die zweite braucht immer eine explizite Begründung, keinen Bauchgefühl-Wert.<br><br>
+    Ein <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="Ein Prior ist die Wahrscheinlichkeitsverteilung, die vor dem Blick auf die Daten für einen Modellparameter angenommen wird — er drückt aus, welche Werte plausibel erscheinen, bevor die Evidenz dazukommt.">Prior</a> ist eine Aussage über <b>einen konkreten Parameter deines Modells</b>, in <b>dessen Einheit</b>, mit einem <b>plausiblen Wertebereich</b>. Bevor diese drei Dinge klar sind, ist jede Verteilungswahl im Prior Lab Rätselraten: man kann zwar irgendeine Normal(0,1) eintippen, aber ohne zu wissen, was dieser Parameter in der eigenen Studie bedeutet und welche Werte er überhaupt annehmen könnte, bleibt unklar, ob 0,1 eng, breit, plausibel oder absurd ist.<br><br>
+    Ein Prior bringt zusätzliche Informationen in das Modell mit ein. Das kann von recht vage, <b>regularisierend</b>, bis hin zu schon sehr konkret, aus Vorwissen, reichen. Regularisierend bedeutet, dass er recht breit und ohne Vorgabe einer Richtung ist, um das Modell daran zu hindern, im <a class="glo-link" href="Glossar.html#gl-mcmc-sampling" target="_blank" title="Die konkrete Durchführung des MCMC-Verfahrens beim Modellfitten (z.B. über brm()) — mehrere Markov-Ketten erkunden parallel den Posterior, erst tastend (Warmup), dann zielgerichtet (Sampling).">MCMC-Sampling</a> in völlig unplausible Regionen abzudriften. Auf dem anderen Ende des Spektrums stehen <b>informed Priors</b>, die echtes Vorwissen (aus Vorstudien, Metaanalysen, Theorie) mit einbringen und die Schätzung schon gezielt in eine Richtung lenken. Für alles findest du exemplarische Beispiele im Parameter-Atlas.<br><br>
+    Der Intercept β₀ beschreibt den erwarteten Wert der AV, wenn <em>alle</em> Prädiktoren null sind. Das ist nur dann sinnvoll interpretierbar, wenn „alle Prädiktoren = 0" auch eine reale, plausible Situation beschreibt — bei einem binären 0/1-Prädiktor ist das meist der Fall, bei einem metrischen Prädiktor mit einem rein positiven, von Null entfernten Wertebereich (z.B. Lernzeit in Stunden) dagegen oft nicht: ein Intercept bei „0 Stunden gelernt" ist zwar rechnerisch immer vorhanden, inhaltlich aber eine Extrapolation weit außerhalb der beobachteten Daten. Deshalb bietet sich für metrische Prädiktoren häufig eine <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Zentrierung (Mean-Centering): Ein Prädiktor wird um seinen Mittelwert verschoben (X_c = X − X̄) — danach beschreibt der Intercept den erwarteten Wert bei DURCHSCHNITTLICHEN statt bei Null liegenden Prädiktorwerten.">Zentrierung</a> an: Zieht man vom Prädiktor seinen Mittelwert ab, beschreibt der Intercept danach den erwarteten Wert bei einem <em>durchschnittlichen</em> (statt einem oft unrealistischen Null-)Prädiktorwert — eine inhaltlich sinnvollere und leichter zu begründende Referenz.<br><br>
     Für Slopes gilt dabei eine wichtige Besonderheit: ihr plausibler Wertebereich hängt <b>sowohl von der Metrik der AV als auch von der Metrik des Prädiktors</b> ab — nie nur von einer der beiden Seiten allein. Die Leitfrage ist immer dieselbe: <em>Um wie viele Einheiten verändert sich die AV, wenn ich den Prädiktor um eine Einheit verändere?</em> Dieselbe inhaltliche Beziehung sieht in Rohwert-Einheiten völlig anders aus als in z-standardisierten Einheiten — nicht, weil sich etwas am zugrundeliegenden Effekt ändert, sondern weil sich die Maßstäbe auf beiden Seiten der Gleichung ändern.
+
+    <div class="wiz-disclaimer" style="margin-top:1rem">
+      <div class="wiz-disclaimer-head">⚠ Wichtiger Grundsatz</div>
+      Ein Prior soll den aktuellen <b>Wissensstand</b> abbilden — <b>nicht</b> deinen Wunsch, wo der Effekt liegen soll! Ist in diesem Bereich noch nichts bekannt, nutze einen vagen, regularisierenden Prior, der auf dem Nullpunkt zentriert ist. Lassen sich plausible Restriktionen begründen, ohne dabei eine Richtung vorzugeben (siehe das IQ-Beispiel zu β₀, dem Intercept), ist das sinnvoll. Priors, die genau in die gewünschte Richtung des bevorzugten Effekts zeigen, <b>ohne</b> konkrete, begründete Vorinformationen (z.B. Metaanalysen), sind dagegen kein redliches Vorgehen!
+    </div>
 
     <div class="ib-head ib-head2">So gehst du vor</div>
     <strong>1. Parameter-Atlas</strong> — eine einfache Modellgleichung, klicke dich durch Intercept, Slopes und σ: was steuert jeder dieser Parameter, welche Einheit hat er, welcher Wertebereich ist plausibel, und welche Verteilungsform passt zu seinem natürlichen Rand (z.B. muss σ positiv sein, Intercepts und Slopes dagegen nicht)? Dieselbe Frage wird an drei unterschiedlichen Zielgrößen (IQ, z-Wert, BDI-II) durchgespielt, damit sichtbar wird: die Methode des Wertebereich-Denkens bleibt gleich, nur die konkreten Zahlen ändern sich mit der Skala der AV.<br>
@@ -420,7 +433,7 @@ const DV_DATA = {
     metric: { name: 'Lernzeit', unit: 'Std./Woche', perUnit: 'zusätzliche Lernstunde/Woche', incLabel: '1 Stunde/Woche', lo: 0, hi: 20, dirNote: 'in welche Richtung Lernzeit den IQ beeinflusst' },
     binary: { name: 'Förderprogramm', l0: 'kein Programm', l1: 'Teilnahme', dirNote: 'in welche Richtung das Förderprogramm den IQ beeinflusst' },
     int: {
-      what: 'Erwarteter IQ-Wert, wenn Lernzeit = 0 Std. und keine Programmteilnahme — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. Zentrierung an). Wichtig: der Intercept beschreibt den MITTELWERT der Stichprobe bei diesen Prädiktorwerten, und der Prior dazu drückt aus, wie sicher wir uns über diesen Mittelwert sind. Das ist nicht dasselbe wie die Streuung der Stichprobe — die wird separat durch σ erfasst.',
+      what: 'Erwarteter IQ-Wert, wenn Lernzeit = 0 Std. und keine Programmteilnahme — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Zentrierung (Mean-Centering): Ein Prädiktor wird um seinen Mittelwert verschoben (X_c = X − X̄) — danach beschreibt der Intercept den erwarteten Wert bei DURCHSCHNITTLICHEN statt bei Null liegenden Prädiktorwerten.">Zentrierung</a> an). Wichtig: der Intercept beschreibt den MITTELWERT der Stichprobe bei diesen Prädiktorwerten, und der Prior dazu drückt aus, wie sicher wir uns über diesen Mittelwert sind. Das ist nicht dasselbe wie die Streuung der Stichprobe — die wird separat durch σ erfasst.',
       plausRange: 'IQ ist durch die Testnormierung auf ca. 55–145 begrenzt (±3 SD).',
       stdPrior: { fam:'normal', mu:100, sd:5, text: 'Bewusst ENGER als die Populationsstreuung (SD=15): IQ-Tests sind per Konstruktion auf einen Populationsmittelwert von 100 normiert — schon vor jedem Blick auf die Daten ist daher ziemlich sicher, dass auch der Mittelwert einer neuen Stichprobe nah bei 100 liegt. Diese Sicherheit betrifft den Mittelwert, nicht einzelne Messwerte (dafür ist der eigene Prior von σ zuständig) — ein Standardprior darf solches Struktur-Wissen über die Skala also durchaus schon nutzen, ohne dadurch zu einem begründungspflichtigen informativen Prior zu werden.' },
       infPrior: { fam:'normal', mu:110, sd:8, text: 'Wenn die Stichprobe bekanntermaßen überdurchschnittlich ist (z.B. Universitätsstudierende, die im Schnitt ca. 110 erreichen), wäre dieser verschobene Prior gerechtfertigt — aber nur mit dieser Begründung. Wir lassen aber auch eine größere Unsicherheit zu, sodass wir den typischen Durchschnitt und Werte leicht darunter ebenfalls für plausibel halten.' },
@@ -455,7 +468,7 @@ const DV_DATA = {
     metric: { name: 'Schlafstunden', unit: 'Std./Nacht', perUnit: 'zusätzliche Schlafstunde', incLabel: '1 Stunde/Nacht', lo: 4, hi: 10, dirNote: 'in welche Richtung Schlafstunden den z-Wert beeinflusst' },
     binary: { name: 'Bedingung', l0: 'Kontrollgruppe', l1: 'Experimentalgruppe', dirNote: 'in welche Richtung die Bedingung den z-Wert beeinflusst' },
     int: {
-      what: 'Erwarteter z-Wert, wenn Schlafstunden = 0 und Kontrollgruppe — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. Zentrierung an).',
+      what: 'Erwarteter z-Wert, wenn Schlafstunden = 0 und Kontrollgruppe — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Zentrierung (Mean-Centering): Ein Prädiktor wird um seinen Mittelwert verschoben (X_c = X − X̄) — danach beschreibt der Intercept den erwarteten Wert bei DURCHSCHNITTLICHEN statt bei Null liegenden Prädiktorwerten.">Zentrierung</a> an).',
       plausRange: 'z-Werte liegen per Definition im Mittel bei 0 mit SD=1, praktisch meist zwischen -3 und 3.',
       stdPrior: { fam:'normal', mu:0, sd:1, text: 'Hier fällt der neutrale Bezugspunkt der Skala (0) mit „kein Vorwissen, Modell soll im plausiblen Bereich suchen" zusammen — anders als bei IQ, wo 0 selbst unplausibel wäre.' },
       infPrior: { fam:'normal', mu:0.4, sd:0.5, text: 'Wenn die Stichprobe bekanntermaßen leicht erhöhte Werte aufweist (z.B. eine vorselektierte Gruppe), wäre dieser verschobene, engere Prior gerechtfertigt.' },
@@ -464,7 +477,7 @@ const DV_DATA = {
     metricParam: {
       what: 'Veränderung im z-Wert pro zusätzlicher Schlafstunde (bei sonst gleichen Werten).',
       plausRange: 'Schlaf variiert über 4–10 Std., z-Werte über -3 bis 3 (Spannweite 6). Die theoretische Extremgrenze (gesamte z-Spannweite über gesamte Schlaf-Spannweite) liegt bei ±1.0 z-Einheiten/Std. — würde bedeuten, Schlafmenge allein erklärt praktisch die gesamte menschliche Variation.',
-      stdPrior: { fam:'normal', mu:0, sd:0.3, text: 'Zentriert auf „kein Effekt", mit einer SD, die kleine bis moderate Effekte zulässt. Ein Effekt von 0.6 (Rand des 95%-Bereichs) wirkt klein — aber hochgerechnet auf die volle Bandbreite der Schlafstunden (4 bis 10 Std.) würde das einen Unterschied von 3.6 z-Einheiten bedeuten, also mehr als die gesamte übliche Spannweite des z-Werts in der Population (-3 bis 3). Ein unrealistisch großer Effekt, den der Prior aber nicht hart ausschließt — auch das ist unproblematisch, ein etwas zu breiter Prior schadet hier kaum.' },
+      stdPrior: { fam:'normal', mu:0, sd:0.3, text: 'Zentriert auf „kein Effekt", mit einer SD, die kleine bis moderate Effekte zulässt. Ein Effekt von 0.6 (Rand des 95%-Bereichs) wirkt klein — aber hochgerechnet auf die volle Bandbreite der Schlafstunden (4 bis 10 Std.) würde das einen Unterschied von 3.6 z-Einheiten bedeuten — Personen mit 4 vs. 10 Stunden Schlaf würden sich also um 3.6 Standardabweichungen unterscheiden. Ein unrealistisch großer Effekt, den der Prior aber nicht hart ausschließt — auch das ist unproblematisch, ein etwas zu breiter Prior schadet hier kaum.' },
       infPrior: { fam:'normal', mu:0.1, sd:0.05, text: 'Schlafforschung findet typischerweise kleine positive Effekte von Schlafmenge auf kognitive/affektive Maße — mit entsprechendem Verweis wäre dieser leicht positiv verschobene, engere Prior vertretbar.' },
       distNote: SLOPE_DIST_NOTE
     },
@@ -490,7 +503,7 @@ const DV_DATA = {
     metric: { name: 'Stressniveau', unit: 'Skala 0–10', perUnit: 'zusätzlichen Stress-Skalenpunkt', incLabel: '1 Skalenpunkt', lo: 0, hi: 10, dirNote: 'in welche Richtung Stressniveau den BDI-II-Score beeinflusst' },
     binary: { name: 'Depressive Episode in den letzten 12 Monaten', eqName: 'Episode(12M)', l0: 'keine Episode in den letzten 12 Monaten', l1: 'Episode in den letzten 12 Monaten', dirNote: 'in welche Richtung eine depressive Episode in den letzten 12 Monaten den BDI-II-Score beeinflusst' },
     int: {
-      what: 'Erwarteter BDI-II-Score, wenn Stressniveau = 0 und keine depressive Episode in den letzten 12 Monaten — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. Zentrierung an).',
+      what: 'Erwarteter BDI-II-Score, wenn Stressniveau = 0 und keine depressive Episode in den letzten 12 Monaten — also die durchschnittliche Ausprägung, wenn alle Prädiktoren null sind (daher bietet sich auch z.B. <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Zentrierung (Mean-Centering): Ein Prädiktor wird um seinen Mittelwert verschoben (X_c = X − X̄) — danach beschreibt der Intercept den erwarteten Wert bei DURCHSCHNITTLICHEN statt bei Null liegenden Prädiktorwerten.">Zentrierung</a> an).',
       plausRange: 'Der BDI-II-Summenscore ist per Konstruktion auf [0, 63] beschränkt (21 Items à 0–3 Punkte).',
       stdPrior: { fam:'normal', mu:15, sd:7, text: 'Zentriert auf einen für gemischte (nicht rein-klinische) Stichproben plausiblen Referenzwert, mit einer SD, die innerhalb der Konstruktionsgrenzen [0,63] bleibt.' },
       infPrior: [
@@ -551,7 +564,7 @@ const FAM_DATA = {
     scaleLo: -4, scaleHi: 4, scaleUnit: 'η = μ (Rohskala)',
     respLo: -4, respHi: 4, respUnit: 'μ (Rohskala, identisch zu η)',
     transform: x => x,
-    wellBehaved: { respLo: -2, respHi: 2, respDesc: 'die plausibelsten Werte zwischen -2 und 2 auf der Rohskala liegen (z.B. standardisierte Testwerte)' },
+    wellBehaved: { respLo: -2, respHi: 2, respDesc: 'die plausibelsten Werte liegen zwischen -2 und 2 auf der Rohskala (z.B. standardisierte Testwerte)' },
     problemCase: null
   },
   bernoulli: {
@@ -563,7 +576,7 @@ const FAM_DATA = {
     scaleLo: -6, scaleHi: 6, scaleUnit: 'η (Logit-Skala)',
     respLo: 0, respHi: 1, respUnit: 'p (Wahrscheinlichkeit)',
     transform: x => 1/(1+Math.exp(-x)),
-    wellBehaved: { respLo: 0.05, respHi: 0.95, respDesc: 'die plausibelsten Werte auf der Wahrscheinlichkeitsskala (z.B. die Prävalenz einer Störung) zwischen 5% und 95% liegen' },
+    wellBehaved: { respLo: 0.05, respHi: 0.95, respDesc: 'die plausibelsten Werte auf der Wahrscheinlichkeitsskala (z.B. die Prävalenz einer Störung) liegen zwischen 5% und 95%' },
     problemCase: {
       sigma: 10,
       desc: `Was passiert bei einem auf η „harmlos breit" wirkenden Prior wie <b>Normal(0, 10)</b> auf
@@ -581,7 +594,7 @@ const FAM_DATA = {
     scaleLo: -3, scaleHi: 4, scaleUnit: 'η (Log-Skala)',
     respLo: 0, respHi: 30, respUnit: 'λ (erwartete Zählrate)',
     transform: x => Math.exp(x),
-    wellBehaved: { respLo: 1, respHi: 10, respDesc: 'die plausibelsten Werte für die erwartete Zählrate λ zwischen 1 und 10 Ereignissen liegen' },
+    wellBehaved: { respLo: 1, respHi: 10, respDesc: 'die plausibelsten Werte für die erwartete Zählrate λ liegen zwischen 1 und 10 Ereignissen' },
     problemCase: {
       sigma: 10,
       desc: `Was passiert bei einem auf η „harmlos breit" wirkenden Prior wie <b>Normal(0, 10)</b> auf
@@ -602,7 +615,7 @@ const FAM_DATA = {
     scaleLo: -3, scaleHi: 4, scaleUnit: 'η = log(μ)',
     respLo: 0, respHi: 20, respUnit: 'μ (Mittelwert, z.B. Reaktionszeit in Sek.)',
     transform: x => Math.exp(x),
-    wellBehaved: { respLo: 0.5, respHi: 8, respDesc: 'die plausibelsten Werte für die mittlere Reaktionszeit μ zwischen 0.5 und 8 Sekunden liegen' },
+    wellBehaved: { respLo: 0.5, respHi: 8, respDesc: 'die plausibelsten Werte für die mittlere Reaktionszeit μ liegen zwischen 0.5 und 8 Sekunden' },
     problemCase: {
       sigma: 10,
       desc: `Genau wie bei Poisson: ein auf η „harmlos breit" wirkender Prior wie <b>Normal(0, 10)</b>
@@ -1447,6 +1460,7 @@ function toggleIntroDetail() {
   introOpen = !introOpen;
   document.getElementById('intro-detail').style.display = introOpen ? 'block' : 'none';
   document.getElementById('intro-toggle-btn').textContent = introOpen ? 'Konzept ausblenden ▾' : 'Konzept erklären ▸';
+  document.body.classList.toggle('intro-scroll', introOpen);
 }
 function toggleTheme() {
   DARK = !DARK;
