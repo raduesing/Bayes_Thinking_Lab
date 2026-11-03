@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){['btn-theme','btn-th','btn-th-nav','themeBtn'].forEach(function(id){var b=document.getElementById(id);if(b)b.textContent='🌙 Dark';});});})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Prior Compass: before you pick prior distributions in Prior Lab, understand why you need a prior at all, for which model parameter, and over what range of values.">
+<title>Prior Compass — Bayes Thinking Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap');
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#1EE8FA;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#7DF2FC;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:18px}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     height:100vh;overflow:hidden;display:flex;flex-direction:column;transition:background .25s,color .25s}
+/* When the concept panel is open it can get very tall — then the WHOLE page should scroll
+   (instead of #shell being squeezed to 0 and the rest becoming unreachable). */
+body.intro-scroll{height:auto;min-height:100vh;overflow-y:auto}
+/* #shell's own flex:1/overflow-y:auto combo doesn't resolve sanely once the body itself is
+   auto-height (indefinite-height flex column + flex-basis:0 + a nested overflow:auto child is
+   a known sizing quirk) — neutralize it so #shell is just normal flow, body does the scrolling. */
+body.intro-scroll #shell{flex:none;overflow:visible;height:auto}
+
+/* ── HEADER ── */
+#topbar{background:var(--paper);border-bottom:1.5px solid var(--border);
+  padding:.5rem 1.1rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:.5rem;line-height:normal}
+.hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.hdr-h1 em{font-style:italic;color:var(--a3)}
+.hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;margin-top:.1rem}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--a2);color:var(--a2)}
+.glo-link{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.glo-link:hover{color:var(--a2)}
+
+/* ── INTRO STRIP / BOX ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.5rem 1.8rem;background:var(--panel);border-bottom:1.5px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);flex-shrink:0}
+.intro-strip strong{color:var(--ink)}
+.intro-strip em{color:var(--a3);font-style:normal}
+.intro-strip .ibtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
+  border:1.5px solid var(--a3);color:var(--a3);background:transparent;cursor:pointer;
+  transition:all .15s;letter-spacing:.03em;white-space:nowrap;flex-shrink:0}
+.intro-strip .ibtn:hover{background:var(--a3);color:var(--paper)}
+.intro-box{background:var(--paper);border-bottom:1.5px solid var(--a3);
+  padding:.85rem 1.8rem;font-family:'DM Mono',monospace;font-size:.75rem;
+  color:var(--ink2);line-height:1.8;flex-shrink:0}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin-bottom:.4rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.3rem;font-family:'Fraunces',Georgia,serif}
+.intro-box .ib-head.ib-head2{margin-top:.75rem}
+.intro-box b,.intro-box strong{color:var(--ink)}
+.intro-box em{color:var(--a3);font-style:normal}
+
+/* LAYOUT */
+#shell{flex:1;overflow-y:auto;min-height:0;scrollbar-gutter:stable}
+#wrap{max-width:1200px;margin:0 auto;padding:1rem 2rem 3rem}
+
+/* REGISTER TABS (same card-tab pattern as GLM_transition/MCMC_Visualizer) */
+.reg-tabs{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1.2rem}
+.regtab{flex:1 1 320px;font-family:'DM Mono',monospace;padding:.6rem .9rem;
+  background:var(--panel);border:1.5px solid var(--border);cursor:pointer;
+  text-align:left;color:var(--ink2);transition:all .15s;position:relative;
+  display:flex;align-items:center;gap:.65rem}
+.regtab:hover{border-color:var(--a3)}
+.regtab .reg-n{flex-shrink:0;width:1.7rem;height:1.7rem;border-radius:50%;
+  border:1.5px solid var(--border);color:var(--ink3);display:flex;align-items:center;
+  justify-content:center;font-size:.85rem;transition:all .15s}
+.regtab .reg-txt{display:flex;flex-direction:column;gap:.1rem}
+.regtab .reg-title{font-family:'Fraunces',Georgia,serif;font-size:.95rem;font-weight:600;color:var(--ink2)}
+.regtab .reg-sub{font-size:.65rem;color:var(--ink3)}
+.regtab.sel{border-color:var(--a3);background:color-mix(in srgb,var(--a3) 14%,var(--panel));
+  box-shadow:0 0 0 1px var(--a3),0 0 14px color-mix(in srgb,var(--a3) 35%,transparent)}
+.regtab.sel .reg-n{background:var(--a3);border-color:var(--a3);color:var(--paper)}
+.regtab.sel .reg-title{color:var(--a3)}
+
+.reg-content{display:none}
+.reg-content.active{display:block}
+
+/* ── REGISTER 1: PARAMETER ATLAS ── */
+.dv-picker{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
+.dv-btn{font-family:'DM Mono',monospace;font-size:.78rem;padding:.4rem .85rem;
+  background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);
+  cursor:pointer;transition:all .15s}
+.dv-btn:hover{border-color:var(--a2)}
+.dv-btn.sel{border-color:var(--a2);background:color-mix(in srgb,var(--a2) 16%,var(--panel));color:var(--a2);font-weight:600}
+
+.eq-box{background:var(--paper);border:1.5px solid var(--border);padding:1.3rem 1.5rem;
+  margin-bottom:1.1rem;text-align:center}
+.eq-formula{font-family:'Fraunces',Georgia,serif;font-size:1.5rem;font-weight:300;
+  color:var(--ink2);letter-spacing:.01em;line-height:1.5}
+.eq-formula .plain{color:var(--ink3)}
+.eq-term{cursor:pointer;padding:.08rem .3rem;border-radius:3px;transition:all .15s;border-bottom:2px dashed transparent}
+.eq-term:hover{background:color-mix(in srgb,var(--a2) 10%,transparent)}
+.eq-term.sel{border-bottom-color:var(--a2);color:var(--a2);font-weight:600}
+.eq-term.c-int{color:var(--a1)}
+.eq-term.c-metric{color:var(--a2)}
+.eq-term.c-bin{color:var(--a5)}
+.eq-term.c-sigma{color:var(--a4)}
+.eq-term.sel.c-int{color:var(--a1);border-bottom-color:var(--a1)}
+.eq-term.sel.c-metric{color:var(--a2);border-bottom-color:var(--a2)}
+.eq-term.sel.c-bin{color:var(--a5);border-bottom-color:var(--a5)}
+.eq-term.sel.c-sigma{color:var(--a4);border-bottom-color:var(--a4)}
+.eq-hint{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--ink3);margin-top:.6rem}
+.dv-info{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink2);line-height:1.8;
+  margin:-.3rem 0 1.1rem;padding:.6rem .85rem;border-left:3px solid var(--border);
+  background:color-mix(in srgb,var(--ink3) 5%,transparent)}
+.dv-info b{color:var(--ink)}
+.dv-info .dv-cut{display:inline-block;margin-right:1rem;white-space:nowrap}
+
+.pcard{background:var(--panel);border:1.5px solid var(--border);padding:1.1rem 1.3rem}
+.pcard-title{font-family:'Fraunces',Georgia,serif;font-size:1.1rem;font-weight:600;margin-bottom:.15rem}
+.pcard-sub{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-bottom:.9rem}
+.pc-row{display:grid;grid-template-columns:9.5em 1fr;gap:.25rem 1rem;padding:.55rem 0;
+  border-top:1px solid var(--grid)}
+.pc-row:first-of-type{border-top:none}
+.pc-lbl{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink3);padding-top:.1rem}
+.pc-body{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);line-height:1.7}
+.pc-body b{color:var(--ink)}
+.quote{margin-top:.4rem;padding:.4rem .7rem;border-left:3px solid var(--border);
+  font-style:italic;color:var(--ink3);font-size:.76rem;line-height:1.75}
+@media(max-width:640px){.pc-row{grid-template-columns:1fr}}
+
+/* Density plot (SVG), Standard/Informative Prior in Register 1 */
+.dens-wrap{margin:.5rem 0 .1rem}
+.dens-cap{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
+  margin-bottom:.3rem;display:flex;align-items:center;gap:.4rem}
+.dens-swatch{display:inline-block;width:.8em;height:.8em;border-radius:2px;flex-shrink:0}
+.dens-svg{width:100%;height:4.5rem;display:block}
+.dens-ticks{position:relative;height:1.1rem;font-family:'DM Mono',monospace;font-size:.62rem;
+  color:var(--ink3);margin-top:.15rem}
+.dens-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.dens-ticks span.dens-peak{color:var(--ink2);font-weight:600}
+
+/* Histogram (simple Monte-Carlo-bar visual, shared by Register 2) */
+.hist-wrap{margin:.5rem 0 .2rem}
+.hist-cap{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);margin-bottom:.3rem}
+.hist-track{position:relative;height:3.6rem;display:flex;align-items:flex-end;gap:1px;
+  background:var(--grid);border-radius:3px;padding:2px}
+.hist-bar{flex:1;border-radius:1px 1px 0 0;min-height:1px}
+.hist-ticks{position:relative;height:1.1rem;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3)}
+.hist-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+
+/* Number-line visual, shared by both registers */
+.nline-wrap{margin:.5rem 0 .2rem}
+.nline-cap{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);margin-bottom:.3rem}
+.nline-track{position:relative;height:1.6rem;background:var(--grid);border-radius:3px;overflow:visible}
+.nline-full{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--ink3) 18%,transparent);border-radius:3px}
+.nline-range{position:absolute;top:0;bottom:0;border-radius:3px}
+.nline-mark{position:absolute;top:50%;width:2px;background:var(--ink);transform:translate(-1px,-50%);height:1.6rem}
+.nline-ticks{position:relative;height:2.1rem;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ink3)}
+.nline-ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.nline-ticks span.row2{top:1.1rem}
+
+/* ── REGISTER 2: GLM LINK SCALE ── */
+.fam-picker{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
+.fam-btn{font-family:'DM Mono',monospace;font-size:.78rem;padding:.4rem .85rem;
+  background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);
+  cursor:pointer;transition:all .15s}
+.fam-btn:hover{border-color:var(--a4)}
+.fam-btn.sel{border-color:var(--a4);background:color-mix(in srgb,var(--a4) 16%,var(--panel));color:var(--a4);font-weight:600}
+
+.fam-box{background:var(--paper);border:1.5px solid var(--border);padding:1.1rem 1.3rem;margin-bottom:1.1rem}
+.fam-title{font-family:'Fraunces',Georgia,serif;font-size:1.2rem;font-weight:600;margin-bottom:.2rem}
+.fam-link{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--a4);margin-bottom:.8rem}
+.fam-txt{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);line-height:1.85}
+.fam-txt b{color:var(--ink)}
+.fam-txt .warn{color:var(--a5)}
+
+.scale-box{background:var(--panel);border:1.5px solid var(--border);padding:1rem 1.3rem;margin-bottom:1.1rem}
+.scale-head{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink3);margin-bottom:.4rem}
+.scale-head.resp{margin-top:1.1rem}
+.scale-sect-title{font-family:'Fraunces',Georgia,serif;font-size:1.02rem;font-weight:600;
+  margin:1.4rem 0 .6rem;color:var(--ink)}
+.scale-sect-title:first-child{margin-top:0}
+.scale-sect-title.warn-title{color:var(--a5)}
+.scale-narr{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);
+  line-height:1.85;margin-bottom:.7rem}
+.scale-narr b{color:var(--ink)}
+
+.deeplink-row{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.9rem}
+.dl-btn{font-family:'DM Mono',monospace;font-size:.73rem;padding:.4rem .75rem;
+  border:1.5px solid var(--a3);color:var(--a3);background:transparent;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;transition:all .15s}
+.dl-btn:hover{background:var(--a3);color:var(--paper)}
+.dl-btn.warn{border-color:var(--a5);color:var(--a5)}
+.dl-btn.warn:hover{background:var(--a5);color:var(--paper)}
+
+.sect-note{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);
+  line-height:1.8;margin-bottom:1.1rem;padding:.6rem .85rem;border-left:3px solid var(--a3);
+  background:color-mix(in srgb,var(--a3) 6%,transparent)}
+
+/* ── REGISTER 3: DECISION WIZARD ── */
+.wiz-disclaimer{background:color-mix(in srgb,var(--a5) 9%,var(--paper));
+  border:1.5px solid var(--a5);padding:.9rem 1.1rem;margin-bottom:1.3rem;
+  font-family:'DM Mono',monospace;font-size:.74rem;line-height:1.85;color:var(--ink2)}
+.wiz-disclaimer-head{font-family:'Fraunces',Georgia,serif;font-weight:700;color:var(--a5);
+  font-size:.95rem;margin-bottom:.45rem}
+.wiz-disclaimer b{color:var(--ink)}
+.wiz-disclaimer a{color:var(--a5)}
+
+.wiz-step{margin-bottom:1.4rem}
+.wiz-step-label{font-family:'DM Mono',monospace;font-size:.68rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink3);margin-bottom:.6rem;display:flex;align-items:center}
+.wiz-step-label .wiz-num{display:inline-flex;align-items:center;justify-content:center;
+  width:1.5em;height:1.5em;border-radius:50%;background:var(--panel);border:1.5px solid var(--border);
+  margin-right:.5rem;font-weight:700;color:var(--ink2);flex-shrink:0}
+.wiz-btn-row{display:flex;flex-wrap:wrap;gap:.5rem}
+.wiz-btn{font-family:'DM Mono',monospace;font-size:.76rem;padding:.55rem .95rem;
+  background:var(--panel);border:1.5px solid var(--border);color:var(--ink2);
+  cursor:pointer;transition:all .15s;text-align:left;line-height:1.5}
+.wiz-btn:hover{border-color:var(--a3)}
+.wiz-btn.sel{border-color:var(--a3);background:color-mix(in srgb,var(--a3) 16%,var(--panel));
+  color:var(--a3);font-weight:600}
+.wiz-btn small{display:block;font-weight:400;opacity:.75;margin-top:.1rem}
+.wiz-btn-sm{padding:.35rem .7rem;font-size:.72rem;text-align:center}
+.wiz-btn-sm small{display:inline;margin-top:0;margin-left:.3rem;opacity:.55;font-size:.9em}
+
+.wiz-question{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--ink2);
+  line-height:1.8;margin-bottom:.8rem}
+.wiz-input-row{display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;margin-bottom:.3rem}
+.wiz-input{display:flex;flex-direction:column;gap:.35rem}
+.wiz-input label{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--ink3);
+  text-transform:uppercase;letter-spacing:.05em}
+.wiz-input input{font-family:'DM Mono',monospace;font-size:.85rem;padding:.4rem .5rem;
+  background:var(--panel);border:1.5px solid var(--border);color:var(--ink);outline:none;width:8.5rem}
+.wiz-input input:focus{border-color:var(--a3)}
+.wiz-warn{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--a5);margin-top:.5rem}
+
+.wiz-result{background:var(--paper);border:1.5px solid var(--a3);padding:1.1rem 1.3rem;margin-top:.3rem}
+.wiz-result-title{font-family:'Fraunces',Georgia,serif;font-size:1.05rem;font-weight:600;
+  color:var(--a3);margin-bottom:.7rem}
+.wiz-result .pc-row:first-of-type{border-top:none}
+.wiz-reset{margin-top:.9rem}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <div class="hdr-h1">Prior <em>Compass</em></div>
+    <div class="hdr-sub2">Why do I need a prior? · Understanding plausible ranges · Model scale vs. response scale</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" onclick="window.open('../index.html','_self')" style="border-color:var(--a3);color:var(--a3)">← Overview</button>
+    <button class="hbtn" onclick="window.open('Bayesian_Prior_Lab.html','_blank')" style="border-color:var(--a2);color:var(--a2)" title="Go to the concrete distribution choice">🎛 Prior Lab →</button>
+    <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<!-- INTRO STRIP -->
+<div class="intro-strip">
+  <div>
+    Before you pick concrete distributions in <strong>Prior Lab</strong>: why do you even need a <em>prior</em>, for which model parameter, and over what range of values does that make sense?
+  </div>
+  <button class="ibtn" id="intro-toggle-btn" onclick="toggleIntroDetail()">Explain the concept ▸</button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">What is this about?</div>
+    A <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" title="The prior p(θ) is the probability distribution over model parameters θ expressing our knowledge before observing the data.">prior</a> is a statement about <b>a specific parameter of your model</b>, in <b>its unit</b>, with a <b>plausible range of values</b>. Until these three things are clear, any distribution choice in Prior Lab is guesswork: you can type in some Normal(0,1), but without knowing what this parameter means in your own study and what values it could even take, it stays unclear whether 0,1 is narrow, wide, plausible, or absurd.<br><br>
+    A prior brings additional information into the model. That can range from fairly vague, <b>regularizing</b>, all the way to quite concrete, based on prior knowledge. Regularizing means it is fairly wide and doesn't favor a direction, so as to keep the model from drifting into completely implausible regions during <a class="glo-link" href="Glossar.html#gl-mcmc-sampling" target="_blank" title="The concrete execution of the MCMC procedure during model fitting (e.g. via brm()) — several Markov chains explore the posterior in parallel, first tentatively (warmup), then purposefully (sampling).">MCMC sampling</a>. At the other end of the spectrum are <b>informed priors</b>, which bring in real prior knowledge (from previous studies, meta-analyses, theory) and steer the estimate deliberately in a direction. You'll find worked examples of all of this in the Parameter Atlas.<br><br>
+    The intercept β₀ describes the expected value of the DV when <em>all</em> predictors are zero. This is only meaningfully interpretable if "all predictors = 0" actually describes a real, plausible situation — for a binary 0/1 predictor that's usually the case, but for a metric predictor with a purely positive range far from zero (e.g. study time in hours) it often isn't: an intercept at "0 hours studied" always technically exists, but substantively it's an extrapolation far outside the observed data. That's why <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Centering (mean-centering): a predictor is shifted by its mean (X_c = X − X̄) — afterward the intercept describes the expected value at AVERAGE instead of zero predictor values.">centering</a> is often useful for metric predictors: subtract the predictor's mean, and the intercept then describes the expected value at an <em>average</em> (rather than an often unrealistic zero) predictor value — a substantively more meaningful and easier-to-justify reference.<br><br>
+    For slopes, an important special case applies: their plausible range depends <b>both on the metric of the DV and on the metric of the predictor</b> — never on just one of the two sides alone. The guiding question is always the same: <em>By how many units does the DV change when I change the predictor by one unit?</em> The same substantive relationship looks completely different in raw-score units than in z-standardized units — not because anything about the underlying effect changes, but because the scales on both sides of the equation change.
+
+    <div class="wiz-disclaimer" style="margin-top:1rem">
+      <div class="wiz-disclaimer-head">⚠ Important principle</div>
+      A prior should reflect your current <b>state of knowledge</b> — <b>not</b> your wish for where the effect should lie! If nothing is known in this area yet, use a vague, regularizing prior centered on zero. If plausible restrictions can be justified without favoring a direction (see the IQ example for β₀, the intercept), that's sensible. Priors that point exactly in the direction of your preferred effect, <b>without</b> concrete, justified prior information (e.g. meta-analyses), are not an honest approach!
+    </div>
+
+    <div class="ib-head ib-head2">How to proceed</div>
+    <strong>1. Parameter Atlas</strong> — a simple model equation, click through Intercept, Slopes and σ: what does each of these parameters control, what unit does it have, what range of values is plausible, and which distribution shape fits its natural boundary (e.g. σ must be positive, intercepts and slopes don't have to be)? The same question is worked through for three different outcome variables (IQ, z-score, BDI-II), so it becomes visible: the method of thinking about plausible ranges stays the same, only the concrete numbers change with the DV's scale.<br>
+    <strong>2. GLM Link Scale</strong> — for Bernoulli/Poisson/Gamma, the prior lives on a <em>different</em> scale (η, the linear predictor) than what you actually observe and substantively interpret (probability, rate, mean). These two scales are connected by a non-linear link function — meaning: a prior that looks harmless and symmetric on η can behave completely differently on the response scale, sometimes very informative, sometimes distorted. Here you learn how to work backward from a substantive idea ("values between X% and Y%") to the matching model-scale distribution.<br>
+    <strong>3. Decision Wizard</strong> — when you need a quick, first rough orientation: based on a few questions (type of outcome, parameter type, your plausibility judgment), it suggests a concrete prior distribution — including alternatives (e.g. Student-t instead of Normal, so as not to rule out extreme values too hard) and a direct deep link into Prior Lab. The wizard does NOT replace the first two registers, but builds directly on their logic — and comes with its own, clear disclaimer: only a rough first recommendation, no substitute for a well-considered, model-specific choice.
+
+    <div class="ib-head ib-head2">And afterwards?</div>
+    Every distribution family in Register 2 links directly into <strong>Prior Lab</strong>, with a matching pre-selected distribution, link function, and intercept/slope view — there you then fine-tune the concrete parameters interactively and see live what your prior means on the response scale (including prior predictive simulation). Prior Compass gives you the starting point and the way of thinking, Prior Lab the tool for further exploration — the two tools are deliberately designed as a pair, not as a substitute for one another.
+  </div>
+</div>
+
+<main id="shell">
+<div id="wrap">
+
+<div class="reg-tabs">
+  <button class="regtab sel" id="regtab-0" onclick="setReg(0)">
+    <span class="reg-n">1</span>
+    <span class="reg-txt">
+      <span class="reg-title">Parameter Atlas</span>
+      <span class="reg-sub">Where do you turn the dials in the model?</span>
+    </span>
+  </button>
+  <button class="regtab" id="regtab-1" onclick="setReg(1)">
+    <span class="reg-n">2</span>
+    <span class="reg-txt">
+      <span class="reg-title">GLM Link Scale</span>
+      <span class="reg-sub">Model scale vs. response scale</span>
+    </span>
+  </button>
+  <button class="regtab" id="regtab-2" onclick="setReg(2)">
+    <span class="reg-n">3</span>
+    <span class="reg-txt">
+      <span class="reg-title">Decision Wizard</span>
+      <span class="reg-sub">Guided to a plausible prior</span>
+    </span>
+  </button>
+</div>
+
+<!-- ══════════ REGISTER 1 ══════════ -->
+<div class="reg-content active" id="reg-content-0">
+
+  <div class="sect-note">
+    A simple linear equation, written as a distributional statement: <b>Y ~ Normal(β₀ + β₁·X₁ + β₂·X₂, σ)</b> —
+    X₁ is metric, X₂ is binary (0/1). Every prediction is therefore not exact, but normally distributed around
+    β₀+β₁·X₁+β₂·X₂ with spread σ. Pick an outcome variable (DV), then click a term to see what it controls
+    and what range of values is plausible for its prior. <b>σ, too, is a parameter that absolutely needs a
+    prior</b> — just like β₀, β₁ and β₂.
+  </div>
+
+  <div class="dv-picker" id="dv-picker"></div>
+
+  <div class="eq-box">
+    <div class="eq-formula" id="eq-formula"></div>
+    <div class="eq-hint">Click β₀, β₁·X₁, β₂·X₂ or σ</div>
+  </div>
+
+  <div class="dv-info" id="dv-info"></div>
+
+  <div class="pcard" id="pcard"></div>
+
+</div>
+
+<!-- ══════════ REGISTER 2 ══════════ -->
+<div class="reg-content" id="reg-content-1">
+
+  <div class="sect-note">
+    <a class="glo-link" href="Glossar.html#gl-link-funktion" target="_blank" title="The link function connects the linear predictor η (unbounded on ℝ) to the expected value of the distribution family (which often has natural bounds, e.g. probability ∈ [0,1]).">Priors in brms are specified on the <b>model scale</b> (η, linear predictor)</a> —
+    not on the scale on which you actually observe the data (probability, rate, mean).
+    For Gaussian these are the same scale; for the other three families a <b>link function</b> sits in between,
+    which is anything but linear. Choose a family:
+  </div>
+
+  <div class="fam-picker" id="fam-picker"></div>
+
+  <div class="fam-box">
+    <div class="fam-title" id="fam-title"></div>
+    <div class="fam-link" id="fam-link"></div>
+    <div class="fam-txt" id="fam-txt"></div>
+  </div>
+
+  <div class="scale-box" id="scale-box"></div>
+
+  <div class="deeplink-row" id="deeplink-row"></div>
+
+</div>
+
+<!-- ══════════ REGISTER 3 ══════════ -->
+<div class="reg-content" id="reg-content-2">
+
+  <div class="wiz-disclaimer">
+    <div class="wiz-disclaimer-head">⚠ Important note before you start</div>
+    This wizard gives — purely as an example, guided by simple <b>general principles</b> and the
+    ±2×SD thumb rule — a first, rough orientation. It <b>does not</b> replace the careful,
+    model-specific choice of your priors. The concrete parametrization for <em>your</em> model always
+    needs to be well thought through. Use the recommendation below only as a starting point, and
+    <b>then make sure to check it yourself</b>: explore the distribution thoroughly in <strong>Prior Lab</strong>,
+    and run a real <a class="glo-link" href="Glossar.html#gl-prior-predictive-check" target="_blank" title="A Prior Predictive Check simulates data purely from the priors (without the real data) and checks whether the simulated predictions look plausible at all — before fitting the model to real data.">prior predictive check</a>
+    in <a href="Bayesian_PP_Check.html" target="_blank">Bayesian PP Check</a> for your concrete model, to see whether your
+    prior actually produces plausible predictions. Don't blindly rely on thumb rules or
+    default settings.
+  </div>
+
+  <div class="sect-note">
+    Answer three short questions — what type of outcome, which parameter, what plausible
+    range of values — and the wizard suggests a prior distribution with a deep link into Prior Lab.
+  </div>
+
+  <div id="wiz-body"></div>
+
+</div>
+
+</div>
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let DARK = true;
+let curReg = 0;
+let curDv = 'iq';
+let curParam = 'int';
+let curFam = 'gaussian';
+
+// ═══════════════════════════════════════════════════════════
+//  DATA — REGISTER 1 (Parameter Atlas)
+// ═══════════════════════════════════════════════════════════
+// Each DV brings its own metric + binary example, so that units and ranges stay concrete
+// instead of abstract. The numbers are didactically plausible (the BDI-II range 0–63 is the
+// instrument's real sum-score range), no claim to clinical precision — this is about the
+// METHOD of thinking in plausible ranges.
+//
+// Each parameter (int/metric/binary/sigma) has four separate fields, deliberately NOT mixed
+// together, per explicit user request: (1) plausRange — purely descriptive, what's plausible
+// at all, NOT yet a prior; (2) stdPrior — the neutral standard prior, which only regularizes
+// ("the model should search within the plausible range"), centered at 0 (or at the scale's
+// natural reference point) for intercept/slopes; (3) infPrior — an EXPLICITLY marked
+// non-default, justified example of an informative prior (never shown without a justification);
+// (4) distNote — which distribution shape fits and why (depends on the parameter's natural
+// range, not just taste).
+const SLOPE_DIST_NOTE = 'Slopes are unbounded — they can be positive or negative. Normal or Student-t are the standard, with μ=0, as long as no direction can be justified.';
+const INT_DIST_NOTE = 'Intercepts are unbounded — usually a symmetric distribution like Normal or Student-t fits (the latter for more tolerance toward outliers). But if there is a concrete, justified assumption that the uncertainty itself is asymmetric, a skewed distribution like Skew-Normal can also make sense (try it e.g. on the BDI-II intercept) — symmetry is not a must, just the standard case.';
+const SIGMA_DIST_NOTE = 'σ must be positive — a Normal prior would be UNSUITABLE here, since it would also assign probability to negative spread values. Half-Normal and Exponential are densest at 0 (fitting for the regularizing standard case); Gamma and Log-Normal can also have a peak away from 0 (fitting when a concrete, informed expectation exists).';
+
+const DV_DATA = {
+  iq: {
+    label: 'IQ', name: 'Intelligence Quotient', unit: 'IQ points',
+    mean: 100, sd: 15, lo: 55, hi: 145,
+    scaleInfo: 'IQ values are normed to <b>M = 100, SD = 15</b>. The usual normal range (±1 SD) is <b>85–115</b>; clear deviations outside that range count as diagnostically notable.',
+    metric: { name: 'Study time', unit: 'hrs/week', perUnit: 'additional hour of study/week', incLabel: '1 hour/week', lo: 0, hi: 20, dirNote: 'in which direction study time affects IQ' },
+    binary: { name: 'Support program', l0: 'no program', l1: 'participation', dirNote: 'in which direction the support program affects IQ' },
+    int: {
+      what: 'Expected IQ value when study time = 0 hrs and no program participation — i.e. the average outcome when all predictors are zero (which is also why <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Centering (mean-centering): a predictor is shifted by its mean (X_c = X − X̄) — afterward the intercept describes the expected value at AVERAGE instead of zero predictor values.">centering</a> can be useful here). Important: the intercept describes the MEAN of the sample at these predictor values, and the prior for it expresses how certain we are about this mean. That is not the same as the spread of the sample — that is captured separately by σ.',
+      plausRange: 'IQ is bounded to approx. 55–145 by the test norming (±3 SD).',
+      stdPrior: { fam:'normal', mu:100, sd:5, text: 'Deliberately NARROWER than the population spread (SD=15): IQ tests are, by construction, normed to a population mean of 100 — so even before looking at any data, it is fairly certain that the mean of a new sample will also lie close to 100. This certainty concerns the mean, not individual measurements (that is the job of σ\'s own prior) — a standard prior is allowed to already use this kind of structural knowledge about the scale, without thereby becoming an informative prior that requires justification.' },
+      infPrior: { fam:'normal', mu:110, sd:8, text: 'If the sample is known to be above average (e.g. university students, who score around 110 on average), this shifted prior would be justified — but only with this justification. We also allow for greater uncertainty, though, so that we also consider the typical average and values slightly below it plausible.' },
+      distNote: INT_DIST_NOTE
+    },
+    metricParam: {
+      what: 'Change in IQ per additional hour of study/week (all else equal).',
+      plausRange: 'Study time varies over 0–20 hrs/week, IQ over 55–145 (range 90). Even if study time ALONE explained the entire IQ range, the slope would be at most ±4.5 IQ points/hr — technically the outer limit, practically implausible, since no single variable explains the whole range.',
+      stdPrior: { fam:'normal', mu:0, sd:1, text: 'Centered on "no effect", with an SD that allows small, but not trivial, effects without presetting a direction. An effect of 2 (edge of the 95% range) looks small — but what would that mean substantively? A person who studies 10 hrs/week would, on average, score 20 IQ points higher than someone who doesn\'t study at all. Improbably large, but not hard-excluded — and that\'s fine: a somewhat too-wide prior barely costs anything here, while a too-narrow one could artificially suppress a real, smaller effect.' },
+      infPrior: { fam:'normal', mu:0.3, sd:0.3, text: 'Education research usually finds small positive effects for study-time interventions — with this justification, a slightly positively shifted prior would be defensible.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    binaryParam: {
+      what: 'Mean IQ difference between support-program participation and control (all else equal).',
+      plausRange: 'Group differences in IQ typically range from a few points to perhaps a dozen. A difference as large as the entire DV range (90 points) would mean group membership alone explains almost everything — implausible for a single support program.',
+      stdPrior: { fam:'normal', mu:0, sd:5, text: 'Centered on "no difference between groups", with an SD that allows moderate differences in either direction. A group difference of 10 points (edge of the 95% range) would be exceptionally large for a single support program — improbable, but not hard-excluded. This too is fine: the prior only regularizes roughly here, a somewhat too-wide range costs almost nothing.' },
+      infPrior: { fam:'normal', mu:5, sd:3, text: 'If prior findings on similar support programs suggest a gain of around 5 points, but with some uncertainty attached, this prior — centered at +5 but deliberately still wide — would be justified: it considers a positive effect most likely, but rules out neither no effect nor a slightly negative one — with reference to exactly these (uncertain) findings.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    sigma: {
+      what: 'Spread of the residuals — how far the actual IQ values deviate, on average, from the model-predicted value.',
+      plausRange: 'σ must be positive and cannot exceed the DV\'s total spread (SD=15) — predictors can only explain variance, not add it. So plausible is 0 &lt; σ ≤ 15, realistically usually 8–14, since individual predictors rarely explain a large share of IQ variance.',
+      stdPrior: { fam:'halfnormal', scale:7.5, text: 'Density highest at 0, falling off toward the edges — regularizes toward smaller, but not unrealistically small, spreads, without presupposing a particular model fit.' },
+      infPrior: { fam:'gamma', mu:10, sd:2, text: 'If a prior study with similar predictors already found σ≈10, a prior concentrated around 10 instead of 0 would be justified — but only with this justification, not by default.' },
+      distNote: SIGMA_DIST_NOTE
+    }
+  },
+  z: {
+    label: 'Z-score', name: 'Standardized score (z)', unit: 'z-units',
+    mean: 0, sd: 1, lo: -3, hi: 3,
+    scaleInfo: 'As a concrete content here, we take a <b>z-standardized measure of cognitive performance</b> (e.g. an attention or memory test) — by definition M = 0, SD = 1 in the reference sample. Only with this substantive anchor can the predictors be meaningfully judged: sleep hours and a sleep intervention (experimental vs. control group) should plausibly act on exactly this kind of cognitive measure.',
+    metric: { name: 'Sleep hours', unit: 'hrs/night', perUnit: 'additional hour of sleep', incLabel: '1 hour/night', lo: 4, hi: 10, dirNote: 'in which direction sleep hours affect the z-score' },
+    binary: { name: 'Condition', l0: 'control group', l1: 'experimental group', dirNote: 'in which direction the condition affects the z-score' },
+    int: {
+      what: 'Expected z-score when sleep hours = 0 and control group — i.e. the average outcome when all predictors are zero (which is also why <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Centering (mean-centering): a predictor is shifted by its mean (X_c = X − X̄) — afterward the intercept describes the expected value at AVERAGE instead of zero predictor values.">centering</a> can be useful here).',
+      plausRange: 'By definition, z-scores average to 0 with SD=1, in practice usually between -3 and 3.',
+      stdPrior: { fam:'normal', mu:0, sd:1, text: 'Here the scale\'s neutral reference point (0) happens to coincide with "no prior knowledge, let the model search within the plausible range" — unlike for IQ, where 0 itself would be implausible.' },
+      infPrior: { fam:'normal', mu:0.4, sd:0.5, text: 'If the sample is known to have slightly elevated values (e.g. a pre-selected group), this shifted, narrower prior would be justified.' },
+      distNote: INT_DIST_NOTE
+    },
+    metricParam: {
+      what: 'Change in z-score per additional hour of sleep (all else equal).',
+      plausRange: 'Sleep varies over 4–10 hrs, z-scores over -3 to 3 (range 6). The theoretical extreme limit (the full z-range over the full sleep range) is ±1.0 z-units/hr — would mean sleep amount alone explains practically all of human variation.',
+      stdPrior: { fam:'normal', mu:0, sd:0.3, text: 'Centered on "no effect", with an SD that allows small to moderate effects. An effect of 0.6 (edge of the 95% range) looks small — but scaled up over the full range of sleep hours (4 to 10 hrs) that would mean a difference of 3.6 z-units — people sleeping 4 vs. 10 hours would differ by 3.6 standard deviations. An unrealistically large effect, which the prior does not hard-exclude, though — and that\'s fine too, a somewhat too-wide prior barely hurts here.' },
+      infPrior: { fam:'normal', mu:0.1, sd:0.05, text: 'Sleep research typically finds small positive effects of sleep amount on cognitive/affective measures — with a corresponding reference, this slightly positively shifted, narrower prior would be defensible.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    binaryParam: {
+      what: 'Mean difference in z-units between the experimental and control group.',
+      plausRange: 'Group differences on the z-scale typically range between 0 and about 1 unit. A difference of several z-units would mean the groups practically no longer overlap — unrealistic for most behavioral interventions.',
+      stdPrior: { fam:'normal', mu:0, sd:0.3, text: 'Centered on "no difference", allows moderate effects in either direction. A group difference of 0.6 z-units (edge of the 95% range) already describes a large effect, at the upper end of what is commonly found in behavioral research — improbable, but not hard-excluded. Here too: better somewhat too wide than too narrow.' },
+      infPrior: { fam:'normal', mu:0.35, sd:0.15, text: 'If earlier studies on similar interventions consistently report an effect of around 0.3–0.4 z-units, this correspondingly shifted prior would be justified.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    sigma: {
+      what: 'Spread of the residuals on the z-scale.',
+      plausRange: 'σ ≤ 1, since the total spread of the z-standardized DV is 1 by definition — predictors can only shrink it. Realistically usually 0.85–1.0, since individual predictors rarely explain much variance.',
+      stdPrior: { fam:'halfnormal', scale:0.5, text: 'Regularizes toward smaller values, but allows up to close to the total spread — fitting for "I don\'t know how strong the model is".' },
+      infPrior: { fam:'gamma', mu:0.84, sd:0.15, text: 'With a predictor set known from prior studies to be strongly explanatory (e.g. an expected R²≈0.3), a prior concentrated around σ≈0.84 (=√(1−0.3)) would be justified.' },
+      distNote: SIGMA_DIST_NOTE
+    }
+  },
+  bdi: {
+    label: 'BDI-II', name: 'Beck Depression Inventory II (sum score)', unit: 'BDI-II points',
+    mean: 15, sd: 10, lo: 0, hi: 63,
+    scaleInfo: 'Severity cutoffs per the BDI-II manual / German S3 depression guideline: <span class="dv-cut">&lt; 13 no depression / clinically unremarkable</span><span class="dv-cut">13–19 mild depressive syndrome</span><span class="dv-cut">20–28 moderate depressive syndrome</span><span class="dv-cut">≥ 29 severe depressive syndrome</span>',
+    metric: { name: 'Stress level', unit: 'scale 0–10', perUnit: 'additional stress-scale point', incLabel: '1 scale point', lo: 0, hi: 10, dirNote: 'in which direction stress level affects the BDI-II score' },
+    binary: { name: 'Depressive episode in the last 12 months', eqName: 'Episode(12M)', l0: 'no episode in the last 12 months', l1: 'episode in the last 12 months', dirNote: 'in which direction a depressive episode in the last 12 months affects the BDI-II score' },
+    int: {
+      what: 'Expected BDI-II score when stress level = 0 and no depressive episode in the last 12 months — i.e. the average outcome when all predictors are zero (which is also why <a class="glo-link" href="Glossar.html#gl-zentrierung" target="_blank" title="Centering (mean-centering): a predictor is shifted by its mean (X_c = X − X̄) — afterward the intercept describes the expected value at AVERAGE instead of zero predictor values.">centering</a> can be useful here).',
+      plausRange: 'By construction, the BDI-II sum score is bounded to [0, 63] (21 items at 0–3 points each).',
+      stdPrior: { fam:'normal', mu:15, sd:7, text: 'Centered on a plausible reference value for mixed (not purely clinical) samples, with an SD that stays within the construction limits [0,63].' },
+      infPrior: [
+        { fam:'normal', mu:18, sd:5, text: 'Let\'s imagine this is already a clinical sample. The intercept gives the expected average outcome when the predictors = 0 — i.e. (centered) average stress level, but no depressive episode in the last 12 months (i.e. people in remission, not people with no depressive history at all). Residual subclinical symptoms are common even in remission, so a prior slightly elevated relative to the general population, but clearly below acute symptomatology, would be justified.' },
+        { fam:'skew_normal', alpha:5, xi:3.218986, omega:9.717581, text: 'An informative prior doesn\'t have to be normally distributed. A different story: for this sample we don\'t know whether a disproportionate number of people with depressive symptoms volunteered — so higher average values can\'t be ruled out. But we are convinced that most participants come from a fairly healthy population. A right-skewed Skew-Normal distribution captures that: more weight on lower, unremarkable values, with a long tail toward higher (more symptomatic) values.' }
+      ],
+      distNote: INT_DIST_NOTE
+    },
+    metricParam: {
+      what: 'Change in BDI-II score per stress-scale point (all else equal).',
+      plausRange: 'Stress level varies over 0–10, BDI-II over 0–63 (range 63). Extreme limit: ±6.3 BDI points/stress point — would mean stress alone explains the entire symptom range.',
+      stdPrior: { fam:'normal', mu:0, sd:1, text: 'Centered on "no effect", allows moderate effects in either direction. An effect of 2 (edge of the 95% range) looks small — but scaled up over the full stress scale (0 to 10) that would mean a BDI-II difference of 20 points, almost a shift from minimal to severe symptomatology through stress alone. Improbably extreme, but not hard-excluded — and that\'s fine too, a somewhat too-wide prior barely hurts here.' },
+      infPrior: { fam:'normal', mu:1.2, sd:0.6, text: 'Stress research robustly finds positive associations between perceived stress and depressive symptomatology — with a corresponding reference, this positively shifted, narrower prior would be defensible.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    binaryParam: {
+      what: 'Mean BDI-II difference between people with and without a depressive episode in the last 12 months.',
+      plausRange: 'Differences due to an episode in the last 12 months typically range from a few to about 10–15 BDI points. A difference as large as the entire scale range (63) would mean a recent episode alone determines almost the entire score.',
+      stdPrior: { fam:'normal', mu:0, sd:5, text: 'Centered on "no difference", allows moderate differences in either direction. A group difference of 10 points (edge of the 95% range) would be a very substantial effect — not entirely implausible given the significance of a recent depressive episode, but at the upper end. Here too: the prior only loosely includes this, without asserting it.' },
+      infPrior: { fam:'normal', mu:10, sd:4, text: 'An episode within the last 12 months is a markedly stronger indicator of current symptomatology than a purely lifetime history (which can also lie far in the past) — with this justification, a clearly positively shifted, wider prior would be justified.' },
+      distNote: SLOPE_DIST_NOTE
+    },
+    sigma: {
+      what: 'Spread of the residuals on the BDI-II scale.',
+      plausRange: 'σ ≤ 10 (the DV\'s total spread), realistically usually 7–10, since individual predictors rarely explain a large share of symptom variance.',
+      stdPrior: { fam:'halfnormal', scale:5, text: 'Density highest at 0, regularizes toward smaller spreads, without presupposing a particular model fit.' },
+      infPrior: { fam:'gamma', mu:6, sd:1.5, text: 'Depression measures often show ceiling effects in heavily burdened samples — if prior findings suggest σ≈6, a correspondingly concentrated prior would be justified.' },
+      distNote: SIGMA_DIST_NOTE
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+//  DATA — REGISTER 2 (GLM Link Scale)
+// ═══════════════════════════════════════════════════════════
+// μ,φ parametrization for Gamma (brms' own, NOT shape/rate) — consistent with
+// Brms_model_builder.html/Golem_Builder.html. Sigma starting values roughly oriented on
+// DEF_PRIORS there (no new prior philosophy, just a round, explainable number per family).
+// Each family brings, in addition to the neutral link explanation (txt), a "wellBehaved"
+// example (a substantive plausibility assumption formulated FIRST on the response scale, from
+// which the matching model-scale distribution is computed back via the link function) and
+// optionally a separate "problemCase" (too-wide a model-scale prior) — deliberately SEPARATE
+// from, and shown AFTER, the well-behaved example, not foreshadowed in the intro explanation.
+const LINK_FN = {
+  identity: x => x,
+  logit: p => Math.log(p / (1 - p)),
+  log: x => Math.log(x)
+};
+
+const FAM_DATA = {
+  gaussian: {
+    name: 'Gaussian', family: 'gaussian()', link: 'identity', linkName: 'Identity — η = μ',
+    txt: `There is <b>no scale problem</b> here: the linear predictor η IS the expected value μ.
+      A prior on the intercept or a slope is directly a prior on the scale you
+      observe (e.g. IQ points, BDI-II points). That's why Gaussian is the building block Register 1
+      uses to practice thinking in plausible ranges — the other three families build on that, but add a
+      non-linear translation.`,
+    scaleLo: -4, scaleHi: 4, scaleUnit: 'η = μ (raw scale)',
+    respLo: -4, respHi: 4, respUnit: 'μ (raw scale, identical to η)',
+    transform: x => x,
+    wellBehaved: { respLo: -2, respHi: 2, respDesc: 'the most plausible values lie between -2 and 2 on the raw scale (e.g. standardized test scores)' },
+    problemCase: null
+  },
+  bernoulli: {
+    name: 'Bernoulli / Binomial', family: 'bernoulli("logit")', link: 'logit', linkName: 'Logit — η = log(p / (1−p))',
+    txt: `p (probability) is bounded to [0,1], but η lives on all of ℝ — the logit function
+      translates between the two. A slope is most easily read as an
+      <a class="glo-link" href="Glossar.html#gl-odds-ratio" target="_blank" title="Odds Ratio = exp(β): the ratio of the odds at X+1 to the odds at X. OR=1 means no effect.">Odds Ratio</a>
+      (exp(β)): β=0 → OR=1 (no effect), β=1 → OR≈2.7 (odds nearly tripled).`,
+    scaleLo: -6, scaleHi: 6, scaleUnit: 'η (logit scale)',
+    respLo: 0, respHi: 1, respUnit: 'p (probability)',
+    transform: x => 1/(1+Math.exp(-x)),
+    wellBehaved: { respLo: 0.05, respHi: 0.95, respDesc: 'the most plausible values on the probability scale (e.g. the prevalence of a disorder) lie between 5% and 95%' },
+    problemCase: {
+      sigma: 10,
+      desc: `What happens with a prior on η that looks "harmlessly wide", like <b>Normal(0, 10)</b> on
+        the logit? SD=10 looks huge and uninformative — but on the p-scale it is anything but
+        that: the prior pushes almost all its mass onto values very close to 0 or 1. The histogram
+        below shows a bathtub-shaped, highly informative distribution with spikes at the edges, instead
+        of the expected uniform distribution over [0,1].`
+    }
+  },
+  poisson: {
+    name: 'Poisson', family: 'poisson("log")', link: 'log', linkName: 'Log — η = log(λ)',
+    txt: `λ (expected count rate) must be positive, η again lives on all of ℝ — the log link
+      guarantees λ &gt; 0 for every value of η. A slope is read as a
+      <b>Rate Ratio</b> (exp(β)): β=0.5 → Rate Ratio≈1.65 (a 65% higher rate per unit of X).`,
+    scaleLo: -3, scaleHi: 4, scaleUnit: 'η (log scale)',
+    respLo: 0, respHi: 30, respUnit: 'λ (expected count rate)',
+    transform: x => Math.exp(x),
+    wellBehaved: { respLo: 1, respHi: 10, respDesc: 'the most plausible values for the expected count rate λ lie between 1 and 10 events' },
+    problemCase: {
+      sigma: 10,
+      desc: `What happens with a prior on η that looks "harmlessly wide", like <b>Normal(0, 10)</b> on
+        the log? The back-transformation is exponential, so extremely right-skewed: most of the mass
+        stays near 0, but a small fraction of samples explodes to astronomical λ values
+        (η=20 → λ≈4.85 × 10⁸). The histogram below shows only the window up to the right axis limit —
+        a substantial share of the simulated values lies far beyond it, even though the prior on η
+        looked symmetric and harmless.`
+    }
+  },
+  gamma: {
+    name: 'Gamma', family: 'Gamma("log")', link: 'log', linkName: 'Log — η = log(μ)',
+    txt: `brms parametrizes Gamma via <b>μ (mean) and φ (precision/shape)</b> — NOT via the
+      textbook shape/rate parametrization. The link only concerns μ: just like for Poisson, μ
+      &gt; 0 must hold, and the log link guarantees that. φ gets its own, separate prior
+      (typically on the log scale) and has nothing to do with μ's η scale. A slope on μ is read,
+      like for Poisson, as a multiplicative ratio (exp(β)) — a "ratio of means", not a Rate Ratio.`,
+    scaleLo: -3, scaleHi: 4, scaleUnit: 'η = log(μ)',
+    respLo: 0, respHi: 20, respUnit: 'μ (mean, e.g. reaction time in sec.)',
+    transform: x => Math.exp(x),
+    wellBehaved: { respLo: 0.5, respHi: 8, respDesc: 'the most plausible values for the mean reaction time μ lie between 0.5 and 8 seconds' },
+    problemCase: {
+      sigma: 10,
+      desc: `Just like for Poisson: a prior on η that looks "harmlessly wide", like <b>Normal(0, 10)</b>
+        on the log, gets projected back onto μ in an extremely right-skewed way via the exponential
+        function. The histogram below shows only the window up to the right axis limit — a
+        substantial share of the simulated mean reaction times lies far beyond it (practically
+        irrelevant magnitudes, from hours to years).`
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+//  SHARED: NUMBER-LINE VISUAL
+// ═══════════════════════════════════════════════════════════
+function pct(v, lo, hi) { return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)); }
+
+function numberLineHTML(opts) {
+  // opts: {lo, hi, rangeLo, rangeHi, mark, ticks:[{v,label}], color}
+  const { lo, hi, rangeLo, rangeHi, mark, ticks, color, caption } = opts;
+  const rLo = pct(rangeLo, lo, hi), rHi = pct(rangeHi, lo, hi);
+  let html = `<div class="nline-wrap">`;
+  if (caption) html += `<div class="nline-cap">${caption}</div>`;
+  html += `<div class="nline-track">
+    <div class="nline-full" style="left:0%;width:100%"></div>
+    <div class="nline-range" style="left:${rLo}%;width:${Math.max(0.5,rHi-rLo)}%;background:${color}"></div>`;
+  if (mark !== undefined) html += `<div class="nline-mark" style="left:${pct(mark,lo,hi)}%"></div>`;
+  html += `</div><div class="nline-ticks">`;
+  // Ticks can cluster tightly (e.g. exp() growth on a log-link response scale) and overlap
+  // into illegible text — stagger any tick within ~9% of the previous one (on the same row)
+  // onto a second row instead, alternating back once there's room again.
+  let lastPctByRow = [-Infinity, -Infinity];
+  (ticks || []).sort((a,b)=>a.v-b.v).forEach(t => {
+    const p = pct(t.v, lo, hi);
+    const row = (p - lastPctByRow[0] < 9) ? 1 : 0;
+    lastPctByRow[row] = p;
+    html += `<span class="${row===1?'row2':''}" style="left:${p}%">${t.label}</span>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SHARED: MONTE-CARLO HISTOGRAM (Register 2)
+// ═══════════════════════════════════════════════════════════
+function sampleNormal(mu, sd) {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function histogramHTML(opts) {
+  // opts: {samples, lo, hi, bins=24, color, caption}
+  const { samples, lo, hi, bins = 24, color, caption } = opts;
+  const counts = new Array(bins).fill(0);
+  let outOfRange = 0;
+  samples.forEach(s => {
+    if (s < lo || s > hi) { outOfRange++; return; }
+    let idx = Math.floor((s - lo) / (hi - lo) * bins);
+    if (idx >= bins) idx = bins - 1;
+    if (idx < 0) idx = 0;
+    counts[idx]++;
+  });
+  const maxC = Math.max(...counts, 1);
+  const outPct = Math.round(outOfRange / samples.length * 100);
+  let html = `<div class="hist-wrap">`;
+  if (caption) html += `<div class="hist-cap">${caption}${outPct > 0 ? ` — ${outPct}% of the simulated values lie outside the window shown.` : ''}</div>`;
+  html += `<div class="hist-track">`;
+  counts.forEach(c => {
+    const h = Math.max(1, c / maxC * 100);
+    html += `<div class="hist-bar" style="height:${h}%;background:${color}"></div>`;
+  });
+  html += `</div><div class="hist-ticks">`;
+  const nTicks = 5;
+  for (let i = 0; i <= nTicks; i++) {
+    const v = lo + (hi - lo) * i / nTicks;
+    html += `<span style="left:${i/nTicks*100}%">${fmtP(v)}</span>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  REGISTER SWITCHING
+// ═══════════════════════════════════════════════════════════
+function setReg(i) {
+  curReg = i;
+  document.querySelectorAll('.regtab').forEach((b, idx) => b.classList.toggle('sel', idx === i));
+  document.querySelectorAll('.reg-content').forEach((c, idx) => c.classList.toggle('active', idx === i));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  REGISTER 1 — RENDER
+// ═══════════════════════════════════════════════════════════
+function renderDvPicker() {
+  const c = document.getElementById('dv-picker');
+  c.innerHTML = Object.entries(DV_DATA).map(([id, d]) =>
+    `<button class="dv-btn${id===curDv?' sel':''}" onclick="selectDv('${id}')">${d.label} <span style="opacity:.6">(${d.name})</span></button>`
+  ).join('');
+}
+function selectDv(id) { curDv = id; renderDvPicker(); renderEquation(); renderDvInfo(); renderParamCard(); }
+
+function renderDvInfo() {
+  const d = DV_DATA[curDv];
+  document.getElementById('dv-info').innerHTML = d.scaleInfo || '';
+}
+
+function renderEquation() {
+  const d = DV_DATA[curDv];
+  document.getElementById('eq-formula').innerHTML =
+    `<span class="plain">${d.label} ~ Normal(</span>` +
+    `<span class="eq-term c-int${curParam==='int'?' sel':''}" onclick="selectParam('int')">β₀</span>` +
+    `<span class="plain"> + </span>` +
+    `<span class="eq-term c-metric${curParam==='metric'?' sel':''}" onclick="selectParam('metric')">β₁·${d.metric.name}</span>` +
+    `<span class="plain"> + </span>` +
+    `<span class="eq-term c-bin${curParam==='binary'?' sel':''}" onclick="selectParam('binary')">β₂·${d.binary.eqName || d.binary.name}</span>` +
+    `<span class="plain">, </span>` +
+    `<span class="eq-term c-sigma${curParam==='sigma'?' sel':''}" onclick="selectParam('sigma')">σ</span>` +
+    `<span class="plain">)</span>`;
+}
+
+function selectParam(p) { curParam = p; renderEquation(); renderParamCard(); }
+
+// ── Shared formatting for Standard/Informative Prior: shows the distribution AND
+// a verbal "translation" with a correctly computed 95% plausibility range (thumb rule
+// for Normal: μ ± 2×SD; for Half-Normal: 0 to 2×scale; for Gamma approximated via
+// mean ± 2×SD, with a note that this is only an approximation since Gamma is skewed).
+function fmtP(x) {
+  const r = Math.round(x * 100) / 100;
+  return Number.isInteger(r) ? r.toFixed(0) : r.toString();
+}
+// brms' own gamma() prior function (e.g. prior(gamma(2,0.1), class="sigma")) does NOT take
+// mean/SD, but Shape (α) and Rate (β) — the same shape-rate parametrization as Stan's
+// gamma_lpdf(y|alpha,beta), already used elsewhere in this repo (Brms_model_builder.html:
+// gamma(2, 0.1) for nu/shape priors). Converting from mean/SD: rate = mu/sd², shape = mu²/sd²
+// (= mu·rate) — internally everything is stored as mu/sd (that is WHAT you imagine), only the
+// DISPLAY shows the actual brms syntax.
+function gammaShapeRate(mu, sd) {
+  const rate = mu / (sd * sd);
+  return { shape: mu * rate, rate };
+}
+// Two-sided 97.5% quantile of the Student-t distribution at ν=3 (brms' own standard df for
+// robust, heavy-tailed priors — see Bayesian_Prior_Lab.html's student_t default).
+// Replaces the ±2×SD thumb rule there: because of the heavier tails, ±2×σ at ν=3 does NOT
+// cover 95% anymore, you need the larger factor.
+const STUDENT_T3_975 = 3.182;
+function distLabel(spec) {
+  if (spec.fam === 'halfnormal') return `Half-Normal(0, ${fmtP(spec.scale)})`;
+  if (spec.fam === 'gamma') {
+    const { shape, rate } = gammaShapeRate(spec.mu, spec.sd);
+    return `Gamma(α=${fmtP(shape)}, β=${fmtP(rate)}) <span style="font-weight:400;opacity:.65">(≈ mean ${fmtP(spec.mu)}, SD ${fmtP(spec.sd)})</span>`;
+  }
+  if (spec.fam === 'student_t') return `Student-t(ν=${fmtP(spec.nu)}, ${fmtP(spec.mu)}, ${fmtP(spec.sd)})`;
+  if (spec.fam === 'half_student') return `Half-Student-t(ν=${fmtP(spec.nu)}, 0, ${fmtP(spec.scale)})`;
+  if (spec.fam === 'exponential') return `Exponential(λ=${fmtP(spec.rate)})`;
+  if (spec.fam === 'skew_normal') return `Skew-Normal(α=${fmtP(spec.alpha)}, ξ=${fmtP(spec.xi)}, ω=${fmtP(spec.omega)})`;
+  return `Normal(${fmtP(spec.mu)}, ${fmtP(spec.sd)})`;
+}
+function distInterval(spec) {
+  if (spec.fam === 'halfnormal') return { lo: 0, hi: 2 * spec.scale };
+  if (spec.fam === 'student_t') return { lo: spec.mu - STUDENT_T3_975 * spec.sd, hi: spec.mu + STUDENT_T3_975 * spec.sd };
+  if (spec.fam === 'half_student') return { lo: 0, hi: STUDENT_T3_975 * spec.scale };
+  if (spec.fam === 'exponential') return { lo: 0, hi: -Math.log(0.05) / spec.rate }; // exact: 95th percentile
+  if (spec.fam === 'skew_normal') return {
+    lo: skewNormalQuantile(0.025, spec.xi, spec.omega, spec.alpha),
+    hi: skewNormalQuantile(0.975, spec.xi, spec.omega, spec.alpha)
+  };
+  return { lo: spec.mu - 2 * spec.sd, hi: spec.mu + 2 * spec.sd };
+}
+function distPeak(spec) {
+  if (DENS_ZERO_PEAK_FAMS.includes(spec.fam)) return 0;
+  if (spec.fam === 'skew_normal') return skewNormalMean(spec.xi, spec.omega, spec.alpha);
+  return spec.mu;
+}
+// ── Density plots for Standard/Informative Prior (SVG, no chart library) ──
+// Lanczos approximation for the gamma function (g=7, n=9 coefficients) — standard recipe,
+// precise enough for a purely visual density curve.
+const LANCZOS_G = 7;
+const LANCZOS_COEF = [
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+  771.32342877765313, -176.61502916214059, 12.507343278686905,
+  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
+];
+function gammaFn(z) {
+  if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gammaFn(1 - z));
+  z -= 1;
+  let x = LANCZOS_COEF[0];
+  for (let i = 1; i < LANCZOS_G + 2; i++) x += LANCZOS_COEF[i] / (z + i);
+  const t = z + LANCZOS_G + 0.5;
+  return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+}
+function normalPDF(x, mu, sd) {
+  return Math.exp(-0.5 * Math.pow((x - mu) / sd, 2)) / (sd * Math.sqrt(2 * Math.PI));
+}
+function halfNormalPDF(x, scale) {
+  if (x < 0) return 0;
+  return 2 * normalPDF(x, 0, scale);
+}
+function gammaPDFfromMeanSD(x, mu, sd) {
+  if (x <= 0) return 0;
+  const rate = mu / (sd * sd), shape = (mu * mu) / (sd * sd);
+  return Math.pow(rate, shape) * Math.pow(x, shape - 1) * Math.exp(-rate * x) / gammaFn(shape);
+}
+function studentTPDF(x, nu, mu, sigma) {
+  const z = (x - mu) / sigma;
+  return (gammaFn((nu + 1) / 2) / (gammaFn(nu / 2) * Math.sqrt(nu * Math.PI) * sigma)) * Math.pow(1 + (z * z) / nu, -(nu + 1) / 2);
+}
+function halfStudentPDF(x, nu, scale) {
+  if (x < 0) return 0;
+  return 2 * studentTPDF(x, nu, 0, scale);
+}
+function exponentialPDF(x, rate) {
+  if (x < 0) return 0;
+  return rate * Math.exp(-rate * x);
+}
+// Skew-Normal (Azzalini 1985), the same direct parametrization (ξ location, ω scale, α skew)
+// as Bayesian_Prior_Lab.html's "skewed_normal"/brms' skew_normal(ξ,ω,α) — deliberately the
+// identical PDF formula, so that a deep link would later consistently show the same
+// distribution. Since the Skew-Normal CDF has no elementary closed form, it is integrated here
+// numerically over the PDF (trapezoid rule) instead of via Owen's T — precise enough for a
+// density-plot visualization, not a performance-critical spot (once per render).
+function erf(x) {
+  const sign = x < 0 ? -1 : 1; x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1) * t * Math.exp(-x*x);
+  return sign * y;
+}
+function normalCDF(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
+function skewNormalPDF(x, xi, omega, alpha) {
+  const z = (x - xi) / omega;
+  return 2 / omega * normalPDF(z, 0, 1) * normalCDF(alpha * z);
+}
+function skewNormalCDF(x, xi, omega, alpha) {
+  const lo = xi - 12 * omega;
+  if (x <= lo) return 0;
+  const N = 400, h = (x - lo) / N;
+  let sum = 0.5 * (skewNormalPDF(lo, xi, omega, alpha) + skewNormalPDF(x, xi, omega, alpha));
+  for (let i = 1; i < N; i++) sum += skewNormalPDF(lo + i * h, xi, omega, alpha);
+  return sum * h;
+}
+function skewNormalQuantile(p, xi, omega, alpha) {
+  let lo = xi - 12 * omega, hi = xi + 12 * omega;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (skewNormalCDF(mid, xi, omega, alpha) < p) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function skewNormalMean(xi, omega, alpha) {
+  const delta = alpha / Math.sqrt(1 + alpha * alpha);
+  return xi + omega * delta * Math.sqrt(2 / Math.PI);
+}
+const DENS_ZERO_PEAK_FAMS = ['halfnormal', 'half_student', 'exponential'];
+function densityXRange(spec) {
+  if (spec.fam === 'halfnormal') return { lo: 0, hi: 3 * spec.scale };
+  if (spec.fam === 'gamma') return { lo: Math.max(0, spec.mu - 3.2 * spec.sd), hi: spec.mu + 3.2 * spec.sd };
+  if (spec.fam === 'student_t') return { lo: spec.mu - 1.3 * STUDENT_T3_975 * spec.sd, hi: spec.mu + 1.3 * STUDENT_T3_975 * spec.sd };
+  if (spec.fam === 'half_student') return { lo: 0, hi: 1.3 * STUDENT_T3_975 * spec.scale };
+  if (spec.fam === 'exponential') return { lo: 0, hi: -Math.log(0.01) / spec.rate };
+  if (spec.fam === 'skew_normal') return {
+    lo: skewNormalQuantile(0.005, spec.xi, spec.omega, spec.alpha),
+    hi: skewNormalQuantile(0.995, spec.xi, spec.omega, spec.alpha)
+  };
+  return { lo: spec.mu - 3.2 * spec.sd, hi: spec.mu + 3.2 * spec.sd };
+}
+function densityValue(spec, x) {
+  if (spec.fam === 'halfnormal') return halfNormalPDF(x, spec.scale);
+  if (spec.fam === 'gamma') return gammaPDFfromMeanSD(x, spec.mu, spec.sd);
+  if (spec.fam === 'student_t') return studentTPDF(x, spec.nu, spec.mu, spec.sd);
+  if (spec.fam === 'half_student') return halfStudentPDF(x, spec.nu, spec.scale);
+  if (spec.fam === 'exponential') return exponentialPDF(x, spec.rate);
+  if (spec.fam === 'skew_normal') return skewNormalPDF(x, spec.xi, spec.omega, spec.alpha);
+  return normalPDF(x, spec.mu, spec.sd);
+}
+function densityPlotHTML(spec, opts) {
+  const { lo, hi } = densityXRange(spec);
+  const color = opts.color || 'var(--a2)';
+  const N = 70, W = 100, H = 32;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const x = lo + (hi - lo) * i / N;
+    pts.push({ x, y: densityValue(spec, x) });
+  }
+  const maxY = Math.max(...pts.map(p => p.y), 1e-9);
+  const linePts = pts.map(p => `${((p.x-lo)/(hi-lo)*W).toFixed(2)},${(H-(p.y/maxY)*H).toFixed(2)}`).join(' ');
+  const areaPts = `0,${H} ${linePts} ${W},${H}`;
+  const iv = distInterval(spec);
+  const peak = distPeak(spec);
+  const ivLoPct = Math.max(0, Math.min(100, (iv.lo - lo) / (hi - lo) * 100));
+  const ivHiPct = Math.max(0, Math.min(100, (iv.hi - lo) / (hi - lo) * 100));
+  const peakPct = Math.max(0, Math.min(100, (peak - lo) / (hi - lo) * 100));
+  const dash = opts.dashed ? ' stroke-dasharray="3,2"' : '';
+  return `<div class="dens-wrap">
+    <div class="dens-cap"><span class="dens-swatch" style="background:color-mix(in srgb, ${color} 30%, var(--panel))"></span>Highlighted in color: the 95% range</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="dens-svg">
+      <rect x="${ivLoPct}" y="0" width="${Math.max(0.3,ivHiPct-ivLoPct)}" height="${H}" fill="${color}" opacity="0.12"></rect>
+      <polyline points="${areaPts}" fill="${color}" opacity="0.2" stroke="none"></polyline>
+      <polyline points="${linePts}" fill="none" stroke="${color}" stroke-width="1.3" vector-effect="non-scaling-stroke"${dash}></polyline>
+    </svg>
+    <div class="dens-ticks">
+      <span style="left:${ivLoPct}%">${fmtP(iv.lo)}</span>
+      <span style="left:${peakPct}%" class="dens-peak">${spec.fam === 'skew_normal' ? `E[Y]=${fmtP(peak)}` : fmtP(peak)}</span>
+      <span style="left:${ivHiPct}%">${fmtP(iv.hi)}</span>
+    </div>
+  </div>`;
+}
+
+function quoteHTML(spec, ctx) {
+  const iv = distInterval(spec);
+  const lo = fmtP(iv.lo), hi = fmtP(iv.hi);
+  const approx = spec.fam === 'gamma' ? ' (approximated — Gamma is not symmetric, the ±2×SD thumb rule only holds approximately here)' : '';
+  const isHeavyTail = spec.fam === 'student_t' || spec.fam === 'half_student';
+  const heavyTailNote = isHeavyTail
+    ? ` Thanks to Student-t's heavier tails (ν=${fmtP(spec.nu)}), values outside this range are excluded less strongly than with a Normal/Half-Normal distribution of comparable scale — that is exactly the point of this alternative.`
+    : '';
+  const thumbRule = isHeavyTail ? `±${fmtP(STUDENT_T3_975)}×σ for Student-t (ν=${fmtP(spec.nu)})` : '±2×SD for a normal distribution';
+  let body;
+  if (spec.fam === 'skew_normal') {
+    const mean = fmtP(skewNormalMean(spec.xi, spec.omega, spec.alpha));
+    body = `I'm convinced that most participants come from a fairly healthy population — so there is more weight on lower values. But I can't rule out that an above-average number of people with depressive symptoms also took part voluntarily, hence a long tail toward higher values. The expected value is E[Y]≈${mean} ${ctx.unit}, but I consider it 95% plausible that the value lies between ${lo} and ${hi} ${ctx.unit} — skewed rather than symmetric, because my uncertainty itself is asymmetric.`;
+  } else if (spec.fam === 'halfnormal' || spec.fam === 'half_student' || spec.fam === 'exponential') {
+    body = `I believe smaller values are more likely than larger ones, but I don't rule out any positive value. I consider it roughly 95% plausible that the value lies between ${lo} and ${hi} ${ctx.unit}.${heavyTailNote}`;
+  } else if (ctx.zeroCentered) {
+    body = `I don't know ${ctx.dirNote}, so the prior is centered on zero. I consider it 95% plausible that the actual value lies in the range ${lo} to ${hi} ${ctx.unit} (thumb rule: ${thumbRule}).${heavyTailNote}`;
+  } else {
+    body = `I believe the most plausible value is ${fmtP(spec.mu)} ${ctx.unit}. But I'm not sure, and I consider it 95% plausible that the value lies in the range ${lo} to ${hi} ${ctx.unit}${(spec.fam === 'normal' || isHeavyTail) ? ` (thumb rule: ${thumbRule})` : approx}.${heavyTailNote}`;
+  }
+  return `<div class="quote">"${body}"</div>`;
+}
+
+// Shared building block for all four parameters: (1) RANGE is purely descriptive, NOT yet
+// a prior; (2) STANDARD PRIOR is the neutral, regularizing default (centered at 0, or at the
+// scale's natural reference point); (3) INFORMATIVE PRIOR is explicitly marked as NOT the
+// default and always needs a justification; (4) DISTRIBUTION SHAPE explains which
+// distribution family fits the parameter's natural range and why.
+function paramBodyHTML(p, ctx) {
+  const stdCtx = Object.assign({}, ctx, { zeroCentered: ctx.zeroCenteredStd });
+  const infCtx = Object.assign({}, ctx, { zeroCentered: false });
+  // p.infPrior may be a single object OR an array of several examples (e.g. to show that an
+  // informative prior doesn't always have to be normally distributed).
+  const infList = Array.isArray(p.infPrior) ? p.infPrior : [p.infPrior];
+  const infRows = infList.map((inf, i) => {
+    const label = infList.length > 1
+      ? `Informative Prior ${i+1} <span style="opacity:.7">(optional, NOT the default)</span>`
+      : `Informative Prior <span style="opacity:.7">(optional, NOT the default)</span>`;
+    return `<div class="pc-row"><div class="pc-lbl">${label}</div><div class="pc-body">
+      <b>${distLabel(inf)}</b> — ${inf.text}
+      ${densityPlotHTML(inf, { color: ctx.accent, dashed: true })}
+      ${quoteHTML(inf, infCtx)}
+    </div></div>`;
+  }).join('');
+  return `
+    <div class="pc-row"><div class="pc-lbl">Range</div><div class="pc-body">${p.plausRange}</div></div>
+    <div class="pc-row"><div class="pc-lbl">Standard Prior</div><div class="pc-body">
+      <b>${distLabel(p.stdPrior)}</b> — ${p.stdPrior.text}
+      ${densityPlotHTML(p.stdPrior, { color: ctx.accent })}
+      ${quoteHTML(p.stdPrior, stdCtx)}
+    </div></div>
+    ${infRows}
+    <div class="pc-row"><div class="pc-lbl">Distribution Shape</div><div class="pc-body">${p.distNote}</div></div>
+  `;
+}
+
+function renderParamCard() {
+  const d = DV_DATA[curDv];
+  const c = document.getElementById('pcard');
+  if (curParam === 'int') {
+    const p = d.int;
+    c.innerHTML = `
+      <div class="pcard-title" style="color:var(--a1)">β₀ — Intercept</div>
+      <div class="pcard-sub">Prior candidate for the intercept of the ${d.label} equation</div>
+      <div class="pc-row"><div class="pc-lbl">What does it control?</div><div class="pc-body">${p.what}</div></div>
+      <div class="pc-row"><div class="pc-lbl">Unit</div><div class="pc-body"><b>${d.unit}</b></div></div>
+      ${paramBodyHTML(p, { unit: d.unit, zeroCenteredStd: false, accent: 'var(--a1)' })}
+    `;
+  } else if (curParam === 'metric') {
+    const p = d.metricParam, m = d.metric;
+    c.innerHTML = `
+      <div class="pcard-title" style="color:var(--a2)">β₁ — Slope (${m.name}, metric)</div>
+      <div class="pcard-sub">Prior candidate for the effect of "${m.name}" on ${d.label}</div>
+      <div class="pc-row"><div class="pc-lbl">What does it control?</div><div class="pc-body">${p.what}
+        <div class="quote">"The regression coefficient β₁ answers the question: If I increase ${m.name} by ${m.incLabel}, by how many ${d.unit} does ${d.label} then change? The prior should cover the plausible range of this change."</div>
+      </div></div>
+      <div class="pc-row"><div class="pc-lbl">Unit</div><div class="pc-body"><b>${d.unit} per ${m.perUnit}</b></div></div>
+      ${paramBodyHTML(p, { unit: d.unit, zeroCenteredStd: true, dirNote: m.dirNote, accent: 'var(--a2)' })}
+    `;
+  } else if (curParam === 'binary') {
+    const p = d.binaryParam, b = d.binary;
+    c.innerHTML = `
+      <div class="pcard-title" style="color:var(--a5)">β₂ — Slope (${b.name}, binary)</div>
+      <div class="pcard-sub">Prior candidate for the group difference in ${d.label}</div>
+      <div class="pc-row"><div class="pc-lbl">What does it control?</div><div class="pc-body">${p.what}
+        (0 = ${b.l0}, 1 = ${b.l1})
+        <div class="quote">"The regression coefficient β₂ answers the question: How do the two groups (${b.l1} vs. ${b.l0}) differ on average in ${d.unit}? For dummy-coded (0/1) predictors, β₂ corresponds exactly to the mean difference between the two groups. The prior should cover the plausible range of this difference."</div>
+      </div></div>
+      <div class="pc-row"><div class="pc-lbl">Unit</div><div class="pc-body"><b>${d.unit}</b> (difference between the two groups)</div></div>
+      ${paramBodyHTML(p, { unit: d.unit, zeroCenteredStd: true, dirNote: b.dirNote, accent: 'var(--a5)' })}
+    `;
+  } else {
+    const p = d.sigma;
+    c.innerHTML = `
+      <div class="pcard-title" style="color:var(--a4)">σ — Residual spread</div>
+      <div class="pcard-sub">Prior candidate for the spread of the ${d.label} residuals — needs a prior just as much as β₀/β₁/β₂</div>
+      <div class="pc-row"><div class="pc-lbl">What does it control?</div><div class="pc-body">${p.what}</div></div>
+      <div class="pc-row"><div class="pc-lbl">Unit</div><div class="pc-body"><b>${d.unit}</b></div></div>
+      ${paramBodyHTML(p, { unit: d.unit, zeroCenteredStd: false, accent: 'var(--a4)' })}
+    `;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  REGISTER 2 — RENDER
+// ═══════════════════════════════════════════════════════════
+function renderFamPicker() {
+  const c = document.getElementById('fam-picker');
+  c.innerHTML = Object.entries(FAM_DATA).map(([id, f]) =>
+    `<button class="fam-btn${id===curFam?' sel':''}" onclick="selectFam('${id}')">${f.name}</button>`
+  ).join('');
+}
+function selectFam(id) { curFam = id; renderFamPicker(); renderFamBox(); renderScaleBox(); renderDeepLinks(); }
+
+function renderFamBox() {
+  const f = FAM_DATA[curFam];
+  document.getElementById('fam-title').textContent = f.name;
+  document.getElementById('fam-link').innerHTML = `<code>family = ${f.family}</code> &nbsp;·&nbsp; ${f.linkName || f.link}`;
+  document.getElementById('fam-txt').innerHTML = f.txt;
+}
+
+// Returns the model-scale prior computed back from the response-scale assumption:
+// mu = midpoint, sd = range/4 (the same ±2×SD thumb rule as in Register 1).
+function computeWellBehaved(f) {
+  const wb = f.wellBehaved;
+  const linkFn = LINK_FN[f.link];
+  const etaLo = linkFn(wb.respLo), etaHi = linkFn(wb.respHi);
+  return { etaLo, etaHi, mu: (etaLo + etaHi) / 2, sd: (etaHi - etaLo) / 4 };
+}
+
+function renderScaleBox() {
+  const f = FAM_DATA[curFam];
+  const c = document.getElementById('scale-box');
+  const wb = f.wellBehaved;
+  const { etaLo, etaHi, mu, sd } = computeWellBehaved(f);
+  const recSpec = { fam: 'normal', mu, sd };
+
+  const N = 4000;
+  const wbEtaSamples = Array.from({length: N}, () => sampleNormal(mu, sd));
+  const wbRespSamples = wbEtaSamples.map(f.transform);
+
+  let html = `
+    <div class="scale-sect-title">Example: a well-behaved prior</div>
+    <div class="scale-narr">A researcher wants to say: <b>${wb.respDesc}</b>.</div>
+
+    <div class="scale-head">Response scale — ${f.respUnit}</div>
+    ${numberLineHTML({lo:f.respLo-0.1*(f.respHi-f.respLo), hi:f.respHi+0.1*(f.respHi-f.respLo),
+      rangeLo:wb.respLo, rangeHi:wb.respHi, ticks:[{v:wb.respLo,label:fmtP(wb.respLo)},{v:wb.respHi,label:fmtP(wb.respHi)}],
+      color:'color-mix(in srgb, var(--a4) 35%, transparent)'})}
+
+    <div class="scale-head resp">Model scale — ${f.scaleUnit}</div>
+    ${numberLineHTML({lo:f.scaleLo-0.1*(f.scaleHi-f.scaleLo), hi:f.scaleHi+0.1*(f.scaleHi-f.scaleLo),
+      rangeLo:etaLo, rangeHi:etaHi, ticks:[{v:etaLo,label:fmtP(etaLo)},{v:etaHi,label:fmtP(etaHi)}],
+      color:'color-mix(in srgb, var(--a2) 35%, transparent)'})}
+
+    <div class="scale-narr">
+      ${f.link === 'identity'
+        ? `Since η = μ, the model-scale boundary is identical to the response-scale boundary — no back-computation needed.`
+        : `Computed back via the ${f.linkName.split('—')[0].trim()} function, that gives a range on the model scale of
+           <b>${fmtP(etaLo)} to ${fmtP(etaHi)}</b>.`}
+      With the ±2×SD thumb rule from Register 1, that corresponds to a recommended prior of
+      <b>${distLabel(recSpec)}</b> for the intercept.
+      ${quoteHTML(recSpec, { unit: 'on η', zeroCentered: false })}
+    </div>
+
+    ${histogramHTML({samples: wbRespSamples, lo: f.respLo, hi: f.respHi,
+      color: 'color-mix(in srgb, var(--a2) 55%, transparent)',
+      caption: `Monte Carlo simulation: ${distLabel(recSpec)} on η, back-transformed onto the response scale.`})}
+  `;
+
+  if (f.problemCase) {
+    const pc = f.problemCase;
+    const pcEtaSamples = Array.from({length: N}, () => sampleNormal(0, pc.sigma));
+    const pcRespSamples = pcEtaSamples.map(f.transform);
+    html += `
+      <div class="scale-sect-title warn-title">Special case: a too-wide prior</div>
+      <div class="scale-narr">${pc.desc}</div>
+      ${histogramHTML({samples: pcRespSamples, lo: f.respLo, hi: f.respHi,
+        color: 'color-mix(in srgb, var(--a5) 55%, transparent)',
+        caption: `Monte Carlo simulation: Normal(0, ${pc.sigma}) on η, back-transformed onto the response scale.`})}
+    `;
+  } else {
+    html += `
+      <div class="scale-narr" style="opacity:.8;margin-top:1rem">
+        For Gaussian there is no analogous special case: without a link function, a too-large SD doesn't
+        distort the distribution further — it just gets wider, but stays symmetric.
+      </div>
+    `;
+  }
+
+  c.innerHTML = html;
+}
+
+function renderDeepLinks() {
+  const f = FAM_DATA[curFam];
+  const c = document.getElementById('deeplink-row');
+  const { mu, sd } = computeWellBehaved(f);
+  const glmPart = f.link === 'identity' ? '' : `&link=${f.link}`;
+  // Prior Lab activates the log-x response axis in intercept mode for log-link families
+  // (Poisson/Gamma) — for logit it wouldn't make sense (p is bounded to [0,1]).
+  const logxPart = f.link === 'log' ? '&logx=1' : '';
+  const wbUrl = f.link === 'identity'
+    ? `Bayesian_Prior_Lab.html?dist=normal&mu=${fmtP(mu)}&sigma=${fmtP(sd)}`
+    : `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=${fmtP(mu)}&sigma=${fmtP(sd)}${glmPart}${logxPart}`;
+  let html = `<a class="dl-btn" href="${wbUrl}" target="_blank">🎛 Open the example prior in Prior Lab →</a>`;
+  if (f.problemCase) {
+    const pcUrl = `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=0&sigma=${f.problemCase.sigma}${glmPart}${logxPart}`;
+    html += `<a class="dl-btn warn" href="${pcUrl}" target="_blank">🎛 Open the problem case in Prior Lab →</a>`;
+  }
+  c.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  REGISTER 3 — DECISION WIZARD
+// ═══════════════════════════════════════════════════════════
+// Three-step wizard: (1) family of the DV, (2) parameter type, (3) a single substantive
+// plausibility question ON THE RESPONSE/RAW SCALE — from which, via the same machinery as
+// Register 1/2 (LINK_FN, ±2×SD thumb rule), a Normal or Half-Normal prior is computed back and
+// linked directly. Deliberately only a rough first tool — see the disclaimer in the markup.
+const WIZ_FAMILIES = [
+  { id: 'gaussian', name: 'Gaussian', hint: 'continuous, unbounded (e.g. IQ, test score, z-score)' },
+  { id: 'bernoulli', name: 'Bernoulli / Binomial', hint: 'binary (yes/no, success/not)' },
+  { id: 'poisson', name: 'Poisson', hint: 'count data (number of events)' },
+  { id: 'gamma', name: 'Gamma', hint: 'positive-continuous, right-skewed (e.g. reaction time, cost)' },
+  { id: 'beta', name: 'Beta', hint: 'continuous proportion/percentage between 0 and 1 (e.g. proportion of correct answers)' }
+];
+const WIZ_PARAMS = {
+  gaussian: ['intercept', 'slope', 'sigma'],
+  bernoulli: ['intercept', 'slope'],
+  poisson: ['intercept', 'slope'],
+  gamma: ['intercept', 'slope'],
+  beta: ['intercept', 'slope']
+};
+const WIZ_PARAM_LABEL = {
+  intercept: 'Intercept (baseline)',
+  slope: 'Slope (effect of a predictor)',
+  sigma: 'σ (residual spread)'
+};
+// Link function and back-transformation per family — meaningless for Gaussian (identity).
+// 'beta' shares the logit link and back-transformation with 'bernoulli' (brms: the Beta()
+// family, μ on [0,1], default link logit) — deliberately kept ONLY here in the wizard,
+// Register 2 stays unchanged with the four families it covers.
+const WIZ_LINK = { gaussian: 'identity', bernoulli: 'logit', poisson: 'log', gamma: 'log', beta: 'logit' };
+const WIZ_TRANSFORM = {
+  gaussian: x => x,
+  bernoulli: x => 1 / (1 + Math.exp(-x)),
+  poisson: x => Math.exp(x),
+  gamma: x => Math.exp(x),
+  beta: x => 1 / (1 + Math.exp(-x))
+};
+const WIZ_RESP_UNIT = {
+  gaussian: 'raw scale', bernoulli: 'p (probability)', poisson: 'λ (expected count rate)',
+  gamma: 'μ (mean)', beta: 'μ (proportion, 0–1)'
+};
+// Alternative distribution families per parameter type — the first option is the default.
+// Student-t (ν=3, brms' own standard for robust priors) rules out extreme values less hard
+// than Normal, at the SAME location/scale; for σ analogously Half-Student-t instead of
+// Half-Normal, plus Gamma/Exponential as alternative positive families.
+const WIZ_ALT_DISTS = {
+  unbounded: [
+    { id: 'normal', label: 'Normal' },
+    { id: 'student_t', label: 'Student-t (ν=3)' }
+  ],
+  sigma: [
+    { id: 'halfnormal', label: 'Half-Normal' },
+    { id: 'half_student', label: 'Half-Student-t (ν=3)' },
+    { id: 'gamma', label: 'Gamma' },
+    { id: 'exponential', label: 'Exponential' }
+  ]
+};
+function plainDistName(spec) {
+  return { normal: 'Normal', halfnormal: 'Half-Normal', gamma: 'Gamma', student_t: 'Student-t', half_student: 'Half-Student-t', exponential: 'Exponential' }[spec.fam] || spec.fam;
+}
+
+let wiz = { family: null, param: null, lo: '', hi: '', altDist: null };
+
+function wizQuestionSpec(family, param) {
+  const Q = {
+    gaussian: {
+      intercept: { prompt: 'What range of values do you consider plausible for your outcome variable when all predictors = 0 (95% range)?', loLabel: 'Lower bound', hiLabel: 'Upper bound', loDefault: -2, hiDefault: 2 },
+      slope: { prompt: 'By how much could your outcome variable plausibly change at most (95% range) when the predictor increases by 1 unit?', loLabel: 'Lower bound', hiLabel: 'Upper bound', loDefault: -1, hiDefault: 1 },
+      sigma: { prompt: 'Up to what upper value do you consider the residual spread (residual SD) still plausible? (The lower bound for σ is always 0.)', hiOnly: true, hiLabel: 'Upper bound (σ)', hiDefault: 2, positive: true }
+    },
+    bernoulli: {
+      intercept: { prompt: 'What range of plausible BASELINE probabilities (p, between 0 and 1) do you have?', loLabel: 'Lower bound (p)', hiLabel: 'Upper bound (p)', loDefault: 0.1, hiDefault: 0.9, bound01: true },
+      slope: { prompt: 'What range of plausible Odds Ratios do you give the effect? (OR=1 means no effect.)', loLabel: 'Lower bound (OR)', hiLabel: 'Upper bound (OR)', loDefault: 0.5, hiDefault: 2, positive: true, ratio: true }
+    },
+    poisson: {
+      intercept: { prompt: 'What range of plausible BASELINE count rates (λ, expected value) do you have?', loLabel: 'Lower bound (λ)', hiLabel: 'Upper bound (λ)', loDefault: 1, hiDefault: 10, positive: true },
+      slope: { prompt: 'What range of plausible Rate Ratios do you give the effect? (RR=1 means no effect.)', loLabel: 'Lower bound (RR)', hiLabel: 'Upper bound (RR)', loDefault: 0.5, hiDefault: 2, positive: true, ratio: true }
+    },
+    gamma: {
+      intercept: { prompt: 'What range of plausible means (μ, e.g. reaction time in sec.) do you have?', loLabel: 'Lower bound (μ)', hiLabel: 'Upper bound (μ)', loDefault: 0.5, hiDefault: 5, positive: true },
+      slope: { prompt: 'What range of plausible multiplicative ratios (μ-ratio) do you give the effect?', loLabel: 'Lower bound (ratio)', hiLabel: 'Upper bound (ratio)', loDefault: 0.5, hiDefault: 2, positive: true, ratio: true }
+    },
+    beta: {
+      intercept: { prompt: 'What range of plausible BASELINE proportions (μ, between 0 and 1) do you have?', loLabel: 'Lower bound (μ)', hiLabel: 'Upper bound (μ)', loDefault: 0.1, hiDefault: 0.9, bound01: true },
+      slope: { prompt: 'What range of plausible ratios (odds-like, since it shares the logit link with Bernoulli) do you give the effect on the proportion?', loLabel: 'Lower bound (ratio)', hiLabel: 'Upper bound (ratio)', loDefault: 0.5, hiDefault: 2, positive: true, ratio: true }
+    }
+  };
+  return (Q[family] || {})[param] || null;
+}
+
+// Returns the bounds ON η — for Gaussian identical to the raw scale (no link), for a
+// slope/ratio (OR/RR/ratio) via the natural logarithm (holds for EVERY link the same way,
+// since exp(β) is always the ratio — NOT via the link function itself, which is meant for
+// ABSOLUTE values: applying logit() to a ratio>1 produces e.g. ln(negative) = NaN).
+function wizEtaBounds() {
+  const q = wizQuestionSpec(wiz.family, wiz.param);
+  if (!q || q.hiOnly) return null;
+  const lo = parseFloat(wiz.lo), hi = parseFloat(wiz.hi);
+  if (wiz.family === 'gaussian') return { etaLo: lo, etaHi: hi };
+  if (q.ratio) return { etaLo: Math.log(lo), etaHi: Math.log(hi) };
+  const linkFn = LINK_FN[WIZ_LINK[wiz.family]];
+  return { etaLo: linkFn(lo), etaHi: linkFn(hi) };
+}
+
+// Validates the inputs and, on success, returns the base numbers (bounds on η, or the upper
+// σ bound) — WITHOUT yet settling on a concrete distribution family; that's wizCompute()'s job.
+function wizValidate() {
+  const q = wizQuestionSpec(wiz.family, wiz.param);
+  if (!q) return { valid: false };
+  const hi = parseFloat(wiz.hi);
+  if (q.hiOnly) {
+    if (!(hi > 0)) return { valid: false, error: 'Please enter a positive upper bound.' };
+    return { valid: true, hi };
+  }
+  const lo = parseFloat(wiz.lo);
+  if (isNaN(lo) || isNaN(hi)) return { valid: false, error: 'Please enter both bounds.' };
+  if (lo >= hi) return { valid: false, error: 'The lower bound must be smaller than the upper one.' };
+  if (q.positive && lo <= 0) return { valid: false, error: 'Both bounds must be positive here.' };
+  if (q.bound01 && (lo <= 0 || hi >= 1)) return { valid: false, error: 'Both bounds must lie between 0 and 1.' };
+  return { valid: true, ...wizEtaBounds() };
+}
+
+// Returns {spec, valid, error} — spec in the same {fam,mu,sd}/{fam:'halfnormal',scale} format
+// as Register 1/2, so that distLabel/densityPlotHTML/quoteHTML/histogramHTML can be reused
+// directly. Takes into account the currently chosen alternative distribution (wiz.altDist) —
+// the default is always the first option in WIZ_ALT_DISTS.
+function wizCompute() {
+  const base = wizValidate();
+  if (!base.valid) return base;
+
+  if (wiz.param === 'sigma') {
+    const hi = base.hi;
+    const dist = wiz.altDist || WIZ_ALT_DISTS.sigma[0].id;
+    if (dist === 'half_student') return { valid: true, spec: { fam: 'half_student', scale: hi / STUDENT_T3_975, nu: 3 } };
+    if (dist === 'exponential') return { valid: true, spec: { fam: 'exponential', rate: -Math.log(0.05) / hi } };
+    if (dist === 'gamma') return { valid: true, spec: { fam: 'gamma', mu: 0.5 * hi, sd: 0.2 * hi } };
+    return { valid: true, spec: { fam: 'halfnormal', scale: hi / 2 } };
+  }
+
+  const mu = (base.etaLo + base.etaHi) / 2, sd = (base.etaHi - base.etaLo) / 4;
+  const dist = wiz.altDist || WIZ_ALT_DISTS.unbounded[0].id;
+  if (dist === 'student_t') return { valid: true, spec: { fam: 'student_t', mu, sd, nu: 3 } };
+  return { valid: true, spec: { fam: 'normal', mu, sd } };
+}
+
+function wizDeepLink(spec) {
+  if (wiz.family === 'gaussian') {
+    if (spec.fam === 'halfnormal') return `Bayesian_Prior_Lab.html?dist=half_normal&sigma=${fmtP(spec.scale)}`;
+    if (spec.fam === 'half_student') return `Bayesian_Prior_Lab.html?dist=half_student&sigma=${fmtP(spec.scale)}`;
+    if (spec.fam === 'exponential') return `Bayesian_Prior_Lab.html?dist=exponential&lambda=${fmtP(spec.rate)}`;
+    if (spec.fam === 'gamma') { const { shape, rate } = gammaShapeRate(spec.mu, spec.sd); return `Bayesian_Prior_Lab.html?dist=gamma&alpha=${fmtP(shape)}&beta=${fmtP(rate)}`; }
+    if (spec.fam === 'student_t') return `Bayesian_Prior_Lab.html?dist=student_t&mu=${fmtP(spec.mu)}&sigma=${fmtP(spec.sd)}`;
+    return `Bayesian_Prior_Lab.html?dist=normal&mu=${fmtP(spec.mu)}&sigma=${fmtP(spec.sd)}`;
+  }
+  const link = WIZ_LINK[wiz.family];
+  const glmP = wiz.param === 'slope' ? 'slope' : 'intercept';
+  const logxPart = (wiz.param === 'slope' || link === 'log') ? '&logx=1' : '';
+  const distId = spec.fam === 'student_t' ? 'student_t' : 'normal';
+  return `Bayesian_Prior_Lab.html?glm=${glmP}&dist=${distId}&mu=${fmtP(spec.mu)}&sigma=${fmtP(spec.sd)}&link=${link}${logxPart}`;
+}
+
+// Monte Carlo sampler per family, for the response-scale translation (histogramHTML just
+// expects an array of numbers). nu is always 3 (small) throughout the wizard, so the simple
+// sum-of-3-squares method for Student-t's chi² component is fast enough.
+function sampleGamma(shape, rate) {
+  if (shape < 1) return sampleGamma(shape + 1, rate) * Math.pow(Math.random(), 1 / shape);
+  const d = shape - 1 / 3, c = 1 / Math.sqrt(9 * d);
+  while (true) {
+    let x, v;
+    do { x = sampleNormal(0, 1); v = 1 + c * x; } while (v <= 0);
+    v = v * v * v;
+    const u = Math.random();
+    if (u < 1 - 0.0331 * x * x * x * x || Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v / rate;
+  }
+}
+function sampleStudentT(nu, mu, sigma) {
+  let chi2 = 0;
+  for (let i = 0; i < nu; i++) { const n = sampleNormal(0, 1); chi2 += n * n; }
+  return mu + sigma * sampleNormal(0, 1) / Math.sqrt(chi2 / nu);
+}
+function sampleFromSpec(spec) {
+  if (spec.fam === 'halfnormal') return Math.abs(sampleNormal(0, spec.scale));
+  if (spec.fam === 'gamma') { const { shape, rate } = gammaShapeRate(spec.mu, spec.sd); return sampleGamma(shape, rate); }
+  if (spec.fam === 'student_t') return sampleStudentT(spec.nu, spec.mu, spec.sd);
+  if (spec.fam === 'half_student') return Math.abs(sampleStudentT(spec.nu, 0, spec.scale));
+  if (spec.fam === 'exponential') return -Math.log(1 - Math.random()) / spec.rate;
+  return sampleNormal(spec.mu, spec.sd);
+}
+
+// Response-scale translation: ONLY relevant when there is a link function at all (not for
+// Gaussian) and NOT for σ (brms' σ prior always sits directly on the raw scale, regardless of
+// family — no link function involved). Shows the exact back-computed range plus a Monte Carlo
+// histogram, so beginners aren't left only with the abstract η number (that's exactly the
+// feedback that led to this section).
+function wizRespSection(spec, q) {
+  if (wiz.family === 'gaussian' || wiz.param === 'sigma') return '';
+  const transform = WIZ_TRANSFORM[wiz.family];
+  const iv = distInterval(spec);
+  const respLo = transform(iv.lo), respHi = transform(iv.hi);
+  const samples = Array.from({ length: 3000 }, () => transform(sampleFromSpec(spec)));
+  let histLo, histHi;
+  if (wiz.param === 'slope') {
+    const pad = Math.max(0.3, (respHi - respLo) * 0.7);
+    histLo = Math.max(0, respLo - pad); histHi = respHi + pad;
+  } else if (wiz.family === 'bernoulli' || wiz.family === 'beta') {
+    histLo = 0; histHi = 1;
+  } else {
+    histLo = 0; histHi = respHi * 1.8;
+  }
+  const ratioLabel = wiz.family === 'bernoulli' ? 'Odds Ratio' : wiz.family === 'poisson' ? 'Rate Ratio' : wiz.family === 'beta' ? 'ratio (odds-like)' : 'ratio';
+  const label = wiz.param === 'slope' ? ratioLabel : WIZ_RESP_UNIT[wiz.family];
+  return `<div class="pc-row"><div class="pc-lbl">Response scale</div><div class="pc-body">
+    Translated back, your range on η corresponds to a range of <b>${fmtP(respLo)} to ${fmtP(respHi)}</b> on the ${label} scale
+    — ${wiz.param === 'slope' ? 'expressed in real numbers, that is the same thing you entered above as the ratio range' : 'the scale on which you actually observe your outcome variable'}.
+    ${histogramHTML({ samples, lo: histLo, hi: histHi, color: 'color-mix(in srgb, var(--a3) 55%, transparent)', caption: `Monte Carlo simulation: ${plainDistName(spec)} on η, back-transformed onto the response scale.` })}
+  </div></div>`;
+}
+
+function wizSetFamily(id) {
+  wiz = { family: id, param: null, lo: '', hi: '', altDist: null };
+  renderWizard();
+}
+function wizSetParam(id) {
+  wiz.param = id;
+  wiz.altDist = null;
+  const q = wizQuestionSpec(wiz.family, id);
+  wiz.lo = q.hiOnly ? '' : q.loDefault;
+  wiz.hi = q.hiDefault;
+  renderWizard();
+}
+function wizSetBound(which, val) {
+  wiz[which] = val;
+  renderWizard();
+}
+function wizSetAltDist(id) {
+  wiz.altDist = id;
+  renderWizard();
+}
+function wizReset() {
+  wiz = { family: null, param: null, lo: '', hi: '', altDist: null };
+  renderWizard();
+}
+
+function renderWizard() {
+  const c = document.getElementById('wiz-body');
+  let html = '';
+
+  // ── Step 1: Family ──
+  html += `<div class="wiz-step">
+    <div class="wiz-step-label"><span class="wiz-num">1</span>What type of outcome variable (DV) do you have?</div>
+    <div class="wiz-btn-row">
+      ${WIZ_FAMILIES.map(f => `<button class="wiz-btn${wiz.family===f.id?' sel':''}" onclick="wizSetFamily('${f.id}')">${f.name}<small>${f.hint}</small></button>`).join('')}
+    </div>
+  </div>`;
+
+  if (!wiz.family) { c.innerHTML = html; return; }
+
+  // ── Step 2: Parameter type ──
+  html += `<div class="wiz-step">
+    <div class="wiz-step-label"><span class="wiz-num">2</span>Which parameter are you looking for a prior for?</div>
+    <div class="wiz-btn-row">
+      ${WIZ_PARAMS[wiz.family].map(p => `<button class="wiz-btn${wiz.param===p?' sel':''}" onclick="wizSetParam('${p}')">${WIZ_PARAM_LABEL[p]}</button>`).join('')}
+    </div>
+  </div>`;
+
+  if (!wiz.param) { c.innerHTML = html; return; }
+
+  // ── Step 3: Plausibility question ──
+  const q = wizQuestionSpec(wiz.family, wiz.param);
+  html += `<div class="wiz-step">
+    <div class="wiz-step-label"><span class="wiz-num">3</span>Your plausibility judgment</div>
+    <div class="wiz-question">${q.prompt}</div>
+    <div class="wiz-input-row">
+      ${q.hiOnly ? '' : `<div class="wiz-input"><label>${q.loLabel}</label><input type="number" step="any" value="${wiz.lo}" oninput="wizSetBound('lo', this.value)"></div>`}
+      <div class="wiz-input"><label>${q.hiLabel}</label><input type="number" step="any" value="${wiz.hi}" oninput="wizSetBound('hi', this.value)"></div>
+    </div>
+  </div>`;
+
+  // ── Result ──
+  const result = wizCompute();
+  if (!result.valid) {
+    html += `<div class="wiz-warn">${result.error || 'Please enter valid values.'}</div>`;
+  } else {
+    const spec = result.spec;
+    const unit = wiz.param === 'sigma' ? 'on the raw scale of the outcome variable'
+      : q.bound01 ? 'on η (logit scale)'
+      : (wiz.family === 'gaussian' ? 'on the raw scale' : (q.ratio ? 'on η (log-ratio)' : 'on η (model scale)'));
+    const accent = 'var(--a3)';
+    const altOptions = WIZ_ALT_DISTS[wiz.param === 'sigma' ? 'sigma' : 'unbounded'];
+    const curAltId = wiz.altDist || altOptions[0].id;
+    html += `<div class="wiz-result">
+      <div class="wiz-result-title">Recommended prior</div>
+      <div class="pc-row"><div class="pc-lbl">Distribution</div><div class="pc-body">
+        <div class="wiz-btn-row" style="margin-bottom:.7rem">
+          ${altOptions.map(o => `<button class="wiz-btn wiz-btn-sm${o.id===curAltId?' sel':''}" onclick="wizSetAltDist('${o.id}')">${o.label}${o.id===altOptions[0].id?' <small>Default</small>':''}</button>`).join('')}
+        </div>
+        <b>${distLabel(spec)}</b>
+      </div></div>
+      <div class="pc-row"><div class="pc-lbl">Density</div><div class="pc-body">${densityPlotHTML(spec, {color: accent})}</div></div>
+      <div class="pc-row"><div class="pc-lbl">Translation</div><div class="pc-body">${quoteHTML(spec, {unit, zeroCentered:false})}</div></div>
+      ${wizRespSection(spec, q)}
+      <div class="deeplink-row" style="margin-top:.7rem">
+        <a class="dl-btn" href="${wizDeepLink(spec)}" target="_blank">🎛 Open this prior in Prior Lab →</a>
+      </div>
+      <div class="wiz-warn" style="margin-top:.8rem;opacity:.85">
+        Reminder: this is only a rough first recommendation based on a simple thumb rule. Explore the
+        distribution further in Prior Lab and check it with a real prior predictive check for
+        your concrete model, before you rely on it.
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="wiz-reset"><button class="hbtn" onclick="wizReset()">↺ Start over</button></div>`;
+  c.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INTRO / THEME
+// ═══════════════════════════════════════════════════════════
+let introOpen = false;
+function toggleIntroDetail() {
+  introOpen = !introOpen;
+  document.getElementById('intro-detail').style.display = introOpen ? 'block' : 'none';
+  document.getElementById('intro-toggle-btn').textContent = introOpen ? 'Hide concept ▾' : 'Explain the concept ▸';
+  document.body.classList.toggle('intro-scroll', introOpen);
+}
+function toggleTheme() {
+  DARK = !DARK;
+  document.documentElement.setAttribute('data-theme', DARK ? 'dark' : 'light');
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  localStorage.setItem('btl-theme', DARK ? 'dark' : 'light');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+(function init() {
+  DARK = document.documentElement.getAttribute('data-theme') !== 'light';
+  document.getElementById('btn-theme').textContent = DARK ? '☀ Light' : '🌙 Dark';
+  renderDvPicker();
+  renderEquation();
+  renderDvInfo();
+  renderParamCard();
+  renderFamPicker();
+  renderFamBox();
+  renderScaleBox();
+  renderDeepLinks();
+  renderWizard();
+})();
+</script>
+</body>
+</html>
