@@ -931,7 +931,12 @@ function quoteHTML(spec, ctx) {
   const heavyTailNote = isHeavyTail
     ? ` Thanks to Student-t's heavier tails (ν=${fmtP(spec.nu)}), values outside this range are excluded less strongly than with a Normal/Half-Normal distribution of comparable scale — that is exactly the point of this alternative.`
     : '';
-  const thumbRule = isHeavyTail ? `±${fmtP(STUDENT_T3_975)}×σ for Student-t (ν=${fmtP(spec.nu)})` : '±2×SD for a normal distribution';
+  // ±2×SD for Normal is a thumb rule (the exact value would be ±1.96×SD) — for Student-t,
+  // on the other hand, ±STUDENT_T3_975×σ is the EXACTLY computed 97.5th percentile for ν=3,
+  // not an approximation. Calling both a "thumb rule" would be misleading for Student-t.
+  const rangeNote = spec.fam === 'normal' ? ' (thumb rule: ±2×SD for a normal distribution)'
+    : isHeavyTail ? ` (exact factor for ν=${fmtP(spec.nu)}: ±${fmtP(STUDENT_T3_975)}×σ)`
+    : approx;
   let body;
   if (spec.fam === 'skew_normal') {
     const mean = fmtP(skewNormalMean(spec.xi, spec.omega, spec.alpha));
@@ -939,9 +944,9 @@ function quoteHTML(spec, ctx) {
   } else if (spec.fam === 'halfnormal' || spec.fam === 'half_student' || spec.fam === 'exponential') {
     body = `I believe smaller values are more likely than larger ones, but I don't rule out any positive value. I consider it roughly 95% plausible that the value lies between ${lo} and ${hi} ${ctx.unit}.${heavyTailNote}`;
   } else if (ctx.zeroCentered) {
-    body = `I don't know ${ctx.dirNote}, so the prior is centered on zero. I consider it 95% plausible that the actual value lies in the range ${lo} to ${hi} ${ctx.unit} (thumb rule: ${thumbRule}).${heavyTailNote}`;
+    body = `I don't know ${ctx.dirNote}, so the prior is centered on zero. I consider it 95% plausible that the actual value lies in the range ${lo} to ${hi} ${ctx.unit}${rangeNote}.${heavyTailNote}`;
   } else {
-    body = `I believe the most plausible value is ${fmtP(spec.mu)} ${ctx.unit}. But I'm not sure, and I consider it 95% plausible that the value lies in the range ${lo} to ${hi} ${ctx.unit}${(spec.fam === 'normal' || isHeavyTail) ? ` (thumb rule: ${thumbRule})` : approx}.${heavyTailNote}`;
+    body = `I believe the most plausible value is ${fmtP(spec.mu)} ${ctx.unit}. But I'm not sure, and I consider it 95% plausible that the value lies in the range ${lo} to ${hi} ${ctx.unit}${rangeNote}.${heavyTailNote}`;
   }
   return `<div class="quote">"${body}"</div>`;
 }
@@ -1121,15 +1126,15 @@ function renderDeepLinks() {
   const c = document.getElementById('deeplink-row');
   const { mu, sd } = computeWellBehaved(f);
   const glmPart = f.link === 'identity' ? '' : `&link=${f.link}`;
-  // Prior Lab activates the log-x response axis in intercept mode for log-link families
-  // (Poisson/Gamma) — for logit it wouldn't make sense (p is bounded to [0,1]).
-  const logxPart = f.link === 'log' ? '&logx=1' : '';
+  // Deliberately WITHOUT &logx=1: the Monte Carlo simulation shown above is untransformed
+  // (right-skewed for log-link families) — with log-x, Prior Lab would look symmetric,
+  // contradicting what was just shown above.
   const wbUrl = f.link === 'identity'
     ? `Bayesian_Prior_Lab.html?dist=normal&mu=${fmtP(mu)}&sigma=${fmtP(sd)}`
-    : `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=${fmtP(mu)}&sigma=${fmtP(sd)}${glmPart}${logxPart}`;
+    : `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=${fmtP(mu)}&sigma=${fmtP(sd)}${glmPart}`;
   let html = `<a class="dl-btn" href="${wbUrl}" target="_blank">🎛 Open the example prior in Prior Lab →</a>`;
   if (f.problemCase) {
-    const pcUrl = `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=0&sigma=${f.problemCase.sigma}${glmPart}${logxPart}`;
+    const pcUrl = `Bayesian_Prior_Lab.html?glm=intercept&dist=normal&mu=0&sigma=${f.problemCase.sigma}${glmPart}`;
     html += `<a class="dl-btn warn" href="${pcUrl}" target="_blank">🎛 Open the problem case in Prior Lab →</a>`;
   }
   c.innerHTML = html;
@@ -1275,9 +1280,16 @@ function wizCompute() {
     return { valid: true, spec: { fam: 'halfnormal', scale: hi / 2 } };
   }
 
-  const mu = (base.etaLo + base.etaHi) / 2, sd = (base.etaHi - base.etaLo) / 4;
+  const mu = (base.etaLo + base.etaHi) / 2;
   const dist = wiz.altDist || WIZ_ALT_DISTS.unbounded[0].id;
-  if (dist === 'student_t') return { valid: true, spec: { fam: 'student_t', mu, sd, nu: 3 } };
+  // Student-t's 95% interval is ±STUDENT_T3_975×sd, not ±2×sd like Normal - sd must be
+  // recomputed (smaller) so the 95% interval still hits EXACTLY the bounds the user stated
+  // (not just reusing the same sd, which would widen the interval beyond the stated question).
+  if (dist === 'student_t') {
+    const sd = (base.etaHi - base.etaLo) / (2 * STUDENT_T3_975);
+    return { valid: true, spec: { fam: 'student_t', mu, sd, nu: 3 } };
+  }
+  const sd = (base.etaHi - base.etaLo) / 4;
   return { valid: true, spec: { fam: 'normal', mu, sd } };
 }
 
@@ -1292,9 +1304,13 @@ function wizDeepLink(spec) {
   }
   const link = WIZ_LINK[wiz.family];
   const glmP = wiz.param === 'slope' ? 'slope' : 'intercept';
-  const logxPart = (wiz.param === 'slope' || link === 'log') ? '&logx=1' : '';
   const distId = spec.fam === 'student_t' ? 'student_t' : 'normal';
-  return `Bayesian_Prior_Lab.html?glm=${glmP}&dist=${distId}&mu=${fmtP(spec.mu)}&sigma=${fmtP(spec.sd)}&link=${link}${logxPart}`;
+  // Deliberately WITHOUT &logx=1: the example ranges in the wizard are all moderate, so the
+  // log-x view isn't needed — with it, the response scale in Prior Lab looks symmetric and
+  // normally distributed, while the Monte Carlo simulation here (untransformed) is shown as
+  // right-skewed. That confuses more than it helps — so the deep link points to the
+  // untransformed response scale instead.
+  return `Bayesian_Prior_Lab.html?glm=${glmP}&dist=${distId}&mu=${fmtP(spec.mu)}&sigma=${fmtP(spec.sd)}&link=${link}`;
 }
 
 // Monte Carlo sampler per family, for the response-scale translation (histogramHTML just
@@ -1332,7 +1348,11 @@ function sampleFromSpec(spec) {
 // feedback that led to this section).
 function wizRespSection(spec, q) {
   if (wiz.family === 'gaussian' || wiz.param === 'sigma') return '';
-  const transform = WIZ_TRANSFORM[wiz.family];
+  // For a slope, eta itself is already log(ratio) - exp() is the correct back-transform
+  // (regardless of logit vs. log link), NOT the family-specific inverse-link function (that's
+  // meant for absolute values like a baseline probability, not a ratio; applying it to a
+  // ratio-eta gave e.g. OR 0.5-2 wrongly back as 0.33-0.67 instead of 0.5-2).
+  const transform = wiz.param === 'slope' ? Math.exp : WIZ_TRANSFORM[wiz.family];
   const iv = distInterval(spec);
   const respLo = transform(iv.lo), respHi = transform(iv.hi);
   const samples = Array.from({ length: 3000 }, () => transform(sampleFromSpec(spec)));
@@ -1423,7 +1443,9 @@ function renderWizard() {
     const unit = wiz.param === 'sigma' ? 'on the raw scale of the outcome variable'
       : q.bound01 ? 'on η (logit scale)'
       : (wiz.family === 'gaussian' ? 'on the raw scale' : (q.ratio ? 'on η (log-ratio)' : 'on η (model scale)'));
-    const accent = 'var(--a3)';
+    // Model-scale plot deliberately uses --a2 (the same blue as Prior Lab's density plot) so
+    // the two tools can be compared visually side by side; the response-scale section stays --a3.
+    const accent = 'var(--a2)';
     const altOptions = WIZ_ALT_DISTS[wiz.param === 'sigma' ? 'sigma' : 'unbounded'];
     const curAltId = wiz.altDist || altOptions[0].id;
     html += `<div class="wiz-result">
