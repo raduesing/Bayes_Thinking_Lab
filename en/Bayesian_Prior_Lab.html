@@ -133,6 +133,10 @@ input[type=number]{
 }
 input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 
+.prange{display:flex;align-items:center;gap:.28rem;margin-top:.22rem}
+.prange input[type=number]{font-size:.67rem;padding:.14rem .3rem;text-align:center}
+.prange span{font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink2);flex-shrink:0}
+
 /* Stats */
 .stats-row{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.4rem}
 .sstat{flex:1;min-width:60px;background:var(--panel);border:1px solid var(--grid);
@@ -1025,7 +1029,11 @@ function loadExample(distId, params) {
 function selectDist(id) {
   CUR = DISTS.find(d => d.id === id);
   PARAMS = {};
-  CUR.params.forEach(p => { PARAMS[p.id] = p.val; });
+  // p.min/p.max may have been widened individually via setParamRange() (e.g. an IQ or BDI
+  // scale) and can now fall outside the default p.val — clamp the default into the current
+  // range, otherwise the slider (auto-clamped by the browser) would show a different number
+  // than the label next to it (PARAMS[p.id]).
+  CUR.params.forEach(p => { PARAMS[p.id] = Math.min(Math.max(p.val, p.min), p.max); });
   document.querySelectorAll('.dbtn').forEach(b => {
     b.classList.toggle('sel', b.id === 'db-'+id);
   });
@@ -1088,6 +1096,15 @@ function buildParams() {
       </div>
       <input type="range" id="slr-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}"
              value="${PARAMS[p.id]}" oninput="setParam('${p.id}',+this.value)">
+      <div class="prange">
+        <input type="number" id="slmin-${p.id}" value="${p.min}" step="any"
+               title="Slider lower bound for ${p.label} — set your own range, e.g. for IQ or BDI scales"
+               onchange="setParamRange('${p.id}','min',+this.value)">
+        <span>–</span>
+        <input type="number" id="slmax-${p.id}" value="${p.max}" step="any"
+               title="Slider upper bound for ${p.label}"
+               onchange="setParamRange('${p.id}','max',+this.value)">
+      </div>
     </div>`).join('');
 }
 
@@ -1095,6 +1112,29 @@ function setParam(id, val) {
   PARAMS[id] = val;
   const s = document.getElementById('slv-'+id);
   if (s) s.textContent = fmtN(val, id==='nu'?1:id==='alp'?1:id==='lambda'?3:2);
+  autoRange();
+  reflectParamsToSolver();
+}
+
+// Set a custom range for a parameter slider (e.g. widen μ to an IQ or BDI scale) — the
+// slider bounds change, and the canvas display range then follows via autoRange() as usual
+// (still manually adjustable afterward via XAXIS_LOCKED).
+function setParamRange(id, which, val) {
+  const p = CUR.params.find(pp => pp.id === id);
+  if (!p || !isFinite(val)) return;
+  const otherId = which === 'min' ? 'slmax-'+id : 'slmin-'+id;
+  const other = +document.getElementById(otherId).value;
+  if ((which === 'min' && val >= other) || (which === 'max' && val <= other)) {
+    document.getElementById('sl'+which+'-'+id).value = p[which];
+    return;
+  }
+  p[which] = val;
+  const slider = document.getElementById('slr-'+id);
+  slider.min = p.min;
+  slider.max = p.max;
+  PARAMS[id] = +slider.value;
+  const s = document.getElementById('slv-'+id);
+  if (s) s.textContent = fmtN(PARAMS[id], id==='nu'?1:id==='alp'?1:id==='lambda'?3:2);
   autoRange();
   reflectParamsToSolver();
 }
