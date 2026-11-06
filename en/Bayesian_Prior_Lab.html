@@ -375,15 +375,15 @@ input[type=number]:focus,input[type=range]:focus{border-color:var(--a2)}
 <div id="intro-detail" style="display:none">
   <div class="intro-box">
     <div class="ib-head">What is this about?</div>
-    Priors are part of the model — but their parameters (μ, σ, α, β, …) are rarely directly interpretable. Prior Lab instead translates substantive bounds ("my effect is 95% likely to lie between −2 and +5") via the <strong>CI-Solver</strong> automatically into the matching distribution parameters — ready to copy-paste as brms syntax.
+    Priors are part of the model — but their parameters (μ, σ, α, β, …) are rarely directly interpretable. The <strong>CI-Solver</strong> reverses the direction of thinking: you enter a <em>substantive</em> plausibility bound ("my effect is 95% likely to lie between −2 and +5") — the solver works backward to find exactly the distribution parameters that produce that interval, and enters them directly into the plot and sliders. No more trial-and-error with μ/σ.
 
     <div class="ib-head ib-head2">How to proceed</div>
     <strong>1. Choose a distribution</strong> (left) — by parameter type: unbounded / positive / [0,1]<br>
-    <strong>2. Use the CI-Solver</strong>: enter substantive bounds → parameters computed automatically<br>
+    <strong>2. Use the CI-Solver</strong>: enter a lower/upper bound and the desired mass (usually 95%), click "Compute" — the solver finds the parameters for which exactly that share of the distribution lies between your bounds<br>
     <strong>3. Copy the brms syntax</strong> — updates live
 
-    <div class="ib-head ib-head2">Special case: GLM mode</div>
-    For GLMs (logit/log link), your substantive beliefs (probabilities, odds ratios, rates) live on a <em>different</em> scale than the prior itself. <strong>GLM mode</strong> (button at the CI-Solver below) shows the model scale and response scale side by side — details in its own "ℹ GLM mode help" button right there.
+    <div class="ib-head ib-head2">Special case: GLM CI-Solver</div>
+    brms requires priors on the <strong>model scale</strong> (logit/log) — but you think in probabilities, odds ratios, or rates on the <strong>response scale</strong>, and these scales aren't linearly related. <strong>GLM mode</strong> (button at the CI-Solver below) is the same solver, but it takes your bounds directly on the response scale that's natural to you (e.g. "success rate between 20% and 60%" or "odds ratio between 0.5 and 3") and automatically converts them to the model scale via logit or log. Model scale and response scale are shown side by side, so you can see how the same prior plays out on both — a prior that looks harmless on the model scale can be implausible on the response scale. Details in its own "ℹ GLM mode help" button right there.
     <br><br>
     For more detailed explanations (prior types, typical defaults, literature), see "ℹ Help" top right.
   </div>
@@ -779,14 +779,19 @@ const DISTS = [
   {
     id:'exponential', name:'Exponential', brms:'exponential(λ)',
     cat:'Positive',
-    desc:'Monotonically decreasing, starts at 0. Defined on x≥0 — no shift possible. E[x]=1/λ. brms default for σ. λ=1: E[σ]=1, λ=0.5: E[σ]=2. Also for ν (degrees of freedom): λ=0.033 → E[ν]≈30. Solver: lower bound always 0, only upper bound relevant.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients (more on Exponential as a likelihood: <a class="glo-link" href="Distribution_Lab.html#exponential" target="_blank">Distribution Lab</a>).',
+    desc:'Monotonically decreasing, starts at 0 — or at lb, if shifted via the CI-Solver. Because the exponential distribution is memoryless, shifting by lb is exactly the same as truncating the Exponential at lb — so it maps 1:1 onto <code>lb=</code> in <code>set_prior()</code> in brms (the only one of the four positive special cases where this works so simply, see Half-Normal/-Student-t/-Cauchy). E[x]=1/λ (or lb+1/λ when shifted). brms default for σ. λ=1: E[σ]=1, λ=0.5: E[σ]=2. Also for ν (degrees of freedom): λ=0.033 → E[ν]≈30.<br><br>⚠ No link to the response scale — not suitable for GLM Intercept/Slope coefficients (more on Exponential as a likelihood: <a class="glo-link" href="Distribution_Lab.html#exponential" target="_blank">Distribution Lab</a>).',
     use:'σ (brms default), τ, ν',
     params:[{id:'lambda',label:'λ (rate)',min:0.01,max:5,step:0.001,val:1}],
     pdf:(x,p)=>(x<0?0:p.lambda*Math.exp(-p.lambda*x)),
     cdf:(x,p)=>(x<0?0:1-Math.exp(-p.lambda*x)),
     mean:p=>1/p.lambda, variance:p=>1/p.lambda**2,
     support:()=>[0,Infinity],
-    brmsLine:(p,cls)=>`prior(<span class="fn">exponential</span>(<span class="nm">${fmtN(p.lambda,3)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
+    brmsLine:(p,cls)=>{
+      const lb = getPosLB();
+      const lbPart = lb>0 ? `, <span class="nm">lb</span> = <span class="nm">${fmtN(lb,2)}</span>` : '';
+      const shiftNote = lb>0 ? `  <span class="cm"># lb = shift, exact (Exponential is memoryless)</span>` : '';
+      return `prior(<span class="fn">exponential</span>(<span class="nm">${fmtN(p.lambda,3)}</span>), <span class="nm">class</span> = ${cls||'sigma'}${lbPart})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>${shiftNote}`;
+    }
   },
   {
     id:'half_normal', name:'Half-Normal', brms:'normal(0, σ)  # lb=0 auto',
@@ -811,7 +816,7 @@ const DISTS = [
     mean:p=>(p.nu>1?p.sig*Math.sqrt(p.nu/Math.PI)*jStat.gammafn((p.nu-1)/2)/jStat.gammafn(p.nu/2):NaN),
     variance:p=>(p.nu>2?p.sig**2*p.nu/(p.nu-2)*(1-2/Math.PI):Infinity),
     support:()=>[0,Infinity],
-    brmsLine:(p,cls)=>`prior(<span class="fn">student_t</span>(<span class="nm">${fmtN(p.nu,0)}</span>, 0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
+    brmsLine:(p,cls)=>`prior(<span class="fn">student_t</span>(<span class="nm">${fmtN(p.nu,0)}</span>, 0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># lb=0 automatic</span>  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
   },
   {
     id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
@@ -823,7 +828,7 @@ const DISTS = [
     cdf:(x,p)=>(x<0?0:2*Math.atan(x/p.sig)/Math.PI),
     mean:p=>'—', variance:p=>'—',
     support:()=>[0,Infinity],
-    brmsLine:(p,cls)=>`prior(<span class="fn">cauchy</span>(0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
+    brmsLine:(p,cls)=>`prior(<span class="fn">cauchy</span>(0, <span class="nm">${fmtN(p.sig)}</span>), <span class="nm">class</span> = ${cls||'sigma'})  <span class="cm"># lb=0 automatic</span>  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
   },
   {
     id:'gamma', name:'Gamma', brms:'gamma(α, β)',
@@ -1038,11 +1043,21 @@ function updateSolverHint() {
   const isLN    = CUR.id === 'lognormal';
   const loEl    = document.getElementById('ci-lo');
   if (isPos) {
-    if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.min = '0'; if (parseFloat(loEl.value)<0) loEl.value=0; loEl.title = 'Lower bound ≥ 0 — shift/truncation'; }
-    hint.innerHTML = '<b style="color:var(--a5)">Positive distribution:</b> Lower bound ≥ 0. '
-      + (CUR.id==='exponential'
-          ? 'With lb > 0, a shifted exponential on [lb, ∞) is shown (memoryless property → identical to shift).'
-          : 'With lb > 0, the distribution is shifted — lb is the new fold point. E[x] = lb + E[standard].')
+    const isExp = CUR.id === 'exponential';
+    if (loEl) {
+      if (isExp) {
+        loEl.disabled = false; loEl.style.opacity = ''; loEl.min = '0';
+        if (parseFloat(loEl.value)<0) loEl.value=0;
+        loEl.title = 'Lower bound ≥ 0 — shift/truncation (identical for Exponential, see hint)';
+      } else {
+        loEl.disabled = true; loEl.style.opacity = '.45'; loEl.min = '0'; loEl.value = 0;
+        loEl.title = 'Locked: half-priors in brms are, by definition, always at lb=0 — a true shift cannot be expressed via set_prior() (see hint).';
+      }
+    }
+    hint.innerHTML = '<b style="color:var(--a5)">Positive distribution:</b> '
+      + (isExp
+          ? 'Lower bound ≥ 0. With lb &gt; 0, a shifted exponential on [lb, ∞) is shown — because the exponential distribution is memoryless, this is exactly the same as an exponential truncated at lb, so it maps 1:1 onto <code>lb=</code> in <code>set_prior()</code> (brms syntax below).'
+          : 'Lower bound locked at 0: half-priors in brms are, by definition, always at lb=0 (brms applies this automatically once the parameter is e.g. <code>class = sigma</code>). A true shift cannot be expressed via <code>set_prior()</code> — unlike the exponential distribution (where shift and truncation coincide due to memorylessness), that would require custom Stan code (<code>stanvars</code>).')
       + (CUR.id === 'half_student' ? '<br><span style="opacity:.7">ν controls tail weight and must be set separately via slider.</span>' : '');
   } else if (isLN) {
     if (loEl) { loEl.disabled = false; loEl.style.opacity = ''; loEl.value = Math.max(0.01, parseFloat(loEl.value)||0.01); loEl.title = ''; }
@@ -1292,7 +1307,13 @@ function drawPlot() {
   document.getElementById('plot-desc').innerHTML = `<b>Use:</b> ${CUR.use}<br>${CUR.desc}`;
 
   // Stats
-  const mean = CUR.mean(PARAMS);
+  // effMean() instead of CUR.mean(): for the four "shiftable" distributions
+  // (exponential/half_normal/half_student/half_cauchy) with CI-solver lower bound lb > 0,
+  // the actual expected value is lb + E[standard] — CUR.mean() alone doesn't know about
+  // the shift and would give a different value than the E[x] line drawn in the plot
+  // (which already correctly uses effMean()). Variance is shift-invariant, so
+  // CUR.variance() stays correct unchanged.
+  const mean = effMean(PARAMS);
   const vari = CUR.variance(PARAMS);
   const sd = typeof vari==='number' && isFinite(vari) ? Math.sqrt(vari) : '—';
   document.getElementById('stats-area').innerHTML = `
@@ -1557,20 +1578,20 @@ function solvCI() {
       const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
       const sigma=(hi-lb)/plInvNorm((q_hi+1)/2);
       if (!isFinite(sigma)||sigma<=0) { res.textContent='Error: hi > lb required.'; return; }
-      res.innerHTML=`<b>Half-Normal (lb=${fmtN(lb,2)}):</b> σ = <b>${fmtN(sigma,4)}</b> → E[x] = ${fmtN(lb+sigma*Math.sqrt(2/Math.PI),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span>`;
+      res.innerHTML=`<b>Half-Normal:</b> σ = <b>${fmtN(sigma,4)}</b> → E[x] = ${fmtN(sigma*Math.sqrt(2/Math.PI),3)}<br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b>, ${fmtN(hi,3)}]</span>`;
       setP('sig',sigma);
     } else if (CUR.id==='half_student') {
       const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
       const nu=PARAMS.nu||3;
       const sigma=(hi-lb)/jStat.studentt.inv((q_hi+1)/2,nu);
       if (!isFinite(sigma)||sigma<=0) { res.textContent='Error: hi > lb required.'; return; }
-      res.innerHTML=`<b>Half-Student-t (ν=${fmtN(nu,1)}, lb=${fmtN(lb,2)}):</b><br>σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">ν must be set separately via slider.</span>`;
+      res.innerHTML=`<b>Half-Student-t (ν=${fmtN(nu,1)}):</b><br>σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b>, ${fmtN(hi,3)}]</span><br><span style="opacity:.5;font-size:.58em">ν must be set separately via slider.</span>`;
       setP('sig',sigma);
     } else if (CUR.id==='half_cauchy') {
       const lb=Math.max(0,parseFloat(document.getElementById('ci-lo').value)||0);
       const sigma=(hi-lb)/Math.tan(Math.PI*q_hi/2);
       if (!isFinite(sigma)||sigma<=0) { res.textContent='Error: hi > lb required.'; return; }
-      res.innerHTML=`<b>Half-Cauchy (lb=${fmtN(lb,2)}):</b> σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>${fmtN(lb,2)}</b>, ${fmtN(hi,3)}]</span>`;
+      res.innerHTML=`<b>Half-Cauchy:</b> σ = <b>${fmtN(sigma,4)}</b><br><span style="opacity:.6">${pct}%-CrI ≈ [<b>0</b>, ${fmtN(hi,3)}]</span>`;
       setP('sig',sigma);
     } else if (CUR.id==='lognormal') {
       if (lo<=0||hi<=0) { res.textContent='Error: Log-Normal is defined on x>0 — both bounds must be >0 (e.g. 50 to 500).'; return; }
