@@ -4270,6 +4270,7 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
               style="font-family:'DM Mono',monospace;font-size:.75rem;width:78px;background:#0f1520;border:1px solid #1e2a40;color:#e8e2d8;padding:.28rem .4rem;outline:none;text-align:center">
           </div>
         </div>
+        <div id="pl-ci-lb-hint" style="display:none;font-family:'DM Mono',monospace;font-size:.7rem;color:#556080;line-height:1.6;margin-bottom:.55rem;border-left:2px solid #4ab0d840;padding-left:.5rem"></div>
         <button onclick="plSolvCI()" style="font-family:'DM Mono',monospace;font-size:.75rem;border:1.5px solid #4ab0d8;background:transparent;cursor:pointer;color:#4ab0d8;padding:.35rem 1.1rem;width:100%;transition:all .12s;letter-spacing:.04em" onmouseover="this.style.background='#4ab0d8';this.style.color='#0d1117'" onmouseout="this.style.background='transparent';this.style.color='#4ab0d8'">▶ Calculate parameters</button>
         <div id="pl-ci-result" style="margin-top:.55rem;font-family:'DM Mono',monospace;font-size:.75rem;color:#9ae4f8;line-height:1.75"></div>
       </div>
@@ -4531,6 +4532,27 @@ function plLog125Ticks(lo, hi, maxTicks=10) {
 }
 
 // ── GLM functions ────────────────────────────────────────
+// Half-Priors (Half-Normal/-Student-t/-Cauchy) stehen in brms per Definition immer bei lb=0 — die
+// Untergrenze des CI-Solvers wird daher bei diesen gesperrt (nur im Nicht-GLM-Modus; im GLM-Modus
+// tragen die Felder Response-Skala-Werte). Der zuvor eingegebene Wert wird beim Entsperren wiederhergestellt.
+const PL_LB_LOCKED = ['half_normal','half_student','half_cauchy'];
+let plLastLo = null;
+function plApplyLbLock() {
+  const loEl = document.getElementById('pl-ci-lo'), hint = document.getElementById('pl-ci-lb-hint');
+  if (!loEl) return;
+  const lock = !PL_GLM_ACTIVE && PL_LB_LOCKED.includes(plDist.id);
+  if (lock) {
+    if (!loEl.disabled) plLastLo = loEl.value;
+    loEl.disabled = true; loEl.style.opacity = '.45'; loEl.value = 0;
+    loEl.title = 'Locked: in brms, half priors always sit at lb=0 by definition.';
+    if (hint) { hint.innerHTML = 'Lower bound locked at 0: in brms, half priors always sit at <code>lb=0</code> by definition (applied automatically, e.g. for <code>class = sigma</code>) — a real shift cannot be expressed via <code>set_prior()</code>. Only the upper bound counts.'; hint.style.display = 'block'; }
+  } else {
+    if (loEl.disabled) { loEl.disabled = false; if (plLastLo !== null) loEl.value = plLastLo; plLastLo = null; }
+    loEl.style.opacity = ''; loEl.title = '';
+    if (hint) hint.style.display = 'none';
+  }
+}
+
 const PL_GLM_INCOMPAT_MSG = {
   'Positiv': d => `<b>${d.name}</b> is typically used for <b>${d.use}</b> — positive parameters such as random-effect SDs or dispersion. These have no link to the response scale; the GLM back-transformation (exp/invlogit) makes no sense here.`,
   '[0,1]': d => `<b>${d.name}</b> is typically used for <b>${d.use}</b> — but only <em>without</em> own predictors for this parameter (no distributional model). Then it already lies directly on [0,1], without any logit transformation. Only <em>with</em> predictors (e.g. <code>zi ~ x</code>) does it become a logistic regression — then use a Normal prior on the logit scale.`,
@@ -4557,6 +4579,7 @@ window.plToggleGLM = function() {
   document.getElementById('pl-response-panel').style.display = PL_GLM_ACTIVE ? '' : 'none';
   plUpdateGLMInputs();
   plCheckGLMDistCompat();
+  plApplyLbLock();
   plUpdatePlot();
 };
 
@@ -4829,6 +4852,7 @@ function plSelectDist(id){
     if (plDist.id === 'beta' && (!(lv>=0 && lv<1) || !(hv>0 && hv<=1) || lv>=hv)) { loEl.value = 0.2; hiEl.value = 0.8; }
     if (plDist.id === 'lkj'  && (!(lv>=-1 && lv<1) || !(hv>-1 && hv<=1) || lv>=hv)) { loEl.value = -0.5; hiEl.value = 0.5; }
   }
+  plApplyLbLock();
   // auto x-range
   plAutoRange();
 }
