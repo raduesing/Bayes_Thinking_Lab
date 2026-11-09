@@ -69,6 +69,7 @@ h1 em{font-style:italic;color:var(--accent3)}
 .intro-box .ib-head.ib-head2{margin-top:.75rem}
 .intro-box b,.intro-box strong{color:var(--ink)}
 .intro-box em{color:var(--accent2);font-style:normal}
+.intro-box .ib-warn{border-left:3px solid var(--accent);background:var(--panel);padding:.45rem .8rem;margin:.65rem 0}
 
 .outer{display:grid;grid-template-columns:300px 1fr;gap:0;flex:1;min-height:0;overflow:hidden}
 .sidebar{display:flex;flex-direction:column;gap:.7rem;overflow-y:auto;
@@ -313,12 +314,17 @@ svg text{font-family:'DM Mono',monospace}
 <div id="intro-detail" style="display:none">
   <div class="intro-box">
     <div class="ib-head">What is this about?</div>
-    A <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" style="color:inherit">prior</a> often feels harmless on the parameter scale — but what does it mean for the <em>data</em> your model considers plausible? The Prior Predictive Check answers exactly that: datasets are simulated from the priors alone (no real data involved), then visualized, e.g. as regression lines or densities. That way you see <em>before</em> the actual fit whether your prior produces realistic or absurd worlds.
+    A <a class="glo-link" href="Glossar.html#gl-prior" target="_blank" style="color:inherit">prior</a> often feels harmless on the parameter scale — but what does it mean for the <em>data</em> your model considers plausible? The Prior Predictive Check answers exactly that: datasets are simulated from the priors alone (without any real measurements) and shown, e.g., as regression lines or densities. That way you see <em>before</em> the actual fit whether your prior produces realistic or absurd worlds.
+
+    <div class="ib-warn">
+      <strong>Important — upload your own predictors.</strong> Whether a prior is plausible depends on the values of your predictors: with β = 2, x = 1 and x = 100 are completely different worlds. Without an upload the tool therefore works with <strong>default values</strong> — x ~ Normal(0, 1), i.e. z-standardised predictors (50 pseudo-observations per draw). If your predictors are in other units (age in years, income in euros, …), the check is then misleading. With your file (sidebar "Data upload") the tool plugs your real x values into every observation — just like brms does in <code>pp_check</code>. Your <em>y</em> does not feed into the priors; it only appears as a green comparison curve.
+    </div>
 
     <div class="ib-head ib-head2">How to proceed</div>
     <strong>1. Choose a model</strong> (left) — likelihood family matching your outcome variable; alternatively, build the complete model in the <a class="glo-link" href="Brms_model_builder.html" target="_blank" style="color:inherit">brms Model Builder</a> and transfer it here with one click<br>
-    <strong>2. Set priors</strong> — via the sidebar, optionally with "⬡ Prior Lab light" as a calculation/visualization aid (CI solver) on the side — you then enter the values you find into the sidebar yourself<br>
-    <strong>3. Look at the simulated data</strong> — plausible, or already unrealistic?
+    <strong>2. Upload your own data</strong> — CSV with a column <code>y</code> and your predictors as <code>x</code> (or <code>x1</code>, <code>x2</code>, …); optionally <code>group</code> for groups (random effects). That way the check uses your real data structure instead of default values<br>
+    <strong>3. Set priors</strong> — via the sidebar, optionally with "⬡ Prior Lab light" as a calculation/visualization aid (CI solver) on the side — you then enter the values you find into the sidebar yourself<br>
+    <strong>4. Look at the simulated data</strong> — plausible, or already unrealistic? If the green curve of your real data lies within the range of the blue prior curves, the prior fits the order of magnitude of your data
     <br><br>
     For a more extensive version of "Prior Lab light" (more distribution types, GLM mode for logit/log link), use the standalone <a class="glo-link" href="Bayesian_Prior_Lab.html" target="_blank" style="color:inherit">Prior Lab</a>.
 
@@ -867,7 +873,7 @@ svg text{font-family:'DM Mono',monospace}
 
   <!-- Upload -->
   <div class="scard">
-    <h3 class="ha">Data upload (optional)</h3>
+    <h3 class="ha">Data upload (recommended)</h3>
     <div class="upload-zone" id="drop-zone"
          onclick="document.getElementById('file-inp').click()"
          ondragover="event.preventDefault();this.classList.add('drag')"
@@ -4159,6 +4165,16 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
   margin-bottom:.6rem;line-height:1.6;
 }
 #pl-response-svg-wrap{width:100%}
+#pl-glm-incompat-note{
+  font-family:'DM Mono',monospace;font-size:.72rem;color:#e8614a;margin-top:.4rem;line-height:1.65;display:none;
+  background:rgba(232,97,74,.08);border-left:3px solid #e8614a;padding:.4rem .55rem;
+}
+#pl-glm-incompat-note.show{display:block}
+/* editable slider ranges (ported from Prior Lab) */
+.pl-prange{display:flex;gap:.3rem;align-items:center;margin-top:.28rem}
+.pl-prange input[type=number]{font-family:'DM Mono',monospace;font-size:.68rem;width:100%;min-width:0;background:#0f1520;border:1px solid #1e2a40;color:#9a9080;padding:.12rem .25rem;outline:none;text-align:center}
+.pl-prange input[type=number]:focus{border-color:#4ab0d8;color:#e8e2d8}
+.pl-prange span{color:#556080;font-size:.7rem}
 </style>
 
 <div id="prior-lab-overlay" onclick="closePriorLabIfBg(event)">
@@ -4197,6 +4213,7 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
           <button id="pl-gpb-slope"     class="pl-gpb"        onclick="plToggleGLMParam('slope')">Slope</button>
         </div>
         <div id="pl-glm-note"></div>
+        <div id="pl-glm-incompat-note"></div>
       </div>
       <div class="pl-stats" id="pl-stats"></div>
     </div>
@@ -4272,6 +4289,7 @@ input.pl-range::-webkit-slider-thumb:hover{background:#9ae4f8}
 const DISTS = [
   {
     id:'normal', name:'Normal', brms:'normal(μ, σ)',
+    cat:'Unbegrenzt', use:'α, β (z-standardised)',
     desc:'Symmetric bell curve. Standard choice for intercept and coefficients with z-standardized variables. Light tails → occasional extreme values possible.',
     params:[
       {id:'mu',  label:'μ (Location)',   min:-20, max:20,  step:0.1,  val:0},
@@ -4284,6 +4302,7 @@ const DISTS = [
   },
   {
     id:'student_t', name:'Student-t', brms:'student_t(ν, μ, σ)',
+    cat:'Unbegrenzt', use:'α (brms default), robust β',
     desc:'Like Normal but with heavier tails — more robust to outliers. ν=1 is Cauchy (extremely heavy-tailed), ν>30 ≈ Normal. Recommended: ν=3–7.',
     params:[
       {id:'nu',  label:'ν (Degrees of freedom)', min:1,   max:50,   step:0.5, val:3},
@@ -4297,7 +4316,8 @@ const DISTS = [
   },
   {
     id:'cauchy', name:'Cauchy', brms:'cauchy(μ, σ)',
-    desc:'Extremely heavy-tailed. No finite mean or variance. Useful as a very vague prior that gives much weight to rare extreme values. Equivalent to Student-t with ν=1.',
+    cat:'Unbegrenzt', use:'very vague priors for β',
+    desc:'Extremely heavy-tailed. No finite mean or variance. Useful as a very vague prior that gives much weight to rare extreme values. Equivalent to Student-t with ν=1. Practically most important use today: JZS Bayes factor for the t-test (Cauchy(0, r) on the effect size) — not for ordinary parameter estimation.',
     params:[
       {id:'mu',  label:'μ (Location)',  min:-20, max:20, step:0.1, val:0},
       {id:'sig', label:'σ (Scale)',min:0.1,max:20, step:0.1, val:1},
@@ -4308,8 +4328,9 @@ const DISTS = [
     support:p=>[-Infinity,Infinity],
   },
   {
-    id:'half_normal', name:'Half-Normal', brms:'half_normal(0, σ)',
-    desc:'Normal(0,σ) with x≥0. Classic weakly-informative prior for standard deviations σ and random-effect SDs τ. E[x] = σ√(2/π) ≈ 0.8σ.',
+    id:'half_normal', name:'Half-Normal', brms:'normal(0, σ)  # lb=0 automatic',
+    cat:'Positiv', use:'σ, τ (random-effect SD)',
+    desc:'Normal(0,σ) with x≥0. Classic weakly-informative prior for standard deviations σ and random-effect SDs τ. E[x] = σ√(2/π) ≈ 0.8σ. ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'sig', label:'σ (Scale)', min:0.1,max:20, step:0.1, val:1},
     ],
@@ -4320,8 +4341,9 @@ const DISTS = [
     support:p=>[0,Infinity],
   },
   {
-    id:'half_student', name:'Half-Student-t', brms:'half_student_t(ν, 0, σ)',
-    desc:'Student-t with x≥0. Heavier tails than Half-Normal — allows occasionally large SDs. Good compromise between Half-Normal and Half-Cauchy.',
+    id:'half_student', name:'Half-Student-t', brms:'student_t(ν, 0, σ)  # lb=0 automatic',
+    cat:'Positiv', use:'σ, τ (brms default)',
+    desc:'Student-t with x≥0. Heavier tails than Half-Normal — allows occasionally large SDs. In this form (with scale 2.5) it is the brms default for σ and τ. ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'nu',  label:'ν (Degrees of freedom)', min:1,   max:50,  step:0.5, val:3},
       {id:'sig', label:'σ (Scale)',          min:0.1,max:20,  step:0.1, val:1},
@@ -4339,7 +4361,8 @@ const DISTS = [
   },
   {
     id:'half_cauchy', name:'Half-Cauchy', brms:'cauchy(0, σ)',
-    desc:'Cauchy with x≥0. Very heavy tails — allows large SDs. Formerly popular for σ priors, now often replaced by Half-Normal or Exponential.',
+    cat:'Positiv', use:'very vague σ/τ priors',
+    desc:'Cauchy with x≥0. Very heavy tails — allows large SDs. Formerly popular for σ priors, now often replaced by Half-Normal or Exponential. ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'sig', label:'σ (Scale)', min:0.1,max:20, step:0.1, val:1},
     ],
@@ -4350,7 +4373,8 @@ const DISTS = [
   },
   {
     id:'gamma', name:'Gamma', brms:'gamma(α, β)',
-    desc:'Flexible prior for positive quantities (σ, rate, concentration). E[x]=α/β, Var=α/β². α=1 equals Exponential(β). Well suited when values are not too close to 0.',
+    cat:'Positiv', use:'ν (Student-t), concentration parameters',
+    desc:'Flexible prior for positive quantities (σ, rate, concentration). E[x]=α/β, Var=α/β². α=1 equals Exponential(β). Well suited when values are not too close to 0. brms default for ν (Student-t). ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'alpha', label:'α (Shape)',  min:0.1, max:20, step:0.1, val:2},
       {id:'beta',  label:'β (Rate)',   min:0.1, max:20, step:0.1, val:1},
@@ -4363,7 +4387,8 @@ const DISTS = [
   },
   {
     id:'exponential', name:'Exponential', brms:'exponential(λ)',
-    desc:'Gamma(1,λ). Monotonically decreasing — gives 0 the highest weight. Default prior for σ in brms. E[x]=1/λ. λ=1: E[σ]=1, λ=0.5: E[σ]=2, λ=0.1: E[σ]=10.',
+    cat:'Positiv', use:'σ, τ (common suggestion, not a brms default), ν',
+    desc:'Gamma(1,λ). Monotonically decreasing — gives 0 the highest weight. A common suggestion for σ and τ (known mainly from the rethinking package) — but not a brms default, which is Half-Student-t(3, 0, 2.5). E[x]=1/λ. λ=1: E[σ]=1, λ=0.5: E[σ]=2, λ=0.1: E[σ]=10. ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'lambda', label:'λ (Rate)', min:0.01, max:5, step:0.01, val:1},
     ],
@@ -4375,6 +4400,7 @@ const DISTS = [
   },
   {
     id:'skew_normal', name:'Skewed Normal', brms:'skew_normal(μ, σ, α)',
+    cat:'Unbegrenzt', use:'asymmetric priors for α, β',
     desc:'Normal with skewness. α>0: right-skewed, α<0: left-skewed, α=0: Normal. Useful when the prior should be asymmetric.',
     params:[
       {id:'mu',    label:'μ (Location)',    min:-20, max:20, step:0.1, val:0},
@@ -4403,7 +4429,8 @@ const DISTS = [
   },
   {
     id:'beta', name:'Beta', brms:'beta(α, β)',
-    desc:'Defined on [0,1]. Perfect for probabilities and proportions. α=β=1: Uniform. α>β: left-skewed. α=β>1: concentrated around 0.5. Used in brms for phi parameter.',
+    cat:'[0,1]', use:'zi, zoi, coi (proportions)',
+    desc:'Defined on [0,1]. Perfect for probabilities and proportions. α=β=1: Uniform. α>β: left-skewed. α=β>1: concentrated around 0.5. Used in brms for zi/zoi/coi. ⚠ Only valid without own predictors for this parameter (no distributional model) — then it lies directly on [0,1]. With predictors (e.g. zi ~ x) it becomes a logistic regression — then use a Normal prior on the logit scale, not a Beta prior directly on the proportion.',
     params:[
       {id:'alpha', label:'α (Shape 1)', min:0.1, max:20, step:0.1, val:2},
       {id:'beta',  label:'β (Shape 2)', min:0.1, max:20, step:0.1, val:2},
@@ -4416,7 +4443,8 @@ const DISTS = [
   },
   {
     id:'lkj', name:'LKJ', brms:'lkj(η)',
-    desc:'Prior for correlation matrices in random-slope models. Visualized here as the distribution of a single correlation coefficient ρ ∈ [-1,1]. η=1: Uniform over all correlations. η>1: concentrated around 0. η<1: bimodal (extreme correlations preferred).',
+    cat:'[-1,1]', use:'cor (random-slope correlations)',
+    desc:'Prior for correlation matrices in random-slope models. Visualized here as the distribution of a single correlation coefficient ρ ∈ [-1,1]. η=1: Uniform over all correlations. η>1: concentrated around 0. η<1: bimodal (extreme correlations preferred). ⚠ No link to the response scale — not suitable for GLM intercept/slope coefficients.',
     params:[
       {id:'eta', label:'η (Concentration)', min:0.5, max:20, step:0.25, val:2},
     ],
@@ -4430,7 +4458,9 @@ const DISTS = [
       const B=jStat.betafn(p.eta,p.eta);
       return Math.pow(1-x*x,p.eta-1)/(Math.pow(2,2*p.eta-1)*B||1);
     },
-    cdf:(x,p)=>null,
+    // Exakte CDF über ρ = 2·X−1, X ~ Beta(η,η) — ohne sie lieferte plDist.cdf überall 0 und die
+    // Prior-Credible-Intervals/Quantile zeigten bei LKJ unsinnige Werte ([1.00, 1.00]).
+    cdf:(x,p)=>(x<=-1?0:x>=1?1:jStat.beta.cdf((x+1)/2,p.eta,p.eta)),
     mean:p=>0,
     // Var(rho) = 4*Var(Y) for Y~Beta(η,η): = 4*η²/((2η)²(2η+1)) = 1/(2η+1) — always finite
     // (ρ is bounded on [-1,1]), confirmed via real-R Monte Carlo (η=2: true 0.200 vs the old
@@ -4481,12 +4511,18 @@ function plFmtN(v, dec=2) {
   return s === '-0' ? '0' : s;
 }
 // 1-2-5 per decade — standard tick pattern for logarithmic axes
-function plLog125Ticks(lo, hi) {
-  const ticks = [];
+function plLog125Ticks(lo, hi, maxTicks=10) {
+  // Bei sehr breiten Spannen (Student-t/Cauchy im GLM-Modus: OR/RR über viele Dekaden) würde das
+  // volle 1-2-5-Muster mehr Ticks erzeugen, als auf der Achse lesbar Platz haben — daher adaptiv
+  // ausdünnen: erst nur Zehnerpotenzen, dann zusätzlich Dekaden überspringen.
   const kMin = Math.floor(Math.log10(lo));
   const kMax = Math.ceil(Math.log10(hi));
-  for (let k = kMin; k <= kMax; k++) {
-    [1,2,5].forEach(m => {
+  const nDecades = kMax - kMin + 1;
+  let mults = [1,2,5], decStep = 1;
+  if (nDecades * 3 > maxTicks) { mults = [1]; decStep = Math.max(1, Math.ceil(nDecades / maxTicks)); }
+  const ticks = [];
+  for (let k = kMin; k <= kMax; k += decStep) {
+    mults.forEach(m => {
       const v = m * Math.pow(10, k);
       if (v >= lo*0.999 && v <= hi*1.001) ticks.push(v);
     });
@@ -4495,6 +4531,22 @@ function plLog125Ticks(lo, hi) {
 }
 
 // ── GLM functions ────────────────────────────────────────
+const PL_GLM_INCOMPAT_MSG = {
+  'Positiv': d => `<b>${d.name}</b> is typically used for <b>${d.use}</b> — positive parameters such as random-effect SDs or dispersion. These have no link to the response scale; the GLM back-transformation (exp/invlogit) makes no sense here.`,
+  '[0,1]': d => `<b>${d.name}</b> is typically used for <b>${d.use}</b> — but only <em>without</em> own predictors for this parameter (no distributional model). Then it already lies directly on [0,1], without any logit transformation. Only <em>with</em> predictors (e.g. <code>zi ~ x</code>) does it become a logistic regression — then use a Normal prior on the logit scale.`,
+  '[-1,1]': d => `<b>${d.name}</b> is typically used for <b>${d.use}</b> — correlation parameters without a link to the response scale. GLM mode does not fit here.`
+};
+function plCheckGLMDistCompat() {
+  const el = document.getElementById('pl-glm-incompat-note');
+  if (!el) return;
+  if (PL_GLM_ACTIVE && plDist.cat !== 'Unbegrenzt' && PL_GLM_INCOMPAT_MSG[plDist.cat]) {
+    el.innerHTML = '⚠ <b>Probably an unsuitable combination:</b> ' + PL_GLM_INCOMPAT_MSG[plDist.cat](plDist);
+    el.classList.add('show');
+  } else {
+    el.classList.remove('show');
+  }
+}
+
 window.plToggleGLM = function() {
   PL_GLM_ACTIVE = !PL_GLM_ACTIVE;
   document.getElementById('pl-glm-btn').classList.toggle('active', PL_GLM_ACTIVE);
@@ -4504,6 +4556,7 @@ window.plToggleGLM = function() {
   document.getElementById('pl-glm-note').style.display = PL_GLM_ACTIVE ? '' : 'none';
   document.getElementById('pl-response-panel').style.display = PL_GLM_ACTIVE ? '' : 'none';
   plUpdateGLMInputs();
+  plCheckGLMDistCompat();
   plUpdatePlot();
 };
 
@@ -4667,7 +4720,7 @@ function plDrawResponsePanel() {
 
   const xFmt = (!isSlope && !isLog) ? d3.format('.0%') : (d => d3.format('.2~g')(d));
   const xAxis = d3.axisBottom(xSc).tickFormat(xFmt).tickSize(-Hp);
-  if (useLogX) xAxis.tickValues(plLog125Ticks(xDomain[0], xDomain[1])); else xAxis.ticks(5);
+  if (useLogX) xAxis.tickValues(plLog125Ticks(xDomain[0], xDomain[1], Math.max(4, Math.floor(Wp/65)))); else xAxis.ticks(5);
   g.append('g').attr('transform',`translate(0,${Hp})`)
    .call(xAxis)
    .call(gr=>{gr.select('.domain').remove();
@@ -4756,13 +4809,26 @@ function plSelectDist(id){
   plDist = DISTS.find(d=>d.id===id);
   // reset params
   plParams={};
-  plDist.params.forEach(p=>{ plParams[p.id]=p.val; });
+  // p.min/p.max können über plSetParamRange() erweitert worden sein und vom Default p.val abweichen —
+  // Default in den aktuellen Bereich klemmen, sonst zeigt der Slider (vom Browser geklemmt) eine andere
+  // Zahl als das Label daneben.
+  plDist.params.forEach(p=>{ plParams[p.id]=Math.min(Math.max(p.val,p.min),p.max); });
   // active button
   document.querySelectorAll('.pl-dist-btn').forEach(b=>{
     b.classList.toggle('active', b.dataset.id===id);
   });
   // render param sliders
   renderPlParams();
+  plCheckGLMDistCompat();
+  // Plausible Default-Grenzen für den CI-Solver bei Beta ([0,1]) und LKJ ([-1,1]) — die generischen
+  // -2/5 aus dem Normal-Fall wären dort ungültig (Fehlermeldung beim ersten Klick). Nur im
+  // Nicht-GLM-Modus; ein bewusst gesetzter, gültiger Bereich bleibt beim Hin- und Herwechseln erhalten.
+  if (!PL_GLM_ACTIVE) {
+    const loEl = document.getElementById('pl-ci-lo'), hiEl = document.getElementById('pl-ci-hi');
+    const lv = parseFloat(loEl.value), hv = parseFloat(hiEl.value);
+    if (plDist.id === 'beta' && (!(lv>=0 && lv<1) || !(hv>0 && hv<=1) || lv>=hv)) { loEl.value = 0.2; hiEl.value = 0.8; }
+    if (plDist.id === 'lkj'  && (!(lv>=-1 && lv<1) || !(hv>-1 && hv<=1) || lv>=hv)) { loEl.value = -0.5; hiEl.value = 0.5; }
+  }
   // auto x-range
   plAutoRange();
 }
@@ -4780,7 +4846,12 @@ function renderPlParams(){
       </div>
       <input class="pl-range" type="range" id="plr-${p.id}"
              min="${p.min}" max="${p.max}" step="${p.step}" value="${plParams[p.id]}"
-             oninput="plSetParam('${p.id}',+this.value)">`;
+             oninput="plSetParam('${p.id}',+this.value)">
+      <div class="pl-prange">
+        <input type="number" id="plmin-${p.id}" value="${p.min}" step="any" title="Slider lower bound for ${p.label}" onchange="plSetParamRange('${p.id}','min',+this.value)">
+        <span>–</span>
+        <input type="number" id="plmax-${p.id}" value="${p.max}" step="any" title="Slider upper bound for ${p.label}" onchange="plSetParamRange('${p.id}','max',+this.value)">
+      </div>`;
     c.appendChild(div);
   });
 }
@@ -4788,6 +4859,23 @@ function renderPlParams(){
 window.plSetParam=function(pid,val){
   plParams[pid]=val;
   const vd=document.getElementById('plv-'+pid); if(vd) vd.textContent=val.toFixed(2);
+  plAutoRange();
+};
+
+// Eigenen Wertebereich für einen Parameter-Slider setzen (z.B. μ auf IQ- oder BDI-Skala erweitern).
+window.plSetParamRange=function(pid,which,val){
+  const p=plDist.params.find(pp=>pp.id===pid);
+  if(!p||!isFinite(val)) return;
+  const other=+document.getElementById(which==='min'?'plmax-'+pid:'plmin-'+pid).value;
+  if((which==='min'&&val>=other)||(which==='max'&&val<=other)){
+    document.getElementById('pl'+which+'-'+pid).value=p[which];
+    return;
+  }
+  p[which]=val;
+  const sl=document.getElementById('plr-'+pid);
+  sl.min=p.min; sl.max=p.max;
+  plParams[pid]=+sl.value;
+  const vd=document.getElementById('plv-'+pid); if(vd) vd.textContent=plParams[pid].toFixed(2);
   plAutoRange();
 };
 
@@ -5131,6 +5219,8 @@ window.plSolvCI=function(){
       const ciLo = mu + sigma*z_lo2, ciHi = mu + sigma*z_hi2;
       res.innerHTML=`<b>Skewed Normal(skew=${skew.toFixed(1)}):</b> μ = ${mu.toFixed(4)}, σ = ${sigma.toFixed(4)}<br><span style="color:#556080;font-size:.75rem">${pct}%-CI ≈ [${ciLo.toFixed(3)}, ${ciHi.toFixed(3)}]</span>`;
       setP('mu',mu); setP('sig',sigma); plAutoRange();
+    } else if(dist.id==='lkj'){
+      res.innerHTML='<span style="color:#556080">No automatic solver is available for LKJ — please set η with the slider.</span>'; return;
     } else {
       if(!plDist.cdf){res.innerHTML='<span style="color:#556080">No CDF available — please adjust parameters manually.</span>';return;}
       const clo=plDist.cdf(lo,plParams)||0, chi=plDist.cdf(hi,plParams)||0;

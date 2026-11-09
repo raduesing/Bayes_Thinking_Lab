@@ -864,7 +864,7 @@ const DISTS = [
     id:'beta', name:'Beta', brms:'beta(α, β)',
     cat:'[0,1]',
     desc:'Defined on [0,1]. For probabilities, proportions, zi/zoi/coi in brms. α=β=1: Uniform.<br><br>⚠ Only holds <em>without</em> its own predictors for this parameter (no distributional model) — it then lives directly on [0,1], with no logit transform at all. With predictors (e.g. <code>zi ~ x</code>), it becomes a logistic regression — then a Normal prior on the logit scale for Intercept/Slope, not a Beta prior directly on the proportion. More: <a class="glo-link" href="Distribution_Lab.html#beta" target="_blank">Distribution Lab — Beta</a>.',
-    use:'zi, zoi, coi, phi (proportions)',
+    use:'zi, zoi, coi (proportions)',
     params:[{id:'alpha',label:'α (shape 1)',min:0.1,max:20,step:0.1,val:1},{id:'beta_',label:'β (shape 2)',min:0.1,max:20,step:0.1,val:1}],
     pdf:(x,p)=>(x<0||x>1?0:jStat.beta.pdf(x,p.alpha,p.beta_)),
     cdf:(x,p)=>(x<0?0:x>1?1:jStat.beta.cdf(x,p.alpha,p.beta_)),
@@ -886,7 +886,9 @@ const DISTS = [
     // X ~ Beta(η,η), hence also Var(ρ) = 4·Var(Beta(η,η)) = 1/(2η+1) — always finite, not
     // only for η>1.
     pdf:(x,p)=>{if(x<=-1||x>=1)return 0;return Math.pow(1-x*x,p.eta-1)/jStat.betafn(p.eta,0.5);},
-    cdf:(x,p)=>null,
+    // Exakte CDF über ρ = 2·X−1, X ~ Beta(η,η) — mit `null` zeigten Quantile/Prior-CrI bei LKJ
+    // unsinnige Werte ([1, 1]) und der 95%-Bereich blieb ungeschattet.
+    cdf:(x,p)=>(x<=-1?0:x>=1?1:jStat.beta.cdf((x+1)/2,p.eta,p.eta)),
     mean:p=>0, variance:p=>1/(2*p.eta+1),
     support:()=>[-1,1],
     brmsLine:(p,cls)=>`prior(<span class="fn">lkj</span>(<span class="nm">${fmtN(p.eta)}</span>), <span class="nm">class</span> = ${cls||'cor'})  <span class="cm"># Adjust parameter with class =, coef = etc. as needed!</span>`
@@ -1734,7 +1736,7 @@ function showToast(msg) {
 // coefficient on the *unbounded* model scale (logit/log) — that only holds
 // for cat:'Unbounded' (Normal, Student-t, Skewed Normal, Cauchy). Every
 // other category represents a parameter with no link to the response scale
-// at all (sd/sigma/nu, zi/zoi/coi/phi without their own predictors,
+// at all (sd/sigma/nu, zi/zoi/coi without their own predictors,
 // correlations) — the GLM back-transform (exp/invlogit) would produce
 // implausible or meaningless values there (see also Distribution Lab,
 // Beta card, "As Prior" section).
