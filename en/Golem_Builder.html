@@ -1310,7 +1310,9 @@ function findAdjustmentSets() {
   const minimal = valid.filter(Z=>!valid.some(Z2=>Z2.length<Z.length&&Z2.every(v=>Z.includes(v))));
 
   // Find backdoor paths blocked only by latent nodes (unblockable)
-  const unblockableLatentPaths = backdoorPaths.filter(path => {
+  // Nur relevant, wenn kein einziges valides Set existiert: ein latenter Knoten auf dem Pfad macht ihn nicht
+  // unblockierbar, solange ein beobachteter Nicht-Collider (z. B. ein Elternknoten des latenten Knotens) ihn blockieren kann.
+  const unblockableLatentPaths = (minimal.length > 0) ? [] : backdoorPaths.filter(path => {
     // A path is "unblockable via latents" if the only non-collider nodes on it
     // that block it (when added to Z) are latent nodes
     if (!isPathActive(path, [])) return false; // already blocked without any control
@@ -1323,6 +1325,29 @@ function findAdjustmentSets() {
   });
 
   return { allPaths, backdoorPaths, minimal, descX, candidates, latentIds, unblockableLatentPaths };
+}
+
+// Adjustierungssets für den DIREKTEN Effekt X → Y (Pearl 2009): Z darf keinen Nachfahren von Y enthalten und muss
+// X und Y im Graphen OHNE die Kante X → Y d-separieren. Das verlangt Mediatoren UND — anders als "Backdoor-Set +
+// Mediatoren" — auch Confounder zwischen Mediator und Outcome (und blockiert dabei entstehende Collider-Pfade).
+// Beobachtete Knoten sind Kandidaten; latente nie.
+function findDirectAdjustmentSets() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return null;
+  const saved = state.edges;
+  state.edges = saved.filter(e => !(e.from === X && e.to === Y));
+  try {
+    const descY = getDescendants(Y);
+    const candidates = state.nodes.filter(n => n.id !== X && n.id !== Y && !n.latent && !descY.has(n.id)).map(n => n.id);
+    const paths = findAllPaths(X, Y);
+    const valid = [];
+    for (let mask = 0; mask < (1 << candidates.length); mask++) {
+      const Z = candidates.filter((_, i) => mask & (1 << i));
+      if (paths.every(p => !isPathActive(p, Z))) valid.push(Z);
+    }
+    const minimal = valid.filter(Z => !valid.some(Z2 => Z2.length < Z.length && Z2.every(v => Z.includes(v))));
+    return { minimal, candidates };
+  } finally { state.edges = saved; }
 }
 
 // ============================================================
@@ -1440,10 +1465,27 @@ function getMediators() {
   if (!X || !Y) return new Set();
   const mediators = new Set();
   state.nodes.forEach(n => {
-    if (n.id === X || n.id === Y) return;
+    if (n.id === X || n.id === Y || n.latent) return;   // latente Mediatoren lassen sich weder adjustieren noch modellieren
     if (hasDirectedPath(X, n.id) && hasDirectedPath(n.id, Y)) mediators.add(n.id);
   });
   return mediators;
+}
+
+// Unbeobachtete Knoten auf einem kausalen Pfad X → … → Y: nicht modellierbar, daher nur Warnung.
+function getLatentMediators() {
+  const X = state.exposure, Y = state.outcome;
+  if (!X || !Y) return [];
+  return state.nodes.filter(n => n.latent && n.id !== X && n.id !== Y && hasDirectedPath(X, n.id) && hasDirectedPath(n.id, Y)).map(n => n.name);
+}
+function latentMediatorWarningLines() {
+  const lm = getLatentMediators();
+  if (!lm.length) return [];
+  return [
+    '# ⚠ Latent mediator [' + lm.join(', ') + '] lies on a causal path from X to Y. It is unobserved and is therefore',
+    '# neither adjusted for nor modeled as a mediator — the part of the effect through this path is part of the',
+    '# estimated direct effect. A clean direct/indirect decomposition is not possible this way.',
+    '',
+  ];
 }
 
 function hasDirectedPath(fromId, toId) {
@@ -1477,34 +1519,15 @@ function hasDirectedPathAvoiding(fromId, toId, avoidId) {
 function detectInstruments() {
   const X = state.exposure, Y = state.outcome;
   if (!X || !Y) return [];
-  const instruments = [];
-  state.nodes.forEach(node => {
-    if (node.id === X || node.id === Y || node.latent) return;
-    const Z = node.id;
-    // Condition 1: Z → X (directed path)
-    if (!hasDirectedPath(Z, X)) return;
-    // Condition 2: Z has no direct edge to Y
-    if (state.edges.some(e => e.from === Z && e.to === Y)) return;
-    // Condition 3: Z and Y are d-separated given {X} when outgoing edges from X are removed
-    // Simplified: check that all paths from Z to Y pass through X
-    const allZYPaths = findAllPaths(Z, Y);
-    const allPassThroughX = allZYPaths.every(path => path.includes(X));
-    if (!allPassThroughX) return;
-    // Also check no common cause between Z and Y (Z independent of U confounders) via
-    // d-separation: Z ⊥⊥ Y | X in the observational graph. A parent P of Z only
-    // disqualifies Z if P reaches Y some OTHER way than through Z itself — reaching Y via
-    // P→Z→X→Y is exactly the instrument's own (allowed) mechanism, not a confound. Using
-    // plain hasDirectedPath(p, Y) here (without excluding Z from the search) rejected
-    // every instrument with any ancestor at all, since P→Z→X→Y always exists once Z→X
-    // does — confirmed empirically: an instrument Z with one harmless upstream ancestor
-    // was wrongly excluded, while that ancestor got wrongly accepted as "the" instrument
-    // instead (see memory: project_golem_builder_mediator_collider_bug).
-    const parentsZ = getParents(Z);
-    const hasSharedCauseWithY = parentsZ.some(p => p !== X && hasDirectedPathAvoiding(p, Y, Z));
-    if (hasSharedCauseWithY) return;
-    instruments.push(Z);
-  });
-  return instruments;
+  // Z ist ein Instrument für X → Y, wenn (1) Z eine Ursache von X ist (Relevanz) und (2) Z von Y d-separiert ist,
+  // sobald alle von X ausgehenden Kanten entfernt sind (Pearl 2009): kein direkter Effekt auf Y (Ausschluss) und
+  // keine gemeinsame Ursache mit Y. Die frühere Pfad-Näherung ("jeder Z–Y-Pfad enthält X") übersah Fälle, in denen
+  // ein Collider den Pfad blockiert, und lehnte Instrumente mit Elternknoten fälschlich ab.
+  const cands = state.nodes.filter(n => n.id !== X && n.id !== Y && !n.latent && hasDirectedPath(n.id, X)).map(n => n.id);
+  const saved = state.edges;
+  state.edges = saved.filter(e => e.from !== X);
+  try { return cands.filter(z => dSeparated(z, Y, [])); }
+  finally { state.edges = saved; }
 }
 
 // Topological sort of a subset of node IDs using hasDirectedPath
@@ -1532,7 +1555,7 @@ function detectFrontDoor() {
   // Collect all intermediate nodes on causal paths
   const candidateSet = new Set();
   causalPaths.forEach(path => {
-    for (let i = 1; i < path.length - 1; i++) candidateSet.add(path[i]);
+    for (let i = 1; i < path.length - 1; i++) { const nd = state.nodes.find(n => n.id === path[i]); if (nd && !nd.latent) candidateSet.add(path[i]); }   // M muss gemessen sein
   });
 
   // Keep only candidates satisfying conditions 2 & 3 individually
@@ -1637,6 +1660,24 @@ function topoSort() {
     });
   }
   return order;
+}
+
+// Knotennamen werden 1:1 als R-Variablennamen in den erzeugten Code geschrieben. Ungültige Zeichen
+// (Leerzeichen, Bindestrich, Klammern …), eine führende Ziffer oder Namen, die Variablen des erzeugten
+// Skripts überschreiben würden (n = Stichprobengröße, dat = Datensatz, id = ID-Spalte) und R-Schlüssel-
+// wörter erzeugen sonst fehlerhaften Code. Deshalb werden Namen beim Anlegen/Umbenennen/Laden bereinigt.
+const R_RESERVED_NAMES = new Set(['if','else','repeat','while','function','for','next','break','in','TRUE','FALSE','NULL','Inf','NaN','NA','NA_integer_','NA_real_','NA_character_','n','dat','id','node','graph']);  // node/graph: rejected by dagitty as keywords (even when quoted)
+function toRName(raw) {
+  let s = String(raw == null ? '' : raw).trim().replace(/[^\p{L}\p{N}._]+/gu, '_').replace(/^[_.]+/, '').replace(/_+$/, '');
+  if (!s) s = 'var';
+  if (/^[0-9]/.test(s)) s = 'v' + s;
+  if (R_RESERVED_NAMES.has(s)) s += '_var';
+  return s;
+}
+function uniqueRName(base, taken) {
+  let s = base, k = 2;
+  while (taken.has(s)) { s = base + '_' + k; k++; }
+  return s;
 }
 
 function getNodeName(id) {
@@ -2053,6 +2094,8 @@ function updateEdgeStatus() {
 function addNode(name, forceLatent) {
   name = name.trim();
   if (!name) { showToast('Please enter a name.'); return; }
+  { const clean = toRName(name);
+    if (clean !== name) { showToast(`Name adjusted: “${name}” → “${clean}” (valid R variable name)`, 'ok'); name = clean; } }
   if (state.nodes.some(n=>n.name===name)) { showToast(`Node "${name}" already exists.`); return; }
   const rect = container.getBoundingClientRect();
   const W = rect.width || 600, H = rect.height || 400;
@@ -2095,8 +2138,11 @@ function beginRenameNode(nodeId) {
 function commitRenameNode(nodeId, rawName) {
   const node = state.nodes.find(n=>n.id===nodeId);
   if (!node) return;
-  const newName = rawName.trim();
+  let newName = rawName.trim();
   if (!newName || newName === node.name) { renderSidebar(); return; }
+  { const clean = toRName(newName);
+    if (clean !== newName) { showToast(`Name adjusted: “${newName}” → “${clean}” (valid R variable name)`, 'ok'); newName = clean; }
+    if (newName === node.name) { renderSidebar(); return; } }
   if (state.nodes.some(n=>n.id!==nodeId && n.name===newName)) {
     showToast(`Node "${newName}" already exists.`);
     renderSidebar();
@@ -2227,6 +2273,7 @@ function updateOverlay() {
 // ANALYSIS
 // ============================================================
 function runAnalysis() {
+  state.directResult = null;
   state.highlightAdjSet = new Set();
   state.highlightColliders = new Set();
 
@@ -2258,7 +2305,13 @@ function runAnalysis() {
   const effectType = getEffectType();
   const mediators = getMediators();
   const mediatorIds = [...mediators].filter(id => id !== X && id !== Y);
-  if (effectType === 'direct') {
+  const directRes = effectType === 'direct' ? findDirectAdjustmentSets() : null;
+  state.directResult = directRes;
+  const useDirect = !!(directRes && directRes.minimal.length > 0);
+  if (useDirect) {
+    mustControlIds = directRes.minimal[0].filter(id => directRes.minimal.every(s => s.includes(id)));
+    state.highlightAdjSet = new Set(directRes.minimal[0]);
+  } else if (effectType === 'direct') {
     mediatorIds.forEach(id => state.highlightAdjSet.add(id));
   }
 
@@ -2318,9 +2371,14 @@ function runAnalysis() {
     } else if (minimal.length === 0) {
       summaryHtml = '<div class="msg-warn">No valid adjustment set found!</div>';
     } else {
-      summaryHtml = `<div class="msg-ok">Valid adjustment set: {${minimal[0].map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
+      summaryHtml = `<div class="msg-ok">Valid adjustment set: {${(useDirect ? directRes.minimal[0] : minimal[0]).map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
     }
   }
+  if (effectType === 'direct' && directRes && directRes.minimal.length === 0) {
+    summaryHtml += '<div class="msg-warn">⚠ No valid adjustment set exists for the direct effect (e.g. a latent confounder between mediator and outcome).</div>';
+  }
+  { const latMed = getLatentMediators();
+    if (latMed.length) summaryHtml += `<div class="msg-warn">⚠ Latent mediator [${latMed.map(escHtml).join(', ')}] on a causal path: unobserved, so it can be neither adjusted for nor modeled — a direct/indirect decomposition is not possible this way.</div>`; }
   summaryEl.innerHTML = summaryHtml;
 
   // Render analysis panel
@@ -2328,8 +2386,9 @@ function runAnalysis() {
 
   // Must control — Confounder + (Mediator wenn direkter Effekt)
   const mustEl = document.getElementById('mustControl');
-  const mustDirectMediators = effectType === 'direct' ? mediatorIds : [];
-  const allMust = [...new Set([...mustControlIds, ...mustDirectMediators])];
+  const mustDirectMediators = effectType === 'direct' ? mediatorIds.filter(id => !useDirect || mustControlIds.includes(id)) : [];
+  const mustConfIds = mustControlIds.filter(id => !(useDirect && mediatorIds.includes(id)));
+  const allMust = [...new Set([...mustConfIds, ...mustDirectMediators])];
   if (allMust.length === 0) {
     if (result.backdoorPaths.length === 0 && mustDirectMediators.length === 0) {
       mustEl.innerHTML = '<li><span class="empty-note">None – no backdoor path</span></li>';
@@ -2337,7 +2396,7 @@ function runAnalysis() {
       mustEl.innerHTML = '<li><span class="empty-note">∅ (empty set suffices)</span></li>';
     }
   } else {
-    mustEl.innerHTML = mustControlIds.map(id =>
+    mustEl.innerHTML = mustConfIds.map(id =>
       `<li>✓ ${escHtml(getNodeName(id))} <span style="color:var(--ink3);font-size:.72rem;">(Confounder)</span></li>`
     ).join('') + mustDirectMediators.map(id =>
       `<li>✓ ${escHtml(getNodeName(id))} <span style="color:var(--a4);font-size:.72rem;">(Mediator – direct effect)</span></li>`
@@ -2383,9 +2442,10 @@ function runAnalysis() {
   // independently sufficient if either alone blocks every backdoor path, and a user may prefer
   // whichever is easier to measure in their actual data.
   const altWrap = document.getElementById('altAdjSetsWrap');
-  if (minimal.length > 1) {
+  const altSets = useDirect ? directRes.minimal : minimal;
+  if (altSets.length > 1) {
     altWrap.style.display = '';
-    document.getElementById('altAdjSetsList').innerHTML = minimal.map((set, i) =>
+    document.getElementById('altAdjSetsList').innerHTML = altSets.map((set, i) =>
       `<li>${i === 0 ? '★' : '○'} {${set.length > 0 ? set.map(id => escHtml(getNodeName(id))).join(', ') : '∅'}}${i === 0 ? ' <span style="color:var(--ink3);font-size:.72rem;">(shown above)</span>' : ''}</li>`
     ).join('');
   } else {
@@ -2403,7 +2463,7 @@ function runAnalysis() {
       // as "Causal" simply because it doesn't start with an arrow into X.
       const isCausal = isFullyDirectedPath(path);
       const isBD = !isCausal && isBackdoorPath(path);
-      const isActive = isPathActive(path, minimal[0] || []);
+      const isActive = isPathActive(path, useDirect ? directRes.minimal[0] : (minimal[0] || []));
       const pathStr = buildPathString(path);
       const hasLatent = path.some(id => result.latentIds.has(id));
       let badges = '';
@@ -2695,7 +2755,8 @@ function updatePartB() {
 
 function getEdgeCoef(edgeId) {
   const input = document.querySelector(`[data-edge-coef="${edgeId}"]`);
-  return input ? parseFloat(input.value) || 0.5 : 0.5;
+  const v = input ? parseFloat(input.value) : NaN;
+  return Number.isFinite(v) ? v : 0.5;   // 0 ist ein gültiger Koeffizient (Nulleffekt); nur ein leeres/ungültiges Feld nutzt den Standard 0.5
 }
 
 function getEdgeModerator(edgeId) {
@@ -2734,11 +2795,14 @@ function updateEdgeCoefTable() {
 
   tbody.innerHTML = state.edges.map(e => {
     const val    = existing[e.id]    !== undefined ? existing[e.id]    : '0.5';
-    const modVal = existingMod[e.id] !== undefined ? existingMod[e.id] : '';
+    // Nachfahren des Zielknotens sind als Moderator ausgeschlossen (zirkuläre Datengenerierung)
+    const toDesc = new Set(getDescendants(e.to));
+    const allowedMods = observableNodes.filter(n => n.id !== e.from && n.id !== e.to && !toDesc.has(n.id));
+    let modVal = existingMod[e.id] !== undefined ? existingMod[e.id] : '';
+    if (modVal && !allowedMods.some(n => n.name === modVal)) modVal = '';
     const intVal = existingInt[e.id] !== undefined ? existingInt[e.id] : '0.3';
     const intDis = !modVal ? ' disabled style="opacity:.35;cursor:not-allowed"' : '';
-    const modOpts = observableNodes
-      .filter(n => n.id !== e.from && n.id !== e.to)
+    const modOpts = allowedMods
       .map(n => `<option value="${escHtml(n.name)}"${modVal===n.name?' selected':''}>${escHtml(n.name)}</option>`)
       .join('');
     return `<tr>
@@ -3073,14 +3137,31 @@ function buildNodeSimLines() {
     });
   }
 
-  const nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
+  let nonRoots = order.map(id=>state.nodes.find(n=>n.id===id)).filter(nd=>nd&&getParents(nd.id).length>0);
+  // Moderators are extra dependencies: a moderator that is itself endogenous must be generated BEFORE
+  // the node it moderates (otherwise R fails with "object not found").
+  {
+    const extraDeps = {};
+    state.edges.forEach(e => {
+      const mod = getEdgeModerator(e.id);
+      const mn = mod && state.nodes.find(n => n.name === mod);
+      if (mn && getParents(mn.id).length > 0 && mn.id !== e.to) (extraDeps[e.to] = extraDeps[e.to] || new Set()).add(mn.id);
+    });
+    if (Object.keys(extraDeps).length) {
+      const done = new Set(), res = [], pending = nonRoots.slice();
+      while (pending.length) {
+        const i = pending.findIndex(nd => [...getParents(nd.id), ...(extraDeps[nd.id] || [])]
+          .every(p => done.has(p) || !pending.some(q => q.id === p)));
+        const nd = pending.splice(i < 0 ? 0 : i, 1)[0]; // i<0 only for a cycle through a moderator: keep order
+        done.add(nd.id); res.push(nd);
+      }
+      nonRoots = res;
+    }
+  }
   if (nonRoots.length > 0) {
-    const latentNonRoots = nonRoots.filter(nd => latentIds.has(nd.id));
-    const observedNonRoots = nonRoots.filter(nd => !latentIds.has(nd.id));
-
-    if (latentNonRoots.length > 0) {
-      lines.push('', '# Latent endogenous nodes (unobservable)');
-      latentNonRoots.forEach(nd => {
+    lines.push('', '# Endogenous nodes (topological order; latent nodes are marked)');
+    nonRoots.forEach(nd => {
+      if (latentIds.has(nd.id)) {
         const parents = getParents(nd.id);
         const stdSig = STD_MODE ? computeStdSigma(nd.id) : null;
         const sigma = STD_MODE ? stdSig.sigma.toFixed(4) : getNonRootSd(nd.id);
@@ -3099,12 +3180,7 @@ function buildNodeSimLines() {
         });
         commentParts.push(STD_MODE ? `sigma=${sigma} [auto${stdSig.approx ? ', ≈ (non-normal ancestor)' : ''}]` : `sigma=${sigma}`);
         lines.push(`${nd.name} <- rnorm(n, ${muTerms.join(' + ')}, ${sigma})  # latent — not in dataset! ${commentParts.join(', ')}`);
-      });
-    }
-
-    if (observedNonRoots.length > 0) {
-      lines.push('', '# Endogenous observable nodes (topological order)');
-      observedNonRoots.forEach(nd => {
+      } else {
         const parents = getParents(nd.id);
         const dist  = getNonRootDist(nd.id);
         const stdSig = STD_MODE ? computeStdSigma(nd.id) : null;
@@ -3143,11 +3219,11 @@ function buildNodeSimLines() {
           commentParts.push(`shape=φ=${shapeVal}`);
           lines.push(`${nd.name} <- rgamma(n, shape = ${shapeVal}, rate = ${shapeVal} / exp(${muExpr}))  # ${commentParts.join(', ')}`);
         } else {
-          commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Var(predictor))${stdSig.approx ? ', ≈' : ''}]` : `sigma=${sigma}`);
+          commentParts.push(STD_MODE ? `sigma=${sigma} [auto, sqrt(1-Var(predictor))${stdSig.approx ? ', ≈' : ''}]${stdSig.invalid ? '  ⚠ coefficients explain ≥ 100 % of the variance (σ = 0) — reduce the coefficients!' : ''}` : `sigma=${sigma}`);
           lines.push(`${nd.name} <- rnorm(n, ${muExpr}, ${sigma})  # ${commentParts.join(', ')}`);
         }
-      });
-    }
+      }
+    });
   }
 
   // Build dat with only non-latent nodes
@@ -3183,6 +3259,7 @@ function getAdjSetNames() {
   const baseSet = (minimal && minimal.length > 0) ? minimal[0].map(id => getNodeName(id)) : [];
   // For direct effect, also add mediators
   if (getEffectType() === 'direct') {
+    if (state.directResult && state.directResult.minimal.length > 0) return state.directResult.minimal[0].map(id => getNodeName(id));
     const mediators = getMediators();
     const X = state.exposure, Y = state.outcome;
     const medNames = [...mediators].filter(id => id !== X && id !== Y).map(id => getNodeName(id));
@@ -3294,6 +3371,7 @@ function generateMediationCode() {
 
   const lines = [];
   lines.push(...(backdoorUnidentifiableWarning() || []));
+  lines.push(...latentMediatorWarningLines());
   lines.push('# MEDIATION ANALYSIS — Bayesian joint model (Pearl 2009 / McElreath SR 2020)');
   lines.push(`# Mediator(s): ${medNames.join(', ')}`);
   lines.push('# All equations estimated jointly for a full joint posterior over the direct,');
@@ -3387,8 +3465,10 @@ function generateBrmsCode() {
   // Check special patterns
   const instruments = X && Y ? detectInstruments() : [];
   const realMediators = X && Y ? [...getMediators()].filter(id => id !== X && id !== Y) : [];
+  const adjInfoIV = X && Y ? findAdjustmentSets() : null;
+  const needsLatentWorkaroundB = !!(adjInfoIV && adjInfoIV.unblockableLatentPaths.length > 0);
 
-  if (instruments.length > 0) {
+  if (needsLatentWorkaroundB && instruments.length > 0) {
     const zNames = instruments.map(id => getNodeName(id));
     const zStr = zNames.join(' + ');
     const zLabel = zNames.join(', ');
@@ -3479,6 +3559,7 @@ function generateTMBCode() {
     const adjComment = adjNames.length > 0 ? adjNames.join(', ') : '(no adjustment set needed)';
     baseCode = [
       ...(backdoorUnidentifiableWarning() || []),
+      ...latentMediatorWarningLines(),
       'library(glmmTMB)',
       `# Adjusted for: ${adjComment}`,
       '',
@@ -3852,12 +3933,25 @@ function generateIVPowerCode(X, Y, instruments) {
   return lines.join('\n');
 }
 
+// Mediatoren, die auf einem kausalen Pfad X → … → Y liegen, der NUR über beobachtete Knoten läuft
+// (Voraussetzung für das Pfadprodukt a×b; ein Pfad über einen latenten Knoten ist nicht schätzbar).
+function observedPathMediators(mediators) {
+  const X = state.exposure, Y = state.outcome, found = new Set();
+  (function walk(node, path) {
+    if (node === Y) { path.slice(1, -1).forEach(id => found.add(id)); return; }
+    getChildren(node).filter(c => !path.includes(c) && (c === Y || !state.nodes.find(n => n.id === c).latent))
+      .forEach(c => walk(c, [...path, c]));
+  })(X, [X]);
+  return mediators.filter(m => found.has(m));
+}
+
 function generatePowerCode() {
   const X = state.exposure, Y = state.outcome;
   if (!X || !Y) return '# Please set exposure and outcome first.';
 
   const instruments = detectInstruments();
-  if (instruments.length > 0) return generateIVPowerCode(X, Y, instruments);
+  const adjInfoIVP = findAdjustmentSets();
+  if (instruments.length > 0 && adjInfoIVP && adjInfoIVP.unblockableLatentPaths.length > 0) return generateIVPowerCode(X, Y, instruments);
 
   // Front-door *eligibility* (detectFrontDoor()) is a purely graph-theoretic property that
   // holds for almost any pure mediation DAG, even ones with no unobserved confounding at
@@ -3944,8 +4038,13 @@ function generatePowerCode() {
   // directly, independent of getEffectType()/getAdjSetNames().
   const mediators = topologicalSort([...getMediators()].filter(id => id !== X && id !== Y));
   const mediatorNames = mediators.map(getNodeName);
+  const pathMediators = observedPathMediators(mediators);
   const baseAdjNames = (state.analysisResult?.minimal?.[0] || []).map(getNodeName); // backdoor set only
-  const directAdjNames = [...new Set([...baseAdjNames, ...mediatorNames])]; // backdoor set + mediators
+  // Direkter Effekt: eigene Suche (Mediatoren + ggf. Confounder zwischen Mediator und Outcome); Fallback: Backdoor-Set + Mediatoren
+  const directRes = mediators.length > 0 ? findDirectAdjustmentSets() : null;
+  const directAdjNames = (directRes && directRes.minimal.length > 0)
+    ? directRes.minimal[0].map(getNodeName)
+    : [...new Set([...baseAdjNames, ...mediatorNames])];
 
   // Moderator interaction on X's edge into Y (independent of which adjustment set is used):
   const yIntPairs = state.edges.filter(e => e.to === Y).flatMap(e => {
@@ -3975,6 +4074,7 @@ function generatePowerCode() {
   const directRhs = buildRHS(directAdjNames), directNullRhs = buildNullRHS(directAdjNames);
 
   const lines = [];
+  lines.push(...latentMediatorWarningLines());
   lines.push('# ============================================================');
   lines.push('# POWER SIMULATION (Golem Builder) — Monte Carlo power analysis');
   lines.push(`# ${xName} → ${yName}: TOTAL, DIRECT and INDIRECT effect (always all three —`);
@@ -4046,12 +4146,12 @@ function generatePowerCode() {
   }
 
   // ── Indirect (mediated) effect ──
-  if (mediators.length > 0) {
+  if (pathMediators.length > 0) {
     const adjIds = (state.analysisResult?.minimal?.[0] || []);
     lines.push('');
     lines.push('# ============================================================');
     lines.push(`# INDIRECT (mediated) EFFECT ${xName} → … → ${yName}`);
-    lines.push(`# Mediator(s): ${mediators.map(getNodeName).join(', ')}`);
+    lines.push(`# Mediator(s): ${pathMediators.map(getNodeName).join(', ')}`);
     lines.push('# Three approaches per path, all testing the same null H0: a×b = 0:');
     lines.push('#  1) Joint significance (MacKinnon et al. 2002; Fritz & MacKinnon 2007): "detected"');
     lines.push('#     if EVERY edge along the path is individually (Wald test) significant. This');
@@ -4067,7 +4167,7 @@ function generatePowerCode() {
     lines.push('# ============================================================');
     lines.push('');
     emitPathProductBlock(lines, {
-      X, Y, xName, mediators, adjIds, coefName,
+      X, Y, xName, mediators: pathMediators, adjIds, coefName,
       jointLabelPrefix: 'indirect_via_', aggregateNoun: 'indirect path',
     });
   } else {
@@ -4081,6 +4181,8 @@ function generatePowerCode() {
 // ============================================================
 // DAGITTY EXPORT
 // ============================================================
+// dagitty kennt nur ASCII-Namen ([0-9a-zA-Z_.]); alle anderen (z.B. Umlaute) müssen in Anführungszeichen stehen.
+function dgName(n) { return /^[A-Za-z0-9_.]+$/.test(n) ? n : '"' + n + '"'; }
 function generateDagittyCode() {
   const X = state.exposure, Y = state.outcome;
   const xName = X ? getNodeName(X) : 'X';
@@ -4097,16 +4199,17 @@ function generateDagittyCode() {
     if (nd.latent) attrs.push('latent');
     const px = (nd.x/100).toFixed(2), py = (-nd.y/100).toFixed(2);
     attrs.push(`pos="${px},${py}"`);
-    return `  ${nd.name} [${attrs.join(',')}]`;
+    return `  ${dgName(nd.name)} [${attrs.join(',')}]`;
   });
-  const edgeLines = state.edges.map(e => `  ${getNodeName(e.from)} -> ${getNodeName(e.to)}`);
+  const edgeLines = state.edges.map(e => `  ${dgName(getNodeName(e.from))} -> ${dgName(getNodeName(e.to))}`);
   const dagBlock = ["dag <- dagitty('dag {", ...nodeLines, ...edgeLines, "}')"].join('\n');
 
   // Own summary instead of getAdjSetNames(): its catch-all "no adjustment needed" message
   // also fires when NO valid set exists at all (e.g. an unblockable backdoor path through a
   // latent variable, the IV case) — that's a completely different situation from "no
   // confounding present", so it's kept clearly distinct here.
-  const minimal = state.analysisResult ? state.analysisResult.minimal : null;
+  const dRes = (effect === 'direct' && X && Y) ? findDirectAdjustmentSets() : null;
+  const minimal = dRes ? dRes.minimal : (state.analysisResult ? state.analysisResult.minimal : null);
   let adjComment;
   if (!minimal || minimal.length === 0) {
     adjComment = 'no valid set — backdoor path only blockable via a latent variable (not identifiable by adjustment)';
@@ -4148,8 +4251,12 @@ function generateDagittyCode() {
       '',
       `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}"),`,
       `               "Minimal adjustment sets (effect: ${effect})")`,
-      `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}", type = "all"),`,
-      '               "All valid adjustment sets")',
+      ...(effect === 'total' ? [
+        `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}", type = "all"),`,
+        '               "All valid adjustment sets")',
+      ] : [
+        '# For direct effects dagitty only supports minimal sets (type = "all" raises an error).',
+      ]),
       ''
     );
   }
@@ -4520,7 +4627,9 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
   }
   const X = state.exposure, Y = state.outcome;
   const getName = id => state.nodes.find(n => n.id === id)?.name || id;
-  const adjSetIds = state.analysisResult?.minimal?.[0] || [];
+  const effectTypeForSet = getEffectType();
+  const dResG = effectTypeForSet === 'direct' ? findDirectAdjustmentSets() : null;
+  const adjSetIds = (dResG && dResG.minimal.length > 0) ? dResG.minimal[0] : (state.analysisResult?.minimal?.[0] || []);
   const adjSetNames = adjSetIds.map(getName);
   const exposureName = getName(X);
   const outcomeName  = getName(Y);
@@ -4807,6 +4916,46 @@ function exportDagJSON() {
   URL.revokeObjectURL(url);
 }
 
+// Prüft eine geladene DAG-Datei, BEVOR der Zustand überschrieben wird: Struktur, eindeutige IDs, Kanten nur zwischen
+// vorhandenen Knoten, keine Schleifen/Duplikate/Zyklen; Namen werden zu gültigen R-Namen bereinigt (siehe toRName()).
+function validateDagImport(data) {
+  const bad = msg => ({ ok: false, msg });
+  const idOk = v => typeof v === 'string' && v.length > 0 && !/["'\\\[\]]/.test(v);
+  if (data.nodes.length === 0) return bad('The file contains no nodes.');
+  if (data.nodes.length > 60) return bad('The file contains too many nodes (max. 60).');
+  const ids = new Set(), names = new Set(), nameMap = {}, nodes = [];
+  for (const n of data.nodes) {
+    if (!n || typeof n !== 'object' || !idOk(n.id)) return bad('Invalid node in the file (ID missing or not allowed).');
+    if (ids.has(n.id)) return bad('Duplicate node ID in the file.');
+    ids.add(n.id);
+    const nm = uniqueRName(toRName(n.name), names);
+    names.add(nm); nameMap[n.name] = nm;
+    nodes.push({ id: n.id, name: nm,
+      x: Number.isFinite(+n.x) ? +n.x : 60 + 40 * nodes.length, y: Number.isFinite(+n.y) ? +n.y : 60 + 50 * (nodes.length % 4),
+      latent: !!n.latent });
+  }
+  const edges = [], seenPair = new Set(), seenId = new Set();
+  for (const e of data.edges) {
+    if (!e || !idOk(e.id) || seenId.has(e.id)) return bad('Invalid or duplicate edge ID in the file.');
+    if (!ids.has(e.from) || !ids.has(e.to)) return bad('An edge refers to a node that is not in the file.');
+    if (e.from === e.to) return bad('The file contains a self-loop edge.');
+    const key = e.from + '>' + e.to;
+    if (seenPair.has(key)) return bad('The file contains the same edge more than once.');
+    seenPair.add(key); seenId.add(e.id);
+    edges.push({ id: e.id, from: e.from, to: e.to });
+  }
+  const indeg = {}, kids = {};
+  nodes.forEach(n => { indeg[n.id] = 0; kids[n.id] = []; });
+  edges.forEach(e => { indeg[e.to]++; kids[e.from].push(e.to); });
+  const queue = nodes.filter(n => indeg[n.id] === 0).map(n => n.id);
+  let seen = 0;
+  while (queue.length) { const c = queue.shift(); seen++; kids[c].forEach(k => { if (--indeg[k] === 0) queue.push(k); }); }
+  if (seen < nodes.length) return bad('The file contains a cycle — a DAG must be acyclic.');
+  return { ok: true, nodes, edges, nameMap,
+    exposure: ids.has(data.exposure) ? data.exposure : null,
+    outcome: ids.has(data.outcome) ? data.outcome : null };
+}
+
 function importDagJSON(file) {
   if (!file) return;
   if (state.nodes.length > 0 && !confirm('This will overwrite the current canvas. Continue?')) return;
@@ -4819,10 +4968,13 @@ function importDagJSON(file) {
       showToast('Invalid DAG file format.'); return;
     }
 
-    state.nodes = data.nodes;
-    state.edges = data.edges.map(e => ({ id: e.id, from: e.from, to: e.to }));
-    state.exposure = data.exposure || null;
-    state.outcome = data.outcome || null;
+    const chk = validateDagImport(data);
+    if (!chk.ok) { showToast(chk.msg); return; }
+    const renamed = Object.keys(chk.nameMap).filter(k => chk.nameMap[k] !== k);
+    state.nodes = chk.nodes;
+    state.edges = chk.edges;
+    state.exposure = chk.exposure;
+    state.outcome = chk.outcome;
     state.selectedNode = null; state.highlightedNode = null; state.selectedEdge = null; state.dragging = null;
     state.analysisResult = null;
     state.highlightAdjSet = new Set(); state.highlightColliders = new Set();
@@ -4848,7 +5000,7 @@ function importDagJSON(file) {
       if (coefInp && e.coef !== undefined) coefInp.value = e.coef;
       const modSel = document.querySelector(`[data-edge-mod="${e.id}"]`);
       if (modSel && e.moderator) {
-        modSel.value = e.moderator;
+        modSel.value = chk.nameMap[e.moderator] || e.moderator;
         toggleIntInput(modSel, e.id);
       }
       const intInp = document.querySelector(`[data-edge-int="${e.id}"]`);
@@ -4881,7 +5033,7 @@ function importDagJSON(file) {
     // plain values were just restored above.
     if (!!data.stdMode !== STD_MODE) toggleStdMode();
 
-    showToast('DAG loaded.', 'ok');
+    showToast(renamed.length ? 'DAG loaded. Names were adjusted to valid R names: ' + renamed.map(k => k + ' → ' + chk.nameMap[k]).join(', ') : 'DAG loaded.', 'ok');
   };
   reader.readAsText(file);
 }
