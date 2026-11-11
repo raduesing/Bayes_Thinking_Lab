@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){['btn-theme'].forEach(function(id){var b=document.getElementById(id);if(b)b.textContent='🌙 Dark';});});})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="DAGs ohne Vorkenntnisse verstehen: Warum Information fließt, was Confounder, Mediator und Collider sind und was Adjustieren für den gesuchten kausalen Effekt bedeutet — mit simulierten Daten.">
+<meta property="og:title" content="DAGs verstehen &amp; adjustieren — Bayes Thinking Lab">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bayes Thinking Lab">
+<title>DAGs verstehen &amp; adjustieren — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+html{font-size:18px;scrollbar-gutter:stable}
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--th:var(--a5);
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     height:100vh;overflow:hidden;display:flex;flex-direction:column;transition:background .25s,color .25s}
+
+/* ── HEADER ── */
+.hdr-hrow{background:var(--paper);display:flex;justify-content:space-between;align-items:flex-start;
+  padding:1rem 1.8rem .7rem;gap:1rem;flex-wrap:wrap;flex-shrink:0;border-bottom:1px solid var(--border)}
+.hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.hdr-h1 em{font-style:italic;color:var(--th)}
+.hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;margin-top:.1rem}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--th);color:var(--th)}
+.glo-link{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.glo-link:hover{color:var(--th)}
+
+/* ── LAYOUT ── */
+#shell{flex:1;overflow-y:auto;min-height:0}
+#wrap{max-width:1760px;margin:0 auto;padding:1.5rem 1.2rem 3rem}
+
+/* ── INTRO ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.55rem 1rem;margin-bottom:.85rem;background:var(--panel);
+  border:1px solid var(--border);font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.intro-strip em{color:var(--th);font-style:normal}
+.intro-strip strong{color:var(--ink)}
+.tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--th);color:var(--th)}
+#intro-toggle-btn .tarr{display:inline-block;width:1em;text-align:center}
+.intro-box{background:var(--paper);border:2px solid var(--th);padding:1.2rem 1.6rem;margin-bottom:.85rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.9}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin:1rem 0 .55rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.35rem}
+.intro-box .ib-head:first-child{margin-top:0}
+.intro-box b{color:var(--ink)}
+.intro-box .ib-n{font-size:1.6em;line-height:1;vertical-align:-.12em;color:var(--th)}
+.intro-box .ib-aside{margin-top:.6rem;padding:.45rem .7rem;border-left:3px solid var(--a2);
+  background:var(--panel);font-size:.72rem;line-height:1.75}
+
+/* ── STAGE TABS ── */
+.stage-tabs-label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3);margin-bottom:.5rem;display:flex;align-items:center;gap:.35rem}
+.stage-tabs-label .arrow{color:var(--th);font-weight:600}
+.stage-tabs{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:.85rem}
+.stab{flex:1 1 190px;font-family:'DM Mono',monospace;padding:.6rem .9rem;background:var(--panel);
+  border:1.5px solid var(--border);cursor:pointer;text-align:left;color:var(--ink2);transition:all .15s;
+  display:flex;align-items:center;gap:.65rem}
+.stab:hover{border-color:var(--th)}
+.stab .stab-n{flex-shrink:0;width:1.7rem;height:1.7rem;border-radius:50%;border:1.5px solid var(--border);color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;font-size:.85rem;transition:all .15s}
+.stab .stab-txt{display:flex;flex-direction:column;gap:.1rem}
+.stab .stab-title{font-family:'Fraunces',Georgia,serif;font-size:.95rem;font-weight:600;color:var(--ink2)}
+.stab .stab-sub{font-size:.65rem;color:var(--ink3)}
+.stab.sel{border-color:var(--th);background:color-mix(in srgb,var(--th) 14%,var(--panel));
+  box-shadow:0 0 0 1px var(--th),0 0 14px color-mix(in srgb,var(--th) 35%,transparent)}
+.stab.sel .stab-n{background:var(--th);border-color:var(--th);color:var(--paper)}
+.stab.sel .stab-title{color:var(--th)}
+
+/* ── NARRATIVE ── */
+.narr{background:var(--paper);border:1px solid var(--border);padding:1rem 1.5rem;margin-bottom:.85rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.8}
+.narr b{color:var(--ink)}.narr em{color:var(--th);font-style:normal}
+.narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.38rem}
+.ntag{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.1rem .38rem;border:1px solid var(--th);color:var(--th);white-space:nowrap}
+.narr-merk{margin-top:.7rem;padding:.5rem .8rem;border-left:3px solid var(--a3);background:var(--panel)}
+.quote{margin:.4rem 0 .6rem;padding:.5rem .9rem;border-left:3px solid var(--th);background:var(--panel);color:var(--ink);font-style:italic}
+
+/* ── PANELS ── */
+.s-grid{display:grid;gap:1px;background:var(--grid)}
+.s-grid.g11{grid-template-columns:1fr 1fr}
+.s-grid.g21{grid-template-columns:1.25fr 1fr}
+.s-panel{background:var(--paper);padding:1.1rem 1.2rem;min-width:0}
+.s-title{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink2);border-bottom:1px solid var(--grid);padding-bottom:.28rem;margin-bottom:.85rem}
+@media(max-width:1000px){.s-grid.g11,.s-grid.g21{grid-template-columns:1fr}}
+
+/* ── CONTROLS ── */
+.fam-btns{display:flex;gap:1px;background:var(--grid);margin-bottom:.7rem;flex-wrap:wrap}
+.fbtn{flex:1 1 auto;font-family:'DM Mono',monospace;font-size:.75rem;padding:.42rem .6rem;background:var(--paper);
+  cursor:pointer;text-align:center;border:none;color:var(--ink2);transition:all .13s}
+.fbtn:hover{background:var(--panel)}
+.fbtn.sel{background:var(--th);color:var(--paper)}
+.ctrl-bar{display:flex;flex-wrap:wrap;gap:.65rem;align-items:center;margin:.7rem 0}
+.cbtn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.3rem .75rem;border:1.5px solid var(--border);
+  background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;white-space:nowrap}
+.cbtn:hover{border-color:var(--th);color:var(--th)}
+.cbtn.sel{background:var(--th);color:var(--paper);border-color:var(--th)}
+.tb-lbl{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:.5rem 0 .25rem}
+.chk{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);display:flex;align-items:center;gap:.4rem;cursor:pointer}
+.chk input{accent-color:var(--th)}
+
+/* ── Badges/Boxen ── */
+.badge{display:inline-block;font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+  padding:.08rem .38rem;border:1px solid;white-space:nowrap}
+.badge.bad{border-color:var(--a1);color:var(--a1)}
+.badge.good{border-color:var(--a3);color:var(--a3)}
+.badge.kaus{border-color:var(--a2);color:var(--a2)}
+.badge.nk{border-color:var(--ink3);color:var(--ink3)}
+.why{margin-top:.8rem;padding:.6rem .85rem;border-left:3px solid var(--th);background:var(--panel);
+  font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.8;color:var(--ink2)}
+.why b{color:var(--ink)}
+.hint-box{padding:.5rem .75rem;border-left:3px solid var(--a2);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.7rem;line-height:1.75;color:var(--ink2);margin:.6rem 0}
+.hint-box b{color:var(--ink)}
+.verdict{padding:.65rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.74rem;line-height:1.75;color:var(--ink2);margin-bottom:.7rem}
+.verdict b{color:var(--ink)}
+.verdict.vbad{border-color:var(--a1)}
+.verdict.vgood{border-color:var(--a3)}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink2);margin:.4rem 0 0}
+.legend i{display:inline-block;width:.85em;height:.85em;vertical-align:-.1em;margin-right:.3em;border:2px solid var(--ink2);background:var(--paper)}
+.legend i.fx{border-color:var(--a2)}.legend i.fy{border-color:var(--a4)}.legend i.fz{background:var(--a6);border-color:var(--a6)}
+.legend i.gl1{border:0;background:color-mix(in srgb,var(--a2) 40%,transparent)}
+.legend i.gl2{border:0;background:color-mix(in srgb,var(--a1) 40%,transparent)}
+
+/* ── SVG ── */
+svg.dg{display:block;width:100%;height:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.dg text{font-family:'DM Mono',monospace}
+.gwrap{border:1px solid var(--grid);background:var(--bg)}
+
+/* ── Pfadliste ── */
+.plist{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-bottom:.8rem}
+.pitem{background:var(--paper);padding:.55rem .75rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);
+  line-height:1.65;cursor:default;border-left:3px solid transparent}
+.pitem:hover{background:var(--panel)}
+.pitem.pg{border-left-color:var(--a3)}
+.pitem.pb{border-left-color:var(--a1)}
+.pitem .pstr{font-size:.8rem;color:var(--ink);margin-bottom:.2rem;display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
+.pitem .pstr .arr{color:var(--ink3)}
+.pitem .pexp{color:var(--ink3);font-size:.66rem}
+.pitem .pnodes{display:flex;flex-direction:column;gap:.05rem;margin-top:.2rem}
+.pitem .ok{color:var(--a3)}.pitem .no{color:var(--a1)}
+
+/* ── Entscheidungshilfe ── */
+.dtab{display:flex;flex-direction:column;gap:1px;background:var(--grid)}
+.drow{display:grid;grid-template-columns:11rem 1fr;gap:.8rem;align-items:start;background:var(--paper);padding:.55rem .75rem;
+  font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.65}
+.chip{font-family:'DM Mono',monospace;font-size:.72rem;padding:.3rem .6rem;border:1.5px solid var(--border);background:transparent;
+  color:var(--ink);cursor:pointer;text-align:left;display:flex;align-items:center;gap:.45rem;width:100%;transition:all .13s}
+.chip:hover{border-color:var(--a6)}
+.chip .bx{width:.9em;height:.9em;border:2px solid var(--ink3);flex-shrink:0}
+.chip.on{background:color-mix(in srgb,var(--a6) 18%,var(--paper));border-color:var(--a6)}
+.chip.on .bx{background:var(--a6);border-color:var(--a6)}
+.chip.s3x.on{background:color-mix(in srgb,var(--a2) 20%,var(--paper));border-color:var(--a2)}
+.chip.s3x.on .bx{background:var(--a2);border-color:var(--a2)}
+.chip.s3y.on{background:color-mix(in srgb,var(--a4) 20%,var(--paper));border-color:var(--a4)}
+.chip.s3y.on .bx{background:var(--a4);border-color:var(--a4)}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0 .5rem}
+.chips .chip{width:auto}
+.drow .cons div{margin-bottom:.15rem}
+.drow .g{color:var(--a3)}.drow .b{color:var(--a1)}.drow .n{color:var(--ink3)}
+.drow .tagline{color:var(--ink3);font-size:.64rem;margin-top:.2rem}
+.drow .rev{font-family:'DM Mono',monospace;font-size:.66rem;background:none;border:1px dashed var(--border);color:var(--ink2);padding:.15rem .5rem;cursor:pointer}
+.drow .rev:hover{border-color:var(--th);color:var(--th)}
+@media(max-width:700px){.drow{grid-template-columns:1fr}}
+
+/* ── Schätzung ── */
+.etab{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin:.4rem 0 .9rem}
+.erow{display:grid;grid-template-columns:2fr 1fr 1.5fr 1.4fr;gap:.6rem;align-items:baseline;background:var(--paper);
+  padding:.45rem .75rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6}
+.erow.eh{background:var(--panel);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.erow .en{color:var(--ink)}
+.erow .en small{display:block;color:var(--ink3);font-size:.62rem}
+.erow .good{color:var(--a3)}.erow .bad{color:var(--a1)}
+.bar{position:relative;height:7px;background:var(--grid);margin-top:.3rem}
+.bar .fill{position:absolute;top:0;height:100%;background:var(--ink3)}
+.bar .fill.gd{background:var(--a3)}.bar .fill.bd{background:var(--a1)}
+.bar .tick{position:absolute;top:-3px;width:2px;height:13px;background:var(--a2)}
+@media(max-width:900px){.erow{grid-template-columns:1fr 1fr}}
+
+/* ── Herleitung ── */
+.dstep{display:grid;grid-template-columns:2.1rem 1fr;gap:.7rem;padding:.7rem .85rem;background:var(--paper);border-left:3px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:.7rem;line-height:1.75;color:var(--ink2)}
+.dstep.sg{border-left-color:var(--a3)}.dstep.sb{border-left-color:var(--a1)}
+.dstep .dn{width:1.7rem;height:1.7rem;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:.8rem}
+.dstep.sg .dn{border-color:var(--a3);color:var(--a3)}.dstep.sb .dn{border-color:var(--a1);color:var(--a1)}
+.dstep b{color:var(--ink)}
+.dstep .q{color:var(--ink3);font-size:.66rem}
+.dsteps{display:flex;flex-direction:column;gap:1px;background:var(--grid)}
+.formula{margin-top:.6rem;padding:.6rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;font-size:.76rem;color:var(--ink);line-height:1.8}
+.formula.fg{border-color:var(--a3)}.formula.fb{border-color:var(--a1)}
+
+/* ── Regel-Labor ── */
+.cmp{display:grid;grid-template-columns:1fr auto 1fr;gap:.6rem;align-items:center;margin:.5rem 0}
+.cmp .cb{background:var(--panel);border:1px solid var(--border);padding:.5rem .7rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6}
+.cmp .cb b{display:block;color:var(--ink);font-size:.95rem;margin-top:.1rem}
+.cmp .eq{font-family:'DM Mono',monospace;font-size:1.1rem;color:var(--th)}
+.cond{padding:.6rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.75;color:var(--ink2);margin:.5rem 0}
+.cond b{color:var(--ink)}
+.cond.cg{border-color:var(--a3)}.cond.cb2{border-color:var(--a1)}
+
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--th);color:var(--paper);font-family:'DM Mono',monospace;
+  font-size:.7rem;padding:.4rem .85rem;z-index:999;opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* ── aus Stufe 1/2 ── */
+.ctrl-group{display:flex;align-items:center;gap:.38rem}
+.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);white-space:nowrap}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);outline:none;cursor:pointer;border-radius:2px;width:110px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--th);border-radius:50%;cursor:pointer}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.7rem;font-weight:500;color:var(--th);min-width:2.6rem;text-align:right}
+.cbtn.ctl{border-color:var(--a6);color:var(--a6)}
+.cbtn.ctl.sel{background:var(--a6);color:var(--paper);border-color:var(--a6)}
+.cbtn:disabled{opacity:.4;cursor:not-allowed}
+.cbtn.danger:hover{border-color:var(--a1);color:var(--a1)}
+.fbtn small{display:block;font-size:.6rem;opacity:.75;margin-top:.1rem}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'DM Mono',monospace;
+  font-size:.7rem;padding:.25rem 0;border-bottom:1px solid var(--grid)}
+.stat-row:last-child{border-bottom:none}
+.stat-lbl{color:var(--ink2)}.stat-val{font-weight:500;color:var(--ink)}
+.stat-val.on{color:var(--th)}
+.badge.open{border-color:var(--a1);color:var(--a1)}
+.badge.shut{border-color:var(--a3);color:var(--a3)}
+.ex{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.35rem;line-height:1.6}
+#s1-svg{max-height:250px;margin:0 auto}
+@keyframes flow{to{stroke-dashoffset:-24}}
+.flow{animation:flow 1.1s linear infinite}
+@media(prefers-reduced-motion:reduce){.flow{animation:none}}
+canvas#sc{display:block;width:100%;border:1px solid var(--grid);background:var(--bg)}
+#s2-paths{max-height:430px;overflow-y:auto}
+.pitem.isopen{border-left-color:var(--a1)}
+.pitem.isshut{border-left-color:var(--a3)}
+.pitem .pnodes .ok{color:var(--a1)}.pitem .pnodes .no{color:var(--a3)}
+.verdict.vopen{border-color:var(--a1)}
+.verdict.vshut{border-color:var(--a3)}
+.erow.dim .ev,.erow.dim .em{opacity:.55}
+.crit{margin:.5rem 0;padding:.6rem .85rem;border-left:3px solid var(--a2);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.7rem;line-height:1.8;color:var(--ink2)}
+.crit b{color:var(--ink)}
+.crit .ck{display:flex;gap:.5rem}
+.crit .ck .y{color:var(--a3)}.crit .ck .n{color:var(--a1)}
+.crit .calc{margin-top:.45rem;padding-top:.4rem;border-top:1px solid var(--grid)}
+.rtab{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-top:1px}
+.rrow{display:grid;grid-template-columns:1.3fr 1fr 1fr 2fr;gap:.7rem;align-items:baseline;background:var(--paper);padding:.5rem .85rem;
+  font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6;border-left:3px solid transparent}
+.rrow.rh{background:var(--panel);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.rrow b{color:var(--ink)}
+.rrow.cur{border-left-color:var(--th);background:color-mix(in srgb,var(--th) 10%,var(--paper))}
+.rrow .g{color:var(--a3)}.rrow .b{color:var(--a1)}
+@media(max-width:800px){.rrow{grid-template-columns:1fr 1fr}}
+details.adv{background:var(--paper);margin-top:1px}
+details.adv>summary{cursor:pointer;padding:.8rem 1.2rem;font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+details.adv>summary:hover{color:var(--th)}
+.next-bar{display:flex;justify-content:flex-end;margin-top:.85rem}
+
+.arows{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-top:.6rem}
+.arow{display:grid;grid-template-columns:10.5rem 6.2rem 1fr;gap:.6rem;align-items:baseline;background:var(--paper);padding:.35rem .6rem;
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);line-height:1.55}
+.arow .ar{color:var(--ink)}
+.arow .av{color:var(--ink3);font-size:.62rem}
+@media(max-width:800px){.arow{grid-template-columns:1fr}}
+.legend2{display:flex;flex-direction:column;gap:.25rem;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);margin:.5rem 0 0}
+.legend2 svg{vertical-align:middle;margin-right:.4rem}
+.legend svg{vertical-align:middle;margin-right:.3rem}
+.c3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--grid);margin:.6rem 0}
+.c3>div{background:var(--paper);padding:.75rem .8rem;text-align:center}
+.c3 .c3l{font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.c3 .c3v{font-size:1.5rem;color:var(--ink);margin:.2rem 0}
+.c3 .c3s{font-size:.62rem;color:var(--ink3);line-height:1.5}
+.c3 .c3k{border-top:3px solid var(--a2)}.c3 .c3d{border-top:3px solid var(--a4)}.c3 .c3i{border-top:3px solid var(--a3)}
+.lv-sec{font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:.8rem 0 .25rem}
+.lastc{font-family:'DM Mono',monospace;font-size:.68rem;line-height:1.6;color:var(--ink2)}
+.lastc b{color:var(--ink)}
+.lastc .g{color:var(--a3)}.lastc .b{color:var(--a1)}.lastc .n{color:var(--ink3)}
+.chiprow{display:flex;flex-wrap:wrap;gap:.35rem;margin:.4rem 0 0}
+.chiprow .chip{width:auto;flex:0 0 auto}
+.effl{margin-bottom:.3rem}
+@media(max-width:700px){.c3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hdr-hrow">
+  <div>
+    <div class="hdr-h1"><em>DAGs</em> verstehen &amp; adjustieren</div>
+    <div class="hdr-sub2">Informationsfluss · Confounder, Mediator, Collider · Sport → Herzgesundheit · die drei Regeln des do-Kalküls</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" onclick="window.open('index_de.html','_self')" style="border-color:var(--th);color:var(--th)">← Übersicht</button>
+    <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<main id="shell">
+<div id="wrap">
+
+<div class="intro-strip">
+  <div><strong>Wann hängen zwei Dinge zusammen und was sollte ich bei einer Analyse berücksichtigen?</strong> <em>Hier lernst du es Schritt für Schritt.</em></div>
+  <button class="tbtn" id="intro-toggle-btn" onclick="toggleIntroDetail()" aria-expanded="false">Konzept erklären <span class="tarr">▸</span></button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">Worum geht es hier?</div>
+    In Daten hängen oft zwei Dinge zusammen, zum Beispiel Sport und Herzgesundheit. Woran liegt das? Sport könnte das Herz schützen. Sportliche Menschen könnten auch jünger sein. Oder die Auswahl der Stichprobe spielt eine Rolle. Um das zu klären, zeichnest du die Ursachen, die du annimmst, als Graph mit Pfeilen (<a class="glo-link" href="Glossar.html#gl-dag" target="_blank" title="Ein Directed Acyclic Graph (DAG) ist ein gerichteter Graph ohne Zyklen, der kausale Annahmen über ein System von Variablen explizit und überprüfbar macht." style="color:inherit">DAG</a>). Ein Pfeil A → B bedeutet: A beeinflusst B.
+    <br><br>
+    Das Tool führt dich in drei Stufen von der Frage „Wann hängen zwei Variablen zusammen?“ zur Frage, welche Variablen du in einer Analyse berücksichtigen (adjustieren) solltest. Du brauchst keine Vorkenntnisse in Kausalanalyse.
+
+    <div class="ib-head">Die wichtigsten Begriffe</div>
+    • <b>Kante (Edge):</b> ein einzelner Pfeil zwischen zwei Variablen, zum Beispiel A → B.<br>
+    • <b>Pfad:</b> eine Folge aus einer oder mehreren Kanten, die zwei Variablen verbindet. A → B ← C ist ein Pfad aus zwei Kanten. Beim Durchlaufen eines Pfades spielt die Pfeilrichtung keine Rolle. <i>Kausal</i> ist ein Pfad nur, wenn alle Pfeile in dieselbe Richtung zeigen (A → B → C).<br>
+    • <b>Information fließt:</b> Wenn ein Pfad offen ist, sagt die eine Variable etwas über die andere aus. Wir sehen dann einen Zusammenhang.<br>
+    • <b>Adjustieren</b> (auch kontrollieren oder herausrechnen): Du vergleichst nur Personen, die in einer Variable gleich sind, etwa nur Gleichaltrige.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-confounder" target="_blank" title="Eine Konfundierungsvariable (Confounder) ist eine Variable, die sowohl mit dem Treatment T als auch mit dem Outcome Y assoziiert ist und nicht auf dem kausalen Pfad von T nach Y liegt." style="color:inherit">Confounder</a></b> / Fork (A ← B → C): eine gemeinsame <i>Ursache</i> zweier Variablen. Sie erzeugt einen Scheinzusammenhang. Adjustieren schließt diesen unerwünschten Pfad.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-mediator" target="_blank" title="Ein Mediator M ist eine Variable, die auf dem kausalen Pfad zwischen Treatment T und Outcome Y liegt: T → M → Y. Mediation bedeutet, dass ein Teil oder der gesamte Effekt von T auf Y durch die Veränderung von M vermittelt wird." style="color:inherit">Mediator</a></b> / Chain (A → B → C): eine Zwischenstation, über die eine Ursache wirkt. Adjustieren schließt diesen kausalen Wirkungsweg. Ob das gewollt ist, hängt vom gesuchten Effekt ab: Beim totalen Effekt gehört der Weg dazu, beim direkten Effekt nicht.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-collider" target="_blank" title="Ein Collider ist ein Knoten in einem DAG, auf den mindestens zwei gerichtete Kanten zeigen: A → C ← B. Im Gegensatz zu Confoundern blockiert ein Collider den Pfad zwischen A und B automatisch — er ist per se kein Problem." style="color:inherit">Collider</a></b> (A → B ← C): eine gemeinsame <i>Wirkung</i> zweier Variablen. Der Pfad ist zunächst zu. Adjustieren öffnet diesen zuvor geschlossenen, unerwünschten Pfad und erzeugt einen Zusammenhang, den es in der Welt nicht gibt.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-d-separation" target="_blank" title="d-Separation (Pearl, 1988) ist die Regel, mit der man aus einem DAG abliest, welche Variablen bedingt unabhängig sein müssen." style="color:inherit">d-separiert</a> und d-connected:</b> Alle Pfade zwischen zwei Variablen sind blockiert (d-separiert) oder mindestens einer ist offen (d-connected).<br>
+    • <b>Intervention</b> (auch Eingriff, <a class="glo-link" href="Glossar.html#gl-do-operator" target="_blank" title="Der do-Operator unterscheidet Beobachten von Eingreifen: P(Y | X = x) ist die Verteilung von Y bei Personen, die zufällig X = x aufweisen; P(Y | do(X = x)) ist die Verteilung von Y, wenn man X für alle Personen von außen auf x setzt." style="color:inherit">do-Operator</a>): Du bringst jemanden gezielt zu etwas, statt nur zu beobachten.
+
+    <div class="ib-head">Die Kernaussage</div>
+    <b>Confounder adjustieren</b> → ein unerwünschter Pfad wird geschlossen.<br>
+    <b>Mediator adjustieren</b> → ein kausaler Wirkungsweg wird geschlossen.<br>
+    <b>Collider adjustieren</b> → ein zuvor geschlossener, unerwünschter Pfad wird geöffnet.<br>
+    Welche dieser Folgen du willst, hängt davon ab, welchen Effekt du schätzen möchtest. Die erste Frage lautet deshalb immer: Welchen Effekt suche ich? Danach fragst du: Was passiert mit den Pfaden zwischen X und Y, wenn ich für Z adjustiere?
+
+    <div class="ib-head">Die drei Regeln des do-Kalküls</div>
+    Wer den Effekt eines Eingriffs aus Beobachtungsdaten berechnen will, kann drei Regeln anwenden. Du kannst sie als Fragen an deinen Graphen lesen:<br>
+    <span class="ib-n">①</span> <b>Beobachtungen ignorieren:</b> Welche zusätzlichen beobachteten Variablen liefern überhaupt relevante Information?<br>
+    <span class="ib-n">②</span> <b>Intervention durch Beobachtung ersetzen:</b> Wann darf aus beobachteten Zusammenhängen auf den Interventionseffekt geschlossen werden?<br>
+    <span class="ib-n">③</span> <b>Intervention ignorieren:</b> Welche Variablen werden durch die Intervention überhaupt beeinflusst?<br>
+    In Stufe 3 wendet das Tool diese Regeln auf deine Adjustierung an. Die Herleitung steht im aufklappbaren Bereich „Warum ist diese Lösung formal gültig?“, nachdem du die Aufgabe anschaulich gelöst hast.
+    <div class="ib-aside">Alle Zahlen stammen aus Simulationen mit linearen Zusammenhängen. Die Pfeile sind Annahmen, die du im Graphen siehst und verändern kannst.</div>
+
+    <div class="ib-head">So gehst du vor</div>
+    <span class="ib-n">①</span> <b>Informationsfluss:</b> Du lernst die drei Muster Mediator, Confounder und Collider kennen. Das Tool zeigt, wann zwischen zwei Variablen ein Zusammenhang entsteht und was Adjustieren damit macht.<br>
+    <span class="ib-n">②</span> <b>Pfade lesen:</b> Du baust größere Graphen, auch ganz ohne Vorlage, und prüfst für jeden Pfad, ob er offen oder blockiert ist. Das Tool zeigt, was das für den Effekt bedeutet.<br>
+    <span class="ib-n">③</span> <b>Anwendung:</b> Am Beispiel Sport und Herzgesundheit bestimmst du in zwei Aufgaben den Gesamteffekt (A) und den direkten Effekt (B). Daraus ergibt sich der indirekte Effekt. Dafür wählst du selbst, was du adjustierst. Zu jeder Entscheidung zeigt das Tool sofort die Konsequenz.
+
+    <div class="ib-head">Worauf achten?</div>
+    • Ob eine Adjustierung hilft, hängt davon ab, welche Wege sie öffnet oder schließt und ob der Weg zum gesuchten Effekt gehört.<br>
+    • Eine Adjustierung kann auch schaden, obwohl sie plausibel klingt. Variablen, die keinen Weg verändern, haben keinen Einfluss auf den Effekt.<br>
+    • Gegenläufige Pfade können sich aufheben. Ein offener Pfad zeigt daher nicht in jedem Fall einen Zusammenhang.
+
+    <div class="ib-head">Und danach?</div>
+    Wie du die gewählte Adjustierung in R umsetzt, zeigt der <a href="Golem_Builder.html" style="color:var(--th)">Golem Builder</a>.
+  </div>
+</div>
+
+<div class="stage-tabs-label">Stufen – Bitte eine Stufe wählen: <span class="arrow">↓</span></div>
+<div class="stage-tabs">
+  <button class="stab sel" id="stab-1" onclick="setStage(1)">
+    <span class="stab-n">1</span>
+    <span class="stab-txt"><span class="stab-title">Informationsfluss</span><span class="stab-sub">Confounder, Mediator, Collider</span></span>
+  </button>
+  <button class="stab" id="stab-2" onclick="setStage(2)">
+    <span class="stab-n">2</span>
+    <span class="stab-txt"><span class="stab-title">Pfade lesen</span><span class="stab-sub">d-Separation im eigenen Graphen</span></span>
+  </button>
+  <button class="stab" id="stab-3" onclick="setStage(3)">
+    <span class="stab-n">3</span>
+    <span class="stab-txt"><span class="stab-title">Anwendung</span><span class="stab-sub">Sport → Herzgesundheit: zwei Aufgaben</span></span>
+  </button>
+</div>
+
+<!-- ═════════ STUFE 1 ═════════ -->
+<div id="stage-1">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stufe 1</span></div>
+    Warum hängen zwei Dinge zusammen? Ein Zusammenhang entsteht, wenn <b>Information</b> zwischen ihnen fließen kann — entlang von Pfeilen, <i>egal in welche Richtung sie zeigen</i>. Es gibt drei Grundmuster, und sie unterscheiden sich darin, was passiert, wenn du eine Variable <b>adjustierst</b>. Zu jedem Muster gehört eine Forschungsfrage. Wähle ein Muster und vergleiche A und C ohne und mit Adjustierung von B.
+    <div class="narr-merk"><b>Adjustieren</b> heißt: Du vergleichst nur Personen, die in B gleich sind (eine Gruppe mit gleichem B-Wert). Man sagt auch „B kontrollieren“ oder „B herausrechnen“. Im Streudiagramm siehst du das als farbige Gruppen.</div>
+    <div class="narr-merk"><b>Kante und Pfad:</b> Eine Kante ist ein einzelner Pfeil zwischen zwei Variablen. Ein Pfad besteht aus einer oder mehreren Kanten. In A → B → C gibt es zwei Kanten, aber nur einen Pfad von A nach C.</div>
+  </div>
+  <div class="s-grid g11">
+    <div class="s-panel">
+      <div class="s-title">Muster &amp; Informationsfluss</div>
+      <div class="fam-btns" id="s1-struct">
+        <button class="fbtn sel" data-s="chain" onclick="setS1Struct('chain')"><b>Mediator</b><small>Chain: A → B → C</small></button>
+        <button class="fbtn" data-s="fork" onclick="setS1Struct('fork')"><b>Confounder</b><small>Fork: A ← B → C</small></button>
+        <button class="fbtn" data-s="coll" onclick="setS1Struct('coll')"><b>Collider</b><small>A → B ← C</small></button>
+      </div>
+      <div class="gwrap"><svg class="dg" id="s1-svg" viewBox="0 0 360 200" role="img" aria-label="Diagramm der drei Variablen A, B und C"></svg></div>
+      <div class="ex" id="s1-ex"></div>
+      <div class="hint-box" id="s1-role"></div>
+      <div class="ctrl-bar">
+        <button class="cbtn ctl" id="s1-ctl" onclick="toggleS1Ctl()">B adjustieren: Aus</button>
+        <div class="ctrl-group"><span class="ctrl-lbl">Stärke der Pfeile</span>
+          <input type="range" id="s1-w" min="0.2" max="1" step="0.05" value="0.7" oninput="s1Redraw()"><span class="ctrl-val" id="s1-wv">0.70</span></div>
+        <button class="cbtn" onclick="newSeed()">↺ Neue Daten</button>
+      </div>
+    </div>
+    <div class="s-panel">
+      <div class="s-title" id="s1-dtitle">Daten: A gegen C</div>
+      <canvas id="sc" height="330"></canvas>
+      <div style="margin-top:.6rem">
+        <div class="stat-row"><span class="stat-lbl" id="s1-pathl">Weg A – C</span><span class="stat-val" id="s1-path">—</span></div>
+        <div class="stat-row"><span class="stat-lbl" id="s1-r0l">Zusammenhang r — ohne Adjustierung</span><span class="stat-val" id="s1-r0">—</span></div>
+        <div class="stat-row"><span class="stat-lbl" id="s1-r1l">Zusammenhang r — mit Adjustierung von B</span><span class="stat-val" id="s1-r1">—</span></div>
+      </div>
+      <div class="why" id="s1-why"></div>
+    </div>
+  </div>
+  <div class="s-grid" style="margin-top:1px"><div class="s-panel">
+    <div class="s-title">Merke: Was Adjustieren mit dem Weg macht</div>
+    <div class="rtab" id="s1-recap">
+      <div class="rrow rh"><div>Muster</div><div>Ohne Adjustierung</div><div>Mit Adjustierung</div><div>Folge</div></div>
+      <div class="rrow" data-s="chain"><div><b>Mediator</b> (Chain)</div><div>Weg offen</div><div>Weg blockiert</div><div>Schließt einen <b>kausalen Wirkungsweg</b>. Der über B laufende Anteil gehört nicht mehr zur Schätzung des totalen Effekts. Das ist nur sinnvoll, wenn du genau diesen Teil ausschließen willst (direkter Effekt).</div></div>
+      <div class="rrow" data-s="fork"><div><b>Confounder</b> (Fork)</div><div>Weg offen: <span class="b">Scheinzusammenhang</span></div><div>Weg blockiert</div><div>Schließt einen <span class="g">unerwünschten Pfad</span>: Der Scheinzusammenhang verschwindet.</div></div>
+      <div class="rrow" data-s="coll"><div><b>Collider</b></div><div>Weg zu</div><div>Weg <span class="b">geöffnet</span></div><div>Öffnet einen zuvor geschlossenen, <span class="b">unerwünschten Pfad</span>: Es entsteht ein Zusammenhang, den es in der Welt nicht gibt.</div></div>
+    </div>
+    <div class="next-bar"><button class="cbtn sel" onclick="setStage(2)">Weiter: Pfade lesen →</button></div>
+  </div></div>
+</div>
+
+<!-- ═════════ STUFE 2 ═════════ -->
+<div id="stage-2" style="display:none">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stufe 2</span></div>
+    Echte Fragestellungen haben mehr als drei Variablen. Dann gibt es oft mehrere Pfade zwischen zwei Variablen X (Ursache) und Y (Wirkung). Wähle einen Beispielgraphen (X und Y sind dort vorgegeben) oder baue unter „Leer – selbst bauen“ einen eigenen. Lege fest, was du <b>adjustierst</b>, und lies die Pfade: Das Tool prüft an jeder Station, ob die Information durchkommt.
+    <div class="narr-merk">Ein Pfad besteht aus einer oder mehreren Kanten (einzelnen Pfeilen). Er ist <b>offen</b>, wenn er an <b>keiner</b> Station blockiert wird. Einen Mediator und einen Confounder blockierst du durch Adjustieren. Einen Collider öffnest du dadurch — auch dann, wenn du nur eine seiner Folgen adjustierst. Ist mindestens ein Pfad offen, sind X und Y <b>d-connected</b> (Zusammenhang erwartet). Sind alle blockiert, sind sie <b>d-separiert</b> (kein Zusammenhang).</div>
+    Tipp zum Einstieg: Lade nacheinander die Beispiele „Confounder“, „Mediator“ und „Collider“ und adjustiere die mittlere Variable. Gestrichelte Knoten sind unbeobachtet: Du kannst sie nicht adjustieren.
+  </div>
+  <div class="s-grid g21">
+    <div class="s-panel">
+      <div class="s-title">Graph</div>
+      <div class="tb-lbl">Beispielgraph</div>
+      <div class="fam-btns" id="s2-presets"></div>
+      <div class="hint-box" id="xy-fixed" style="margin:.3rem 0 .5rem">In diesem Beispiel sind <b>X (Ursache)</b> und <b>Y (Wirkung)</b> vorgegeben. Du untersuchst, was Adjustieren mit den Pfaden zwischen beiden macht.</div>
+      <div id="tool-wrap">
+        <div class="tb-lbl">Werkzeug</div>
+        <div class="ctrl-bar" style="margin:.2rem 0 .5rem">
+          <button class="cbtn sel" id="m-select" onclick="setMode('select')">☝ Auswählen &amp; verschieben</button>
+          <button class="cbtn" id="m-arrow" onclick="setMode('arrow')">→ Pfeil ziehen</button>
+          <button class="cbtn" id="m-node" onclick="setMode('node')">＋ Knoten setzen</button>
+          <button class="cbtn" id="u-undo" onclick="undoBuild()">↶ Rückgängig</button>
+          <button class="cbtn danger" id="u-clear" onclick="clearBuild()">Alles löschen</button>
+        </div>
+      </div>
+      <div class="gwrap"><svg class="dg" id="s2-svg" viewBox="0 0 640 400" role="img" aria-label="Graph"></svg></div>
+      <div class="legend" style="margin:.2rem 0 .5rem"><span><i class="gl1"></i>offener kausaler Pfad</span><span><i class="gl2"></i>offener nicht-kausaler Pfad</span><span><i class="fz"></i>adjustiert</span><span style="color:var(--a3)">✕ blockiert: Station, an der ein Pfad zugeht</span><span style="color:var(--a1)">◉ geöffnet: Collider, der durch Adjustierung aufgeht</span></div>
+      <div class="tb-lbl">Ausgewählter Knoten: <b id="sel-name" style="color:var(--ink)">keiner</b></div>
+      <div class="ctrl-bar" style="margin:.2rem 0 .3rem">
+        <button class="cbtn" id="r-x" onclick="setRole('X')">als X / Ursache</button>
+        <button class="cbtn" id="r-y" onclick="setRole('Y')">als Y / Wirkung</button>
+        <button class="cbtn ctl" id="r-z" onclick="setRole('Z')">adjustieren</button>
+        <button class="cbtn" id="r-l" onclick="setRole('L')">unbeobachtet ⇄</button>
+        <button class="cbtn danger" id="r-del" onclick="deleteSel()">Löschen</button>
+      </div>
+      <div class="ctrl-bar" id="node-ctl" style="margin:.2rem 0 .3rem;display:none"><div class="ctrl-group"><span class="ctrl-lbl">Beschriftung</span><input type="text" id="node-lbl" maxlength="6" oninput="setNodeLabel(this.value)" style="font-family:'DM Mono',monospace;font-size:.75rem;width:6rem;padding:.2rem .4rem;background:var(--bg);color:var(--ink);border:1.5px solid var(--border)"></div></div>
+      <div class="ctrl-bar" id="edge-ctl" style="margin:.2rem 0 0;display:none">
+        <div class="ctrl-group"><span class="ctrl-lbl" id="edge-lbl">Pfeil</span>
+          <input type="range" id="edge-w" min="-1" max="1" step="0.1" value="0.6" oninput="setEdgeW(this.value)"><span class="ctrl-val" id="edge-wv">0.6</span></div>
+      </div>
+      <div class="ctrl-bar" id="edit-bar" style="margin:.5rem 0 .2rem">
+        <button class="cbtn" id="edit-toggle" onclick="toggleEdit()">Graph verändern (fortgeschritten)</button>
+        <button class="cbtn" id="edit-reset" onclick="resetEdit()">Änderungen zurücksetzen</button>
+      </div>
+      <div class="hint-box" id="edit-info" style="margin:.2rem 0 .3rem"><b>Veränderungsmodus:</b> Ziehe einen Pfeil von einem Knoten zu einem anderen, wähle einen Pfeil und ändere seine Stärke oder verschiebe Knoten. „Änderungen zurücksetzen“ stellt den Ausgangsgraphen wieder her.</div>
+      <div class="hint-box" id="s2-hint"></div>
+    </div>
+    <div class="s-panel">
+      <div class="s-title">Pfade von X nach Y</div>
+      <div class="verdict" id="s2-verdict"></div>
+      <div id="s2-change" style="margin-bottom:.6rem"></div>
+      <div class="plist" id="s2-paths"></div>
+      <div class="s-title" style="margin-top:.4rem">Was bedeutet das für den Effekt?</div>
+      <div class="hint-box" id="s2-effect" style="margin-top:0"></div>
+      <div class="s-title" style="margin-top:.8rem">Simulierte Daten (visuelle Gegenprobe)</div>
+      <div class="stat-row"><span class="stat-lbl">r(X, Y) — ohne Adjustierung</span><span class="stat-val" id="s2-r0">—</span></div>
+      <div class="stat-row"><span class="stat-lbl" id="s2-r1-lbl">r(X, Y | Z) — mit Adjustierung</span><span class="stat-val" id="s2-r1">—</span></div>
+      <div class="ctrl-bar" style="margin-bottom:0"><button class="cbtn" onclick="newSeed()">↺ Neue Daten</button></div>
+    </div>
+  </div>
+<details class="adv" id="s2-adv"><summary>Weiterführend: den Effekt schätzen, auch wenn eine Ursache unbeobachtet bleibt (Front-Door, Instrument)</summary>
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="hint-box" style="margin-top:0">Hier vergleichst du Verfahren zur Schätzung des Effekts von X auf Y. Das ist optional und eher für Fortgeschrittene: <b>Front-Door</b> und <b>Instrument</b> sind zwei Wege, den Effekt zu bestimmen, wenn eine gemeinsame Ursache unbeobachtet bleibt und sich nicht adjustieren lässt. Probiere die Beispiele „Front-Door“ und „Instrument“.<br>Ein Knoten ist nicht einfach ein Mediator oder ein Instrument, weil du es festlegst. Die Rolle ergibt sich aus den Pfeilen des Graphen. Du kannst hier prüfen, ob sich der ausgewählte Knoten dafür eignet.</div>
+      <div class="ctrl-bar" style="margin:.4rem 0"><span class="ctrl-lbl">Ausgewählten Knoten prüfen als</span>
+        <button class="cbtn" id="r-m" onclick="setRole('M')">Front-Door-Mediator</button>
+        <button class="cbtn" id="r-i" onclick="setRole('I')">Instrument</button>
+      </div>
+      <div id="s2-est-body"></div>
+    </div>
+  </div>
+  </details>
+  <div class="next-bar"><button class="cbtn sel" onclick="setStage(3)">Weiter: Anwendung →</button></div>
+</div>
+
+<!-- ═════════ STUFE 3 ═════════ -->
+<div id="stage-3" style="display:none">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stufe 3</span></div>
+    <div class="quote">In der Psychologie beobachten wir häufig Zusammenhänge, interessieren uns aber eigentlich für kausale Effekte: Was würde passieren, wenn wir gezielt in X eingreifen würden?</div>
+    Hier wendest du an, was du in Stufe 1 und 2 gelernt hast. Das Beispiel: Wie wirkt Sport (X) auf die Herzgesundheit (Y)? So gehst du vor: Die Aufgabe legt fest, <b>welchen Effekt</b> du schätzen willst. Dann klickst du im Graphen die Variablen an, die du adjustieren möchtest. Die Live-Auswertung rechts zeigt sofort, welche Wege sich dadurch öffnen oder schließen. Die formale Herleitung mit den drei Regeln des do-Kalküls steht ganz unten und erklärt, warum eine Lösung gültig ist.
+    <div class="narr-merk"><b>Erinnerung aus Stufe 1:</b> Confounder adjustieren schließt einen unerwünschten Pfad. Mediator adjustieren schließt einen kausalen Wirkungsweg. Collider adjustieren öffnet einen zuvor geschlossenen, unerwünschten Pfad. Ob das hilft, hängt vom gesuchten Effekt ab.</div>
+  </div>
+
+  <div class="narr" style="margin-top:.85rem">
+    <div class="narr-h"><span class="ntag">Beispiel: Sport und Herzgesundheit</span></div>
+    Wir möchten wissen, welchen kausalen Effekt regelmäßiger Sport auf die Herzgesundheit hat.<br><br>
+    Dabei reicht es nicht, sportliche und weniger sportliche Personen einfach miteinander zu vergleichen. Menschen unterscheiden sich zum Beispiel im Alter und im Einkommen, und beides kann sowohl mit dem Sportverhalten als auch mit der Herzgesundheit zusammenhängen.<br><br>
+    Gleichzeitig kann Sport indirekt über eine bessere Fitness auf die Herzgesundheit wirken. Weitere Variablen wie Studio-Nähe, Ruhepuls oder Klinik-Aufnahme gehören ebenfalls zum angenommenen kausalen System. Der DAG unten stellt diese Annahmen dar. Wähle die Variablen aus, die zum gesuchten Effekt passen.
+    <div class="narr-merk"><b>Jetzt bist du dran:</b> Welche Variablen musst du adjustieren, damit du<br>A) den Gesamteffekt bzw.<br>B) den direkten Effekt<br>von Sport auf Herzgesundheit identifizieren kannst?</div>
+  </div>
+
+  <div class="s-grid g21" style="margin-top:.85rem" id="a2-tasks">
+    <div class="s-panel">
+      <div class="s-title">Aufgabe und Graph</div>
+      <div class="fam-btns" id="a2-task">
+        <button class="fbtn sel" data-t="A" onclick="setTask('A')"><b>Aufgabe A · Gesamteffekt</b><small id="a2-ta">noch offen</small></button>
+        <button class="fbtn" data-t="B" onclick="setTask('B')"><b>Aufgabe B · direkter Effekt</b><small id="a2-tb">noch offen</small></button>
+      </div>
+      <div class="why" id="a2-task-text" style="margin-top:0"></div>
+      <div class="gwrap"><svg class="dg" id="a2-svg" viewBox="0 0 640 460" role="img" aria-label="Kausalgraph; Klick auf einen Knoten schaltet die Adjustierung um"></svg></div>
+      <div class="hint-box" style="margin-top:.4rem"><b>Variablen anklicken = adjustieren.</b> Adjustierte Variablen sind gefüllt. Du kannst sie auch hier schalten:</div>
+      <div class="chiprow" id="a2-chips"></div>
+      <div class="ctrl-bar" style="margin:.6rem 0 .2rem">
+        <button class="cbtn" onclick="presetAdj([])">Zurücksetzen</button>
+        <button class="cbtn" onclick="presetAdj(['alter','ses','studio','fitness','ruhepuls','klinik'])">Alles adjustieren</button>
+        <button class="cbtn" onclick="showSolution()">Lösung anzeigen</button>
+      </div>
+      <div class="legend"><span><i class="fx"></i>Sport</span><span><i class="fy"></i>Herzgesundheit</span><span><i class="fz"></i>adjustiert</span><span><i class="gl1"></i>offener Wirkungsweg</span><span><i class="gl2"></i>offener Störweg</span></div>
+      <div class="legend"><span><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" style="stroke:var(--ink2);stroke-width:3"/></svg>positiver Einfluss</span><span><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" style="stroke:var(--ink2);stroke-width:3;stroke-dasharray:6 3"/></svg>negativer Einfluss</span><span>Zahl und Dicke: Stärke</span></div>
+      <details class="adv" style="margin-top:.7rem"><summary>Welche kausalen Annahmen enthält dieses Beispiel?</summary>
+        <div class="ex" style="margin:.5rem 0">Jeder Pfeil ist eine Annahme darüber, wie die Welt funktioniert. Die Zahl gibt an, um wie viel sich das Ziel im Mittel ändert, wenn die Ursache um eine Einheit steigt. Die Studio-Nähe, die Klinik-Aufnahme (Menschen, die über eine Klinik in die Stichprobe kommen) und der Ruhepuls sind eigene Variablen.</div>
+        <div class="arows" id="a1-assume"></div>
+      </details>
+    </div>
+    <div class="s-panel">
+      <div class="s-title">Live-Auswertung</div>
+      <div id="a2-live"></div>
+    </div>
+  </div>
+
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="s-title">Was heißt das für die Schätzung?</div>
+      <div id="a2-est-body"></div>
+    </div>
+  </div>
+
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="s-title">Woraus sich der Gesamteffekt zusammensetzt</div>
+      <div id="a2-concl"></div>
+    </div>
+  </div>
+
+  <details class="adv" id="a2-dv"><summary>Warum ist diese Lösung formal gültig? Herleitung mit den drei Regeln</summary>
+    <div class="s-grid" style="margin-top:1px">
+      <div class="s-panel">
+        <div class="hint-box" style="margin-top:0">Die Live-Auswertung oben zeigt anschaulich, welche Wege offen sind. Hier prüfst du dieselbe Auswahl formal mit den drei Regeln des do-Kalküls für die aktuelle Aufgabe. Am Ende steht, ob sich der gesuchte Effekt aus Beobachtungsdaten berechnen lässt (identifiziert) oder nicht.</div>
+        <div id="a2-derive"></div>
+      </div>
+    </div>
+  </details>
+</div>
+
+</div>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ═══════════════════ Theme, Toast, Intro ═══════════════════ */
+let DARK = document.documentElement.getAttribute('data-theme') === 'dark';
+function toggleTheme(){
+  DARK=!DARK;
+  document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
+  document.getElementById('btn-theme').textContent=DARK?'☀ Light':'🌙 Dark';
+  try{localStorage.setItem('btl-theme',DARK?'dark':'light');}catch(e){}
+  if(STAGE===1)drawS1Scatter();
+}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('show'),2600);}
+let introOpen=false;
+function toggleIntroDetail(){
+  introOpen=!introOpen;
+  document.getElementById('intro-detail').style.display=introOpen?'block':'none';
+  const b=document.getElementById('intro-toggle-btn');
+  b.querySelector('.tarr').textContent=introOpen?'▾':'▸';
+  b.setAttribute('aria-expanded',introOpen?'true':'false');
+}
+
+/* ═══════════════════ Zufall & Statistik ═══════════════════ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function noiseVec(seed,key,n){
+  const r=mulberry32((seed*7919+hashStr(key))>>>0), out=new Float64Array(n);
+  for(let i=0;i<n;i+=2){
+    let u=r(),v=r();if(u<1e-12)u=1e-12;
+    const m=Math.sqrt(-2*Math.log(u));
+    out[i]=m*Math.cos(2*Math.PI*v);
+    if(i+1<n)out[i+1]=m*Math.sin(2*Math.PI*v);
+  }
+  return out;
+}
+let SEED=1;
+function newSeed(){SEED++;SETS=null;refreshAll();}
+
+function parentsOf(Gx,id){return Gx.edges.filter(e=>e.b===id).map(e=>e.a);}
+function childrenOf(Gx,id){return Gx.edges.filter(e=>e.a===id).map(e=>e.b);}
+function descendantsOf(Gx,id){
+  const seen=new Set(),st=[id];
+  while(st.length){const v=st.pop();for(const c of childrenOf(Gx,v)){if(!seen.has(c)){seen.add(c);st.push(c);}}}
+  return seen;
+}
+function ancestorsOf(Gx,ids){
+  const seen=new Set(),st=[...ids];
+  while(st.length){const v=st.pop();for(const p of parentsOf(Gx,v)){if(!seen.has(p)){seen.add(p);st.push(p);}}}
+  return seen;
+}
+function topoOrder(Gx){
+  const indeg={};Gx.nodes.forEach(n=>indeg[n.id]=0);Gx.edges.forEach(e=>indeg[e.b]++);
+  const q=Gx.nodes.filter(n=>indeg[n.id]===0).map(n=>n.id),out=[];
+  while(q.length){const v=q.shift();out.push(v);for(const c of childrenOf(Gx,v)){if(--indeg[c]===0)q.push(c);}}
+  return out;
+}
+/* do: Knoten in doSet erhalten zufällige Werte ohne Eltern (Randomisierung) */
+function simulate(Gx,n,doSet){
+  const data={},order=topoOrder(Gx);
+  for(const id of order){
+    if(doSet&&doSet.has(id)){data[id]=noiseVec(SEED,'do_'+id,n);continue;}
+    const x=noiseVec(SEED,id,n);
+    for(const e of Gx.edges){if(e.b===id){const p=data[e.a];for(let i=0;i<n;i++)x[i]+=e.w*p[i];}}
+    data[id]=x;
+  }
+  return data;
+}
+function mean(a){let s=0;for(let i=0;i<a.length;i++)s+=a[i];return s/a.length;}
+function sdOf(a){if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1));}
+function covMat(data,ids){
+  const n=data[ids[0]].length,m=ids.map(id=>mean(data[id])),k=ids.length,C=[];
+  for(let i=0;i<k;i++){C.push(new Array(k).fill(0));}
+  for(let i=0;i<k;i++)for(let j=i;j<k;j++){
+    let s=0;const a=data[ids[i]],b=data[ids[j]];
+    for(let t=0;t<n;t++)s+=(a[t]-m[i])*(b[t]-m[j]);
+    C[i][j]=C[j][i]=s/(n-1);
+  }
+  return C;
+}
+function invert(M){
+  const n=M.length,A=M.map((r,i)=>r.concat(Array.from({length:n},(_,j)=>i===j?1:0)));
+  for(let c=0;c<n;c++){
+    let p=c;for(let r=c+1;r<n;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;
+    if(Math.abs(A[p][c])<1e-12)return null;
+    [A[c],A[p]]=[A[p],A[c]];
+    const d=A[c][c];for(let j=0;j<2*n;j++)A[c][j]/=d;
+    for(let r=0;r<n;r++)if(r!==c){const f=A[r][c];if(f!==0)for(let j=0;j<2*n;j++)A[r][j]-=f*A[c][j];}
+  }
+  return A.map(r=>r.slice(n));
+}
+function olsCoefs(data,y,xs){
+  const ids=xs.concat([y]),C=covMat(data,ids),k=xs.length;
+  const Sxx=C.slice(0,k).map(r=>r.slice(0,k)),sxy=C.slice(0,k).map(r=>r[k]),P=invert(Sxx);
+  if(!P)return null;
+  return P.map(r=>r.reduce((a,v,j)=>a+v*sxy[j],0));
+}
+/* Anteil erklärter Varianz von y durch xs */
+function r2of(data,y,xs){
+  if(!xs.length)return 0;
+  const C=covMat(data,xs.concat([y])),k=xs.length,b=olsCoefs(data,y,xs);
+  if(!b)return NaN;
+  let e=0;for(let i=0;i<k;i++)e+=b[i]*C[i][k];
+  return e/C[k][k];
+}
+function resSD(data,y,xs){
+  const C=covMat(data,xs.concat([y])),k=xs.length,b=xs.length?olsCoefs(data,y,xs):[];
+  let e=0;for(let i=0;i<k;i++)e+=b[i]*C[i][k];
+  return Math.sqrt(Math.max(0,C[k][k]-e));
+}
+
+/* ═══════════════════ Modell: Sport → Herzgesundheit ═══════════════════ */
+const NODES=[
+  {id:'alter',label:'Alter',x:320,y:24,tag:'Confounder: gemeinsame Ursache von Sport und Herzgesundheit'},
+  {id:'ses',label:'Einkommen',x:325,y:435,tag:'Confounder: gemeinsame Ursache von Sport und Herzgesundheit'},
+  {id:'studio',label:'Studio-Nähe',x:65,y:360,tag:'Ursache nur von Sport (instrumentartig)'},
+  {id:'sport',label:'Sport',x:105,y:250},
+  {id:'fitness',label:'Fitness',x:320,y:160,tag:'Mediator: Zwischenstation auf dem Wirkweg von Sport'},
+  {id:'ruhepuls',label:'Ruhepuls',x:320,y:92,tag:'Folge des Mediators Fitness'},
+  {id:'herz',label:'Herzgesundheit',x:545,y:250},
+  {id:'klinik',label:'Klinik-Aufnahme',x:325,y:330,tag:'Collider: gemeinsame Wirkung von Sport und Herzgesundheit (und selbst Folge von Sport)'}
+];
+const EDGES=[
+  ['alter','sport',-0.4],['alter','herz',-0.5],['ses','sport',0.4],['ses','herz',0.4],['studio','sport',0.6],
+  ['sport','fitness',0.7],['fitness','herz',0.6],['sport','herz',0.2],['fitness','ruhepuls',-0.7],
+  ['sport','klinik',0.5],['herz','klinik',-0.6]
+];
+const G={nodes:NODES.map(n=>({id:n.id,label:n.label})),edges:EDGES.map(e=>({a:e[0],b:e[1],w:e[2]}))};
+const NB={};NODES.forEach(n=>NB[n.id]=n);
+const X0='sport',Y0='herz';
+const CAND=['alter','ses','studio','fitness','ruhepuls','klinik'];
+const lab=id=>NB[id].label;
+
+function hasEdge(Gx,a,b){return Gx.edges.some(e=>e.a===a&&e.b===b);}
+function allPaths(Gx,x,y,cap){
+  const adj={};Gx.nodes.forEach(n=>adj[n.id]=new Set());
+  Gx.edges.forEach(e=>{adj[e.a].add(e.b);adj[e.b].add(e.a);});
+  const out=[],path=[x],seen=new Set([x]);
+  (function dfs(v){
+    if(out.length>=cap)return;
+    if(v===y){out.push(path.slice());return;}
+    for(const w of adj[v]){if(!seen.has(w)){seen.add(w);path.push(w);dfs(w);path.pop();seen.delete(w);}}
+  })(x);
+  return out;
+}
+function labelOf(Gx,id){const n=Gx.nodes.find(n=>n.id===id);return n?n.label:id;}
+function analysePath(Gx,path,Zset){
+  const steps=[];let open=true;
+  for(let i=1;i<path.length-1;i++){
+    const p=path[i-1],v=path[i],nx=path[i+1];
+    const inL=hasEdge(Gx,p,v),inR=hasEdge(Gx,nx,v);
+    let kind,isOpen,why;
+    if(inL&&inR){
+      kind='collider';
+      const zd=[...descendantsOf(Gx,v)].filter(d=>Zset.has(d));
+      if(Zset.has(v)){isOpen=true;why='Collider, adjustiert → geöffnet';}
+      else if(zd.length){isOpen=true;why='Collider, Folge '+zd.map(d=>labelOf(Gx,d)).join(', ')+' adjustiert → geöffnet';}
+      else{isOpen=false;why='Collider, nicht adjustiert → zu';}
+    }else{
+      kind=(!inL&&!inR)?'fork':'chain';
+      const nm=kind==='fork'?'Fork (gemeinsame Ursache)':'Chain (Zwischenstation)';
+      if(Zset.has(v)){isOpen=false;why=nm+', adjustiert → blockiert';}
+      else{isOpen=true;why=nm+', nicht adjustiert → durchlässig';}
+    }
+    steps.push({id:v,kind,open:isOpen,why});
+    if(!isOpen)open=false;
+  }
+  let causal=true;
+  for(let i=0;i<path.length-1;i++)if(!hasEdge(Gx,path[i],path[i+1])){causal=false;break;}
+  return {path,steps,open,causal};
+}
+function pstr(path){
+  let h='';
+  for(let i=0;i<path.length;i++){
+    h+='<span>'+lab(path[i])+'</span>';
+    if(i<path.length-1)h+='<span class="arr">'+(hasEdge(G,path[i],path[i+1])?'→':'←')+'</span>';
+  }
+  return h;
+}
+function directedPaths(Gx,a,b){
+  const out=[],path=[a];
+  (function dfs(v){if(v===b){out.push(path.slice());return;}
+    for(const c of childrenOf(Gx,v)){path.push(c);dfs(c);path.pop();}})(a);
+  return out;
+}
+function trueEffect(Gx,x,y){
+  const ord=topoOrder(Gx),eff={};ord.forEach(v=>eff[v]=0);eff[x]=1;
+  for(const v of ord){if(v===x)continue;let t=0;for(const e of Gx.edges)if(e.b===v)t+=eff[e.a]*e.w;eff[v]=t;}
+  return eff[y];
+}
+const cutIn=(Gx,S)=>{S=new Set(S);return {nodes:Gx.nodes,edges:Gx.edges.filter(e=>!S.has(e.b))};};
+const cutOut=(Gx,S)=>{S=new Set(S);return {nodes:Gx.nodes,edges:Gx.edges.filter(e=>!S.has(e.a))};};
+function openBetween(Gx,A,B,cond){
+  const out=[];
+  for(const a of A)for(const b of B){
+    if(a===b){out.push({path:[a],steps:[],trivial:true});continue;}
+    for(const p of allPaths(Gx,a,b,400)){const r=analysePath(Gx,p,cond);if(r.open)out.push(r);}
+  }
+  return out;
+}
+const PATHS=allPaths(G,X0,Y0,100);
+const MED=new Set();directedPaths(G,X0,Y0).forEach(p=>p.slice(1,-1).forEach(v=>MED.add(v)));
+const DESC_Y=descendantsOf(G,Y0);
+const TRUE_TOTAL=trueEffect(G,X0,Y0);
+const TRUE_DIRECT=G.edges.find(e=>e.a===X0&&e.b===Y0).w;
+
+/* ═══════════════════ Zeichnen ═══════════════════ */
+function dagSvg(id,o){
+  o=o||{};
+  const svg=document.getElementById(id),bx={};
+  G.nodes.forEach(n=>{const nb=NB[n.id],w=Math.max(56,18+n.label.length*8.4);bx[n.id]={x:nb.x,y:nb.y,hw:w/2,hh:16};});
+  const clip=(a,b,m)=>{const dx=b.x-a.x,dy=b.y-a.y;
+    const t=Math.min((a.hw+m)/Math.max(Math.abs(dx),1e-9),(a.hh+m)/Math.max(Math.abs(dy),1e-9));return {x:a.x+dx*t,y:a.y+dy*t};};
+  let h='<defs><marker id="ar-'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker></defs>';
+  (o.glow||[]).forEach(g=>{
+    for(let i=0;i<g.path.length-1;i++){const A=bx[g.path[i]],B=bx[g.path[i+1]];
+      h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:'+g.color+';stroke-width:'+(g.w||10)+';opacity:'+(g.op||.3)+';stroke-linecap:round"/>';}
+  });
+  G.edges.forEach(e=>{
+    const A=bx[e.a],B=bx[e.b],p1=clip(A,B,1),p2=clip(B,A,4);
+    const rem=o.removed&&o.removed.some(r=>r.a===e.a&&r.b===e.b);
+    if(rem){
+      h+='<line x1="'+p1.x+'" y1="'+p1.y+'" x2="'+p2.x+'" y2="'+p2.y+'" style="stroke:var(--a1);stroke-width:1.6;stroke-dasharray:2 5;opacity:.75"/>';
+      h+='<text x="'+((p1.x+p2.x)/2)+'" y="'+((p1.y+p2.y)/2+5)+'" text-anchor="middle" font-size="16" style="fill:var(--a1);font-weight:700">×</text>';
+    }else{
+      h+='<line x1="'+p1.x+'" y1="'+p1.y+'" x2="'+p2.x+'" y2="'+p2.y+'" marker-end="url(#ar-'+id+')" style="stroke:var(--ink2);stroke-width:'+(1.2+Math.abs(e.w)*2)+(e.w<0?';stroke-dasharray:7 4':'')+'"/>';
+      if(o.weights){const short=Math.hypot(p2.x-p1.x,p2.y-p1.y)<90,f=short?0.5:0.38,tx=p1.x+(p2.x-p1.x)*f+(short?8:0),ty=p1.y+(p2.y-p1.y)*f+(short?4:-4);h+='<text x="'+tx+'" y="'+ty+'" text-anchor="'+(short?'start':'middle')+'" font-size="11" style="fill:var(--ink);paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none">'+(e.w>0?'+':'−')+Math.abs(e.w).toFixed(1)+'</text>';}
+    }
+  });
+  G.nodes.forEach(n=>{
+    const b=bx[n.id],role=o.roles&&o.roles[n.id],adj=o.Z&&o.Z.has(n.id);
+    let stroke='var(--ink2)',sw=2,fill='var(--paper)',tc='var(--ink)';
+    if(role==='X'){stroke='var(--a2)';sw=3.6;}
+    if(role==='Y'){stroke='var(--a4)';sw=3.6;}
+    if(adj){fill='var(--a6)';tc='var(--paper)';if(!role)stroke='var(--a6)';}
+    h+='<g data-n="'+n.id+'" style="cursor:'+(o.click&&o.click(n.id,true)?'pointer':'default')+'"><rect x="'+(b.x-b.hw)+'" y="'+(b.y-b.hh)+'" width="'+(2*b.hw)+'" height="'+(2*b.hh)+'" rx="7" style="fill:'+fill+';stroke:'+stroke+';stroke-width:'+sw+'"/>'
+      +'<text x="'+b.x+'" y="'+(b.y+5)+'" text-anchor="middle" font-size="14" style="fill:'+tc+';pointer-events:none">'+n.label+'</text></g>';
+    if(o.tags&&o.tags[n.id])h+='<text x="'+b.x+'" y="'+(b.y-b.hh-5)+'" text-anchor="middle" font-size="11" style="fill:'+o.tags[n.id][1]+';pointer-events:none">'+o.tags[n.id][0]+'</text>';
+  });
+  svg.innerHTML=h;
+  svg.onclick=e=>{const g=e.target.closest('[data-n]');if(g&&o.click)o.click(g.dataset.n);};
+}
+
+/* ═══════════════════ Stufen ═══════════════════ */
+
+/* Schätzdaten: aktueller Datensatz + 30 weitere (unabhängig von Estimand und Adjustierung) */
+let SETS=null;
+function getSets(){
+  if(SETS&&SETS.seed===SEED)return SETS;
+  const keep=SEED,arr=[];
+  for(let k=0;k<30;k++){SEED=5000+k;arr.push(simulate(G,3000));}
+  SEED=keep;
+  SETS={seed:SEED,cur:simulate(G,3000),arr};
+  return SETS;
+}
+
+/* ═══════════════════ Gemeinsamer Zustand ═══════════════════ */
+let EST='total';
+const ADJS={total:new Set(),direct:new Set()};
+let ADJ=ADJS.total;
+const estTruth=()=>EST==='total'?TRUE_TOTAL:TRUE_DIRECT;
+const isTarget=p=>EST==='total'?p.every((v,i)=>i===p.length-1||hasEdge(G,v,p[i+1])):p.length===2&&hasEdge(G,p[0],p[1]);
+const f2=v=>(v===null||v===undefined||!isFinite(v))?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+
+/* Zustand aller Wege unter einer Adjustierung */
+function pathStates(Zset){
+  return PATHS.map(p=>{
+    const a=analysePath(G,p,Zset),target=isTarget(p);
+    let damped=false;
+    if(a.open)for(const s of a.steps){
+      if(s.kind==='chain'&&!Zset.has(s.id)){
+        for(const d of descendantsOf(G,s.id)){if(Zset.has(d)&&d!==Y0&&!DESC_Y.has(d)){damped=true;}}
+      }
+    }
+    const cat=target?(!a.open?'blocked':(damped?'damped':'ok')):(a.open?'open':'closed');
+    const viaCollider=a.open&&a.steps.some(s=>s.kind==='collider');
+    return {p,a,target,cat,viaCollider,good:cat==='ok'||cat==='closed'};
+  });
+}
+function explainPath(st){
+  const p=st.p;
+  if(st.a.causal&&p.length===2)return 'Sport wirkt direkt auf das Herz.';
+  const s=st.a.steps;
+  if(st.a.causal)return 'Sport wirkt über '+s.map(x=>lab(x.id)).join(' und ')+' auf das Herz.';
+  const c=s.find(x=>x.kind==='collider'),f=s.find(x=>x.kind==='fork');
+  if(c)return lab(c.id)+' ist eine gemeinsame Wirkung von Sport und Herz. Der Weg ist erst zu, wenn man sie nicht adjustiert.';
+  if(f)return lab(f.id)+' beeinflusst Sport und Herz gleichzeitig und erzeugt einen Zusammenhang ohne Wirkung von Sport.';
+  return '';
+}
+
+/* ═══════════════════ STUFE 1 ═══════════════════ */
+/* ═══════════════════ STUFE 2 ═══════════════════ */
+let hiP=null,LAST=null;
+function toggleAdj(id){
+  if(!CAND.includes(id))return false;
+  const c=consequence(id),adding=!ADJ.has(id);
+  if(adding)ADJ.add(id);else ADJ.delete(id);
+  LAST={v:id,adding,c};
+  renderA2();
+  return true;
+}
+function presetAdj(list){ADJ.clear();list.forEach(v=>ADJ.add(v));LAST=null;renderA2();}
+
+function consequence(v){
+  const cur=new Set(ADJ),nxt=new Set(ADJ);
+  if(cur.has(v))nxt.delete(v);else nxt.add(v);
+  const A=pathStates(cur),B=pathStates(nxt),out=[];
+  PATHS.forEach((p,i)=>{
+    const a=A[i],b=B[i];if(a.cat===b.cat)return;
+    const s=pstr(p).replace(/<[^>]+>/g,'').replace(/(→|←)/g,' $1 ').replace(/\s+/g,' ');
+    if(a.target){
+      if(a.cat==='ok'&&b.cat==='blocked')out.push(['b','blockiert den Wirkungsweg '+s+' — ein Teil des gesuchten Effekts wird herausgerechnet']);
+      else if(a.cat==='ok'&&b.cat==='damped')out.push(['b','dämpft den Wirkungsweg '+s+' (die Variable misst das Zwischenglied mit) — ein Teil des Effekts wird herausgerechnet']);
+      else if(b.cat==='ok')out.push(['g','gibt den Wirkungsweg '+s+' wieder frei']);
+      else out.push(['b','verändert den Wirkungsweg '+s+' ('+a.cat+' → '+b.cat+')']);
+    }else{
+      if(b.cat==='closed')out.push(['g','schließt den Störweg '+s]);
+      else if(a.cat==='closed')out.push(['b','öffnet den Störweg '+s+(b.viaCollider?' (eine gemeinsame Wirkung wird aufgemacht)':'')]);
+    }
+  });
+  return out;
+}
+
+function whyPath(s){
+  const st=s.a.steps;
+  if(!st.length)return 'direkter Pfeil, nichts kann ihn blockieren';
+  if(s.cat==='damped')return 'Ein Nachfahre der Zwischenstation ist adjustiert: Der Weg bleibt offen, wird aber teilweise herausgerechnet.';
+  const cl=st.find(x=>!x.open);
+  if(cl)return lab(cl.id)+': '+cl.why;
+  return st.map(x=>lab(x.id)+': '+x.why).join(' · ');
+}
+function lastHtml(){
+  if(!LAST)return '<div class="n">Klicke im Graphen eine Variable an. Hier steht dann, was sie bewirkt.</div>';
+  const v=LAST.v,c=LAST.c;
+  const head='<b>'+lab(v)+'</b> '+(LAST.adding?'adjustiert':'nicht mehr adjustiert')+':';
+  const body=c.length
+    ?c.map(x=>'<div class="'+x[0]+'">'+(x[0]==='g'?'✓ ':'✗ ')+x[1]+'</div>').join('')
+    :'<div class="n">Das verändert keinen der '+PATHS.length+' Wege.'+(v==='studio'?' Der Effekt bleibt gleich, die Schätzung kann aber ungenauer werden, weil weniger Variation in Sport übrig bleibt.':' Für diese Frage ändert sich nichts an der Verzerrung.')+'</div>';
+  return head+body+(NB[v].tag?'<div class="n" style="margin-top:.2rem">Rolle in diesem Graphen: '+NB[v].tag+'</div>':'');
+}
+function renderLive(sts){
+  const isTot=EST==='total';
+  const idx=sts.map((s,i)=>({s,i}));
+  const tgt=idx.filter(o=>o.s.target),umw=idx.filter(o=>!o.s.target&&o.s.a.causal),stoer=idx.filter(o=>!o.s.target&&!o.s.a.causal);
+  const row=(o,good,bad)=>{
+    const g=o.s.good;
+    return '<div class="pitem '+(g?'pg':'pb')+'" data-pi="'+o.i+'"><div class="pstr">'+pstr(o.s.p)+'<span class="badge '+(g?'good':'bad')+'">'+(g?'✓ ':(o.s.cat==='damped'?'◐ ':'✗ '))+(g?good:bad)+'</span></div><div class="pexp">'+whyPath(o.s)+'</div></div>';
+  };
+  const sec=(t,rows)=>rows.length?'<div class="lv-sec">'+t+'</div><div class="plist" style="margin-bottom:0">'+rows.join('')+'</div>':'';
+  const wOk=tgt.every(o=>o.s.cat==='ok'),sOk=sts.filter(s=>!s.target).every(s=>s.cat==='closed');
+  const colOpen=sts.some(s=>s.a.open&&s.a.steps.some(x=>x.kind==='collider'));
+  const blk=sts.filter(s=>s.target&&s.cat!=='ok'),umOpen=sts.filter(s=>!s.target&&s.a.causal&&s.cat==='open');
+  const confOpen=sts.filter(s=>!s.a.causal&&s.cat==='open'&&!s.viaCollider),colB=sts.filter(s=>!s.a.causal&&s.cat==='open'&&s.viaCollider);
+  const eff=isTot?'den Gesamteffekt':'den direkten Effekt';
+  let cons,cls;
+  if(!blk.length&&!umOpen.length&&!confOpen.length&&!colB.length){
+    cons='Deine aktuelle Auswahl schätzt <b>'+eff+'</b> von Sport auf Herzgesundheit.';cls='vgood';
+  }else{
+    const parts=[];
+    if(blk.length)parts.push('<b>blockiert einen Teil des gesuchten Effekts</b>');
+    if(umOpen.length)parts.push('<b>lässt den indirekten Weg über Fitness offen</b> (du schätzt noch mehr als den direkten Effekt)');
+    if(confOpen.length)parts.push('<b>lässt Confounding bestehen</b>');
+    if(colB.length)parts.push('<b>erzeugt Collider Bias</b>');
+    cons='Deine aktuelle Auswahl '+parts.join(', ')+'.';cls='vbad';
+  }
+  const names=ADJ.size?'Adjustiert: '+[...ADJ].map(lab).join(', ')+'.':'Es wird nichts adjustiert.';
+  document.getElementById('a2-live').innerHTML=
+    '<div class="why" style="margin-top:0"><b>Gesuchter Effekt: '+(isTot?'Gesamteffekt':'direkter Effekt')+'.</b> Ein <b>Wirkungsweg</b> gehört zum gesuchten Effekt und soll offen bleiben. '+(isTot?'':'Der Umweg über Fitness gehört nicht dazu und soll blockiert sein. ')+'Ein <b>Störweg</b> soll geschlossen sein.</div>'
+    +sec('Wirkungswege',tgt.map(o=>row(o,'offen','blockiert')))
+    +sec('Umweg, der blockiert sein muss',umw.map(o=>row(o,'blockiert','noch offen')))
+    +sec('Störwege',stoer.map(o=>row(o,'geschlossen','noch offen')))
+    +'<div class="lv-sec">Adjustierungscheck</div><div class="crit" style="margin-top:0">'
+    +ckRow(wOk,'alle gewünschten Wirkungswege offen: <b>'+(wOk?'ja':'nein')+'</b>')
+    +ckRow(sOk,'alle Störwege'+(isTot?'':' und der Umweg')+' geschlossen: <b>'+(sOk?'ja':'nein')+'</b>')
+    +ckRow(!colOpen,'Collider geöffnet: <b>'+(colOpen?'ja':'nein')+'</b>')
+    +'</div>'
+    +'<div class="lv-sec">Zuletzt geändert</div><div class="lastc">'+lastHtml()+'</div>'
+    +'<div class="verdict '+cls+'" style="margin-top:.7rem"><b>Konsequenz.</b> '+cons+' <span style="color:var(--ink3)">'+names+'</span></div>';
+  document.querySelectorAll('#a2-live .pitem').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{hiP=+el.dataset.pi;renderA2Svg();});
+    el.addEventListener('mouseleave',()=>{hiP=null;renderA2Svg();});
+  });
+}
+function renderA2(){
+  if(STAGE!==3)return;
+  const Z=new Set(ADJ),sts=pathStates(Z);
+  renderA2Svg(sts);
+  document.getElementById('a2-chips').innerHTML=CAND.map(v=>'<button class="chip'+(ADJ.has(v)?' on':'')+'" onclick="toggleAdj(\''+v+'\')" aria-pressed="'+ADJ.has(v)+'"><span class="bx"></span>'+lab(v)+'</button>').join('');
+  renderLive(sts);
+  renderEst(sts);renderDerive();renderTask(sts);
+}
+function renderA2Svg(sts){
+  const Z=new Set(ADJ);sts=sts||pathStates(Z);
+  const glow=sts.filter(s=>s.a.open).map(s=>({path:s.p,color:s.target?'var(--a2)':'var(--a1)',op:.26}));
+  const hl=hiP!==null&&sts[hiP]?[{path:sts[hiP].p,color:'var(--ink)',op:.22,w:14}]:[];
+  dagSvg('a2-svg',{roles:{[X0]:'X',[Y0]:'Y'},Z,weights:true,glow:hl.concat(glow),click:(id,q)=>q?CAND.includes(id):toggleAdj(id)});
+}
+
+
+function renderEst(sts){
+  const box=document.getElementById('a2-est-body'),S=getSets(),truth=estTruth();
+  const Zs=[...ADJ];
+  const calc=d=>{
+    // direkter Effekt: Mediatoren (Fitness) gehören mit ins Modell, damit der Direkt-Koeffizient gelesen werden kann
+    const b=olsCoefs(d,Y0,[X0].concat(Zs));return b?b[0]:null;
+  };
+  const naiveCur=olsCoefs(S.cur,Y0,[X0])[0],adjCur=Zs.length?calc(S.cur):naiveCur;
+  const na=S.arr.map(d=>olsCoefs(d,Y0,[X0])[0]),aa=S.arr.map(d=>Zs.length?calc(d):olsCoefs(d,Y0,[X0])[0]);
+  const lo=-0.2,hi=1.2,pos=x=>Math.max(0,Math.min(100,(x-lo)/(hi-lo)*100));
+  const row=(name,sub,cur,arr)=>{
+    const m=mean(arr),sd=sdOf(arr),unb=Math.abs(m-truth)<0.05;
+    const z=pos(0),vv=pos(m),l=Math.min(z,vv),w=Math.abs(vv-z);
+    return '<div class="erow"><div class="en">'+name+'<small>'+sub+'</small><div class="bar"><div class="fill '+(unb?'gd':'bd')+'" style="left:'+l+'%;width:'+w+'%"></div><div class="tick" style="left:'+pos(truth)+'%"></div></div></div>'
+      +'<div class="ev">'+f2(cur)+'</div><div class="em">Ø '+f2(m)+' ± '+sd.toFixed(2)+'</div>'
+      +'<div class="eu"><span class="'+(unb?'good':'bad')+'">'+(unb?'unverzerrt':'verzerrt')+'</span> (Ø '+(m-truth>=0?'+':'−')+Math.abs(m-truth).toFixed(2)+')</div></div>';
+  };
+  const zl=Zs.map(lab).join(', ');
+  const ok=sts.every(s=>s.good);
+  box.innerHTML='<div class="etab"><div class="erow eh"><div>Schätzung</div><div>diese Daten</div><div>30 Datensätze (Ø ± SD)</div><div>Urteil</div></div>'
+    +'<div class="erow"><div class="en">Gesuchter Effekt<small>'+(EST==='total'?'Gesamteffekt: Summe der Pfadprodukte':'direkter Effekt: Pfeil Sport → Herzgesundheit')+'</small></div><div class="ev">'+f2(truth)+'</div><div class="em">—</div><div class="eu">Referenz (blaue Marke)</div></div>'
+    +row('Nichts adjustiert','Herz auf Sport',naiveCur,na)
+    +(Zs.length?row('Deine Adjustierung','Herz auf Sport + '+zl,adjCur,aa):'<div class="erow"><div class="en">Deine Adjustierung<small>noch nichts gewählt</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">Variablen anklicken</div></div>')
+    +'</div>'
+    +'<div class="hint-box"><b>Lesehilfe:</b> „Verzerrt“ heißt, dass die Schätzung im Mittel über viele Datensätze mehr als 0,05 vom gesuchten Wert abweicht. Die Streuung (±) zeigt, wie stark ein einzelner Datensatz schwankt. '
+    +(ok?'':'Die Live-Auswertung oben zeigt dir, <i>warum</i> die Schätzung danebenliegt.')+'</div>';
+}
+
+/* Herleitung mit den drei Regeln */
+function derive(Zset){
+  const T=new Set([X0]);
+  if(EST==='direct'){
+    const missing=[...MED].filter(m=>!Zset.has(m));
+    if(missing.length)return {error:'missing',missing};
+    MED.forEach(m=>T.add(m));
+  }
+  const W0=[...Zset].filter(z=>!T.has(z)),GT=cutIn(G,T),GTu=cutOut(G,T);
+  let Wc=W0.slice();const r1=[];
+  for(const w of W0){
+    const cond=new Set([...T,...Wc.filter(x=>x!==w)]);
+    const op=openBetween(GT,[Y0],[w],cond);
+    if(!op.length){Wc=Wc.filter(x=>x!==w);r1.push({w,drop:true});}
+    else r1.push({w,drop:false,open:op[0]});
+  }
+  const aff=openBetween(GT,Wc,[...T],new Set());
+  const r3ok=aff.length===0;
+  const op2=openBetween(GTu,[Y0],[...T],new Set(Wc));
+  const r2ok=op2.length===0;
+  return {T,W0,Wc,r1,aff,r3ok,op2,r2ok,ok:r3ok&&r2ok};
+}
+function renderDerive(){
+  const box=document.getElementById('a2-derive'),Z=new Set(ADJ),d=derive(Z);
+  const tn=T=>[...T].map(lab).join(' und ');
+  if(d.error){
+    box.innerHTML='<div class="verdict vbad"><b>Für den direkten Effekt fehlt etwas.</b> Der direkte Effekt ist definiert als „Sport ändern, <i>während Fitness festgehalten wird</i>“, also als Eingriff auf zwei Variablen: do(Sport, Fitness). Damit die Herleitung funktioniert, muss '+d.missing.map(lab).join(', ')+' in der Adjustierung stehen. Nimm es im Graphen auf.</div>';
+    return;
+  }
+  const step=(n,cls,q,html)=>'<div class="dstep '+cls+'"><div class="dn">'+n+'</div><div><b>'+q[0]+'</b><div class="q">'+q[1]+'</div>'+html+'</div></div>';
+  const I='do('+tn(d.T).replace(' und ',', ')+')';
+  const W=d.Wc;
+  let s1;
+  if(!d.W0.length)s1=step(1,'sg',['Regel 1 – Beobachtungen ignorieren','Welche zusätzlichen beobachteten Variablen liefern überhaupt relevante Information?'],'<div>Du hast nichts adjustiert, also gibt es hier nichts zu prüfen.</div>');
+  else s1=step(1,'sg',['Regel 1 – Beobachtungen ignorieren','Welche zusätzlichen beobachteten Variablen liefern überhaupt relevante Information?'],
+    d.r1.map(r=>r.drop
+      ?'<div><span style="color:var(--a3)">✓</span> <b>'+lab(r.w)+'</b> kannst du ignorieren: Sobald du in '+tn(d.T)+' eingreifst, verrät '+lab(r.w)+' nichts mehr über Herzgesundheit (in diesem Graphen ist kein Weg zwischen den beiden offen).</div>'
+      :'<div><span style="color:var(--a1)">●</span> <b>'+lab(r.w)+'</b> bleibt: Auch nach dem Eingriff liefert es Information über Herzgesundheit (offener Weg: '+pstr(r.open.path)+').</div>').join(''));
+  const s3=step(2,d.r3ok?'sg':'sb',['Regel 3 – Intervention ignorieren','Welche Variablen werden durch die Intervention überhaupt beeinflusst?'],
+    !W.length?'<div><span style="color:var(--a3)">✓</span> Es bleibt keine adjustierte Variable übrig, die der Eingriff verändern könnte.</div>'
+    :(d.r3ok?'<div><span style="color:var(--a3)">✓</span> Der Eingriff '+I+' verändert '+W.map(lab).join(', ')+' nicht. Die Verteilung dieser Variablen bleibt, wie sie ist, du darfst sie einfach so verwenden, wie du sie beobachtest.</div>'
+      :'<div><span style="color:var(--a1)">✗</span> Der Eingriff '+I+' <b>verändert</b> '+[...new Set(d.aff.map(a=>a.path[0]))].map(lab).join(', ')+' (Weg: '+pstr(d.aff[0].path)+'). Wer das adjustiert, vergleicht Menschen aus einer Welt, die es nach dem Eingriff so nicht mehr gibt — das ist die Folge von Adjustierung auf Mediatoren oder Collidern, die selbst Folge von Sport sind.</div>'));
+  const t2=tn(d.T);
+  const s2=step(3,d.r2ok?'sg':'sb',['Regel 2 – Intervention durch Beobachtung ersetzen','Wann darf aus beobachteten Zusammenhängen auf den Interventionseffekt geschlossen werden?'],
+    d.r2ok?'<div><span style="color:var(--a3)">✓</span> Entfernst du alle Pfeile, die von '+t2+' wegführen (die Wirkungen), bleibt kein offener Weg zwischen '+t2+' und Herzgesundheit'+(W.length?' (gegeben '+W.map(lab).join(', ')+')':'')+'. Dann ist Beobachten dasselbe wie Eingreifen.</div>'
+    :'<div><span style="color:var(--a1)">✗</span> Auch ohne die Wirkungen von '+t2+' bleibt ein Weg offen: '+d.op2.slice(0,3).map(o=>pstr(o.path)).join('; ')+'. Das ist ein Störweg, den die Adjustierung nicht schließt. Beobachten ≠ Eingreifen.</div>');
+  const fm=d.ok
+    ?'<div class="formula fg"><b>Ergebnis: identifiziert.</b><br>P(Herzgesundheit | '+I+') = '+(W.length?'Σ<sub>'+W.map(lab).join(',')+'</sub> ':'')+'P(Herzgesundheit | '+t2.replace(' und ',', ')+(W.length?', '+W.map(lab).join(', '):'')+')'+(W.length?' · P('+W.map(lab).join(', ')+')':'')+'<br><span style="font-size:.66rem;color:var(--ink2)">Der Eingriffseffekt lässt sich aus beobachtbaren Größen berechnen. Das ist genau die Adjustierungsformel.</span></div>'
+    :'<div class="formula fb"><b>Ergebnis: nicht identifiziert.</b><br><span style="font-size:.7rem;color:var(--ink2)">Mit dieser Auswahl lässt sich der Eingriffseffekt nicht aus den Beobachtungen herleiten. Die Zahlen oben zeigen, wie weit die Schätzung daneben liegt.</span></div>';
+  box.innerHTML='<div class="dsteps">'+s1+s3+s2+'</div>'+fm;
+}
+
+/* ═══════════════════ Start ═══════════════════ */
+
+let STAGE=1;
+function setStage(s){
+  STAGE=s;
+  [1,2,3].forEach(i=>{
+    document.getElementById('stage-'+i).style.display=(i===s)?'block':'none';
+    document.getElementById('stab-'+i).classList.toggle('sel',i===s);
+  });
+  refreshAll();
+}
+function refreshAll(){
+  if(STAGE===1)s1Redraw();
+  else if(STAGE===2)renderAnalysis();
+  else{renderA1();renderA2();}
+}
+
+
+/* ═══════════════════ Stufe 3: Modell & Aufgaben ═══════════════════ */
+const EDGE_TXT={
+  'alter>sport':'Ältere treiben weniger Sport.',
+  'alter>herz':'Mit dem Alter lässt die Herzgesundheit nach.',
+  'ses>sport':'Wer mehr verdient, treibt mehr Sport (Zeit, Geld, Angebote).',
+  'ses>herz':'Wer mehr verdient, hat im Mittel das gesündere Herz.',
+  'studio>sport':'Ein Fitnessstudio in der Nähe bringt Menschen zum Sport. Auf sonst nichts wirkt es.',
+  'sport>fitness':'Sport macht fitter.',
+  'fitness>herz':'Fitte Menschen haben das gesündere Herz.',
+  'sport>herz':'Sport wirkt zusätzlich direkt auf das Herz, am Umweg über Fitness vorbei.',
+  'fitness>ruhepuls':'Fitte Menschen haben einen niedrigeren Ruhepuls.',
+  'sport>klinik':'Wer Sport treibt, verletzt sich öfter und kommt eher in die Klinik.',
+  'herz>klinik':'Ein krankes Herz führt in die Klinik: bessere Herzgesundheit, seltener Klinik.'
+};
+function renderA1(){
+  document.getElementById('a1-assume').innerHTML=G.edges.map(e=>
+    '<div class="arow"><span class="ar">'+lab(e.a)+' → '+lab(e.b)+'</span><span class="av">'+(e.w>0?'positiv':'negativ')+' ('+(e.w>0?'+':'−')+Math.abs(e.w).toFixed(1)+')</span><span>'+(EDGE_TXT[e.a+'>'+e.b]||'')+'</span></div>').join('');
+}
+
+let TASK='A';
+function setTask(t){TASK=t;EST=t==='A'?'total':'direct';LAST=null;afterEst();}
+function afterEst(){ADJ=ADJS[EST];hiP=null;syncTaskUi();refreshAll();}
+function syncTaskUi(){
+  document.querySelectorAll('#a2-task .fbtn').forEach(b=>b.classList.toggle('sel',b.dataset.t===TASK));
+  const T={
+    A:'<b>Aufgabe A · Gesamteffekt.</b> Finde eine Adjustierungsmenge, mit der du den gesamten kausalen Effekt von Sport auf Herzgesundheit schätzen kannst. Alle kausalen Wirkungswege müssen offen bleiben, alle Störwege müssen geschlossen sein, und es darf kein Collider-Pfad geöffnet werden. Du entscheidest selbst, welche Variablen du adjustierst.',
+    B:'<b>Aufgabe B · direkter Effekt.</b> Finde eine Adjustierungsmenge, mit der du nur den direkten Effekt von Sport auf Herzgesundheit schätzen kannst. Zusätzlich zu den Störwegen aus Aufgabe A muss hier der indirekte Wirkungsweg über Fitness blockiert werden.'
+  };
+  document.getElementById('a2-task-text').innerHTML=T[TASK];
+}
+function showSolution(){
+  ADJ.clear();
+  const sol=EST==='total'?['alter','ses']:['alter','ses','fitness'];
+  sol.forEach(v=>ADJ.add(v));
+  LAST=null;
+  renderA2();
+  toast(EST==='total'?'Lösung: Alter und Einkommen schließen die Störwege, Fitness bleibt als Wirkungsweg offen.':'Lösung: Alter und Einkommen schließen die Störwege, Fitness blockiert den Umweg.');
+}
+function withEst(e,fn){const k=EST;EST=e;try{return fn();}finally{EST=k;}}
+function renderTask(sts){
+  syncTaskUi();
+  const okT=withEst('total',()=>pathStates(ADJS.total).every(s=>s.good)),okD=withEst('direct',()=>pathStates(ADJS.direct).every(s=>s.good));
+  document.getElementById('a2-ta').textContent=okT?'✓ gelöst':'noch offen';
+  document.getElementById('a2-tb').textContent=okD?'✓ gelöst':'noch offen';
+  const el=document.getElementById('a2-concl');
+  if(!(okT&&okD)){
+    el.innerHTML='<div class="hint-box" style="margin-top:0">Aufgabe A (Gesamteffekt): <b>'+(okT?'✓ gelöst':'noch offen')+'</b> · Aufgabe B (direkter Effekt): <b>'+(okD?'✓ gelöst':'noch offen')+'</b><br>Sobald du beide Aufgaben gelöst hast, siehst du hier, wie sich der Gesamteffekt aus dem direkten und dem indirekten Effekt zusammensetzt.</div>';
+    return;
+  }
+  const S=getSets(),coef=(set,d)=>olsCoefs(d,Y0,[X0].concat([...set]))[0];
+  const tot=S.arr.map(d=>coef(ADJS.total,d)),dir=S.arr.map(d=>coef(ADJS.direct,d)),ind=tot.map((v,i)=>v-dir[i]);
+  const cT=coef(ADJS.total,S.cur),cD=coef(ADJS.direct,S.cur);
+  const tI=TRUE_TOTAL-TRUE_DIRECT,mT=mean(tot),mD=mean(dir),mI=mean(ind);
+  const card=(cls,l,v,cur,sd,truth,sub)=>'<div class="'+cls+'"><div class="c3l">'+l+'</div><div class="c3v">'+f2(v)+'</div><div class="c3s">'+sub+'<br>diese Daten: '+f2(cur)+' · 30 Datensätze: ± '+sd.toFixed(2)+'<br>wahrer Wert: '+f2(truth)+'</div></div>';
+  const share=mT!==0?Math.round(mI/mT*100):null;
+  el.innerHTML='<div class="hint-box" style="margin-top:0"><b>Beide Aufgaben sind gelöst.</b> Der Gesamteffekt besteht aus dem direkten Effekt und dem indirekten Effekt über Fitness: <b>Indirekter Effekt = Gesamteffekt − direkter Effekt</b>.</div>'
+    +'<div class="c3">'
+    +card('c3k','Gesamteffekt',mT,cT,sdOf(tot),TRUE_TOTAL,'Aufgabe A · Mittel aus 30 Datensätzen')
+    +card('c3d','direkter Effekt',mD,cD,sdOf(dir),TRUE_DIRECT,'Aufgabe B · Mittel aus 30 Datensätzen')
+    +card('c3i','indirekter Effekt',mI,cT-cD,sdOf(ind),tI,'Gesamteffekt − direkter Effekt')
+    +'</div>'
+    +'<div class="why" style="margin-top:0">'+(share!==null&&isFinite(share)?'Rund '+share+' % der gesamten Wirkung von Sport auf die Herzgesundheit laufen über Fitness. ':'')+'Der Rest ist die direkte Wirkung, die am Umweg über Fitness vorbeiläuft.</div>';
+}
+
+
+/* ═══════════════════ STUFE 1 ═══════════════════ */
+const S1_DEF={
+  chain:{edges:[['A','B'],['B','C']],names:{A:'Lernzeit',B:'Vorwissen',C:'Note'},
+    ex:'Beispiel: Wer länger lernt (Lernzeit), hat mehr Vorwissen, und mehr Vorwissen führt zu besseren Noten. Vorwissen ist die Zwischenstation.',
+    role:'<b>Gesucht: der totale Effekt der Lernzeit auf die Note.</b> Er umfasst alles, wodurch Lernzeit auf die Note wirkt: einen möglichen direkten Effekt und den indirekten Effekt über Vorwissen. <b>Vorwissen ist hier ein Mediator:</b> die Station, über die ein Teil der Wirkung läuft. Die Information fließt entlang der Pfeile von links nach rechts.',
+    open0:true,openC:false},
+  fork:{edges:[['B','A'],['B','C']],names:{A:'Eisverkauf',B:'Sonnenschein',C:'Sonnenbrand'},
+    ex:'Beispiel: An sonnigen Tagen wird mehr Eis verkauft, und es gibt mehr Sonnenbrand. Eis verursacht keinen Sonnenbrand, trotzdem treten beide zusammen auf.',
+    role:'<b>Gesucht: der Effekt von Eisverkauf auf Sonnenbrand.</b> <b>Sonnenschein ist hier ein Confounder:</b> eine gemeinsame Ursache. Sie treibt Eisverkauf und Sonnenbrand gleichzeitig an und täuscht einen Zusammenhang vor.',
+    open0:true,openC:false},
+  coll:{edges:[['A','B'],['C','B']],names:{A:'Talent',B:'Stipendium',C:'Fleiß'},
+    ex:'Beispiel: Ein Stipendium bekommt, wer talentiert oder fleißig ist (oder beides). Talent und Fleiß haben im Alltag nichts miteinander zu tun.',
+    role:'<b>Gesucht: der Zusammenhang zwischen Talent und Fleiß in der Bevölkerung.</b> <b>Stipendium ist hier ein Collider:</b> eine gemeinsame Wirkung. Talent und Fleiß „kollidieren“ dort. Solange du das Stipendium nicht beachtest, bleiben sie unabhängig.',
+    open0:false,openC:true}
+};
+let s1Struct='chain',s1Ctl=false,s1Cache=null;
+const S1_POS={A:[66,150],B:[180,52],C:[294,150]};
+function setS1Struct(s){
+  s1Struct=s;s1Ctl=false;
+  document.querySelectorAll('#s1-struct .fbtn').forEach(b=>b.classList.toggle('sel',b.dataset.s===s));
+  s1Redraw();
+}
+function toggleS1Ctl(){s1Ctl=!s1Ctl;s1Redraw();}
+function s1Graph(){
+  const w=parseFloat(document.getElementById('s1-w').value),nm=S1_DEF[s1Struct].names;
+  return {nodes:['A','B','C'].map(id=>({id,label:nm[id]})),edges:S1_DEF[s1Struct].edges.map(e=>({a:e[0],b:e[1],w}))};
+}
+function fmt(r){return (r>=0?'+':'−')+Math.abs(r).toFixed(2);}
+function partialCorr(data,x,y,Z){
+  const ids=[x,y].concat(Z),P=invert(covMat(data,ids));
+  if(!P)return NaN;
+  return -P[0][1]/Math.sqrt(P[0][0]*P[1][1]);
+}
+function pathString(Gx,path){
+  const parts=[];
+  for(let i=0;i<path.length;i++){
+    parts.push({t:'n',v:labelOf(Gx,path[i]),id:path[i]});
+    if(i<path.length-1)parts.push({t:'a',v:hasEdge(Gx,path[i],path[i+1])?'→':'←'});
+  }
+  return parts;
+}
+function s1Redraw(){
+  document.getElementById('s1-wv').textContent=parseFloat(document.getElementById('s1-w').value).toFixed(2);
+  const Gs=s1Graph(),n=1500,data=simulate(Gs,n),def=S1_DEF[s1Struct],nm=def.names;
+  const r0=partialCorr(data,'A','C',[]),r1=partialCorr(data,'A','C',['B']);
+  s1Cache={Gs,data,n,r0,r1,nm};
+  const open=s1Ctl?def.openC:def.open0;
+  const ctl=document.getElementById('s1-ctl');
+  ctl.textContent=nm.B+' adjustieren: '+(s1Ctl?'An':'Aus');ctl.classList.toggle('sel',s1Ctl);
+  document.getElementById('s1-ex').textContent=def.ex;
+  document.getElementById('s1-role').innerHTML=def.role;
+  document.getElementById('s1-dtitle').textContent='Daten: '+nm.A+' gegen '+nm.C;
+  document.getElementById('s1-pathl').textContent='Weg '+nm.A+' – '+nm.C;
+  document.getElementById('s1-path').innerHTML='<span class="badge '+(open?'open':'shut')+'">'+(open?'offen':'blockiert')+'</span>';
+  document.getElementById('s1-r0l').textContent='Zusammenhang r('+nm.A+', '+nm.C+') — ohne Adjustierung';
+  document.getElementById('s1-r1l').textContent='Zusammenhang r('+nm.A+', '+nm.C+') — mit Adjustierung von '+nm.B;
+  const e0=document.getElementById('s1-r0'),e1=document.getElementById('s1-r1');
+  e0.textContent=fmt(r0);e1.textContent=fmt(r1);
+  e0.classList.toggle('on',!s1Ctl);e1.classList.toggle('on',s1Ctl);
+  document.querySelectorAll('#s1-recap .rrow[data-s]').forEach(r=>r.classList.toggle('cur',r.dataset.s===s1Struct));
+  drawS1Svg(open);
+  s1Why(r0,r1);
+  drawS1Scatter();
+}
+function drawS1Svg(open){
+  const svg=document.getElementById('s1-svg'),def=S1_DEF[s1Struct],nm=def.names;
+  const bw=id=>Math.max(64,20+nm[id].length*8.2),bh=17;
+  const pt=id=>S1_POS[id];
+  let h='<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker></defs>';
+  const line=(a,b)=>{
+    const A=pt(a),B=pt(b),dx=B[0]-A[0],dy=B[1]-A[1];
+    const clip=(id,m)=>Math.min((bw(id)/2+m)/Math.max(Math.abs(dx),1e-9),(bh+m)/Math.max(Math.abs(dy),1e-9));
+    const t1=clip(a,1),t2=clip(b,4);
+    return {x1:A[0]+dx*t1,y1:A[1]+dy*t1,x2:B[0]-dx*t2,y2:B[1]-dy*t2};
+  };
+  if(open){
+    for(const [a,b] of [['A','B'],['B','C']]){
+      const l=line(a,b);
+      h+='<line x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" style="stroke:var(--a1);stroke-width:9;opacity:.2;stroke-linecap:round"/>';
+    }
+  }
+  for(const [a,b] of def.edges){
+    const l=line(a,b);
+    h+='<line x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" marker-end="url(#ar)" style="stroke:var(--ink2);stroke-width:2.2"/>';
+  }
+  if(open){
+    for(const [a,b] of [['A','B'],['B','C']]){
+      const l=line(a,b);
+      h+='<line class="flow" x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" style="stroke:var(--a1);stroke-width:3;stroke-dasharray:2 10;stroke-linecap:round;opacity:.9"/>';
+    }
+  }
+  for(const id of ['A','B','C']){
+    const [x,y]=pt(id),cond=(id==='B'&&s1Ctl),w=bw(id);
+    h+='<rect x="'+(x-w/2)+'" y="'+(y-bh)+'" width="'+w+'" height="'+(2*bh)+'" rx="7" style="fill:'+(cond?'var(--a6)':'var(--paper)')+';stroke:'+(cond?'var(--a6)':'var(--ink2)')+';stroke-width:2"/>';
+    h+='<text x="'+x+'" y="'+(y+5)+'" text-anchor="middle" font-size="13" style="fill:'+(cond?'var(--paper)':'var(--ink)')+'">'+nm[id]+'</text>';
+  }
+  let lbl;
+  if(s1Struct==='coll')lbl=open?'Der Collider ist geöffnet: Information fließt':'Collider zu: '+nm.A+' und '+nm.C+' sind getrennt';
+  else lbl=open?'Information fließt von '+nm.A+' nach '+nm.C:'Der Weg über '+nm.B+' ist blockiert';
+  h+='<text x="180" y="192" text-anchor="middle" font-size="12" style="fill:'+(open?'var(--a1)':'var(--a3)')+'">'+lbl+'</text>';
+  svg.innerHTML=h;
+}
+function s1Why(r0,r1){
+  const el=document.getElementById('s1-why'),nm=S1_DEF[s1Struct].names,a=nm.A,b=nm.B,c=nm.C;let t;
+  if(s1Struct==='chain'){
+    t=s1Ctl
+      ?'<b>'+b+' ist adjustiert.</b> Du vergleichst nur Personen mit ähnlichem '+b+'. Der Weg '+a+' → '+b+' → '+c+' ist damit blockiert (r ≈ '+fmt(r1)+').<br><b>Konsequenz für den totalen Effekt:</b> Der über '+b+' vermittelte Anteil gehört nicht mehr zur Schätzung, obwohl er zur Wirkung von '+a+' auf '+c+' dazugehört. Suchst du dagegen nur den direkten Effekt, ist genau das gewollt. Ob ein Mediator adjustiert werden sollte, hängt also davon ab, welchen Effekt du schätzen möchtest.'
+      :'<b>Information fließt '+a+' → '+b+' → '+c+'.</b> '+a+' verändert '+b+', und '+b+' verändert '+c+'. Deshalb hängen '+a+' und '+c+' zusammen (r = '+fmt(r0)+'), obwohl '+a+' vielleicht gar nicht direkt auf '+c+' wirkt.';
+  }else if(s1Struct==='fork'){
+    t=s1Ctl
+      ?'<b>'+b+' ist adjustiert.</b> Innerhalb jeder Gruppe mit gleichem '+b+' fehlt der gemeinsame Antrieb: Die Scheinkorrelation verschwindet (r ≈ '+fmt(r1)+').<br><b>Konsequenz:</b> Hier ist Adjustieren richtig. Du rechnest die gemeinsame Ursache heraus.'
+      :'<b>'+b+' ist eine gemeinsame Ursache.</b> Ist '+b+' hoch, sind '+a+' und '+c+' beide tendenziell hoch. Das erzeugt eine Korrelation (r = '+fmt(r0)+'), obwohl weder '+a+' auf '+c+' noch '+c+' auf '+a+' wirkt: ein <b>Scheinzusammenhang</b>.';
+  }else{
+    t=s1Ctl
+      ?'<b>'+b+' ist adjustiert — und das öffnet den Collider.</b> In einer Gruppe mit gleichem '+b+' gilt: Ist '+a+' niedrig, muss '+c+' hoch sein, damit '+b+' stimmt. Die beiden erklären sich gegenseitig weg, und es entsteht eine negative Korrelation (r = '+fmt(r1)+') aus dem Nichts.<br><b>Konsequenz:</b> Hier schadet Adjustieren. Du erzeugst einen Zusammenhang, den es in der Welt nicht gibt.'
+      :'<b>'+b+' ist eine gemeinsame Wirkung.</b> '+a+' und '+c+' beeinflussen '+b+', aber nicht einander. Nichts fließt zwischen ihnen, der Weg ist zu (r ≈ '+fmt(r0)+').';
+  }
+  el.innerHTML=t;
+}
+function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function drawS1Scatter(){
+  if(STAGE!==1||!s1Cache)return;
+  const c=document.getElementById('sc'),dpr=window.devicePixelRatio||1;
+  const W=c.clientWidth,H=330;if(!W)return;
+  c.width=W*dpr;c.height=H*dpr;c.style.height=H+'px';
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const {data,n,nm}=s1Cache,A=data.A,C=data.C,B=data.B;
+  let ax0=Infinity,ax1=-Infinity,cy0=Infinity,cy1=-Infinity;
+  for(let i=0;i<n;i++){ax0=Math.min(ax0,A[i]);ax1=Math.max(ax1,A[i]);cy0=Math.min(cy0,C[i]);cy1=Math.max(cy1,C[i]);}
+  const pad={l:44,r:14,t:12,b:34},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const xs=v=>pad.l+(v-ax0)/(ax1-ax0)*pw, ys=v=>pad.t+ph-(v-cy0)/(cy1-cy0)*ph;
+  const grid=cv('--grid'),ink2=cv('--ink2'),ink3=cv('--ink3');
+  ctx.strokeStyle=grid;ctx.lineWidth=1;ctx.strokeRect(pad.l,pad.t,pw,ph);
+  ctx.fillStyle=ink2;ctx.font='11px DM Mono, monospace';ctx.textAlign='center';
+  ctx.fillText(nm.A,pad.l+pw/2,H-8);
+  ctx.save();ctx.translate(14,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(nm.C,0,0);ctx.restore();
+  const idx=Array.from({length:n},(_,i)=>i).sort((i,j)=>B[i]-B[j]);
+  const grp=new Int8Array(n);idx.forEach((i,k)=>grp[i]=Math.min(2,Math.floor(k*3/n)));
+  const cols=[cv('--a2'),cv('--a3'),cv('--a1')],names=['niedrig','mittel','hoch'];
+  const m=Math.min(n,900);
+  for(let i=0;i<m;i++){
+    ctx.fillStyle=s1Ctl?cols[grp[i]]:ink3;
+    ctx.globalAlpha=s1Ctl?.55:.4;
+    ctx.beginPath();ctx.arc(xs(A[i]),ys(C[i]),2.3,0,6.2832);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  const fitLine=(sel,color,dash,wd)=>{
+    let sx=0,sy=0,k=0;for(let i=0;i<n;i++)if(sel(i)){sx+=A[i];sy+=C[i];k++;}
+    if(k<5)return;const mx=sx/k,my=sy/k;let cxy=0,vx=0,mn=Infinity,mxv=-Infinity;
+    for(let i=0;i<n;i++)if(sel(i)){cxy+=(A[i]-mx)*(C[i]-my);vx+=(A[i]-mx)**2;mn=Math.min(mn,A[i]);mxv=Math.max(mxv,A[i]);}
+    const b=cxy/vx,a=my-b*mx;
+    ctx.strokeStyle=color;ctx.lineWidth=wd;ctx.setLineDash(dash);
+    ctx.beginPath();ctx.moveTo(xs(mn),ys(a+b*mn));ctx.lineTo(xs(mxv),ys(a+b*mxv));ctx.stroke();ctx.setLineDash([]);
+  };
+  if(s1Ctl){
+    fitLine(()=>true,ink3,[5,4],1.5);
+    for(let g=0;g<3;g++)fitLine(i=>grp[i]===g,cols[g],[],2.6);
+    ctx.textAlign='left';
+    ctx.fillStyle=ink2;ctx.fillText('Gruppen nach '+nm.B+':',pad.l+8,pad.t+16);
+    for(let g=0;g<3;g++){const x0=pad.l+8+g*74;ctx.fillStyle=cols[g];ctx.fillRect(x0,pad.t+26,9,9);ctx.fillStyle=ink2;ctx.fillText(names[g],x0+13,pad.t+34);}
+    ctx.fillStyle=ink3;ctx.fillText('gestrichelt: alle zusammen',pad.l+8,pad.t+54);
+  }else{
+    fitLine(()=>true,cv('--a4'),[],2.6);
+  }
+}
+window.addEventListener('resize',()=>{if(STAGE===1)drawS1Scatter();});
+
+/* ═══════════════════ STUFE 2 ═══════════════════ */
+const PRESETS=[
+  {name:'Confounder',nodes:[['Z','Z',320,70],['X','X',150,270],['Y','Y',490,270]],edges:[['Z','X'],['Z','Y'],['X','Y']],X:'X',Y:'Y',Zs:[],
+   hint:'Z ist ein <b>Confounder</b>: eine gemeinsame Ursache von X und Y. Der Pfad X ← Z → Y ist offen und erzeugt einen Zusammenhang zwischen X und Y, der nicht von X kommt. Wähle Z aus und klicke „adjustieren“: Der Pfad wird blockiert, und r(X, Y) nähert sich dem direkten Effekt.'},
+  {name:'Mediator',nodes:[['X','X',110,200],['M','M',320,90],['Y','Y',530,200]],edges:[['X','M'],['M','Y'],['X','Y']],X:'X',Y:'Y',Zs:[],
+   hint:'M ist ein <b>Mediator</b>: eine Zwischenstation auf dem Weg von X nach Y. Adjustierst du M, schließt du diesen kausalen Wirkungsweg. Für den totalen Effekt von X auf Y fehlt dann der über M laufende Anteil. Für den direkten Effekt ist das gewollt.'},
+  {name:'Collider',nodes:[['X','X',110,100],['Y','Y',530,100],['C','C',320,290]],edges:[['X','C'],['Y','C']],X:'X',Y:'Y',Zs:[],
+   hint:'C ist ein <b>Collider</b>: eine gemeinsame Wirkung von X und Y. Ohne Adjustierung sind X und Y unabhängig. Wähle C aus und klicke „adjustieren“: Der Pfad öffnet sich, und es entsteht eine Korrelation.'},
+  {name:'Collider-Nachfahre',nodes:[['X','X',110,90],['Y','Y',530,90],['C','C',320,200],['D','D',320,330]],edges:[['X','C'],['Y','C'],['C','D']],X:'X',Y:'Y',Zs:[],w:0.9,
+   hint:'Auch die Folge eines Colliders öffnet den Pfad: Adjustiere D statt C. D trägt Information über C, und damit wirkt die Adjustierung von D wie eine halbe Adjustierung von C.'},
+  {name:'M-Bias',nodes:[['U1','U₁',130,80,1],['U2','U₂',510,80,1],['X','X',70,300],['M','M',320,190],['Y','Y',570,300]],edges:[['U1','X'],['U1','M'],['U2','M'],['U2','Y']],X:'X',Y:'Y',Zs:[],w:0.9,
+   hint:'M sieht aus wie ein Confounder, ist aber auf dem Pfad X ← U₁ → M ← U₂ → Y ein Collider. Ohne Adjustierung ist dieser Pfad zu, X und Y sind getrennt. Adjustiere M und beobachte, wie der Pfad aufgeht. U₁ und U₂ sind unbeobachtet (gestrichelt).'},
+  {name:'Front-Door',nodes:[['U','U',320,60,1],['X','X',110,290],['M','M',320,290],['Y','Y',530,290]],edges:[['U','X',0.8],['U','Y',0.8],['X','M',0.7],['M','Y',0.7]],X:'X',Y:'Y',Zs:[],M:'M',
+   hint:'U ist unbeobachtet (gestrichelt) und lässt sich nicht adjustieren: Der Pfad X ← U → Y bleibt offen, ein Backdoor-Ausweg fehlt. Aber der ganze Effekt läuft über M — und M ist von U nicht direkt betroffen. Das reicht für die <b>Front-Door</b>-Schätzung: erst X → M, dann M → Y (mit X adjustiert), dann multiplizieren. Unten siehst du die drei Bedingungen und das Ergebnis. In deinem eigenen Graphen: M auswählen und im Bereich „Weiterführend“ als Front-Door-Mediator prüfen.'},
+  {name:'Instrument',nodes:[['I','I',90,300],['U','U',320,60,1],['X','X',270,300],['Y','Y',530,300]],edges:[['I','X',0.7],['U','X',0.8],['U','Y',0.8],['X','Y',0.5]],X:'X',Y:'Y',Zs:[],I:'I',
+   hint:'U ist unbeobachtet und verzerrt den naiven Schätzer. I (das <b>Instrument</b>) verschiebt X, ohne selbst auf Y zu wirken und ohne eine Ursache mit Y zu teilen. Dann zeigt Cov(I,Y)/Cov(I,X) den reinen Effekt von X. Probiere mit „Graph verändern“: Wähle den Pfeil I → X und senke die Stärke — das Instrument wird schwach und die Schätzung streut. Oder zeichne einen Pfeil I → Y und beobachte, wie die Bedingungen brechen.'},
+  {name:'Leer – selbst bauen',build:true,nodes:[],edges:[],X:null,Y:null,Zs:[],hint:'Hier baust du den DAG selbst. 1. „Knoten setzen“ wählen und ins Feld klicken. 2. „Pfeil ziehen“ wählen und von einem Knoten zum nächsten ziehen. 3. Einen Knoten auswählen und als X (Ursache), einen anderen als Y (Wirkung) festlegen. Danach beginnt die Pfadanalyse. Mit „Beschriftung“ gibst du Knoten eigene Namen, „unbeobachtet“ markiert Knoten, die du nicht messen kannst. Maximal 10 Knoten, und der Graph darf keinen Kreis enthalten.'},
+  {name:'Gemischt',nodes:[['W','W',110,70],['Z','Z',290,70],['X','X',110,230],['M','M',320,230],['Y','Y',530,230],['C','C',320,360]],edges:[['W','Z'],['Z','X'],['Z','Y'],['X','M'],['M','Y'],['X','C'],['Y','C']],X:'X',Y:'Y',Zs:[],
+   hint:'Ein Graph mit allen drei Bausteinen: ein Wirkungsweg über den Mediator M, ein Backdoor-Pfad über den Confounder Z und ein Collider C. Prüfe, welche Adjustierung welchen Pfad verändert.'}
+];
+let G2={nodes:[],edges:[]},roles={X:null,Y:null,Z:new Set(),M:null,I:null},sel=null,mode='select',drag=null,draft=null,presetIdx=0,editing=false,UNDO=[],BUILD_SAVE=null,UNDOKEY='',UNDOT=0;
+const NR=22;
+
+function buildPresets(){
+  const box=document.getElementById('s2-presets');
+  box.innerHTML=PRESETS.map((p,i)=>'<button class="fbtn'+(i===0?' sel':'')+'" data-i="'+i+'" onclick="loadPreset('+i+')">'+p.name+'</button>').join('');
+}
+function isBuild(){return !!PRESETS[presetIdx].build;}
+function canEdit(){return isBuild()||editing;}
+function snapshot(){return JSON.stringify({nodes:G2.nodes,edges:G2.edges,X:roles.X,Y:roles.Y,Z:[...roles.Z],M:roles.M,I:roles.I});}
+function restoreSnap(t){const o=JSON.parse(t);G2={nodes:o.nodes,edges:o.edges};roles={X:o.X,Y:o.Y,Z:new Set(o.Z),M:o.M,I:o.I};}
+function pushUndo(t){if(!isBuild())return;UNDO.push(t);if(UNDO.length>50)UNDO.shift();updUndo();}
+function undoCo(key){const t=Date.now();if(UNDOKEY!==key||t-UNDOT>1500)pushUndo(snapshot());UNDOKEY=key;UNDOT=t;}
+function updUndo(){
+  const u=document.getElementById('u-undo'),c=document.getElementById('u-clear');
+  if(u)u.disabled=!UNDO.length;
+  if(c)c.disabled=!G2.nodes.length&&!G2.edges.length;
+}
+function undoBuild(){
+  const t=UNDO.pop();if(!t)return;
+  restoreSnap(t);sel=null;draft=null;UNDOKEY='';updUndo();renderGraph();renderAnalysis();
+}
+function clearBuild(){
+  if(!G2.nodes.length&&!G2.edges.length)return;
+  pushUndo(snapshot());
+  G2={nodes:[],edges:[]};roles={X:null,Y:null,Z:new Set(),M:null,I:null};sel=null;S2PREV=null;S2LAST='';
+  updUndo();renderGraph();renderAnalysis();toast('Graph gelöscht. „Rückgängig“ stellt ihn wieder her.');
+}
+function applyUi(){
+  const b=isBuild(),ed=canEdit();
+  const show=(id,on)=>{const e=document.getElementById(id);if(e)e.style.display=on?'':'none';};
+  show('xy-fixed',!b);
+  show('tool-wrap',ed);
+  show('m-node',b);show('u-undo',b);show('u-clear',b);
+  show('r-x',b);show('r-y',b);show('r-l',b);show('r-del',b);
+  show('edit-bar',!b);
+  show('edit-reset',!b&&editing);
+  show('edit-info',!b&&editing);
+  document.getElementById('edit-toggle').textContent=editing?'Veränderungsmodus beenden':'Graph verändern (fortgeschritten)';
+  document.getElementById('edit-toggle').classList.toggle('sel',editing);
+  updUndo();
+}
+function toggleEdit(){
+  if(isBuild())return;
+  editing=!editing;
+  if(!editing){if(sel&&sel.t==='e')sel=null;setMode('select');}
+  applyUi();renderGraph();
+}
+function resetEdit(){const keep=editing;loadPreset(presetIdx);editing=keep;applyUi();renderGraph();}
+function loadPreset(i){
+  const was=presetIdx,p=PRESETS[i];
+  if(p.build&&i===was)return;
+  if(PRESETS[was].build&&i!==was)BUILD_SAVE=snapshot();
+  presetIdx=i;
+  editing=false;UNDO=[];UNDOKEY='';sel=null;draft=null;drag=null;hiPath=null;
+  if(p.build&&BUILD_SAVE)restoreSnap(BUILD_SAVE);
+  else{
+    G2={nodes:p.nodes.map(n=>({id:n[0],label:n[1],x:n[2],y:n[3],latent:!!n[4]})),edges:p.edges.map(e=>({a:e[0],b:e[1],w:(e[2]!==undefined?e[2]:(p.w||0.6))}))};
+    roles={X:p.X,Y:p.Y,Z:new Set(p.Zs),M:p.M||null,I:p.I||null};
+  }
+  document.querySelectorAll('#s2-presets .fbtn').forEach(b=>b.classList.toggle('sel',+b.dataset.i===i));
+  document.getElementById('s2-hint').innerHTML=(p.build?'<b>So geht es:</b> ':'<b>Idee:</b> ')+p.hint;
+  S2PREV=null;S2LAST='';
+  if(p.M||p.I)document.getElementById('s2-adv').open=true;
+  setMode(p.build&&!G2.nodes.length?'node':'select');
+  applyUi();
+  renderGraph();renderAnalysis();
+}
+function setMode(m){
+  if(m==='arrow'&&!canEdit())m='select';
+  if(m==='node'&&!isBuild())m='select';
+  mode=m;['select','arrow','node'].forEach(k=>document.getElementById('m-'+k).classList.toggle('sel',k===m));
+  draft=null;renderGraph();
+}
+function nodeById(id){return G2.nodes.find(n=>n.id===id);}
+function wouldCycle(a,b){return a===b||descendantsOf(G2,b).has(a);}
+function addEdge(a,b){
+  if(a===b)return;
+  if(hasEdge(G2,a,b)){toast('Dieser Pfeil existiert schon.');return;}
+  if(hasEdge(G2,b,a)){toast('Zwischen diesen Knoten gibt es schon einen Pfeil in Gegenrichtung.');return;}
+  if(wouldCycle(a,b)){toast('Das würde einen Kreis erzeugen — ein DAG darf keine Zyklen haben.');return;}
+  pushUndo(snapshot());G2.edges.push({a,b,w:0.6});sel={t:'e',i:G2.edges.length-1};
+  renderGraph();renderAnalysis();
+}
+function addNodeAt(x,y){
+  if(!isBuild())return;
+  if(G2.nodes.length>=10){toast('Maximal 10 Knoten.');return;}
+  const pool='ABCDEFGHIJKLMNOPQRSTUV'.split('');
+  const id=pool.find(c=>!nodeById(c));if(!id)return;
+  pushUndo(snapshot());G2.nodes.push({id,label:id,x:Math.max(NR,Math.min(640-NR,x)),y:Math.max(NR,Math.min(400-NR,y))});
+  sel={t:'n',id};renderGraph();renderAnalysis();
+}
+function deleteSel(){
+  if(!sel||!isBuild())return;
+  pushUndo(snapshot());
+  if(sel.t==='n'){
+    const id=sel.id;G2.nodes=G2.nodes.filter(n=>n.id!==id);G2.edges=G2.edges.filter(e=>e.a!==id&&e.b!==id);
+    if(roles.X===id)roles.X=null;if(roles.Y===id)roles.Y=null;if(roles.M===id)roles.M=null;if(roles.I===id)roles.I=null;roles.Z.delete(id);
+  }else{G2.edges.splice(sel.i,1);}
+  sel=null;renderGraph();renderAnalysis();
+}
+function clearRoles(id){if(roles.X===id)roles.X=null;if(roles.Y===id)roles.Y=null;if(roles.M===id)roles.M=null;if(roles.I===id)roles.I=null;roles.Z.delete(id);}
+function setRole(r){const b=snapshot();_setRole(r);if(snapshot()!==b)pushUndo(b);}
+function _setRole(r){
+  if(!isBuild()&&(r==='X'||r==='Y'||r==='L')){toast('In diesem Beispiel sind X und Y vorgegeben.');return;}
+  if(!sel||sel.t!=='n'){toast('Wähle zuerst einen Knoten im Graphen aus.');return;}
+  const id=sel.id,nd=nodeById(id);
+  if(r==='L'){
+    if(!nd.latent&&(roles.X===id||roles.Y===id||roles.M===id||roles.I===id||roles.Z.has(id))){toast('Ein Knoten mit Rolle muss beobachtet sein. Entferne erst die Rolle.');return;}
+    nd.latent=!nd.latent;renderGraph();renderAnalysis();return;
+  }
+  if(nd.latent){toast('Dieser Knoten ist unbeobachtet — du kannst ihn nicht festlegen oder adjustieren.');return;}
+  if(r==='X'){if(roles.X===id)roles.X=null;else{clearRoles(id);roles.X=id;}}
+  else if(r==='Y'){if(roles.Y===id)roles.Y=null;else{clearRoles(id);roles.Y=id;}}
+  else if(r==='M'){if(roles.M===id)roles.M=null;else{if(roles.X===id||roles.Y===id){toast('X und Y können nicht der Mediator sein.');return;}roles.Z.delete(id);if(roles.I===id)roles.I=null;roles.M=id;}}
+  else if(r==='I'){if(roles.I===id)roles.I=null;else{if(roles.X===id||roles.Y===id){toast('X und Y können nicht das Instrument sein.');return;}roles.Z.delete(id);if(roles.M===id)roles.M=null;roles.I=id;}}
+  else{
+    if(roles.X===id||roles.Y===id){toast('X und Y selbst adjustierst du nicht.');return;}
+    if(roles.Z.has(id))roles.Z.delete(id);else{roles.Z.add(id);if(roles.M===id)roles.M=null;if(roles.I===id)roles.I=null;}
+  }
+  renderGraph();renderAnalysis();
+}
+function setEdgeW(v){
+  if(!sel||sel.t!=='e')return;
+  undoCo('e'+sel.i);G2.edges[sel.i].w=parseFloat(v);
+  document.getElementById('edge-wv').textContent=parseFloat(v).toFixed(1);
+  renderGraph();renderAnalysis();
+}
+
+/* ── Zeichnen des Graphen ── */
+let hiPath=null;
+function edgeGeom(a,b){
+  const A=nodeById(a),B=nodeById(b),d=Math.hypot(B.x-A.x,B.y-A.y)||1,ux=(B.x-A.x)/d,uy=(B.y-A.y)/d;
+  return {x1:A.x+ux*(NR+2),y1:A.y+uy*(NR+2),x2:B.x-ux*(NR+5),y2:B.y-uy*(NR+5)};
+}
+function renderGraph(){
+  const svg=document.getElementById('s2-svg');
+  let h='<defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker>'
+       +'<marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--a4)"/></marker></defs>';
+  const CC=s2Calc(),marks={};
+  if(CC){
+    CC.paths.forEach(p=>p.steps.forEach(st=>{if(st.kind!=='collider'&&!st.open&&!marks[st.id])marks[st.id]=['✕ blockiert','var(--a3)'];}));
+    CC.paths.forEach(p=>p.steps.forEach(st=>{if(st.kind==='collider'&&st.open)marks[st.id]=['◉ geöffnet','var(--a1)'];}));
+    CC.paths.filter(p=>p.open).forEach(p=>{
+      for(let i=0;i<p.path.length-1;i++){const A=nodeById(p.path[i]),B=nodeById(p.path[i+1]);
+        h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:'+(p.causal?'var(--a2)':'var(--a1)')+';stroke-width:10;opacity:.26;stroke-linecap:round"/>';}
+    });
+  }
+  if(hiPath){
+    for(let i=0;i<hiPath.length-1;i++){
+      const a=hiPath[i],b=hiPath[i+1],A=nodeById(a),B=nodeById(b);
+      h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:var(--a4);stroke-width:11;opacity:.28;stroke-linecap:round"/>';
+    }
+  }
+  G2.edges.forEach((e,i)=>{
+    const g=edgeGeom(e.a,e.b),isSel=sel&&sel.t==='e'&&sel.i===i,sw=1.2+Math.abs(e.w)*2.2;
+    h+='<line x1="'+g.x1+'" y1="'+g.y1+'" x2="'+g.x2+'" y2="'+g.y2+'" marker-end="url(#ar2)" style="stroke:'+(isSel?'var(--a4)':'var(--ink2)')+';stroke-width:'+sw+(e.w<0?';stroke-dasharray:6 4':'')+'"/>';
+    h+='<line data-e="'+i+'" x1="'+g.x1+'" y1="'+g.y1+'" x2="'+g.x2+'" y2="'+g.y2+'" style="stroke:transparent;stroke-width:16;cursor:pointer"/>';
+  });
+  if(draft){
+    const A=nodeById(draft.from);
+    h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+draft.x+'" y2="'+draft.y+'" marker-end="url(#ar3)" style="stroke:var(--a4);stroke-width:2;stroke-dasharray:5 4"/>';
+  }
+  G2.nodes.forEach(n=>{
+    const isSel=sel&&sel.t==='n'&&sel.id===n.id,isX=roles.X===n.id,isY=roles.Y===n.id,isZ=roles.Z.has(n.id),isM=roles.M===n.id,isI=roles.I===n.id;
+    const stroke=isX?'var(--a2)':isY?'var(--a4)':isM?'var(--a3)':isI?'var(--a6)':isSel?'var(--a4)':'var(--ink2)',sw=(isX||isY||isM||isI||isSel)?3.2:2;
+    h+='<g data-n="'+n.id+'" style="cursor:'+(mode==='arrow'?'crosshair':(canEdit()?'grab':'pointer'))+'">';
+    if(isZ)h+='<rect x="'+(n.x-NR)+'" y="'+(n.y-NR)+'" width="'+(2*NR)+'" height="'+(2*NR)+'" style="fill:var(--a6);stroke:'+stroke+';stroke-width:'+sw+'"/>';
+    else h+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+NR+'" style="fill:var(--paper);stroke:'+stroke+';stroke-width:'+sw+(n.latent?';stroke-dasharray:5 4':'')+'"/>';
+    h+='<text x="'+n.x+'" y="'+(n.y+6)+'" text-anchor="middle" font-size="'+(n.label.length<=2?17:n.label.length<=4?13:10)+'" style="fill:'+(isZ?'var(--paper)':(n.latent?'var(--ink2)':'var(--ink)'))+(n.latent?';font-style:italic':'')+';pointer-events:none">'+n.label+'</text>';
+    const badge=isX?['X · Ursache','var(--a2)']:isY?['Y · Wirkung','var(--a4)']:isM?['Front-Door-Kandidat','var(--a3)']:isI?['Instrument-Kandidat','var(--a6)']:n.latent?['unbeobachtet','var(--ink3)']:null;
+    if(badge)h+='<text x="'+n.x+'" y="'+(n.y-NR-6)+'" text-anchor="middle" font-size="12" style="fill:'+badge[1]+';paint-order:stroke;stroke:var(--bg);stroke-width:4px;pointer-events:none">'+badge[0]+'</text>';
+    if(marks[n.id]){
+      const mk=marks[n.id];
+      if(n.y>350)h+='<text x="'+(n.x+NR+6)+'" y="'+(n.y+5)+'" font-size="12" style="fill:'+mk[1]+';pointer-events:none">'+mk[0]+'</text>';
+      else h+='<text x="'+n.x+'" y="'+(n.y+NR+15)+'" text-anchor="middle" font-size="12" style="fill:'+mk[1]+';pointer-events:none">'+mk[0]+'</text>';
+    }
+    h+='</g>';
+  });
+  svg.innerHTML=h;
+  // Kantensteuerung
+  const ec=document.getElementById('edge-ctl');
+  if(canEdit()&&sel&&sel.t==='e'&&G2.edges[sel.i]){
+    const e=G2.edges[sel.i];ec.style.display='flex';
+    document.getElementById('edge-lbl').textContent='Stärke '+labelOf(G2,e.a)+' → '+labelOf(G2,e.b);
+    document.getElementById('edge-w').value=e.w;document.getElementById('edge-wv').textContent=e.w.toFixed(1);
+  }else ec.style.display='none';
+  document.getElementById('r-x').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.X===sel.id));
+  document.getElementById('r-y').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.Y===sel.id));
+  document.getElementById('r-z').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.Z.has(sel.id)));
+  document.getElementById('r-m').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.M===sel.id));
+  document.getElementById('r-i').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.I===sel.id));
+  document.getElementById('r-l').classList.toggle('sel',!!(sel&&sel.t==='n'&&nodeById(sel.id)&&nodeById(sel.id).latent));
+  const nc=document.getElementById('node-ctl'),ni=document.getElementById('node-lbl');
+  if(isBuild()&&sel&&sel.t==='n'&&nodeById(sel.id)){nc.style.display='flex';if(document.activeElement!==ni)ni.value=nodeById(sel.id).label;}else nc.style.display='none';
+  const sn=document.getElementById('sel-name'),sd=sel&&sel.t==='n'?nodeById(sel.id):null;
+  sn.textContent=sd?sd.label+(sd.latent?' (unbeobachtet)':''):(sel&&sel.t==='e'?'(ein Pfeil)':'keiner');
+  document.getElementById('r-del').disabled=!sel;
+}
+function setNodeLabel(v){
+  if(!sel||sel.t!=='n')return;
+  const nd=nodeById(sel.id);if(!nd)return;
+  undoCo('n'+nd.id);nd.label=(v.trim()||nd.id).slice(0,6);renderGraph();renderAnalysis();
+}
+function svgPt(e){
+  const svg=document.getElementById('s2-svg'),r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal;
+  return {x:(e.clientX-r.left)/r.width*vb.width,y:(e.clientY-r.top)/r.height*vb.height};
+}
+function nodeAt(p){
+  let best=null,bd=NR+10;
+  for(const n of G2.nodes){const d=Math.hypot(n.x-p.x,n.y-p.y);if(d<bd){bd=d;best=n;}}
+  return best;
+}
+(function wireSvg(){
+  const svg=document.getElementById('s2-svg');
+  svg.addEventListener('pointerdown',e=>{
+    const p=svgPt(e),nd=e.target.closest('[data-n]'),ed=e.target.closest('[data-e]');
+    if(mode==='select'){
+      if(nd){const n=nodeById(nd.dataset.n);sel={t:'n',id:n.id};if(canEdit()){drag={id:n.id,dx:p.x-n.x,dy:p.y-n.y,snap:isBuild()?snapshot():null,moved:false};svg.setPointerCapture(e.pointerId);}}
+      else if(ed&&canEdit()){sel={t:'e',i:+ed.dataset.e};}
+      else sel=null;
+      renderGraph();
+    }else if(mode==='arrow'){
+      if(nd){draft={from:nd.dataset.n,x:p.x,y:p.y};svg.setPointerCapture(e.pointerId);renderGraph();}
+    }else if(mode==='node'){
+      if(!nd)addNodeAt(p.x,p.y);
+    }
+  });
+  svg.addEventListener('pointermove',e=>{
+    const p=svgPt(e);
+    if(drag){drag.moved=true;const n=nodeById(drag.id);n.x=Math.max(NR,Math.min(640-NR,p.x-drag.dx));n.y=Math.max(NR+8,Math.min(400-NR,p.y-drag.dy));renderGraph();}
+    else if(draft){draft.x=p.x;draft.y=p.y;renderGraph();}
+  });
+  svg.addEventListener('pointerup',e=>{
+    if(draft){const p=svgPt(e),t=nodeAt(p),from=draft.from;draft=null;if(t&&t.id!==from)addEdge(from,t.id);else renderGraph();}
+    if(drag){if(drag.moved&&drag.snap)pushUndo(drag.snap);drag=null;renderAnalysis();}
+  });
+  window.addEventListener('keydown',e=>{
+    if(STAGE!==2)return;
+    if((e.key==='Delete'||e.key==='Backspace')&&isBuild()&&sel&&!/INPUT|TEXTAREA/.test((e.target.tagName||''))){e.preventDefault();deleteSel();}
+  });
+})();
+
+/* ── Analyse ── */
+function renderAnalysis(){renderPaths();renderEstimates();}
+let S2PREV=null,S2LAST='';
+function s2Key(){return JSON.stringify([G2.nodes.map(n=>n.id+(n.latent?'*':'')),G2.edges.map(e=>e.a+'>'+e.b),roles.X,roles.Y]);}
+function s2Calc(){
+  if(!roles.X||!roles.Y||!nodeById(roles.X)||!nodeById(roles.Y))return null;
+  const set=new Set([...roles.Z].filter(z=>nodeById(z)&&!nodeById(z).latent));
+  return {set,paths:allPaths(G2,roles.X,roles.Y,300).map(p=>analysePath(G2,p,set))};
+}
+function s2Plain(p){return pathString(G2,p.path).map(s=>s.v).join(' ');}
+function s2EffectHtml(C){
+  const X=roles.X,Y=roles.Y,xl=labelOf(G2,X),yl=labelOf(G2,Y),dps=directedPaths(G2,X,Y);
+  if(!dps.length){
+    return '<b>Zwischen '+xl+' und '+yl+' besteht in diesem DAG kein gerichteter kausaler Wirkungsweg.</b> Ein beobachteter Zusammenhang kann daher nur über nicht-kausale Pfade entstehen.'
+      +(C.paths.some(p=>p.open)?' Hier ist mindestens einer offen: Du erwartest einen Zusammenhang, obwohl '+xl+' nichts bewirkt.':' Hier sind alle blockiert: Du erwartest keinen Zusammenhang.');
+  }
+  const de=G2.edges.find(e=>e.a===X&&e.b===Y),dir=de?de.w:0,tot=trueEffect(G2,X,Y),ind=tot-dir,indP=dps.filter(p=>p.length>2);
+  const f=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+  let h='<div class="effl"><b>Direkter Effekt:</b> Wirkung über den direkten Pfeil '+xl+' → '+yl+(de?'. Hier: '+f(dir)+'.':'. Diesen Pfeil gibt es in diesem DAG nicht, der direkte Effekt ist 0.')+'</div>'
+    +'<div class="effl"><b>Indirekter Effekt:</b> Wirkung über gerichtete Mediationspfade'+(indP.length?', hier '+indP.map(p=>p.map(v=>labelOf(G2,v)).join(' → ')).join('; ')+'. Zusammen: '+f(ind)+'.':'. Davon gibt es hier keinen, der indirekte Effekt ist 0.')+'</div>'
+    +'<div class="effl"><b>Totaler Effekt</b> = direkter Effekt + indirekter Effekt: '+f(tot)+' = '+f(dir)+' '+(ind<0?'−':'+')+' '+Math.abs(ind).toFixed(2)+'</div>';
+  const cp=C.paths.filter(p=>p.causal),cOpen=cp.filter(p=>p.open),cBlk=cp.filter(p=>!p.open),nc=C.paths.filter(p=>!p.causal&&p.open);
+  let a;
+  if(!cOpen.length)a='Alle kausalen Wirkungswege sind blockiert. Von der Wirkung von '+xl+' bleibt in der Schätzung nichts übrig.';
+  else if(cBlk.length&&cOpen.length===1&&cOpen[0].path.length===2)a='Nur der direkte Pfeil ist offen. Die Schätzung bezieht sich auf den direkten Effekt.';
+  else if(cBlk.length)a='Ein Teil der kausalen Wirkungswege ist blockiert. Die Schätzung erfasst nur einen Teil des totalen Effekts.';
+  else a='Alle kausalen Wirkungswege sind offen. Die Schätzung bezieht sich auf den totalen Effekt.';
+  const b=nc.length
+    ?'Zusätzlich sind '+nc.length+' nicht-kausale'+(nc.length>1?' Pfade':'r Pfad')+' offen: Der beobachtete Zusammenhang enthält Verzerrung ('+(nc.some(p=>p.steps.some(s=>s.kind==='collider'))?'Collider Bias':'Confounding')+').'
+    :'Alle nicht-kausalen Pfade sind zu: Es bleibt keine Verzerrung durch Störwege.';
+  return h+'<div class="effl" style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--grid)"><b>Mit deiner aktuellen Auswahl:</b> '+a+' '+b+'</div>';
+}
+function renderPaths(){
+  if(STAGE!==2)return;
+  const verdict=document.getElementById('s2-verdict'),list=document.getElementById('s2-paths'),chg=document.getElementById('s2-change'),eff=document.getElementById('s2-effect');
+  const C=s2Calc();
+  const zl=C?[...C.set].map(z=>labelOf(G2,z)):[];
+  document.getElementById('s2-r1-lbl').textContent='r(X, Y'+(zl.length?' | '+zl.join(', '):'')+') — '+(zl.length?'mit Adjustierung':'nichts adjustiert');
+  document.getElementById('s2-r0').textContent='—';document.getElementById('s2-r1').textContent='—';
+  if(!C){
+    verdict.className='verdict';verdict.innerHTML='Lege zunächst <b>X</b> und <b>Y</b> fest, damit die Pfade analysiert werden können.';
+    list.innerHTML='';chg.innerHTML='';eff.innerHTML='Lege zunächst X und Y fest, damit die Pfade analysiert werden können.';S2PREV=null;S2LAST='';return;
+  }
+  const set=C.set,paths=C.paths,anyOpen=paths.some(p=>p.open);
+  const xl=labelOf(G2,roles.X),yl=labelOf(G2,roles.Y);
+  const ctxt=zl.length?' gegeben '+zl.join(', '):' ohne Adjustierung';
+  if(!paths.length){
+    verdict.className='verdict vshut';
+    verdict.innerHTML='Zwischen <b>'+xl+'</b> und <b>'+yl+'</b> gibt es keinen Pfad: Die beiden sind <b>d-separiert</b>'+ctxt+'.';
+  }else if(anyOpen){
+    const nOpen=paths.filter(p=>p.open).length;
+    verdict.className='verdict vopen';
+    verdict.innerHTML='<b>'+xl+'</b> und <b>'+yl+'</b> sind <b>d-connected</b>'+ctxt+': '+(paths.length===1?'der Pfad ist offen':(nOpen===1?'1 von '+paths.length+' Pfaden ist offen':nOpen+' von '+paths.length+' Pfaden sind offen'))+'. Information kann fließen, also erwartest du einen Zusammenhang.';
+  }else{
+    verdict.className='verdict vshut';
+    verdict.innerHTML='<b>'+xl+'</b> und <b>'+yl+'</b> sind <b>d-separiert</b>'+ctxt+': '+(paths.length>1?'alle '+paths.length+' Pfade sind':'der einzige Pfad ist')+' blockiert. Du erwartest keinen Zusammenhang.';
+  }
+  // Was hat sich geändert?
+  const key=s2Key(),sig={},zNow=[...set].sort().join(',');
+  paths.forEach(p=>{sig[p.path.join('|')]=p.open;});
+  if(S2PREV&&S2PREV.key===key&&S2PREV.z!==zNow){
+    const prevZ=new Set(S2PREV.z?S2PREV.z.split(','):[]);
+    const added=[...set].filter(z=>!prevZ.has(z)),removed=[...prevZ].filter(z=>!set.has(z)),diffZ=new Set(added.concat(removed));
+    const act=[];
+    if(added.length)act.push('<b>'+added.map(z=>labelOf(G2,z)).join(', ')+'</b> adjustiert');
+    if(removed.length)act.push('<b>'+removed.map(z=>labelOf(G2,z)).join(', ')+'</b> nicht mehr adjustiert');
+    const items=[];
+    paths.forEach(p=>{
+      const k=p.path.join('|');
+      if(S2PREV.sig[k]===undefined||S2PREV.sig[k]===p.open)return;
+      const st=p.steps.filter(s=>diffZ.has(s.id)||(s.kind==='collider'&&[...descendantsOf(G2,s.id)].some(d=>diffZ.has(d))));
+      const where=st.length?' An der Station <b>'+st.map(s=>labelOf(G2,s.id)).join(', ')+'</b> ('+st.map(s=>s.why).join('; ')+').':'';
+      let folge,cls;
+      if(p.causal&&!p.open){folge='Ein <b>kausaler Wirkungsweg</b> wird geschlossen: Der darüber laufende Anteil des Effekts geht verloren.';cls='b';}
+      else if(p.causal){folge='Ein <b>kausaler Wirkungsweg</b> ist wieder offen.';cls='g';}
+      else if(!p.open){folge='Ein <b>nicht-kausaler Pfad</b> wird geschlossen: eine Verzerrungsquelle weniger.';cls='g';}
+      else{folge='Ein <b>nicht-kausaler Pfad</b> wird geöffnet'+(p.steps.some(s=>s.kind==='collider')?' (ein Collider geht auf)':'')+': Es kann ein Scheinzusammenhang entstehen.';cls='b';}
+      items.push('<div class="'+cls+'" style="margin-top:.3rem">'+(cls==='g'?'✓ ':'✗ ')+'<b>'+s2Plain(p)+'</b>: '+(S2PREV.sig[k]?'offen':'blockiert')+' → '+(p.open?'offen':'blockiert')+'.'+where+' '+folge+'</div>');
+    });
+    S2LAST=act.join(' und ')+':'+(items.length?items.join(''):'<div class="n" style="margin-top:.3rem">Das verändert keinen Pfad zwischen '+xl+' und '+yl+'.</div>');
+  }else if(!(S2PREV&&S2PREV.key===key))S2LAST='';
+  S2PREV={key,z:zNow,sig};
+  chg.innerHTML=S2LAST?'<div class="s-title" style="margin-top:.2rem">Was hat sich geändert?</div><div class="lastc">'+S2LAST+'</div>'
+    :'<div class="hint-box" style="margin-top:0">Wähle einen Knoten und klicke „adjustieren“. Hier siehst du dann, welcher Pfad sich an welcher Station verändert.</div>';
+  // Pfadliste (kausale zuerst, dann offene)
+  paths.sort((a,b)=>(b.causal-a.causal)||(b.open-a.open));
+  list.innerHTML=paths.map((p,i)=>{
+    const str=pathString(G2,p.path).map(s=>s.t==='n'?'<span>'+s.v+'</span>':'<span class="arr">'+s.v+'</span>').join('');
+    const nodes=p.steps.length?p.steps.map(s=>'<div><span class="'+(s.open?'ok':'no')+'">'+(s.open?'●':'✕')+'</span> '+labelOf(G2,s.id)+': '+s.why+'</div>').join(''):'direkter Pfeil — nichts kann ihn blockieren';
+    return '<div class="pitem '+(p.open?'isopen':'isshut')+'" data-pi="'+i+'"><div class="pstr">'+str
+      +'<span class="badge '+(p.open?'open':'shut')+'">'+(p.open?'offen':'blockiert')+'</span>'
+      +'<span class="badge '+(p.causal?'kaus':'nk')+'">'+(p.causal?'kausal':'nicht kausal')+'</span></div><div class="pnodes">'+nodes+'</div></div>';
+  }).join('');
+  list.querySelectorAll('.pitem').forEach(el=>{
+    const p=paths[+el.dataset.pi];
+    el.addEventListener('mouseenter',()=>{hiPath=p.path;renderGraph();});
+    el.addEventListener('mouseleave',()=>{hiPath=null;renderGraph();});
+  });
+  eff.innerHTML=s2EffectHtml(C);
+  // simulierte Daten (visuelle Gegenprobe)
+  const data=simulate(G2,3000);
+  const r0=partialCorr(data,roles.X,roles.Y,[]),Zarr=[...set].filter(z=>z!==roles.X&&z!==roles.Y);
+  const r1=Zarr.length?partialCorr(data,roles.X,roles.Y,Zarr):r0;
+  document.getElementById('s2-r0').textContent=isNaN(r0)?'—':fmt(r0);
+  document.getElementById('s2-r1').textContent=isNaN(r1)?'—':fmt(r1);
+}
+
+
+/* ═══════════════════ Effektschätzung ═══════════════════ */
+function withoutOut(G,id){return {nodes:G.nodes,edges:G.edges.filter(e=>e.a!==id)};}
+function dsepIn(G,x,y,Zset){return !allPaths(G,x,y,500).some(pp=>analysePath(G,pp,Zset).open);}
+function estimators(data,X,Y,Zs,M,I){
+  const o={naive:null,adj:null,fd:null,iv:null};
+  const b=olsCoefs(data,Y,[X]);o.naive=b?b[0]:null;
+  if(Zs.length){const c=olsCoefs(data,Y,[X].concat(Zs));o.adj=c?c[0]:null;}
+  if(M){const b1=olsCoefs(data,M,[X]),b2=olsCoefs(data,Y,[M,X]);if(b1&&b2)o.fd=b1[0]*b2[0];}
+  if(I){const C=covMat(data,[I,X,Y]);o.iv=Math.abs(C[0][1])>1e-9?C[0][2]/C[0][1]:null;}
+  return o;
+}
+function ckRow(ok,txt){return '<div class="ck"><span class="'+(ok?'y':'n')+'">'+(ok?'✓':'✗')+'</span><span>'+txt+'</span></div>';}
+function renderEstimates(){
+  if(STAGE!==2)return;
+  const box=document.getElementById('s2-est-body');
+  if(!roles.X||!roles.Y||!nodeById(roles.X)||!nodeById(roles.Y)){box.innerHTML='<div class="hint-box">Lege zuerst X und Y fest.</div>';return;}
+  const X=roles.X,Y=roles.Y,xl=labelOf(G2,X),yl=labelOf(G2,Y);
+  const Zs=[...roles.Z].filter(z=>nodeById(z)&&!nodeById(z).latent&&z!==X&&z!==Y);
+  const M=(roles.M&&nodeById(roles.M)&&roles.M!==X&&roles.M!==Y)?roles.M:null;
+  const I=(roles.I&&nodeById(roles.I)&&roles.I!==X&&roles.I!==Y)?roles.I:null;
+  const truth=trueEffect(G2,X,Y);
+  // Kriterien
+  let fdOk=null,fdHtml='',ivOk=null,ivHtml='';
+  if(M){
+    const ml=labelOf(G2,M),dps=directedPaths(G2,X,Y);
+    const c1=dps.length>0&&dps.every(p=>p.includes(M));
+    const c2=dsepIn(withoutOut(G2,X),X,M,new Set());
+    const c3=dsepIn(withoutOut(G2,M),M,Y,new Set([X]));
+    fdOk=c1&&c2&&c3;
+    fdHtml='<div class="crit"><b>Eignet sich '+ml+' als Front-Door-Mediator? '+(fdOk?'Ja.':'Nein.')+'</b> Geprüft werden drei Bedingungen:'
+      +ckRow(c1,'<b>'+ml+'</b> fängt alle kausalen Wege von '+xl+' nach '+yl+' ab (kein direkter Pfeil, kein Weg an '+ml+' vorbei).')
+      +ckRow(c2,'Kein offener Backdoor-Pfad von '+xl+' nach '+ml+' (nichts Gemeinsames verzerrt diesen Schritt).')
+      +ckRow(c3,'Alle Backdoor-Pfade von '+ml+' nach '+yl+' werden durch '+xl+' blockiert (deshalb adjustierst du in Schritt 2 für '+xl+').')
+      +'<div class="calc"><b>So wird gerechnet:</b> Schritt 1 schätzt den Effekt '+xl+' → '+ml+' (unverzerrt, weil Bedingung 2 gilt). Schritt 2 schätzt '+ml+' → '+yl+' bei Adjustierung von '+xl+' (blockiert den Backdoor-Weg, der über '+xl+' führt). Das Produkt der beiden Koeffizienten ist der Effekt von '+xl+' auf '+yl+' — ohne dass du die unbeobachtete Ursache kennen musst.</div></div>';
+  }
+  if(I){
+    const il=labelOf(G2,I),dps=directedPaths(G2,I,Y);
+    const c1=!dsepIn(G2,I,X,new Set());
+    const c2=dps.every(p=>p.includes(X));
+    const c3=dsepIn(withoutOut(G2,I),I,Y,new Set());
+    ivOk=c1&&c2&&c3;
+    ivHtml='<div class="crit"><b>Eignet sich '+il+' als Instrument? '+(ivOk?'Ja.':'Nein.')+'</b> Geprüft werden drei Bedingungen:'
+      +ckRow(c1,'<b>Relevanz:</b> '+il+' und '+xl+' hängen zusammen (es gibt einen offenen Pfad).')
+      +ckRow(c2,'<b>Ausschluss:</b> '+il+' wirkt auf '+yl+' nur über '+xl+' (kein direkter Weg an '+xl+' vorbei).')
+      +ckRow(c3,'<b>Unabhängigkeit:</b> '+il+' teilt keine Ursache mit '+yl+' (kein offener Backdoor-Pfad von '+il+' zu '+yl+').')
+      +'<div class="calc"><b>So wird gerechnet:</b> Effekt = Cov('+il+', '+yl+') / Cov('+il+', '+xl+'). Im Zähler steht, wie stark '+il+' '+yl+' verschiebt, im Nenner, wie stark '+il+' '+xl+' verschiebt. Weil '+il+' nur über '+xl+' wirkt, ist das Verhältnis der Effekt von '+xl+' auf '+yl+' — unverzerrt durch alles, was '+xl+' und '+yl+' gemeinsam beeinflusst. Je schwächer '+il+' auf '+xl+' wirkt, desto stärker streut die Schätzung.</div></div>';
+  }
+  // Schätzungen: aktueller Datensatz + 30 Wiederholungen
+  const n=3000,R=30,keep=SEED;
+  const cur=estimators(simulate(G2,n),X,Y,Zs,M,I);
+  const acc={naive:[],adj:[],fd:[],iv:[]};
+  for(let k=0;k<R;k++){SEED=5000+k;const e=estimators(simulate(G2,n),X,Y,Zs,M,I);for(const key in acc)if(e[key]!==null&&isFinite(e[key]))acc[key].push(e[key]);}
+  SEED=keep;
+  const f=v=>(v===null||v===undefined||!isFinite(v))?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+  const row=(name,sub,key,validity)=>{
+    if(key==='truth')return '<div class="erow"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">'+f(truth)+'</div><div class="em">—</div><div class="eu">Referenz</div></div>';
+    const a=acc[key],has=cur[key]!==null&&a.length>0;
+    if(!has)return '<div class="erow dim"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">nicht festgelegt</div></div>';
+    const m=mean(a),sd=sdOf(a),unb=Math.abs(m-truth)<0.05;
+    let urteil;
+    if(validity===false)urteil='<span class="bad">Bedingungen verletzt</span>';
+    else urteil='<span class="'+(unb?'good':'bad')+'">'+(unb?'unverzerrt':'verzerrt')+'</span> (Ø '+(m-truth>=0?'+':'−')+Math.abs(m-truth).toFixed(2)+')';
+    return '<div class="erow'+(validity===false?' dim':'')+'"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">'+f(cur[key])+'</div><div class="em">Ø '+f(m)+' ± '+sd.toFixed(2)+'</div><div class="eu">'+urteil+'</div></div>';
+  };
+  const zl=Zs.map(z=>labelOf(G2,z)).join(', ');
+  let h='<div class="etab"><div class="erow eh"><div>Verfahren</div><div>diese Daten</div><div>30 Datensätze (Ø ± SD)</div><div>Urteil</div></div>'
+    +row('Wahrer Effekt','Summe der Pfadprodukte im Graphen','truth')
+    +row('Naiv','Y auf X, ohne Adjustierung','naive')
+    +(Zs.length?row('Mit Adjustierung','Y auf X + '+zl,'adj'):'<div class="erow dim"><div class="en">Mit Adjustierung<small>keine Adjustierungsvariable gewählt</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">wähle Z oben im Graphen</div></div>')
+    +row('Front-Door','Produkt zweier Teileffekte über den Mediator','fd',M?fdOk:undefined)
+    +row('Instrument','Cov(I,Y) / Cov(I,X)','iv',I?ivOk:undefined)
+    +'</div>';
+  h+=fdHtml+ivHtml;
+  if(!M&&!I)h+='<div class="hint-box"><b>Weitere Verfahren:</b> Wähle im Graphen einen Knoten und prüfe oben, ob er sich als Front-Door-Mediator oder als Instrument eignet. Probiere es an den Beispielgraphen „Front-Door“ und „Instrument“.</div>';
+  h+='<div class="hint-box"><b>Lesehilfe:</b> „Verzerrt“ heißt, dass das Verfahren im Mittel über viele Datensätze daneben liegt (mehr als 0,05 vom wahren Wert). Die Streuung (±) zeigt, wie stark ein einzelner Datensatz vom Mittel abweicht — sie wächst bei schwachen Instrumenten.</div>';
+  box.innerHTML=h;
+}
+
+
+/* ═══════════════════ Start ═══════════════════ */
+EST='total';ADJ=ADJS.total;syncTaskUi();
+buildPresets();
+loadPreset(0);
+s1Redraw();
+</script>
+</body>
+</html>
