@@ -13,7 +13,7 @@
 
 ### 🌐 [www.bayes-thinking-lab.uni-osnabrueck.de](https://www.bayes-thinking-lab.uni-osnabrueck.de/)
 
-**24 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including causal effect estimation via G-Computation, DAG-based causal reasoning, parametric data generation, and GLM-scale prior specification.**
+**27 interactive tools that guide users from frequentist foundations through Bayesian multi-level modeling to principled posterior decision-making — including a guided introduction to causal reasoning with DAGs (Causal Terror), causal effect estimation via G-Computation, parametric data generation, and GLM-scale prior specification. Available in German and English.**
 
 [ [Learning Path](#-the-learning-path) ] • [ [Ecosystem](#-the-ecosystem) ] • [ [Philosophy](#-scientific-philosophy) ] • [ [Usage](#-getting-started) ] • [ [GitHub Repository](https://github.com/raduesing/Bayes_Thinking_Lab) ]
 
@@ -39,12 +39,12 @@ The lab is organized into six sections that build on each other. Work through th
 | :--- | :--- | :--- |
 | **0 · Foundations** | Why the GLM is the gateway to Bayesian thinking | Interactive LM · MLE Tool · LM→GLM Transition |
 | **I · GLM & GLMM** | How regression generalizes across distributions and hierarchies | Distribution Lab · GLM Conditional Distributions · GLM 3D · Interactive GLMM |
-| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Why Bayes? · Thinking Simulator · Likelihood Compass · Prior Lab · MCMC Visualizer · Bayes Interactive |
-| **III · Small Worlds** | How to construct models: sketch causal structure, simulate data, plan power | Golem Builder · Data Creator |
+| **II · Bayesian Intuition** | How to think in probability distributions and update beliefs from data | Why Bayes? · Thinking Simulator · Likelihood Compass · Prior Compass · Prior Lab · MCMC Visualizer · Bayes Interactive |
+| **III · Small Worlds** | How to construct models: understand causal structure, sketch it as a DAG, simulate data, plan power | Causal Terror · Golem Builder · Data Creator |
 | **IV · Bayesian Workflow** | How to specify, build, check, compare, and export hierarchical Bayesian models | Model Architect · brms Builder · Advanced Model Builder · Prior & Posterior PC · LOO Lab |
 | **V · Posterior Decision** | How to make principled, transparent decisions from posterior distributions | Causal Calculator · G-Comp Builder · Decision Lab · Decision Maker |
 
-> **⬡ Workflow tip:** Use the **Golem Builder** (Section III — Small Worlds) to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. Transfer everything to the **G-Comp Builder** (Section V) at the click of a button — it generates ready-to-run `marginaleffects` R code for ATE, ATT, and ATU, and exports MCMC draws directly to the **Decision Maker**.
+> **⬡ Workflow tip:** New to DAGs? Start with **Causal Terror** (Section III — Small Worlds). Then use the **Golem Builder** to do the causal groundwork: draw your DAG, identify confounders, and determine the correct adjustment set. Transfer everything to the **G-Comp Builder** (Section V) at the click of a button — it generates ready-to-run `marginaleffects` R code for ATE, ATT, and ATU, and exports MCMC draws directly to the **Decision Maker**.
 
 ---
 
@@ -65,7 +65,7 @@ The lab is organized into six sections that build on each other. Work through th
 ### I. From LM to GLMM
 *Scale the hierarchy of linear modeling.*
 
-* **Distribution Lab** — Explore **18 probability distributions** interactively — adjust parameters, show moments, and read off brms parameterisation and link functions directly. Covers all major GLM and Bayesian likelihood families: Normal, Student-t, Skew-Normal, Log-Normal, Gamma, Beta, Bernoulli, Poisson, Negative Binomial, ZI-Beta, ZOIB, Beta-Binomial, and more. Ideal preparation before fitting GLMs or specifying priors in brms.
+* **Distribution Lab** — Explore **31 probability distributions** interactively — adjust parameters, show moments, and read off brms parameterisation and link functions directly. Covers all major GLM and Bayesian likelihood families: Normal, Student-t, Cauchy, Skew-Normal, Log-Normal, Gamma, Weibull, Beta, Bernoulli, Poisson, Negative Binomial, ZI-Beta, ZOIB, Beta-Binomial, zero-inflated and hurdle families, ordinal (cumulative) models, the LKJ prior, and more. A built-in cheat sheet and a relationships diagram show how the distributions connect. Ideal preparation before fitting GLMs or specifying priors in brms.
 
 * **GLM Conditional Distributions** — Visualize the conditional distribution y|x along a predictor across **8 model families**: Normal, Student-t, Bernoulli (logistic), Poisson, Gamma, Ordinal (cumulative logit), Zero-Inflated Poisson, and Hurdle-Poisson. Compare parameter behavior and link functions across families.
 * **GLM in 3D** — Interact with regression planes and residuals in a spatial environment. Explore how multiple predictors jointly determine the outcome surface.
@@ -79,6 +79,7 @@ The lab is organized into six sections that build on each other. Work through th
 * **Why Bayes?** — What can a Bayesian posterior tell you that a p-value can't? A two-act comparison: frequentist output first, then an interactive posterior with a movable effect threshold and a live prior-update — no R required. Makes concrete why a credible interval is not a confidence interval.
 * **Bayesian Thinking Simulator** — Work through 8 psychological scenarios that build qualitative updating intuition without requiring mathematical notation.
 * **Likelihood Compass** — Before the first prior is set, a different decision has to be made: which distribution family actually fits the data-generating process — not just the histogram. A guided decision tree leads from reaction times, sum scores, and count data to a reasoned shortlist. Check candidates against your own dataset via Maximum Likelihood (AIC/BIC), then jump straight to the brms reference: required parameters, priors, and go-to defaults per family.
+* **Prior Compass** — Why do you need a prior at all, for which model parameter, and in which value range? A parameter atlas, a GLM link-scale explainer, and a decision wizard that leads to a concrete prior suggestion with a deep link into the Prior Lab.
 * **Prior Lab** — Translate verbal uncertainty statements into mathematical priors across 12 distributions. A real-time CI-solver maps your beliefs onto distribution parameters. **GLM Mode**: enter your bounds as probabilities (logit-link) or expected values (log-link) — the solver converts to model scale automatically, and a dual-panel plot shows both the prior as brms needs it and what it implies on the response scale (probabilities, Odds Ratios, Rate Ratios) — via a **mathematically exact Jacobian transformation** (change-of-variables theorem), not an approximation.
 
 <p align="center"><img src="images/Prior_Lab.gif" width="580"></p>
@@ -94,12 +95,14 @@ The lab is organized into six sections that build on each other. Work through th
 ### III. Small Worlds
 *Named after Richard McElreath (*Statistical Rethinking*, Ch. 2): a model is a "small world" — a simplified, consistent representation of reality. Before real data are collected or models fitted, it is worth explicitly constructing and simulating this small world.*
 
+* **Causal Terror** — Learn what adjusting for a variable does to the effect you want to estimate — no prior knowledge of causal inference needed. Named after McElreath's chapter on the haunted DAG and the causal terror (*Statistical Rethinking*, Ch. 6). Three stages: (1) **information flow** in the three basic structures confounder (fork), mediator (chain), and collider; (2) **reading paths** in example graphs (M-bias, collider descendants, front-door, instrument) or in a DAG you build yourself, with live feedback on which path opens or closes where; (3) **application** to *sport → heart health*: choose adjustment sets for the total effect and the direct effect, see the consequence of every click, and derive the indirect effect — followed by a formal derivation with the three rules of the do-calculus.
+
 * **Golem Builder** — Draw directed acyclic graphs (DAGs), compute d-separation and testable implications (compatible with dagitty), identify minimal adjustment sets, detect instrumental variables and the **Front Door criterion**. Quantify relationships, simulate data directly from the DAG, and export production-ready `brms` and `glmmTMB` analysis code — all in the browser. Exactly following McElreath's approach. **One-click export to the G-Comp Builder** transfers exposure, outcome, adjustment set, and formula automatically — no R code required.
 <p align="center"><img src="images/Golem_Builder_gif.gif" width="580"></p>
 
-* **Data Creator** — Parametric data generation for all common designs: between-subjects, within-subjects (repeated measures), and mixed designs — with covariates, cluster structures (random intercepts & slopes), and arbitrary sample sizes. Supports 10 likelihood families (Gaussian, Student-t, Log-Normal, Gamma, Bernoulli, Beta, Binomial, Poisson, Negative Binomial). Full `faux` and `glmmTMB` R code export, plus a commented simulation-based power analysis block (glmmTMB + car::Anova) — ready to run in R.
+* **Data Creator** — Parametric data generation for all common designs: between-subjects, within-subjects (repeated measures), and mixed designs — with covariates, cluster structures (random intercepts & slopes), and arbitrary sample sizes. Covariates have a slope on the outcome — optionally per group, which creates a factor × covariate interaction — and are centered at their grand mean. Supports 9 likelihood families (Gaussian, Student-t, Log-Normal, Gamma, Bernoulli, Beta, Binomial, Poisson, Negative Binomial). Full `faux` and `glmmTMB` R code export, plus a commented simulation-based power analysis block (glmmTMB + car::Anova) — ready to run in R.
 
-> **⬡ Workflow tip:** Do the causal groundwork in the **Golem Builder** first — draw your DAG and identify which variables to adjust for. Transfer everything to the **G-Comp Builder** at the click of a button to generate ready-to-run R code for G-Computation, then export MCMC draws to the **Decision Maker**.
+> **⬡ Workflow tip:** Do the causal groundwork first — learn the logic in **Causal Terror**, then draw your DAG in the **Golem Builder** and identify which variables to adjust for. Transfer everything to the **G-Comp Builder** at the click of a button to generate ready-to-run R code for G-Computation, then export MCMC draws to the **Decision Maker**.
 
 ---
 
@@ -125,9 +128,15 @@ The lab is organized into six sections that build on each other. Work through th
 
 ---
 
+## 📚 Reference & Study Aids
+
+Alongside the tools, the lab ships three supporting pages: a **glossary** of almost 500 statistical terms (linked from within the tools, with hover definitions), **flashcards** for self-testing the glossary, and a **reference list** of the literature behind the tools.
+
+---
+
 ## 🚀 Getting Started
 
-The Bayes Thinking Lab is a **serverless web application**. No installation, no backend, and no data leaves your machine.
+The Bayes Thinking Lab is a **serverless web application**. No installation, no backend, and no data leaves your machine. All tools are available in **German** (`index_de.html`) and **English** (`index.html`, tools in `en/`).
 
 ### Option 1 — Use it online (recommended)
 
@@ -154,8 +163,8 @@ No setup required.
 
 | Level | Recommended Entry Point | Tools to Explore |
 | :--- | :--- | :--- |
-| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · **Distribution Lab** · Prior Lab (CI-Solver) · Bayes Interactive |
-| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Likelihood Compass · Prior Lab (GLM Mode) · Model Architect · Decision Lab |
+| **BSc Students** | Section 0 — Foundations | Interactive LM · MLE Tool · Thinking Simulator · **Distribution Lab** · Prior Compass · Prior Lab (CI-Solver) · Bayes Interactive · Causal Terror |
+| **MSc Students** | Section I–II | GLM Conditional Distributions · Interactive GLMM · Likelihood Compass · Prior Lab (GLM Mode) · Causal Terror · Model Architect · Decision Lab |
 | **PhD / Researchers** | Section III–V | Golem Builder · Data Creator · brms Model Builder · Prior & Posterior PC · LOO Lab · Causal Calculator · G-Comp Builder · Decision Maker |
 
 ---
