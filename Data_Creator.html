@@ -121,7 +121,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
 .corr-matrix{border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.75rem}
 .corr-matrix th{padding:.25rem .4rem;background:var(--panel);border:1px solid var(--border);color:var(--ink3);font-size:.7rem;text-align:center;min-width:52px}
 .corr-matrix td{padding:.2rem .3rem;border:1px solid var(--border);text-align:center}
-.corr-inp{font-family:'DM Mono',monospace;font-size:.75rem;border:1px solid transparent;border-radius:3px;width:50px;padding:.15rem .25rem;text-align:center;color:var(--ink);background:transparent}
+.corr-inp{font-family:'DM Mono',monospace;font-size:.75rem;border:1px solid transparent;border-radius:3px;width:62px;padding:.15rem .25rem;text-align:center;color:var(--ink);background:transparent}
 .corr-inp:focus{outline:none;border-color:var(--a2);background:var(--bg)}
 .corr-diag{color:var(--ink3);font-weight:500}
 .corr-mirror{color:var(--ink3)}
@@ -203,7 +203,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
         <p><strong>Between-Subject-Faktor</strong>: Jede Versuchsperson gehört zu genau einer Gruppe (z.B. Kontroll- vs. Experimentalgruppe). Varianz entsteht zwischen Personen.</p>
         <p><strong>Within-Subject-Faktor</strong>: Dieselbe Person wird mehrfach gemessen (z.B. Zeitpunkte t1, t2, t3). Messwiederholung erzeugt Korrelation zwischen den Levels. Der Data Creator unterstützt aktuell <strong>einen Within-Faktor</strong>.</p>
         <p>Die Kombination aus beiden heißt <strong><a class="glo-link" href="Glossar.html#gl-mixed-design" target="_blank" title="Ein Mixed Design (Split-Plot-Design) kombiniert mindestens einen Between-Subjects-Faktor mit mindestens einem Within-Subjects-Faktor.">Mixed Design</a></strong> (= Split-Plot). In brms: <code>bf(Y ~ gruppe * time + (1 | id))</code></p>
-        <p><strong>Levelnames</strong>: Kommagetrennt eingeben, z.B. <code>A, B, C</code>. Leerzeichen werden automatisch in Unterstriche umgewandelt.</p>
+        <p><strong>Levelnames</strong>: Kommagetrennt eingeben, z.B. <code>A, B, C</code>. Erlaubt sind Buchstaben, Ziffern und Punkt. Leerzeichen und Sonderzeichen werden automatisch in Punkte umgewandelt (z. B. „treat 1“ → „treat.1“), doppelte Level entfernt. Unterstriche sind nicht erlaubt, weil <code>faux::sim_design()</code> sie als Trennzeichen der Zellnamen verwendet.</p>
       </div>
     </div>
 
@@ -280,8 +280,14 @@ select.inp option{background:var(--paper);color:var(--ink)}
       <div class="help-section-body">
         <p><strong><a class="glo-link" href="Glossar.html#gl-kovariate" target="_blank" title="Eine Kovariate ist eine zusätzliche Variable im Regressionsmodell, die nicht die primäre Prädiktorvariable ist, aber zur Bereinigung ihres Einflusses aufgenommen wird.">Kovariablen</a></strong> sind kontinuierliche Prädiktoren, die zusätzlich zu Between/Within-Faktoren generiert werden (max. 2). Sie erscheinen als Spalten im CSV und in der Formelvorschau.</p>
         <p><strong>μ / σ:</strong> Globaler Mittelwert und Standardabweichung der Kovariable.</p>
-        <p><strong>μ je Gruppe:</strong> Wenn Between-Faktoren vorhanden sind, kann der Mittelwert pro Gruppe variieren — das erzeugt eine <em><a class="glo-link" href="Glossar.html#gl-confounder" target="_blank" title="Eine Konfundierungsvariable (Confounder) ist eine Variable, die sowohl mit dem Treatment als auch mit dem Outcome assoziiert ist und nicht auf dem kausalen Pfad dazwischen liegt.">Konfundierung</a></em> zwischen Kovariable und Faktor (typischer Anwendungsfall für <a class="glo-link" href="Glossar.html#gl-gcomp" target="_blank" title="G-Computation schätzt kausale Effekte in drei Schritten: Outcome-Modell fitten, kontrafaktische Outcomes vorhersagen, Differenz mitteln.">G-Computation</a>).</p>
+        <p><strong>μ je Gruppe:</strong> Wenn Between-Faktoren vorhanden sind, kann der Mittelwert pro Gruppe variieren — zusammen mit einer Steigung β ≠ 0 erzeugt das eine <em><a class="glo-link" href="Glossar.html#gl-confounder" target="_blank" title="Eine Konfundierungsvariable (Confounder) ist eine Variable, die sowohl mit dem Treatment als auch mit dem Outcome assoziiert ist und nicht auf dem kausalen Pfad dazwischen liegt.">Konfundierung</a></em> zwischen Kovariable und Faktor (typischer Anwendungsfall für <a class="glo-link" href="Glossar.html#gl-gcomp" target="_blank" title="G-Computation schätzt kausale Effekte in drei Schritten: Outcome-Modell fitten, kontrafaktische Outcomes vorhersagen, Differenz mitteln.">G-Computation</a>).</p>
         <p><strong>ρ mit cov1:</strong> Wenn 2 Kovariablen definiert sind, können sie über eine <a class="glo-link" href="Glossar.html#gl-cholesky" target="_blank" title="Die Cholesky-Zerlegung faktorisiert eine positiv-definite Kovarianzmatrix Σ = L·Lᵀ und wird genutzt, um aus unabhängigem Rauschen korrelierte Ziehungen zu erzeugen.">Cholesky-Zerlegung</a> korreliert generiert werden. Im R-Code wird <code>MASS::mvrnorm()</code> verwendet.</p>
+        <p><strong>β (Steigung auf Y):</strong> Um wie viel Y steigt, wenn die Kovariable um eine Einheit steigt, in den Einheiten deiner eigenen Variablen (z. B. Punkte pro Lebensjahr). Bei Gaussian und Student ist das die Regressionssteigung. Bei den übrigen Verteilungen wirkt β auf der Link-Skala (log bzw. logit). Unter dem Feld rechnet das Tool zur Orientierung aus, wie viele Residual-SD eine SD der Kovariable verschiebt. Das hilft bei Effektgrößen und Poweranalysen, ohne dass du in standardisierten Einheiten eingeben musst. Mit β = 0 bleibt die Kovariable ohne Wirkung auf Y.</p>
+        <p><strong>β je Gruppe (Interaktion Faktor × Kovariable):</strong> Hier gibst du für jede Gruppe eine eigene Steigung an. Die Interaktion ist der Unterschied zwischen den Steigungen. Der Haupteffekt der Kovariable (bei Effektkodierung) ist der Mittelwert der Gruppensteigungen. Beispiel: +0,5 in Gruppe A und −0,5 in Gruppe B ergeben einen Haupteffekt von 0 und trotzdem eine Interaktion. Die Formelvorschau enthält dann Faktor × Kovariable.</p>
+        <p><strong>μ je Gruppe und β sind zwei verschiedene Dinge:</strong> μ je Gruppe beschreibt, dass sich die Gruppen in der Kovariable unterscheiden (Pfeil Faktor → Kovariable). Die Steigung β beschreibt, wie die Kovariable auf Y wirkt (Pfeil Kovariable → Y). Erst beide zusammen erzeugen Confounding. Eine Interaktion entsteht nur über „β je Gruppe“.</p>
+        <p><strong>Zentrierung:</strong> Die Zellmittelwerte μ in der Mittelwerte-Tabelle gelten für eine Kovariable am Gesamtmittel der Kovariable (Zentrierungspunkt). Ohne β ändert das nichts. Mit β sind es „adjustierte“ Mittelwerte: Die rohen Gruppenmittel von Y weichen davon ab, wenn die Gruppen unterschiedliche Kovariablen-Mittel haben. Für die Analyse empfiehlt sich dieselbe Zentrierung (<code>cov − mean(cov)</code>). Das gilt generell, bei Interaktionen ist es besonders wichtig: Sonst beziehen sich die Gruppeneffekte auf Kovariable = 0, einen Wert, der oft gar nicht vorkommt. Der R-Export enthält einen Tipp dazu, und der Power-Block zentriert die Kovariable selbst.</p>
+        <p><strong>Exakt-Modus:</strong> Verteilung der Kovariable und der Residuen sind exakt. Die geschätzte Steigung weicht trotzdem leicht von β ab, weil Kovariable und Residuen in jeder Stichprobe minimal zusammenhängen.</p>
+        <p><strong>Poweranalyse:</strong> Der Power-Block (Option A, Wald) enthält die Kovariable und bei „β je Gruppe“ auch die Interaktion Faktor × Kovariable. Die LRT-Variante (Option B) kennt diese Interaktion noch nicht.</p>
         <ul>
           <li>Kovariablen sind immer <em>between-subjects</em> (zeitinvariant): bei Within-Design eine Spalte pro Subjekt, die durch <code>pivot_longer()</code> automatisch repliziert wird.</li>
           <li>Kovariablen-Namen werden im R-Code durch <code>cleanR()</code> sanitiert (Leerzeichen → Unterstriche, Sonderzeichen entfernt).</li>
@@ -452,12 +458,13 @@ select.inp option{background:var(--paper);color:var(--ink)}
     <div class="sec-title">Stichprobe</div>
     <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.35rem">
       <div class="row" style="flex-wrap:nowrap">
-        <label style="width:78px;flex-shrink:0">n pro Zelle</label>
+        <label style="width:96px;flex-shrink:0">n pro Zelle</label>
         <input type="number" id="nPerCell" class="inp inp-sm" value="50" min="5" max="5000" oninput="updateFormula()">
       </div>
       <div class="row" style="flex-wrap:nowrap">
-        <label style="width:78px;flex-shrink:0">seed</label>
+        <label style="width:96px;flex-shrink:0">seed</label>
         <input type="number" id="seedVal" class="inp inp-sm" value="42">
+        <span id="seedUsed" style="font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink3);white-space:nowrap" title="Nach jedem Lauf springt das Feld auf den nächsten Seed, damit „Generieren“ eine neue Stichprobe zieht. R-Code und Daten nutzen den hier genannten Seed."></span>
       </div>
     </div>
   </div>
@@ -500,6 +507,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
         <label>τ₁_id (Slope-SD)</label>
         <input type="number" id="withinSlopeIdTau1" class="inp inp-sm" value="0.3" step="0.1" min="0" oninput="updateFormula()">
       </div>
+      <div id="withinSlopeIdWarn" class="info-box" style="display:none;margin-top:.3rem;font-size:.68rem;line-height:1.5">⚠ Ohne Item-Struktur hat jede Person nur eine Messung pro Stufe. Dann ist <code>(1 + … | id)</code> nicht identifizierbar: lme4 lehnt das Modell ab, glmmTMB liefert unzuverlässige Schätzungen. Sinnvoll ist der Random Slope auf id nur mit Item-Struktur (mehrere Messungen pro Person und Stufe).</div>
     </div>
   </div>
 
@@ -507,6 +515,7 @@ select.inp option{background:var(--paper);color:var(--ink)}
     <div class="sec-title">Kovariablen <span style="font-style:italic;text-transform:none;font-size:.72rem">(kontinuierlich, max. 2)</span></div>
     <div id="covList" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.4rem"></div>
     <button class="btn btn-sm" id="covAddBtn" onclick="addCovariate()">+ Kovariable</button>
+    <div id="covNote" style="display:none;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.4rem;line-height:1.5"></div>
   </div>
 
   <div>
@@ -704,7 +713,7 @@ function uid() { return 'f' + (++_uid); }
 const ST = {
   between: [],     // [{id, name, levels:[str,...]}]
   within:  [],     // [{id, name, levels:[str,...]}]  — max 1 in v1
-  covariates: [],  // [{id, name, mu, sd, groupMeans:{}, useGroupMeans:false}]  — max 2
+  covariates: [],  // [{id, name, mu, sd, groupMeans:{}, useGroupMeans:false, beta:0, groupBetas:{}, useGroupBetas:false}]  — max 2
   covRho: 0,       // correlation between the two covariates (if 2 defined)
   cluster: { active:false },
   item:    { active:false },  // crossed (not nested) random-intercept factor, e.g. "item"
@@ -819,6 +828,34 @@ function rescaleExactMulti(arrs,targetMeans,targetSDs,targetCorr){
   return out;
 }
 
+// Nächstgelegene positiv-definite Korrelationsmatrix: Eigenwerte (Jacobi-Verfahren) nach unten
+// abschneiden, zurücktransformieren, Diagonale wieder auf 1 skalieren. Wird verwendet, wenn eine
+// eigene (oder CS-Matrix mit stark negativem ρ) nicht positiv definit ist — in der Live-Vorschau
+// UND im R-Code (faux::sim_design() würde die ungültige Matrix sonst mit Fehler ablehnen).
+function nearPDCorr(M){
+  const k=M.length,A=M.map(r=>r.slice()),V=Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>i===j?1:0));
+  for(let sweep=0;sweep<100;sweep++){
+    let off=0;for(let i=0;i<k;i++)for(let j=i+1;j<k;j++)off+=A[i][j]*A[i][j];
+    if(off<1e-20)break;
+    for(let p=0;p<k;p++)for(let q=p+1;q<k;q++){
+      if(Math.abs(A[p][q])<1e-15)continue;
+      const th=(A[q][q]-A[p][p])/(2*A[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),sn=t*c;
+      for(let r=0;r<k;r++){const a=A[r][p],b=A[r][q];A[r][p]=c*a-sn*b;A[r][q]=sn*a+c*b;}
+      for(let r=0;r<k;r++){const a=A[p][r],b=A[q][r];A[p][r]=c*a-sn*b;A[q][r]=sn*a+c*b;}
+      for(let r=0;r<k;r++){const a=V[r][p],b=V[r][q];V[r][p]=c*a-sn*b;V[r][q]=sn*a+c*b;}
+    }
+  }
+  const lam=A.map((r,i)=>Math.max(0.02,r[i]));   // Abstand zur Grenze, damit die Matrix auch nach dem Runden im R-Code gültig bleibt
+  const R=Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>{let s=0;for(let m=0;m<k;m++)s+=V[i][m]*lam[m]*V[j][m];return s;}));
+  return R.map((r,i)=>r.map((v,j)=>i===j?1:v/Math.sqrt(R[i][i]*R[j][j])));
+}
+// Für die Simulation verwendete Korrelationsmatrix eines Within-Faktors (ggf. PD-korrigiert)
+function effCorr(fid){
+  const M=ST.corrMats[fid];
+  if(!M) return null;
+  return isPD(M)?M:nearPDCorr(M);
+}
+
 // Check positive definiteness via Cholesky
 function isPD(mat){
   try{
@@ -897,9 +934,19 @@ function removeFactor(kind,id){
   if(kind==='between') renderCovariates();
 }
 
+// Prüft, ob ein (bereinigter) Variablenname schon vergeben ist — zwei gleichnamige Spalten
+// würden in R stillschweigend umbenannt bzw. in der Formel zusammenfallen.
+function nameTaken(name,selfId){
+  const r=cleanR(name);
+  const reserved=['Y','id',cleanR(document.getElementById('clusterName')?.value||'school'),cleanR(document.getElementById('itemName')?.value||'item')];
+  if(reserved.includes(r)) return true;
+  return [...ST.between,...ST.within].some(f=>f.id!==selfId&&cleanR(f.name)===r)
+      || ST.covariates.some(c=>c.id!==selfId&&cleanR(c.name)===r);
+}
 function updateFactorName(kind,id,val){
   const arr=kind==='between'?ST.between:ST.within;
   const f=arr.find(x=>x.id===id); if(!f)return;
+  if(val.trim()&&nameTaken(val.trim(),id)){showToast('Name schon vergeben (oder reserviert: Y, id, Cluster, Item)');renderFactors();return;}
   f.name=val.trim()||f.name;
   syncMeanKeys();
   renderMeanGrid();
@@ -912,9 +959,17 @@ function updateFactorName(kind,id,val){
 function updateFactorLevels(kind,id,val){
   const arr=kind==='between'?ST.between:ST.within;
   const f=arr.find(x=>x.id===id); if(!f)return;
-  const lvls=val.split(',').map(s=>s.trim().replace(/\s+/g,'_')).filter(Boolean);
+  // Nur Buchstaben, Ziffern und . — Leerzeichen, Bindestriche, Anführungszeichen usw. zerbrechen R-Code/CSV,
+  // und "_" ist in faux::sim_design() als Trennzeichen der Zellnamen reserviert (Fehler bei Within-Designs).
+  const cleaned=val.split(',').map(s=>s.trim().replace(/[^\p{L}\p{N}.]+/gu,'.')).filter(Boolean);
+  const lvls=[...new Set(cleaned)];
   if(!lvls.length)return;
+  const changed=lvls.join(',')!==val.split(',').map(s=>s.trim()).filter(Boolean).join(',');
   f.levels=lvls;
+  // Eingabefeld (bereinigte Schreibweise) und Level-Zähler sofort aktualisieren
+  const inp=document.querySelector(`.factor-levels-inp[onblur*="'${id}'"]`);
+  if(inp){inp.value=lvls.join(',');const h=inp.nextElementSibling;if(h&&h.classList.contains('factor-hint'))h.textContent=`${lvls.length} Level${lvls.length!==1?'s':''}`;}
+  if(changed) showToast('Level-Namen angepasst: nur Buchstaben, Ziffern und Punkt (z. B. „treat 1“ → „treat.1“), doppelte entfernt');
   if(kind==='within'){
     const k=lvls.length;
     ST.corrMats[id]=Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>i===j?1:(ST.corrRho[id]||0.65)));
@@ -1033,7 +1088,7 @@ function renderMeanGrid(){
                  oninput="setMeanRaw('all',this.value)" style="width:90px"></div>
         <div style="opacity:${useSd?'1':'.5'}"><div class="sec-title" style="margin-bottom:.25rem">Residual-SD σ</div>
           <input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds['all']??1}"
-                 oninput="ST.sds['all']=+this.value" style="width:90px;${sdInpStyle}"${sdInpAttr}></div>
+                 oninput="setSd('all',this.value)" style="width:90px;${sdInpStyle}"${sdInpAttr}></div>
       </div>`;
     return;
   }
@@ -1052,7 +1107,7 @@ function renderMeanGrid(){
       html+=`<td><input class="mean-inp" type="number" step="0.01" value="${dispVal(bk)}"
                oninput="setMeanRaw('${bk}',this.value)"></td>`;
       html+=`<td><input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds[bk]??1}"
-               oninput="ST.sds['${bk}']=+this.value" style="${sdInpStyle}"${sdInpAttr}></td>`;
+               oninput="setSd('${bk}',this.value)" style="${sdInpStyle}"${sdInpAttr}></td>`;
       html+=`</tr>`;
     });
     html+=`</tbody></table>
@@ -1093,7 +1148,7 @@ function renderMeanGrid(){
     wHeaders.forEach(wh=>{
       const mKey=[bk,wh].filter(s=>s&&s!=='all').join('_')||'all';
       html+=`<td><input class="mean-inp" type="number" step="0.1" min="0.01" value="${ST.sds[mKey]??1}"
-               oninput="ST.sds['${mKey}']=+this.value" style="${sdInpStyle}"${sdInpAttr}></td>`;
+               oninput="setSd('${mKey}',this.value)" style="${sdInpStyle}"${sdInpAttr}></td>`;
     });
     html+=`</tr>`;
   });
@@ -1184,14 +1239,15 @@ function renderCorrTab(){
             <input class="corr-inp" type="number" step="0.05" min="-0.99" max="0.99"
                    value="${v.toFixed(2)}" ${editable?'':'readonly'} ${nonGauss?'disabled':''}
                    style="cursor:${editable?'text':'default'}"
-                   oninput="updateCorrCell('${f.id}',${i},${j},this.value)">
+                   onchange="updateCorrCell('${f.id}',${i},${j},this.value)">
           </td>`;
         }
       }
       html+=`</tr>`;
     }
     html+=`</tbody></table></div>`;
-    html+=`<div class="corr-valid ${pd?'corr-ok':'corr-warn'}">${pd?'✓ Matrix positiv definit':'✗ Matrix nicht positiv definit — wird automatisch korrigiert (Cholesky)'}</div>`;
+    const corrFix=pd?'':(()=>{const C=nearPDCorr(mat);const pairs=[];for(let i=0;i<k;i++)for(let j=i+1;j<k;j++)pairs.push(`${esc(f.levels[i])}–${esc(f.levels[j])}: ${C[i][j].toFixed(2)}`);return pairs.join(' · ');})();
+    html+=`<div class="corr-valid ${pd?'corr-ok':'corr-warn'}">${pd?'✓ Matrix positiv definit':'✗ Matrix nicht positiv definit — für Simulation und R-Code wird die nächstgelegene gültige Matrix verwendet: '+corrFix}</div>`;
     html+=`</div>`;
   });
 
@@ -1320,7 +1376,7 @@ function addCovariate(){
   if(ST.covariates.length>=2)return;
   const id=uid();
   const name=ST.covariates.length===0?'cov1':'cov2';
-  ST.covariates.push({id,name,mu:0,sd:1,groupMeans:{},useGroupMeans:false});
+  ST.covariates.push({id,name,mu:0,sd:1,groupMeans:{},useGroupMeans:false,beta:0,groupBetas:{},useGroupBetas:false});
   renderCovariates();
   updateFormula();
 }
@@ -1334,6 +1390,7 @@ function removeCovariate(id){
 
 function updateCovName(id,val){
   const c=ST.covariates.find(x=>x.id===id); if(!c)return;
+  if(val.trim()&&nameTaken(val.trim(),id)){showToast('Name schon vergeben (oder reserviert: Y, id, Cluster, Item)');renderCovariates();return;}
   c.name=val.trim()||c.name;
   renderCovariates();
   updateFormula();
@@ -1361,6 +1418,74 @@ function toggleCovGroupMeans(id,checked){
   renderCovariates();
 }
 
+// ── Effekt der Kovariable auf Y ────────────────────────────────────────────
+// Datenmodell (auf der η-/Modellskala, VOR der Link-Funktion):
+//   η = Zellmittel + Σ_k  β_k(Zelle) · (Kovariable_k − Zentrierungspunkt_k)
+// Zentrierungspunkt = Gesamtmittel der Kovariable über alle Between-Zellen. Bei
+// durchschnittlicher Kovariable entspricht η also genau dem angegebenen Zellmittel.
+// β_k(Zelle) = β_k, oder (bei "β je Gruppe") die Steigung der jeweiligen Between-Zelle.
+function covRef(cov){
+  if(cov.useGroupMeans&&ST.between.length>0){
+    const cells=getBetweenCells();
+    return cells.reduce((s,bc)=>s+(cov.groupMeans[cellKey(bc)]??cov.mu),0)/cells.length;
+  }
+  return cov.mu;
+}
+function covSlope(cov,bk){
+  return (cov.useGroupBetas&&ST.between.length>0)?(cov.groupBetas[bk]??cov.beta):cov.beta;
+}
+function covEffActive(){
+  return ST.covariates.some(c=>{
+    if(c.useGroupBetas&&ST.between.length>0) return getBetweenCells().some(bc=>covSlope(c,cellKey(bc))!==0);
+    return c.beta!==0;
+  });
+}
+function covInteractionActive(){
+  return ST.between.length>0&&ST.covariates.some(c=>c.useGroupBetas);
+}
+function fSign(v){return (v>=0?'+':'−')+Math.abs(v).toFixed(2);}
+function covSummaryHtml(cov){
+  const hasB=ST.between.length>0,lik=document.getElementById('likSel')?.value||'gaussian';
+  const cells=hasB?getBetweenCells():[];
+  const grp=cov.useGroupBetas&&hasB;
+  const slopes=grp?cells.map(bc=>covSlope(cov,cellKey(bc))):[cov.beta];
+  const mean=slopes.reduce((a,b)=>a+b,0)/slopes.length;
+  const out=[];
+  if(grp){
+    if(slopes.length===2) out.push('Ø Steigung (Haupteffekt der Kovariable bei Effektkodierung): {m} · Unterschied der Steigungen (Interaktion): {d}'.replace('{m}',fSign(mean)).replace('{d}',fSign(slopes[1]-slopes[0])));
+    else out.push('Ø Steigung (Haupteffekt bei Effektkodierung): {m} · Spannweite der Gruppensteigungen: {r}'.replace('{m}',fSign(mean)).replace('{r}',(Math.max(...slopes)-Math.min(...slopes)).toFixed(2)));
+  }
+  if(isIdentityLink(lik)){
+    const sds=Object.values(ST.sds).filter(v=>v>0),sdY=sds.length?sds.reduce((a,b)=>a+b,0)/sds.length:1;
+    out.push('Zur Orientierung: Eine SD der Kovariable ({sd}) verschiebt Y um {dy}, das sind {rs} Residual-SD.'.replace('{sd}',cov.sd.toFixed(2)).replace('{dy}',fSign(mean*cov.sd)).replace('{rs}',fSign(mean*cov.sd/sdY)));
+  }else{
+    const link=(lik==='bernoulli'||lik==='binomial'||lik==='beta')?'logit':'log';
+    out.push('β wirkt auf der Link-Skala ({l}).'.replace('{l}',link));
+  }
+  return out.join('<br>');
+}
+function refreshCovSummary(id){
+  const c=ST.covariates.find(x=>x.id===id),el=document.getElementById('cov-sum-'+id);
+  if(c&&el) el.innerHTML=covSummaryHtml(c);
+}
+function updateCovGroupBeta(covId,ck,val){
+  const c=ST.covariates.find(x=>x.id===covId); if(!c)return;
+  c.groupBetas[ck]=+val;
+  refreshCovSummary(covId);
+}
+function toggleCovGroupBetas(id,checked){
+  const c=ST.covariates.find(x=>x.id===id); if(!c)return;
+  c.useGroupBetas=checked;
+  if(checked){
+    getBetweenCells().forEach(bc=>{
+      const k=cellKey(bc);
+      if(c.groupBetas[k]===undefined) c.groupBetas[k]=c.beta;
+    });
+  }
+  renderCovariates();
+  updateFormula();
+}
+
 function renderCovariates(){
   const el=document.getElementById('covList');
   if(!el)return;
@@ -1379,8 +1504,22 @@ function renderCovariates(){
         const val=(cov.groupMeans[k]??cov.mu).toFixed(2);
         gmHtml+=`<div class="row" style="margin-top:.15rem;gap:.3rem">
           <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);flex:1;min-width:50px">${esc(label)}</span>
-          <input class="inp inp-sm" type="number" step="0.1" value="${val}" style="width:62px"
+          <input class="inp inp-sm" type="number" step="0.1" value="${val}" style="width:84px"
                  oninput="updateCovGroupMean('${cov.id}','${k}',+this.value)">
+        </div>`;
+      });
+    }
+
+    let gbHtml='';
+    if(cov.useGroupBetas&&hasB){
+      getBetweenCells().forEach(bc=>{
+        const k=cellKey(bc);
+        const label=bc.join(' / ');
+        const val=(cov.groupBetas[k]??cov.beta).toFixed(2);
+        gbHtml+=`<div class="row" style="margin-top:.15rem;gap:.3rem">
+          <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);flex:1;min-width:50px">${esc(label)}</span>
+          <input class="inp inp-sm" type="number" step="0.1" value="${val}" style="width:84px"
+                 oninput="updateCovGroupBeta('${cov.id}','${k}',+this.value)">
         </div>`;
       });
     }
@@ -1402,6 +1541,12 @@ function renderCovariates(){
         <input class="inp inp-sm" type="number" step="0.1" min="0.01" value="${cov.sd.toFixed(2)}" style="width:72px"
                oninput="updateCovParam('${cov.id}','sd',Math.max(0.001,+this.value))">
       </div>
+      ${(!cov.useGroupBetas||!hasB)?`<div class="row" style="margin-top:.3rem;gap:.35rem">
+        <label title="Steigung der Kovariable auf Y (pro +1 Einheit der Kovariable)">β</label>
+        <input class="inp inp-sm" type="number" step="0.1" value="${(cov.beta||0).toFixed(2)}" style="width:72px"
+               oninput="updateCovParam('${cov.id}','beta',+this.value);refreshCovSummary('${cov.id}')">
+        <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">Steigung auf Y je +1 Einheit</span>
+      </div>`:''}
       ${isSecond?`<div class="row" style="margin-top:.3rem;gap:.35rem">
         <label style="white-space:nowrap">ρ mit ${esc(otherName)}</label>
         <input class="inp inp-sm" type="number" step="0.05" min="-0.99" max="0.99"
@@ -1413,12 +1558,24 @@ function renderCovariates(){
                onchange="toggleCovGroupMeans('${cov.id}',this.checked)">
         <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">μ je Gruppe</span>
       </label>
-      <div id="cov-gm-${cov.id}">${cov.useGroupMeans?gmHtml:''}</div>`:''}`;
+      <div id="cov-gm-${cov.id}">${cov.useGroupMeans?gmHtml:''}</div>`:''}
+      ${hasB?`<label class="row" style="cursor:pointer;margin-top:.28rem;gap:.4rem;user-select:none">
+        <input type="checkbox" style="accent-color:var(--a5)" ${cov.useGroupBetas?'checked':''}
+               onchange="toggleCovGroupBetas('${cov.id}',this.checked)">
+        <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3)">β je Gruppe (Interaktion Faktor × Kovariable)</span>
+      </label>
+      <div id="cov-gb-${cov.id}">${cov.useGroupBetas?gbHtml:''}</div>`:''}
+      <div id="cov-sum-${cov.id}" style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.3rem;line-height:1.5">${covSummaryHtml(cov)}</div>`;
     el.appendChild(div);
   });
 
   const addBtn=document.getElementById('covAddBtn');
   if(addBtn) addBtn.style.display=ST.covariates.length>=2?'none':'';
+  const note=document.getElementById('covNote');
+  if(note){
+    note.style.display=ST.covariates.length?'block':'none';
+    note.innerHTML='<b>Zentrierung:</b> Die Zellmittelwerte μ gelten für eine Kovariable am Gesamtmittel (Zentrierungspunkt). Für die Analyse empfiehlt sich dieselbe Zentrierung (<code>cov − mean(cov)</code>), bei Interaktionen besonders.';
+  }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1455,7 +1612,15 @@ function updateFormula(){
   const allTerms=[...bTerms,...wTerms];
   const factorFixed=allTerms.length>1?allTerms.join(' * '):(allTerms[0]||'1');
   const covTerms=ST.covariates.map(c=>cleanR(c.name));
-  const fixed=covTerms.length>0?factorFixed+' + '+covTerms.join(' + '):factorFixed;
+  // Faktor × Kovariable: Interaktion nur für Kovariablen mit "β je Gruppe" (betrifft alle Between-Faktoren).
+  let fixed;
+  if(!covInteractionActive()){
+    fixed=covTerms.length>0?factorFixed+' + '+covTerms.join(' + '):factorFixed;
+  }else if(!hasW&&ST.covariates.length===1){
+    fixed=[...bTerms,covTerms[0]].join(' * ');
+  }else{
+    fixed=[factorFixed].concat(ST.covariates.map(c=>c.useGroupBetas?[...bTerms,cleanR(c.name)].join(' * '):cleanR(c.name))).join(' + ');
+  }
 
   // Random effects: (1 | id) immer wenn Within-Faktor ODER Item-Struktur vorhanden —
   // beide bedeuten Messwiederholung pro Person (mehrere Zeitpunkte bzw. mehrere Items),
@@ -1463,6 +1628,8 @@ function updateFormula(){
   // wurde. Cluster-RE zusätzlich.
   const itemActive=document.getElementById('itemActive')?.checked;
   const itemName=document.getElementById('itemName')?.value||'item';
+  const idSlWarn=document.getElementById('withinSlopeIdWarn');
+  if(idSlWarn) idSlWarn.style.display=(hasW&&document.getElementById('withinSlopeOnId')?.checked&&!itemActive)?'block':'none';
   const reTerms=[];
   if(hasW||itemActive){
     const idSlope=document.getElementById('withinSlopeOnId')?.checked;
@@ -1555,7 +1722,7 @@ function onLikChange(){
 
 function getExtra(){
   return{
-    sigma:+(document.getElementById('extraSigma')?.value||1),
+    sigma:(Object.values(ST.sds)[0]??1),
     nu:+(document.getElementById('extraNu')?.value||4),
     phi:+(document.getElementById('extraPhi')?.value||2),
     ntrials:+(document.getElementById('extraNtrials')?.value||10),
@@ -1585,7 +1752,10 @@ function onItemToggle(){
 // DATA GENERATION
 // ────────────────────────────────────────────────────────────
 function generateAndRender(){
-  const n=+(document.getElementById('nPerCell').value)||50;
+  const nRaw=Math.round(+(document.getElementById('nPerCell').value)||50);
+  const n=Math.max(2,nRaw);   // n < 2: keine Streuung schätzbar, n ≤ 0 ergäbe einen leeren Datensatz / ungültigen R-Code
+  let nClampNote='';
+  if(n!==nRaw){document.getElementById('nPerCell').value=n;nClampNote='n auf 2 gesetzt (Minimum) · ';}
   const seed=+(document.getElementById('seedVal').value)||42;
   setSeed(seed);
 
@@ -1604,7 +1774,7 @@ function generateAndRender(){
   const hasIdSlope=idSlopeOn&&idTau1>0;
   const clActive=ST.cluster.active;
   const clName=document.getElementById('clusterName')?.value||'school';
-  const clK=+(document.getElementById('clusterK')?.value||20);
+  const clK=Math.max(2,Math.round(+(document.getElementById('clusterK')?.value)||20));   // mind. 2 Cluster (0/1 ergäbe ungültige REs bzw. R-Code)
   const clTau0=+(document.getElementById('clusterTau0')?.value||0.5);
   const clTau1=+(document.getElementById('clusterTau1')?.value||0);
   const clRho01=+(document.getElementById('clusterRho01')?.value||0);
@@ -1701,6 +1871,10 @@ function generateAndRender(){
     });
   }
 
+  // Kovariablen-Effekt auf η: β(Zelle)·(Kovariable − Zentrierungspunkt); zentriert am Gesamtmittel.
+  const covRefs=ST.covariates.map(c=>covRef(c));
+  const covEff=(covVals,bk)=>{let e=0;ST.covariates.forEach((cov,ci)=>{e+=covSlope(cov,bk)*(covVals[ci]-covRefs[ci]);});return e;};
+
   for(const bc of bRows){
     const bk=cellKey(bc);
     setClusterRangeForCell(bRows.indexOf(bc));
@@ -1733,6 +1907,7 @@ function generateAndRender(){
           const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
           return cmu+(covZ[ci]?.[subjId-1]||0);
         });
+        const eff=covEff(covVals,bk);
         // Item loop: itemK=1 (no Item column) when the crossed item factor is off —
         // that degenerates to exactly one row per subject, identical to pre-item behaviour.
         for(let j=0;j<itemK;j++){
@@ -1743,9 +1918,9 @@ function generateAndRender(){
           const itemEff=itemEffects[j]||0;
           if(isAdditiveB){
             const noise=lik==='student'?rStudentT(extra.nu||4)*sd:rNorm()*sd;
-            cellNoiseB.push(noise); cellReslopeB.push(re+slope+itemEff); cellRowsB.push(row);
+            cellNoiseB.push(noise); cellReslopeB.push(re+slope+itemEff+eff); cellRowsB.push(row);
           } else {
-            row.Y=samplePoint(mu+re+slope+itemEff, lik, extra, sd);
+            row.Y=samplePoint(mu+re+slope+itemEff+eff, lik, extra, sd);
           }
           ST.covariates.forEach((cov,ci)=>row[cleanR(cov.name)]=covVals[ci]);
           data.push(row);
@@ -1772,7 +1947,7 @@ function generateAndRender(){
         const sdKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
         return ST.sds[sdKey]??1;
       });
-      const corrMat=ST.corrMats[wf.id]||Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>i===j?1:0));
+      const corrMat=effCorr(wf.id)||Array.from({length:k},(_,i)=>Array.from({length:k},(_,j)=>i===j?1:0));
 
       // Pre-compute Cholesky once per between-cell (depends only on sds+corrMat, not means/RE)
       let L=null;
@@ -1814,6 +1989,7 @@ function generateAndRender(){
             const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
             return cmu+(covZ[ci]?.[subjId-1]||0);
           });
+          const eff=covEff(covVals,bk);
 
           for(let j=0;j<itemK;j++){
             const itemEff=itemEffects[j]||0;
@@ -1828,7 +2004,7 @@ function generateAndRender(){
               trialRowsW.push(trialRows);
               reslopeBufW.push(wf.levels.map((_,wi)=>{
                 const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-                return re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff;
+                return re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff+eff;
               }));
               if(lik==='gaussian'){
                 const z=Array.from({length:k},()=>rNorm());
@@ -1847,7 +2023,7 @@ function generateAndRender(){
               wf.levels.forEach((lv,wi)=>{
                 const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
                 const row={...baseRow,[cleanR(wf.name)]:lv};
-                row.Y=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff, lik, extra, sds[wi]);
+                row.Y=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0)+itemEff+eff, lik, extra, sds[wi]);
                 data.push(row);
               });
             }
@@ -1884,6 +2060,11 @@ function generateAndRender(){
         // (reference level 0 gets none) — the actual data-generating counterpart to
         // the "(1 + … | id)" formula shown when "Random Slope auf id" is checked.
         const idDev=hasIdSlope?wf.levels.map((_,wi)=>wi===0?0:rNorm()*idTau1):null;
+        const covVals=ST.covariates.map((cov,ci)=>{
+          const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
+          return cmu+(covZ[ci]?.[subjId-1]||0);
+        });
+        const eff=covEff(covVals,bk);
 
         if(lik==='gaussian'){
           // RE on η, correlation preserved via pre-computed Cholesky L
@@ -1891,7 +2072,7 @@ function generateAndRender(){
           rowsW.push(row);
           reslopeBufW.push(wf.levels.map((_,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            return re+u1*slopeCode+(idDev?idDev[wi]:0);
+            return re+u1*slopeCode+(idDev?idDev[wi]:0)+eff;
           }));
           wf.levels.forEach((lv,wi)=>{
             let innov=0;
@@ -1903,7 +2084,7 @@ function generateAndRender(){
           rowsW.push(row);
           reslopeBufW.push(wf.levels.map((_,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            return re+u1*slopeCode+(idDev?idDev[wi]:0);
+            return re+u1*slopeCode+(idDev?idDev[wi]:0)+eff;
           }));
           wf.levels.forEach((lv,wi)=>{
             const noise=lik==='student'?rStudentT(extra.nu||4)*sds[wi]:rNorm()*sds[wi];
@@ -1913,13 +2094,10 @@ function generateAndRender(){
           // Non-additive (GLM-style): RE on η before inverse link — independent per within-level
           wf.levels.forEach((lv,wi)=>{
             const slopeCode=genSlopeFactor?.kind==='within'?wi:bCellSlopeCode;
-            row[lv]=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0), lik, extra, sds[wi]);
+            row[lv]=samplePoint(means[wi]+re+u1*slopeCode+(idDev?idDev[wi]:0)+eff, lik, extra, sds[wi]);
           });
         }
-        ST.covariates.forEach((cov,ci)=>{
-          const cmu=cov.useGroupMeans?(cov.groupMeans[bk]??cov.mu):cov.mu;
-          row[cleanR(cov.name)]=cmu+(covZ[ci]?.[subjId-1]||0);
-        });
+        ST.covariates.forEach((cov,ci)=>{ row[cleanR(cov.name)]=covVals[ci]; });
         data.push(row);
       }
 
@@ -1981,7 +2159,8 @@ function generateAndRender(){
   else document.getElementById('csvLongBtn').style.display='none';
   updatePlotSelectors();
   document.getElementById('seedVal').value = seed + 1;
-  showToast(`✓ ${data.length} Zeilen generiert (seed: ${seed})`);
+  const su=document.getElementById('seedUsed'); if(su) su.textContent='verwendet: '+seed;
+  showToast(`${nClampNote}✓ ${data.length} Zeilen generiert (seed: ${seed})`);
 }
 
 function samplePoint(eta,lik,extra,sd){
@@ -1991,7 +2170,7 @@ function samplePoint(eta,lik,extra,sd){
     case 'lognormal':   return Math.exp(eta+rNorm()*sd);
     case 'gamma':       {const mu=Math.exp(eta),phi=extra.phi||2;return rGamma(phi)*mu/phi;}
     case 'bernoulli':   return _rng()<plogis(eta)?1:0;
-    case 'beta':        {const mu=plogis(eta),phi=extra.phi||2;return rBeta(mu*phi,(1-mu)*phi);}
+    case 'beta':        {const mu=plogis(eta),phi=extra.phi||2;return Math.min(1-1e-6,Math.max(1e-6,rBeta(mu*phi,(1-mu)*phi)));}
     case 'binomial':    {const p=plogis(eta),N=extra.ntrials||10;let s=0;for(let i=0;i<N;i++)s+=_rng()<p?1:0;return s;}
     case 'poisson':     return rPois(Math.exp(eta));
     case 'negbinomial': return rNegBin(Math.exp(eta),extra.phi||2);
@@ -2061,7 +2240,8 @@ function _renderDescTable(data,numCols){
     const mean=vals.reduce((s,v)=>s+v,0)/n;
     const sd=n>1?Math.sqrt(vals.reduce((s,v)=>s+(v-mean)**2,0)/(n-1)):0;
     const sorted=[...vals].sort((a,b)=>a-b);
-    const q=p=>sorted[Math.min(n-1,Math.floor(p*(n-1)))];
+    // Quantile mit linearer Interpolation (wie R quantile(), Typ 7) — vorher nur abgerundeter Index
+    const q=p=>{const h=p*(n-1),lo=Math.floor(h),hi=Math.min(n-1,lo+1);return sorted[lo]+(h-lo)*(sorted[hi]-sorted[lo]);};
     return{c,n,mean,sd,min:sorted[0],q25:q(.25),median:q(.5),q75:q(.75),max:sorted[n-1]};
   }).filter(Boolean);
   let html='<thead><tr>'
@@ -2272,13 +2452,15 @@ function renderPlot(data,colNames,hasB,hasW,itemActive){
       }
 
       const spagVals=clusterMeans.flatMap(c=>c.cms).filter(isFinite);
-      const allVals=[...groupMeans.flat(),...spagVals].filter(isFinite);
+      const subdata=data.length>300?data.filter((_,i)=>i%Math.ceil(data.length/300)===0):data;
+      // Rohpunkte werden (nur mit Between-Faktor) gezeichnet — dann gehören sie in den y-Bereich.
+      const rawVals=hasB?subdata.flatMap(r=>lvls.map(lv=>r[lv])).filter(v=>typeof v==='number'&&isFinite(v)):[];
+      const allVals=[...groupMeans.flat(),...spagVals,...rawVals].filter(isFinite);
       const ymn=Math.min(...allVals), ymx=Math.max(...allVals);
       const yRange=ymx-ymn||1;
       const ymn2=ymn-yRange*.05, ymx2=ymx+yRange*.05;
       const scY=v=>pad.t+ph*(1-(v-ymn2)/(ymx2-ymn2||1));
 
-      const subdata=data.length>300?data.filter((_,i)=>i%Math.ceil(data.length/300)===0):data;
       if(hasB){
         bCellArrays.forEach((bc,gi)=>{
           const filt=makeFilter(bc);
@@ -2347,7 +2529,7 @@ function renderPlot(data,colNames,hasB,hasW,itemActive){
         const vals=data.filter(r=>filt(r)&&String(r[wfNameR])===String(lv)).map(r=>r.Y).filter(v=>typeof v==='number'&&isFinite(v));
         if(!vals.length)return;
         const sv=[...vals].sort((a,b)=>a-b);
-        const q1=sv[Math.floor(sv.length*.25)], med=sv[Math.floor(sv.length*.5)], q3=sv[Math.floor(sv.length*.75)];
+        const q1=pct(sv,.25), med=pct(sv,.5), q3=pct(sv,.75);
         const bxw=boxW*.7;
         html+=se('line',{x1:cx,y1:scY(sv[0]),x2:cx,y2:scY(q1),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
         html+=se('line',{x1:cx,y1:scY(q3),x2:cx,y2:scY(sv[sv.length-1]),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
@@ -2406,7 +2588,7 @@ function renderPlot(data,colNames,hasB,hasW,itemActive){
         } else {
           // boxplot + jitter
           const sv=[...vals].sort((a,b)=>a-b);
-          const q1=sv[Math.floor(sv.length*.25)], med=sv[Math.floor(sv.length*.5)], q3=sv[Math.floor(sv.length*.75)];
+          const q1=pct(sv,.25), med=pct(sv,.5), q3=pct(sv,.75);
           const bxw=boxW*.7;
           html+=se('line',{x1:cx,y1:scY(sv[0]),x2:cx,y2:scY(q1),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
           html+=se('line',{x1:cx,y1:scY(q3),x2:cx,y2:scY(sv[sv.length-1]),stroke:col,'stroke-width':1.5,'stroke-dasharray':'3,2'});
@@ -2507,7 +2689,51 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   const clNameR=cleanR(clName);
   const sfNameR=clSlopeFactor?cleanR(clSlopeFactor.name):null;
   const nTotal=hasB?(n*bCells.length):n;
-  const bRowsAll=hasB?bCells:[[]]; // between-Zellen in derselben Reihenfolge wie crossProduct()/nextClusterLabel()
+  const bRowsAll=hasB?bCells:[[]];
+  // Kovariablen: Block + Effekt auf Y. Der Effekt wirkt auf η (VOR der Link-Funktion):
+  // within → auf die Wide-Spalten, between/ohne Faktor → bei Nicht-Identitäts-Link über die .eta-Spalte.
+  const covEffR=buildCovEffectR(bNamesR);
+  // η-Spalte nötig (nur ohne Within-Faktor, Nicht-Identitäts-Link), sobald nach der Zellziehung noch etwas
+  // auf η addiert wird: Kovariablen-Effekt, Cluster-REs oder Item-Effekte. Y wird erst am Ende gezogen.
+  const covEtaMode=!hasW&&!isIdentityLink(lik)&&(!!covEffR.expr||clActive||itemActive);
+  const emitCovBlock=(datName,heading)=>{
+    if(!ST.covariates.length) return;
+    lines.push('');
+    lines.push(heading);
+    if(ST.covariates.length===2&&ST.covRho!==0){
+      const c1=ST.covariates[0],c2=ST.covariates[1];
+      const c1R=cleanR(c1.name),c2R=cleanR(c2.name);
+      const rho=(ST.covRho||0).toFixed(2);
+      lines.push(`# Korrelierte Kovariablen: ${c1R}, ${c2R}  (ρ = ${rho})`);
+      lines.push(`Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)},`);
+      lines.push(`                     ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
+      lines.push(`cov_z <- MASS::mvrnorm(nrow(${datName}), mu = c(0, 0), Sigma = Sigma_cov, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
+      ST.covariates.forEach((cov,ci)=>{
+        lines.push(...buildCovAssignment(cov,cleanR(cov.name),datName,bNamesR,`cov_z[, ${ci+1}]`));
+      });
+    }else{
+      ST.covariates.forEach(cov=>{
+        const zExpr=ST.exactMode?`exact_mean_sd(rnorm(nrow(${datName})), 0, ${cov.sd.toFixed(2)})`:`rnorm(nrow(${datName}), 0, ${cov.sd.toFixed(2)})`;
+        lines.push(...buildCovAssignment(cov,cleanR(cov.name),datName,bNamesR,zExpr));
+      });
+    }
+  };
+  const emitCovEffect=(datName,target,wideCols)=>{
+    if(!covEffR.expr) return;
+    lines.push('');
+    lines.push('# ── Effekt der Kovariable(n) auf Y ──────────────────────');
+    lines.push('# η = Zellmittel + β · (Kovariable − Zentrierungspunkt). Der Zentrierungspunkt ist das');
+    lines.push('# Gesamtmittel der Kovariable: bei durchschnittlicher Kovariable entspricht Y dem Zellmittel.');
+    covEffR.defs.forEach(d=>d.split('\n').forEach(l=>lines.push(l)));
+    if(target==='wide') lines.push(`${datName} <- ${datName} |> mutate(across(c(${wideCols}), \\(x) x + ${covEffR.expr}))`);
+    else if(target==='eta') lines.push(`${datName} <- ${datName} |> mutate(.eta = .eta + ${covEffR.expr})`);
+    else lines.push(`${datName} <- ${datName} |> mutate(Y = Y + ${covEffR.expr})`);
+  };
+  const emitEtaResolve=()=>{
+    lines.push(`${'dat'} <- dat |>`);
+    lines.push(`  mutate(Y = ${rYFromEtaCol(lik, extra)}) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+  };
+   // between-Zellen in derselben Reihenfolge wie crossProduct()/nextClusterLabel()
 
   lines.push('# ══════════════════════════════════════════════════════');
   lines.push('# Data Creator — Bayes Thinking Lab');
@@ -2557,7 +2783,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         return (ST.means[mKey]??0).toFixed(2);
       });
       const key=hasB?bc.join('_'):'Y';
-      return `    ${key} = c(${vals.join(', ')})`;
+      return `    \`${key}\` = c(${vals.join(', ')})`;
     });
 
     // sd/r: for SD-likelihoods (gaussian, student, lognormal) use cell SDs from grid and
@@ -2579,7 +2805,10 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push('dat_wide <- sim_design(');
     lines.push(`  within  = ${withinDef},`);
     lines.push(`  between = ${betweenDef},`);
-    lines.push(`  n       = n,`);
+    // Items (Within-Design): jede Zeile ist ein DURCHGANG (Person × Item) mit eigener korrelierter Ziehung —
+    // wie in der Live-Vorschau. Personen-ID/Item werden direkt danach zugeordnet.
+    if(itemActive) lines.push(`  n       = n * ${itemK},   # n Personen × k_item Items (ein Durchgang pro Zeile)`);
+    else lines.push(`  n       = n,`);
     if(!hasB){
       // only within: mu must be a plain vector, not a named list
       const bk=cellKey([]);
@@ -2604,6 +2833,20 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push(`  empirical = ${ST.exactMode?'TRUE':'FALSE'},`);
     lines.push('  plot     = FALSE');
     lines.push(')');
+
+    // ── Kovariablen + Effekt auf Y (VOR Cluster-REs und Link-Transformation, auf η) ──
+    if(itemActive){
+      const itemNameRw=cleanR(itemName);
+      lines.push('');
+      lines.push('# ── Personen und Items (gekreuzt) ────────────────────────');
+      lines.push('# Je k_item aufeinanderfolgende Zeilen gehören zu einer Person (faux legt die Zellen zusammenhängend ab).');
+      lines.push(`k_item <- ${itemK}`);
+      lines.push('dat_wide$id <- rep(seq_len(nrow(dat_wide) / k_item), each = k_item)');
+      lines.push(`dat_wide$${itemNameRw} <- factor(rep(paste0("${itemNameRw}", 1:k_item), times = nrow(dat_wide) / k_item))`);
+    }
+    emitCovBlock('dat_wide','# ── Kovariablen (vor pivot_longer — werden automatisch in dat_long übernommen) ──');
+    if(itemActive&&ST.covariates.length) lines.push(`dat_wide <- dat_wide |> group_by(id) |> mutate(across(all_of(c(${ST.covariates.map(c=>`"${cleanR(c.name)}"`).join(', ')})), first)) |> ungroup()   # Kovariable pro Person konstant`);
+    emitCovEffect('dat_wide','wide',wNames.map(l=>`"${l}"`).join(', '));
 
     // ── Cluster-REs im Wide Format (BEFORE pivot_longer) ─────
     const hasSlopes=clActive&&clTau1>0&&clSlopeFactor!=null;
@@ -2638,6 +2881,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       } else {
         lines.push(`dat_wide$${clNameR} <- factor(sample(paste0("${clNameR}", 1:k), nrow(dat_wide), replace = TRUE))`);
       }
+      if(itemActive) lines.push(`dat_wide <- dat_wide |> group_by(id) |> mutate(${clNameR} = first(${clNameR})) |> ungroup()   # Cluster pro Person`);
       if(hasSlopes&&slopeIsWithin){
         lines.push(`dat_wide <- dat_wide |>`);
         lines.push(`  mutate(`);
@@ -2679,7 +2923,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push('# Jede Person bekommt eine unabhängige Abweichung pro Nicht-Referenz-Level —');
       lines.push(`# die tatsächliche Datengrundlage für die Formel "(1 + ${wfNameR} | id)".`);
       lines.push(`tau1_id <- ${idTau1R}   # Random-Slope-SD pro Person (Slope auf: ${wf.name})`);
-      wNames.forEach((lv,wi)=>{ if(wi>0) lines.push(`id_slope_${lv} <- rnorm(nrow(dat_wide), 0, tau1_id)`); });
+      wNames.forEach((lv,wi)=>{ if(wi>0) lines.push(itemActive?`id_slope_${lv} <- rnorm(max(dat_wide$id), 0, tau1_id)[dat_wide$id]`:`id_slope_${lv} <- rnorm(nrow(dat_wide), 0, tau1_id)`); });
       lines.push(`dat_wide <- dat_wide |>`);
       lines.push(`  mutate(`);
       const idRows=wNames.map((lv,wi)=>wi===0?null:`\`${lv}\` = \`${lv}\` + id_slope_${lv}`).filter(Boolean);
@@ -2719,32 +2963,6 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       }
     }
 
-    // ── Kovariablen (VOR pivot_longer — landen so in dat_long) ──
-    if(ST.covariates.length>0){
-      const bNamesR_cov=ST.between.map(f=>cleanR(f.name));
-      lines.push('');
-      lines.push('# ── Kovariablen (vor pivot_longer — werden automatisch in dat_long übernommen) ──');
-      if(ST.covariates.length===2&&ST.covRho!==0){
-        const c1=ST.covariates[0],c2=ST.covariates[1];
-        const c1R=cleanR(c1.name),c2R=cleanR(c2.name);
-        const rho=(ST.covRho||0).toFixed(2);
-        lines.push(`# Korrelierte Kovariablen: ${c1R}, ${c2R}  (ρ = ${rho})`);
-        lines.push(`Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)},`);
-        lines.push(`                     ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
-        lines.push(`cov_z <- MASS::mvrnorm(nrow(dat_wide), mu = c(0, 0), Sigma = Sigma_cov, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
-        ST.covariates.forEach((cov,ci)=>{
-          const cR=cleanR(cov.name);
-          lines.push(...buildCovAssignment(cov,cR,'dat_wide',bNamesR_cov,`cov_z[, ${ci+1}]`));
-        });
-      }else{
-        ST.covariates.forEach(cov=>{
-          const cR=cleanR(cov.name);
-          const zExpr=ST.exactMode?`exact_mean_sd(rnorm(nrow(dat_wide)), 0, ${cov.sd.toFixed(2)})`:`rnorm(nrow(dat_wide), 0, ${cov.sd.toFixed(2)})`;
-          lines.push(...buildCovAssignment(cov,cR,'dat_wide',bNamesR_cov,zExpr));
-        });
-      }
-    }
-
     // ── Wide → Long ──────────────────────────────────────────
     lines.push('');
     lines.push('# ── Wide → Long (für brms / lme4) ─────────────────────');
@@ -2774,11 +2992,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
         lines.push(`item_effects <- setNames(rnorm(k_item, 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
       }
       lines.push('dat_long <- dat_long |>');
-      lines.push('  slice(rep(1:n(), each = k_item)) |>');
-      lines.push('  mutate(');
-      lines.push(`    ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
-      lines.push(`    Y = Y + unname(item_effects[as.character(${itemNameR})])`);
-      lines.push('  )');
+      lines.push(`  mutate(Y = Y + unname(item_effects[as.character(${itemNameR})]))`);
 
       if(lik==='student'){
         const lambda=rTransformLambda('student',extra);
@@ -2817,7 +3031,7 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   } else if(hasB){
     // Between only: rbind of rnorm per group
     lines.push('# ── Between-Design (eine Gruppe pro Block) ─────────────');
-    const useEtaColB = clActive && !isIdentityLink(lik);
+    const useEtaColB = (clActive||covEtaMode) && !isIdentityLink(lik);
     const bRows=hasB?bCells:[[]];
     if(!isIdentityLink(lik)){
       bRows.forEach(bc=>{
@@ -2848,13 +3062,17 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     lines.push('');
     lines.push(`dat <- rbind(${bCells.map(bc=>'dat_'+bc.join('_')).join(', ')})`);
     ST.between.forEach((f,i)=>lines.push(`dat$${bNamesR[i]} <- factor(dat$${bNamesR[i]})`));
+    if(itemActive) lines.push('dat$id <- seq_len(nrow(dat))   # Personen-ID (für (1 | id) bei Item-Struktur)');
+    emitCovBlock('dat','# ── Kovariablen ──────────────────────────────────────────────');
+    emitCovEffect('dat',covEtaMode?'eta':'y');
+    if(covEtaMode&&!clActive&&!itemActive) emitEtaResolve();
 
   } else {
     // No factors
     lines.push('# ── Einfaches Design ────────────────────────────────────');
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
-    const useEtaColNF = clActive && !isIdentityLink(lik);
+    const useEtaColNF = (clActive||covEtaMode) && !isIdentityLink(lik);
     const etaDefNF=rEtaDef('eta',lik,ST.means['all']??0,sd);
     if(etaDefNF){ lines.push(etaDefNF); lines.push(''); }
     lines.push(`dat <- data.frame(`);
@@ -2867,47 +3085,10 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       lines.push(`  Y = ${rSamplePoint('n', lik, mu, sd, extra)}`);
     }
     lines.push(')');
-  }
-
-  // Item-Random-Effects (gekreuzt, KEIN Within-Faktor) — muss NACH der Cluster-Auflösung
-  // oben laufen (Y ist dort bereits final), das ist unproblematisch für additive Skalen
-  // (gaussian/student: identity link, "+ item_effects" ist exakt äquivalent zur Injektion
-  // auf η). Für Nicht-additive Familien (Bernoulli/Poisson/…) UND aktivem Cluster wäre Y an
-  // dieser Stelle aber schon eine gezogene, diskrete Stichprobe — Item-Effekte müssten VOR
-  // der Cluster-η→Y-Auflösung injiziert werden. Dieser eine Sonderfall bleibt hier bewusst
-  // nur als Hinweis stehen (die Live-Vorschau/CSV oben simulieren ihn korrekt).
-  if(itemActive&&!hasW){
-    const itemNameR=cleanR(itemName);
-    const identityOk=isIdentityLink(lik);
-    const problematicCombo=clActive&&!identityOk;
-    lines.push('');
-    lines.push('# ── Item-Random-Effects (gekreuzt, kein Within-Faktor) ─────────');
-    lines.push('# Jedes Item erscheint bei jedem Subject — echte Kreuzklassifikation.');
-    lines.push(`k_item   <- ${itemK}`);
-    lines.push(`tau_item <- ${itemTau0}   # Item-Random-Intercept-SD`);
-    lines.push(ST.exactMode
-      ? `item_effects <- setNames(exact_mean_sd(rnorm(k_item), 0, tau_item), paste0("${itemNameR}", 1:k_item))`
-      : `item_effects <- setNames(rnorm(k_item, 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
-    if(problematicCombo){
-      lines.push(`# ⚠ Cluster + Item zusammen mit einer nicht-additiven Familie (${lik}) erfordern`);
-      lines.push('# eine Umsortierung: Y ist oben bereits eine gezogene, diskrete Stichprobe —');
-      lines.push('# Item-Effekte müssten VOR "Y = ' + rYFromEtaCol(lik,extra).slice(0,40) + '…" im Cluster-');
-      lines.push('# Abschnitt oben auf .eta addiert werden. Auskommentiert gelassen statt falsch');
-      lines.push('# generiert — Live-Vorschau/CSV oben simulieren diesen Fall bereits korrekt.');
-      lines.push('# dat <- dat |>');
-      lines.push('#   slice(rep(1:n(), each = k_item)) |>');
-      lines.push('#   mutate(');
-      lines.push(`#     ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
-      lines.push(`#     Y = Y + unname(item_effects[as.character(${itemNameR})])  # falsch bei nicht-additivem Y!`);
-      lines.push('#   )');
-    } else {
-      lines.push('dat <- dat |>');
-      lines.push('  slice(rep(1:n(), each = k_item)) |>');
-      lines.push('  mutate(');
-      lines.push(`    ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
-      lines.push(`    Y = Y + unname(item_effects[as.character(${itemNameR})])`);
-      lines.push('  )');
-    }
+    if(itemActive) lines.push('dat$id <- seq_len(nrow(dat))   # Personen-ID (für (1 | id) bei Item-Struktur)');
+    emitCovBlock('dat','# ── Kovariablen ──────────────────────────────────────────────');
+    emitCovEffect('dat',covEtaMode?'eta':'y');
+    if(covEtaMode&&!clActive&&!itemActive) emitEtaResolve();
   }
 
   // Cluster for between-only or no-factor designs (hasW case handled above, inside wide block)
@@ -2942,10 +3123,14 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
       const slopeExpr=betweenSlopeAdditionExpr(clNameR,sfNameR,clSlopeFactor.levels,i=>'u'+i);
       lines.push(`dat <- dat |>`);
       if(useEtaColCl){
+        if(itemActive){
+          lines.push(`  mutate(.eta = .eta + ${slopeExpr})   # Y wird nach den Item-Effekten gezogen`);
+        } else {
         lines.push(`  mutate(`);
         lines.push(`    .eta = .eta + ${slopeExpr},`);
         lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
         lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+        }
         if(ST.exactMode){
           lines.push(`# ⚠ "Exakte Parameter" erzwingt hier nur eine exakte η-/Cluster-Struktur;`);
           lines.push(`# die finale ${lik}-Ziehung bleibt zufällig — für diese Verteilungsfamilie`);
@@ -2963,10 +3148,14 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     } else {
       lines.push(`dat <- dat |>`);
       if(useEtaColCl){
+        if(itemActive){
+          lines.push(`  mutate(.eta = .eta + u0[as.character(${clNameR})])   # Y wird nach den Item-Effekten gezogen`);
+        } else {
         lines.push(`  mutate(`);
         lines.push(`    .eta = .eta + u0[as.character(${clNameR})],`);
         lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
         lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+        }
       } else {
         lines.push(`  mutate(Y = Y + u0[as.character(${clNameR})])`);
         if(ST.exactMode){
@@ -2984,30 +3173,30 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
     }
   }
 
-  // ── Kovariablen (between-only / no-factor Designs) ──────────
-  // Within-Design: Kovariablen wurden bereits VOR pivot_longer in den hasW-Block eingefügt.
-  if(!hasW && ST.covariates.length>0){
-    const bNamesR_cov=ST.between.map(f=>cleanR(f.name));
+  // Item-Random-Effects (gekreuzt, KEIN Within-Faktor) — läuft NACH Kovariablen und Cluster.
+  // Personen, Kovariablen und Cluster sind dann pro Person festgelegt; die Erweiterung auf Item-Zeilen
+  // repliziert sie. Bei Nicht-Identitäts-Link wird der Item-Effekt auf .eta addiert und erst danach gezogen.
+  if(itemActive&&!hasW){
+    const itemNameR=cleanR(itemName);
     lines.push('');
-    lines.push('# ── Kovariablen ──────────────────────────────────────────────');
-    if(ST.covariates.length===2&&ST.covRho!==0){
-      const c1=ST.covariates[0], c2=ST.covariates[1];
-      const c1R=cleanR(c1.name), c2R=cleanR(c2.name);
-      const rho=(ST.covRho||0).toFixed(2);
-      lines.push(`# Korrelierte Kovariablen: ${c1R}, ${c2R}  (ρ = ${rho})`);
-      lines.push(`Sigma_cov <- matrix(c(${c1.sd.toFixed(2)}^2, ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)},`);
-      lines.push(`                     ${rho}*${c1.sd.toFixed(2)}*${c2.sd.toFixed(2)}, ${c2.sd.toFixed(2)}^2), nrow = 2)`);
-      lines.push(`cov_z <- MASS::mvrnorm(nrow(dat), mu = c(0, 0), Sigma = Sigma_cov, empirical = ${ST.exactMode?'TRUE':'FALSE'})`);
-      ST.covariates.forEach((cov,ci)=>{
-        const cR=cleanR(cov.name);
-        lines.push(...buildCovAssignment(cov,cR,'dat',bNamesR_cov,`cov_z[, ${ci+1}]`));
-      });
-    }else{
-      ST.covariates.forEach(cov=>{
-        const cR=cleanR(cov.name);
-        const zExpr=ST.exactMode?`exact_mean_sd(rnorm(nrow(dat)), 0, ${cov.sd.toFixed(2)})`:`rnorm(nrow(dat), 0, ${cov.sd.toFixed(2)})`;
-        lines.push(...buildCovAssignment(cov,cR,'dat',bNamesR_cov,zExpr));
-      });
+    lines.push('# ── Item-Random-Effects (gekreuzt, kein Within-Faktor) ─────────');
+    lines.push('# Jedes Item erscheint bei jedem Subject — echte Kreuzklassifikation.');
+    lines.push(`k_item   <- ${itemK}`);
+    lines.push(`tau_item <- ${itemTau0}   # Item-Random-Intercept-SD`);
+    lines.push(ST.exactMode
+      ? `item_effects <- setNames(exact_mean_sd(rnorm(k_item), 0, tau_item), paste0("${itemNameR}", 1:k_item))`
+      : `item_effects <- setNames(rnorm(k_item, 0, tau_item), paste0("${itemNameR}", 1:k_item))`);
+    lines.push('dat <- dat |>');
+    lines.push('  slice(rep(1:n(), each = k_item)) |>');
+    lines.push('  mutate(');
+    lines.push(`    ${itemNameR} = factor(rep(names(item_effects), times = n() / k_item)),`);
+    if(covEtaMode){
+      lines.push(`    .eta = .eta + unname(item_effects[as.character(${itemNameR})]),`);
+      lines.push(`    Y = ${rYFromEtaCol(lik, extra)}`);
+      lines.push(`  ) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+    } else {
+      lines.push(`    Y = Y + unname(item_effects[as.character(${itemNameR})])`);
+      lines.push('  )');
     }
   }
 
@@ -3015,6 +3204,15 @@ function buildRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK
   lines.push('# ── Modell-Formel ────────────────────────────────────────');
   lines.push(`# ${document.getElementById('formulaLme4Prefix').textContent} ${document.getElementById('formulaLme4').textContent}${document.getElementById('formulaLme4Family').textContent}`);
   lines.push(`# brms: ${document.getElementById('formulaBrms').textContent}`);
+  if(hasW&&!itemActive&&document.getElementById('withinSlopeOnId')?.checked){
+    lines.push('# ⚠ (1 + … | id) ohne Item-Struktur: nur eine Messung pro Person und Stufe — nicht identifizierbar');
+    lines.push('#   (lme4 bricht ab, glmmTMB schätzt unzuverlässig). Für die Analyse (1 | id) verwenden oder Items aktivieren.');
+  }
+  if(ST.covariates.length>0){
+    const dn=hasW?'dat_long':'dat';
+    lines.push('# Tipp: Kovariable(n) vor der Analyse am Gesamtmittel zentrieren (bei Interaktion Faktor × Kovariable besonders wichtig):');
+    ST.covariates.forEach(c=>{const cR=cleanR(c.name);lines.push(`#   ${dn}$${cR} <- ${dn}$${cR} - mean(${dn}$${cR})`);});
+  }
 
   // ── Auskommentierter Power-Simulations-Block ──────────────
   const pwLines=buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor,itemActive,clRandomized);
@@ -3049,12 +3247,12 @@ function buildWithinSdR(lik,hasB,bRows,wNames,wf){
         const sdKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
         return (ST.sds[sdKey]??1).toFixed(2);
       });
-      return `    ${bc.join('_')} = c(${vals.join(', ')})`;
+      return `    \`${bc.join('_')}\` = c(${vals.join(', ')})`;
     });
     sdPart=`list(\n${sdListParts.join(',\n')}\n  )`;
   }
 
-  const corrMat=wf?ST.corrMats[wf.id]:null;
+  const corrMat=wf?effCorr(wf.id):null;
   const corrType=wf?ST.corrTypes[wf.id]:'cs';
   const rho=wf?ST.corrRho[wf.id]??0.65:0.65;
   // Bare value, no "r = " prefix — kept consistent with sdPart so both can go through the
@@ -3066,9 +3264,10 @@ function buildWithinSdR(lik,hasB,bRows,wNames,wf){
   // must also pass the full pre-computed matrix (ST.corrMats, already ρ^|i-j| via
   // applyCorrType()), exactly like the "custom" case.
   let rParam;
-  if(corrType==='cs') rParam=`${rho.toFixed(2)}   # compound symmetry`;
+  // CS als Skalar nur, wenn gültig — sonst (z. B. ρ stark negativ) die korrigierte Matrix übergeben
+  if(corrType==='cs'&&isPD(ST.corrMats[wf.id]||[[1]])) rParam=`${rho.toFixed(2)}   # compound symmetry`;
   else {
-    const flat=corrMat?corrMat.map(row=>row.map(v=>v.toFixed(2)).join(', ')).join(',\n    '):rho.toFixed(2);
+    const flat=corrMat?corrMat.map(row=>row.map(v=>v.toFixed(3)).join(', ')).join(',\n    '):rho.toFixed(2);
     const label=corrType==='ar1'?`AR(1), ρ=${rho.toFixed(2)}`:'custom';
     rParam=`matrix(c(\n    ${flat}\n  ), ${wNames.length}, ${wNames.length})   # ${label}`;
   }
@@ -3133,6 +3332,29 @@ function betweenSlopeAdditionExpr(clNameR,sfNameR,levels,uName){
 // ────────────────────────────────────────────────────────────
 // COVARIATE R-CODE HELPER
 // ────────────────────────────────────────────────────────────
+// Baut den R-Ausdruck (mutate-Kontext, nackte Spaltennamen) für den Kovariablen-Effekt auf η:
+//   β · (Kovariable − Zentrierungspunkt)   bzw. Gruppen-β über einen benannten Vektor.
+// Liefert {defs: [R-Zeilen für beta_<cov>-Vektoren], expr: String|null}.
+function buildCovEffectR(bNamesR){
+  const defs=[],terms=[],num=v=>String(+(+v).toFixed(4));
+  ST.covariates.forEach(cov=>{
+    const cR=cleanR(cov.name),ref=covRef(cov);
+    const grp=cov.useGroupBetas&&ST.between.length>0;
+    const cells=grp?getBetweenCells():[];
+    const vals=grp?cells.map(bc=>covSlope(cov,cellKey(bc))):[cov.beta];
+    if(vals.every(v=>v===0)) return;
+    const centered=`(${cR} ${ref<0?'+':'-'} ${num(Math.abs(ref))})`;
+    if(grp){
+      defs.push(`beta_${cR} <- c(\n${cells.map(bc=>`  "${bc.join('_')}" = ${num(covSlope(cov,cellKey(bc)))}`).join(',\n')}\n)`);
+      const keyExpr=ST.between.length===1?`as.character(${bNamesR[0]})`:`paste(${bNamesR.join(', ')}, sep = "_")`;
+      terms.push(`unname(beta_${cR}[${keyExpr}]) * ${centered}`);
+    }else{
+      terms.push(`${num(cov.beta)} * ${centered}`);
+    }
+  });
+  return {defs,expr:terms.length?terms.join(' + '):null};
+}
+
 function buildCovAssignment(cov,cR,datObjName,bNamesR,zExpr){
   const lines=[];
   if(cov.useGroupMeans&&ST.between.length>0){
@@ -3159,6 +3381,15 @@ function buildCovAssignment(cov,cR,datObjName,bNamesR,zExpr){
 // ────────────────────────────────────────────────────────────
 function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clName,clK,clTau0,clTau1,clRho01,clSlopeFactor=null,itemActive=false,clRandomized=false){
   const L=[];
+  if(!hasB&&!hasW&&!ST.covariates.length){
+    L.push('# ════════════════════════════════════════════════════════');
+    L.push('# POWER-SIMULATION: entfällt — ohne Faktoren und Kovariablen gibt es keinen');
+    L.push('# Effekt zu testen (Modell: Y ~ 1). Füge einen Faktor oder eine Kovariable hinzu.');
+    L.push('# ════════════════════════════════════════════════════════');
+    return L;
+  }
+  const pwCovEffR=buildCovEffectR(ST.between.map(f=>cleanR(f.name)));
+  const pwCovEta=!hasW&&!!pwCovEffR.expr&&!isIdentityLink(lik);
   const wf=hasW?ST.within[0]:null;
   const wNames=wf?wf.levels:[];
   const bNames=ST.between.map(f=>f.name);
@@ -3178,7 +3409,8 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   const pwSlopeIsBetween=clSlopeFactor?.kind==='between';
 
   // Hilfsfunktion: kommentierte Kovariablen-Zeilen für sim_data_one()
-  function pwCovLines(datName){
+  // effTarget: 'wide' (Effekt auf Wide-Spalten), 'eta' (.eta-Spalte), 'y' (Y direkt) oder null (kein Effekt).
+  function pwCovLines(datName,effTarget,wideCols){
     const out=[];
     if(!ST.covariates.length) return out;
     const bNR=ST.between.map(f=>cleanR(f.name));
@@ -3202,6 +3434,17 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       ST.covariates.forEach(cov=>{
         pushCommented(buildCovAssignment(cov,cleanR(cov.name),datName,bNR,`rnorm(nrow(${datName}), 0, ${cov.sd.toFixed(2)})`));
       });
+    }
+    if(effTarget&&pwCovEffR.expr){
+      out.push(`#   # ── Effekt der Kovariable(n) auf Y (β, zentriert am Gesamtmittel der Kovariable) ──`);
+      pwCovEffR.defs.forEach(d=>pushCommented([d]));
+      if(effTarget==='wide') out.push(`#   ${datName} <- ${datName} |> mutate(across(c(${wideCols}), \\(x) x + ${pwCovEffR.expr}))`);
+      else if(effTarget==='eta') out.push(`#   ${datName} <- ${datName} |> mutate(.eta = .eta + ${pwCovEffR.expr})`);
+      else out.push(`#   ${datName} <- ${datName} |> mutate(Y = Y + ${pwCovEffR.expr})`);
+    }
+    if(covInteractionActive()){
+      out.push(`#   # Kovariable(n) zentrieren (für sinnvolle Typ-II/III-Tests bei Interaktion Faktor × Kovariable)`);
+      ST.covariates.forEach(c=>{const cR=cleanR(c.name);out.push(`#   ${datName}$${cR} <- ${datName}$${cR} - mean(${datName}$${cR})`);});
     }
     return out;
   }
@@ -3312,7 +3555,7 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
         const mKey=[bk,lv].filter(s=>s&&s!=='all').join('_')||'all';
         return (ST.means[mKey]??0).toFixed(2);
       });
-      return `#     ${hasB?bc.join('_'):'Y'} = c(${vals.join(', ')})`;
+      return `#     \`${hasB?bc.join('_'):'Y'}\` = c(${vals.join(', ')})`;
     });
     // sd/r come from the SAME helper buildRCode() uses, so the power simulation always
     // matches the exact SD/correlation settings — not faux::sim_design()'s defaults
@@ -3350,6 +3593,7 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     if(pwNoSdLik) L.push(`#   # ⚠ r hat auch hier keine Wirkung — siehe Hinweis oben im Hauptcode.`);
     pushCommentedArg('r',pwRParamRaw,',');
     L.push('#   empirical = FALSE, plot = FALSE)');
+    pwCovLines('d','wide',wNames.map(l=>`"${l}"`).join(', ')).forEach(ln=>L.push(ln));
 
     if(clActive){
       L.push(`#   k_pw <- ${clK}; tau0_pw <- ${clTau0}`);
@@ -3404,14 +3648,13 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
       if(lambda) L.push(`#   d <- d |> mutate(across(c(${wNames.map(l=>`"${l}"`).join(', ')}), ${lambda}))`);
     }
 
-    pwCovLines('d').forEach(ln=>L.push(ln));
     L.push(`#   d_long <- tidyr::pivot_longer(d, cols = tidyr::all_of(c(${wNames.map(l=>`"${l}"`).join(', ')})),`);
     L.push(`#     names_to = "${wfNameR}", values_to = "Y")`);
     L.push(`#   d_long$${wfNameR} <- factor(d_long$${wfNameR}, levels = c(${wNames.map(l=>`"${l}"`).join(', ')}))`);
     if(hasB) ST.between.forEach((f,fi)=>L.push(`#   d_long$${bNamesR[fi]} <- factor(d_long$${bNamesR[fi]})`));
     L.push('#   return(d_long)');
   } else if(hasB){
-    const pwUseEtaCol = clActive && !isIdentityLink(lik);
+    const pwUseEtaCol = (clActive||pwCovEta) && !isIdentityLink(lik);
     const bRows=bCells;
     if(!isIdentityLink(lik)){
       bRows.forEach(bc=>{
@@ -3438,13 +3681,21 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     });
     L.push(`#   d <- rbind(${bCells.map(bc=>'d_'+bc.join('_')).join(', ')})`);
     ST.between.forEach((f,i)=>L.push(`#   d$${bNamesR[i]} <- factor(d$${bNamesR[i]})`));
-    pushClusterInjection('d',pwUseEtaCol);
-    pwCovLines('d').forEach(ln=>L.push(ln));
+    if(pwCovEta){
+      pwCovLines('d','eta').forEach(ln=>L.push(ln));
+      pushClusterInjection('d',pwUseEtaCol);
+      if(!clActive){
+        L.push(`#   d <- d |> mutate(Y = ${rYFromEtaCol(lik, extra)}) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+      }
+    }else{
+      pushClusterInjection('d',pwUseEtaCol);
+      pwCovLines('d',pwCovEffR.expr?'y':null).forEach(ln=>L.push(ln));
+    }
     L.push('#   return(d)');
   } else {
     const mu=(ST.means['all']??0).toFixed(2);
     const sd=(ST.sds['all']??1).toFixed(2);
-    const pwUseEtaColNoFactor = clActive && !isIdentityLink(lik);
+    const pwUseEtaColNoFactor = (clActive||pwCovEta) && !isIdentityLink(lik);
     if(!isIdentityLink(lik)){
       const defLine=rEtaDef('eta',lik,ST.means['all']??0,sd);
       if(defLine){ L.push(`#   ${defLine}`); L.push('#'); }
@@ -3453,8 +3704,16 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     } else {
       L.push(`#   d <- data.frame(Y = ${rSamplePoint('n',lik,mu,sd,extra)})`);
     }
-    pushClusterInjection('d',pwUseEtaColNoFactor);
-    pwCovLines('d').forEach(ln=>L.push(ln));
+    if(pwCovEta){
+      pwCovLines('d','eta').forEach(ln=>L.push(ln));
+      pushClusterInjection('d',pwUseEtaColNoFactor);
+      if(!clActive){
+        L.push(`#   d <- d |> mutate(Y = ${rYFromEtaCol(lik, extra)}) |> select(-c(.eta${lik==='lognormal'?', .sigma':''}))`);
+      }
+    }else{
+      pushClusterInjection('d',pwUseEtaColNoFactor);
+      pwCovLines('d',pwCovEffR.expr?'y':null).forEach(ln=>L.push(ln));
+    }
     L.push('#   return(d)');
   }
 
@@ -3496,6 +3755,17 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     return `${yLhs} ~ ${fx}${pwCovStr}${pwReStr}`;
   }
   const pwFmlFull =pwMkFml(pwAllTermsFull);
+  // Faktor × Kovariable (nur Option A / Wald): alle nicht-leeren Teilmengen der Between-Faktoren mal Kovariable.
+  const pwInterCovTerms=[];
+  if(pwAllB.length>0) ST.covariates.filter(c=>c.useGroupBetas).forEach(c=>{
+    const cR=cleanR(c.name);
+    for(let mask=1;mask<(1<<pwAllB.length);mask++){
+      pwInterCovTerms.push([...pwAllB.filter((_,i)=>mask&(1<<i)),cR].join(':'));
+    }
+  });
+  const pwFmlFullA=pwInterCovTerms.length
+    ? pwFmlFull.slice(0,pwFmlFull.length-(pwCovStr+pwReStr).length)+pwCovStr+' + '+pwInterCovTerms.join(' + ')+pwReStr
+    : pwFmlFull;
   const pwFmlAdd  =pwMkFml(pwAllMain);          // nur Haupteffekte
   const pwFmlNull =pwMkFml([]);                 // Y ~ 1 + covs + RE
 
@@ -3504,7 +3774,7 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
   L.push('# fit_and_test <- function(sim_seed) {');
   L.push('#   d <- sim_data_one(sim_seed)');
   L.push('#   tryCatch({');
-  L.push(`#     fit  <- glmmTMB(${pwFmlFull}, data = d, family = ${rFamily})`);
+  L.push(`#     fit  <- glmmTMB(${pwFmlFullA}, data = d, family = ${rFamily})`);
   L.push('#     # Typ II: testet jeden Term nach allen anderen Termen ohne higher-order Interaktionen.');
   if(pwInterTerms&&pwInterTerms.length>0){
     L.push('#     # Bei vorhandenen Interaktionen: Haupteffekte sind konditional und evtl. nicht sinnvoll.');
@@ -3547,6 +3817,10 @@ function buildPowerRCode(n,seed,lik,extra,bCells,wCells,hasB,hasW,clActive,clNam
     L.push('# # Genauer als Wald (v.a. bei kleinen N und non-Gaussian), aber');
     L.push('# # ~3-6× langsamer (mehrere Modell-Fits pro Sim-Durchlauf).');
     L.push('# # Hinweis: Ersetze den obigen fit_and_test durch fit_and_test_lrt.');
+    if(pwInterCovTerms.length){
+      L.push('# # ⚠ Die LRT-Variante kennt die Interaktion Faktor × Kovariable (' + pwInterCovTerms.join(', ') + ') noch NICHT —');
+      L.push('# # ihr Modell enthält nur die Haupteffekte der Kovariable. Für diese Interaktionen bitte Option A (Wald) verwenden.');
+    }
     L.push('# # ════════════════════════════════════════════════════════════');
     L.push('#');
 
@@ -3680,7 +3954,7 @@ function rSamplePoint(nVar,lik,mu,sd,extra){
     case 'lognormal':   return `rlnorm(${nVar}, meanlog = ${mu}, sdlog = ${sd})`;
     case 'gamma':       return `rgamma(${nVar}, shape = ${extra.phi||2}, rate = ${extra.phi||2} / exp(${mu}))`;
     case 'bernoulli':   return `rbinom(${nVar}, 1, plogis(${mu}))`;
-    case 'beta':        {const p=`plogis(${mu})`;return `rbeta(${nVar}, ${p}*${extra.phi||2}, (1-${p})*${extra.phi||2})`;}
+    case 'beta':        {const p=`plogis(${mu})`;return `pmin(pmax(rbeta(${nVar}, ${p}*${extra.phi||2}, (1-${p})*${extra.phi||2}), 1e-6), 1 - 1e-6)`;}
     case 'binomial':    return `rbinom(${nVar}, ${extra.ntrials||10}, plogis(${mu}))`;
     case 'poisson':     return `rpois(${nVar}, exp(${mu}))`;
     case 'negbinomial': return `rnbinom(${nVar}, mu = exp(${mu}), size = ${extra.phi||2})`;
@@ -3701,7 +3975,7 @@ function rYFromEtaCol(lik, extra){
     case 'lognormal':   return 'rlnorm(n(), meanlog = .eta, sdlog = .sigma)';
     case 'gamma':       return `rgamma(n(), shape = ${phi}, rate = ${phi} / exp(.eta))`;
     case 'bernoulli':   return 'rbinom(n(), 1, plogis(.eta))';
-    case 'beta':        return `{ p <- plogis(.eta); rbeta(n(), p * ${phi}, (1 - p) * ${phi}) }`;
+    case 'beta':        return `{ p <- plogis(.eta); pmin(pmax(rbeta(n(), p * ${phi}, (1 - p) * ${phi}), 1e-6), 1 - 1e-6) }`;
     case 'binomial':    return `rbinom(n(), ${ntrials}, plogis(.eta))`;
     case 'poisson':     return 'rpois(n(), exp(.eta))';
     case 'negbinomial': return `rnbinom(n(), mu = exp(.eta), size = ${phi})`;
@@ -3768,7 +4042,7 @@ function rSamplePointFromEtaVar(nVar, etaVar, lik, extra, sd){
     case 'lognormal':   return `rlnorm(${nVar}, meanlog = ${etaVar}, sdlog = ${sd})`;
     case 'gamma':       return `rgamma(${nVar}, shape = ${phi}, rate = ${phi} / exp(${etaVar}))`;
     case 'bernoulli':   return `rbinom(${nVar}, 1, plogis(${etaVar}))`;
-    case 'beta':        return `rbeta(${nVar}, plogis(${etaVar})*${phi}, (1-plogis(${etaVar}))*${phi})`;
+    case 'beta':        return `pmin(pmax(rbeta(${nVar}, plogis(${etaVar})*${phi}, (1-plogis(${etaVar}))*${phi}), 1e-6), 1 - 1e-6)`;
     case 'binomial':    return `rbinom(${nVar}, ${ntrials}, plogis(${etaVar}))`;
     case 'poisson':     return `rpois(${nVar}, exp(${etaVar}))`;
     case 'negbinomial': return `rnbinom(${nVar}, mu = exp(${etaVar}), size = ${phi})`;
@@ -3798,7 +4072,7 @@ function rTransformLambda(lik, extra){
     case 'lognormal':   return '\\(eta) exp(eta)';
     case 'gamma':       return `\\(eta) rgamma(n(), shape = ${phi}, rate = ${phi} / exp(eta))`;
     case 'bernoulli':   return '\\(eta) rbinom(n(), 1, plogis(eta))';
-    case 'beta':        return `\\(eta) { p <- plogis(eta); rbeta(n(), p * ${phi}, (1 - p) * ${phi}) }`;
+    case 'beta':        return `\\(eta) { p <- plogis(eta); pmin(pmax(rbeta(n(), p * ${phi}, (1 - p) * ${phi}), 1e-6), 1 - 1e-6) }`;
     case 'binomial':    return `\\(eta) rbinom(n(), ${ntrials}, plogis(eta))`;
     case 'poisson':     return '\\(eta) rpois(n(), exp(eta))';
     case 'negbinomial': return `\\(eta) rnbinom(n(), mu = exp(eta), size = ${phi})`;
@@ -3809,12 +4083,21 @@ function rTransformLambda(lik, extra){
 // ────────────────────────────────────────────────────────────
 // CSV EXPORT
 // ────────────────────────────────────────────────────────────
+// Zahlen für CSV: ganze Zahlen ohne Nachkommastellen (id, Zähldaten, 0/1), sehr kleine Werte
+// in wissenschaftlicher Notation statt auf 0.000000 gerundet (sonst exakte Nullen bei Gamma/Beta/Lognormal).
+function fmtNum(v){
+  if(!isFinite(v)) return '';
+  if(Number.isInteger(v)) return String(v);
+  if(v!==0&&Math.abs(v)<1e-3) return v.toPrecision(6);
+  return v.toFixed(6);
+}
+function csvStr(v){return `"${String(v).replace(/"/g,'""')}"`;}
 function buildCSV(data,colNames){
   const rows=[colNames.join(',')];
   data.forEach(row=>rows.push(colNames.map(c=>{
     const v=row[c];
-    if(typeof v==='string') return `"${v.replace(/"/g,'""')}"`;
-    return v===null||v===undefined?'':typeof v==='number'?v.toFixed(6):v;
+    if(typeof v==='string') return csvStr(v);
+    return v===null||v===undefined?'':typeof v==='number'?fmtNum(v):v;
   }).join(',')));
   return rows.join('\n');
 }
@@ -3832,10 +4115,10 @@ function buildLongCSV(data,colNames){
     wLvls.forEach(lv=>{
       const vals=nonWide.map(c=>{
         const v=row[c];
-        return typeof v==='string'?`"${v}"`:v===null?'':typeof v==='number'?v.toFixed(6):v;
+        return typeof v==='string'?csvStr(v):v===null?'':typeof v==='number'?fmtNum(v):v;
       });
       const yv=row[lv];
-      rows.push([...vals,`"${lv}"`,typeof yv==='number'?yv.toFixed(6):yv].join(','));
+      rows.push([...vals,csvStr(lv),typeof yv==='number'?fmtNum(yv):yv].join(','));
     });
   });
   return rows.join('\n');
@@ -3923,6 +4206,16 @@ function scaleUnitNote(lik,rawMode){
   return null; // gaussian, student
 }
 
+// σ setzen. Lognormal + Response-Skala: E[Y] = exp(η + σ²/2) — damit die eingegebene E[Y]
+// bei einer σ-Änderung nicht still wandert, wird η passend nachgeführt.
+function setSd(mKey,val){
+  const lik=document.getElementById('likSel').value;
+  if(rawMode&&lik==='lognormal'){
+    const resp=etaToRaw(ST.means[mKey]??0,mKey,lik);
+    ST.sds[mKey]=Math.max(0,+val||0);
+    ST.means[mKey]=rawToEta(resp,mKey,lik);
+  } else ST.sds[mKey]=Math.max(0,+val||0);   // negative σ wären im R-Code ungültig
+}
 function setMeanRaw(mKey,val){
   const lik=document.getElementById('likSel').value;
   ST.means[mKey]=rawMode?rawToEta(+val,mKey,lik):+val;
@@ -3966,7 +4259,7 @@ function renderReverseCalc(){
     etaRef=[-1,0,0.5,1,1.5,2,2.5,3];
   } else {
     rawLabel='E[Y]'; linkLabel='log (median=exp η)';
-    formula='E[Y] = exp(η + σ²/2)';
+    formula='E[Y] = exp(η + σ²/2), σ = '+(Object.values(ST.sds)[0]??1);
     etaRef=[-1,0,0.5,1,1.5,2,2.5,3];
   }
 
@@ -3975,7 +4268,7 @@ function renderReverseCalc(){
     if(isLogit) return 1/(1+Math.exp(-eta));
     if(isLog)   return Math.exp(eta);
     // lognormal: use default SD=1 for the reference table
-    const s=+(document.getElementById('extraSigma')?.value||1);
+    const s=(Object.values(ST.sds)[0]??1);
     return Math.exp(eta+s*s/2);
   };
 
@@ -4010,7 +4303,7 @@ function rcFromEta(){
   const logitLink=['bernoulli','beta','binomial'];
   let raw;
   if(logitLink.includes(lik))      raw=1/(1+Math.exp(-eta));
-  else if(lik==='lognormal'){const s=+(document.getElementById('extraSigma')?.value||1);raw=Math.exp(eta+s*s/2);}
+  else if(lik==='lognormal'){const s=(Object.values(ST.sds)[0]??1);raw=Math.exp(eta+s*s/2);}
   else                              raw=Math.exp(eta);
   const el=document.getElementById('rcRaw');
   if(el) el.value=raw.toFixed(4);
@@ -4025,7 +4318,7 @@ function rcFromRaw(){
     const p=Math.max(1e-6,Math.min(1-1e-6,raw));
     eta=Math.log(p/(1-p));
   } else if(lik==='lognormal'){
-    const s=+(document.getElementById('extraSigma')?.value||1);
+    const s=(Object.values(ST.sds)[0]??1);
     eta=Math.log(Math.max(1e-9,raw))-s*s/2;
   } else {
     eta=Math.log(Math.max(1e-9,raw));
@@ -4059,7 +4352,7 @@ function toggleHelpSection(hdr){
 // ────────────────────────────────────────────────────────────
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
-function toggleTheme(){const h=document.documentElement;const dark=h.getAttribute('data-theme')==='dark';h.setAttribute('data-theme',dark?'light':'dark');document.getElementById('btn-theme').textContent=dark?'🌙 Dark':'☀ Light';localStorage.setItem('btl-theme',dark?'light':'dark');}
+function toggleTheme(){const h=document.documentElement;const dark=h.getAttribute('data-theme')==='dark';h.setAttribute('data-theme',dark?'light':'dark');document.getElementById('btn-theme').textContent=dark?'🌙 Dark':'☀ Light';try{localStorage.setItem('btl-theme',dark?'light':'dark');}catch(e){}}
 
 function toggleExactMode(){
   ST.exactMode=!ST.exactMode;
