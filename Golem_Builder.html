@@ -1679,6 +1679,39 @@ function uniqueRName(base, taken) {
   return s;
 }
 
+// Koeffizientenname der Exposition im angepassten Modell: Eine Bernoulli-Exposition wird im erzeugten Code
+// mit as.factor() kodiert (siehe buildNodeSimLines) — R/brms/glmmTMB nennen den Koeffizienten dann "<Name>1"
+// (Referenzstufe 0 entfällt) statt "<Name>". Alle Stellen, die einen Koeffizienten der Exposition per Namen
+// auslesen (draws$b_…, fixef(…)[…], coef(…)[…]), müssen darüber laufen — sonst liefert R still NA.
+function expCoef(name) {
+  const X = state.exposure;
+  if (!X || name !== getNodeName(X)) return name;
+  const expNode = state.nodes.find(n => n.id === X);
+  if (!expNode || expNode.latent) return name;
+  const isBern = getParents(X).length === 0 ? getRootDist(X).dist === 'Bernoulli' : getNonRootDist(X) === 'Bernoulli';
+  return isBern ? name + '1' : name;
+}
+
+// Adjustierungsset für die Pfadprodukt-Modelle (Mediation, Power des indirekten Effekts): Backdoor-Set für den
+// totalen Effekt PLUS die Variablen des Direkt-Effekt-Sets ohne Mediatoren (z.B. Confounder zwischen Mediator und
+// Outcome). Ohne diese Confounder (Mediator–Outcome-Konfundierung) sind a×b, direkter und indirekter Effekt
+// verzerrt, auch wenn der totale Effekt stimmt (sequential ignorability, Imai et al. 2010).
+function mediationAdjIds() {
+  const total = state.analysisResult?.minimal?.[0] || [];
+  const meds = new Set([...getMediators()].filter(id => id !== state.exposure && id !== state.outcome));
+  if (meds.size === 0) return total;
+  const dr = findDirectAdjustmentSets();
+  const direct = (dr && dr.minimal.length) ? dr.minimal[0].filter(id => !meds.has(id)) : [];
+  return [...new Set([...total, ...direct])];
+}
+
+// brms-Familie je Knoten (für mvbf(): jede Gleichung bekommt ihre eigene Verteilung). Normal = Standard → kein Zusatz.
+function nodeBrmsFamilyArg(nodeId) {
+  const isRoot = getParents(nodeId).length === 0;
+  const dist = isRoot ? getRootDist(nodeId).dist : getNonRootDist(nodeId);
+  return { Bernoulli: 'bernoulli("logit")', Poisson: 'poisson("log")', Gamma: 'Gamma("log")' }[dist] || '';
+}
+
 function getNodeName(id) {
   const n = state.nodes.find(n=>n.id===id);
   return n ? n.name : id;
@@ -2365,7 +2398,9 @@ function runAnalysis() {
     if (minimal.length === 0 && result.backdoorPaths.length === 0) {
       summaryHtml = '<div class="msg-ok">Kein Backdoor-Pfad – keine Adjustierung nötig.</div>';
     } else if (minimal.length === 0) {
-      summaryHtml = '<div class="msg-warn">Kein valides Adjustierungsset gefunden!</div>';
+      summaryHtml = hasDirectedPath(state.outcome, state.exposure)
+        ? '<div class="msg-warn">⚠ Umgekehrte Kausalrichtung: ' + escHtml(getNodeName(state.outcome)) + ' ist (direkt oder indirekt) eine Ursache von ' + escHtml(getNodeName(state.exposure)) + '. Der Pfad ' + escHtml(getNodeName(state.outcome)) + ' → … → ' + escHtml(getNodeName(state.exposure)) + ' ist ein Backdoor-Pfad, der sich nicht durch Adjustierung blockieren lässt — der Effekt von ' + escHtml(getNodeName(state.exposure)) + ' auf ' + escHtml(getNodeName(state.outcome)) + ' ist so nicht schätzbar. Prüfen, ob Exposition und Outcome vertauscht sind.</div>'
+        : '<div class="msg-warn">Kein valides Adjustierungsset gefunden!</div>';
     } else {
       summaryHtml = `<div class="msg-ok">Valides Adjustierungsset: {${(useDirect ? directRes.minimal[0] : minimal[0]).map(id=>getNodeName(id)).join(', ')||'∅'}}</div>`;
     }
@@ -3283,7 +3318,7 @@ function buildFormulaRHS(targetId) {
 
   // Collect interaction pairs: edges into targetId whose moderator is set
   const intPairs = targetId
-    ? state.edges.filter(e => e.to === targetId).flatMap(e => {
+    ? state.edges.filter(e => e.to === targetId && !state.nodes.find(n => n.id === e.from)?.latent).flatMap(e => {
         const mod = getEdgeModerator(e.id);
         return mod ? [{ a: getNodeName(e.from), b: mod }] : [];
       })
@@ -3318,6 +3353,7 @@ function intTermsFor(nodeId) {
   return getParents(nodeId).flatMap(pid => {
     const edge = state.edges.find(e => e.from === pid && e.to === nodeId);
     if (!edge) return [];
+    if (state.nodes.find(n => n.id === pid)?.latent) return []; // latente Quelle steht nicht in dat → nicht im Modell
     const modName = getEdgeModerator(edge.id);
     const bint = getEdgeIntCoef(edge.id);
     return (modName && bint !== 0) ? [`${getNodeName(pid)}:${modName}`] : [];
@@ -3383,7 +3419,7 @@ function generateMediationCode() {
   // True ancestor mediators of `node` — real reachability, not sort order (see comment above).
   const medAncestorsOf = node => mediators.filter(m => m !== node && hasDirectedPath(m, node));
 
-  const adjIds = (state.analysisResult?.minimal?.[0] || []);
+  const adjIds = mediationAdjIds();
   const pathAllowed = new Set([X, ...mediators, Y]);
   const hasDirectXY = getChildren(X).includes(Y);
   const hasUnorderedMediatorPair = mediators.some((m1, i) =>
@@ -3399,9 +3435,15 @@ function generateMediationCode() {
   lines.push('# Mediatoren, die echte Vorfahren des jeweiligen Knotens sind (nicht nur direkte');
   lines.push('# DAG-Eltern) — das macht die Schätzung robust gegen einen unvollständig');
   lines.push('# gezeichneten DAG. Nimmt an, dass keine unbeobachteten Confounder zwischen den');
-  lines.push('# Mediatoren selbst bestehen (nur das für X→Y berechnete Adjustierungsset wird');
-  lines.push('# pro Gleichung mit übernommen, wo es ein echter Elternknoten ist).');
+  lines.push('# Mediatoren selbst bestehen. Pro Gleichung werden außerdem die Variablen des Adjustierungssets');
+  lines.push('# übernommen, die echte Elternknoten sind — inkl. Confounder zwischen Mediator und Outcome.');
   lines.push('');
+  if (nodeBrmsFamilyArg(Y) || mediators.some(m => nodeBrmsFamilyArg(m))) {
+    lines.push('# Hinweis Skalen: Mindestens eine Gleichung ist nicht gaussisch — die Pfadkoeffizienten liegen dann auf der');
+    lines.push("# jeweiligen Link-Skala (logit bzw. log). Das Produkt a×b und die Summe 'total' sind daher Effekte auf");
+    lines.push('# gemischter Link-Skala (Produkt-der-Koeffizienten-Methode), keine Wahrscheinlichkeits- bzw. Zähldifferenzen.');
+    lines.push('# Effekte auf der Ergebnisskala (z.B. Risikodifferenz) liefert die g-Berechnung (siehe G-Comp Builder).');
+  }
   lines.push('library(brms)');
 
   const bfNames = [];
@@ -3409,12 +3451,12 @@ function generateMediationCode() {
     const mName = getNodeName(m);
     const adjParents = getParents(m).filter(p => adjIds.includes(p)).map(getNodeName);
     const preds = [...new Set([xName, ...medAncestorsOf(m).map(getNodeName), ...adjParents, ...intTermsFor(m)])];
-    lines.push(`bf_${mName} <- bf(${mName} ~ 1 + ${preds.join(' + ')})`);
+    { const fam = nodeBrmsFamilyArg(m); lines.push(`bf_${mName} <- bf(${mName} ~ 1 + ${preds.join(' + ')}${fam ? ', family = ' + fam : ''})`); }
     bfNames.push(`bf_${mName}`);
   });
   const yAdjParents = getParents(Y).filter(p => adjIds.includes(p)).map(getNodeName);
   const yPreds = [...new Set([xName, ...medAncestorsOf(Y).map(getNodeName), ...yAdjParents, ...intTermsFor(Y)])];
-  lines.push(`bf_${yName} <- bf(${yName} ~ 1 + ${yPreds.join(' + ')})`);
+  { const fam = nodeBrmsFamilyArg(Y); lines.push(`bf_${yName} <- bf(${yName} ~ 1 + ${yPreds.join(' + ')}${fam ? ', family = ' + fam : ''})`); }
   bfNames.push(`bf_${yName}`);
   if (!hasDirectXY) {
     lines.push(`# b_${yName}_${xName} wird trotzdem mitgeschätzt, obwohl im DAG keine direkte ${xName}→${yName}-Kante`);
@@ -3454,7 +3496,7 @@ function generateMediationCode() {
   realPaths.forEach(path => {
     const coefTerms = [];
     for (let i = 0; i < path.length - 1; i++) {
-      coefTerms.push(`draws$b_${getNodeName(path[i+1])}_${getNodeName(path[i])}`);
+      coefTerms.push(`draws$b_${getNodeName(path[i+1])}_${expCoef(getNodeName(path[i]))}`);
     }
     const varName = path.length === 2 ? 'direct_effect' : `indirect_via_${path.slice(1, -1).map(getNodeName).join('_')}`;
     lines.push(`${varName} <- ${coefTerms.join(' * ')}`);
@@ -3472,8 +3514,8 @@ function generateMediationCode() {
   }
   lines.push('');
   lines.push('# Zum Vergleich: naiver (verzerrter) Schätzer');
-  lines.push(`fit_naive <- lm(${yName} ~ ${xName}, data = dat)`);
-  lines.push(`cat("Naiver Schätzer: ", coef(fit_naive)["${xName}"], "\\n")`);
+  { const fy = nodeGlmmFamily(Y); lines.push(fy === 'gaussian()' ? `fit_naive <- lm(${yName} ~ ${xName}, data = dat)` : `fit_naive <- glm(${yName} ~ ${xName}, data = dat, family = ${fy})`); }
+  lines.push(`cat("Naiver Schätzer: ", coef(fit_naive)["${expCoef(xName)}"], "\\n")`);
   return lines.join('\n');
 }
 
@@ -3492,17 +3534,19 @@ function generateBrmsCode() {
     const zNames = instruments.map(id => getNodeName(id));
     const zStr = zNames.join(' + ');
     const zLabel = zNames.join(', ');
+    const xv = expCoef(xName) !== xName ? `${xName}_num` : xName;  // binäre Exposition: numerische 0/1-Kopie
     return [
       `# INSTRUMENTALVARIABLE — Bayesianisches joint model (McElreath SR 2020, Kap. 15)`,
       `# Instrumente: ${zLabel}`,
       '# Beide Gleichungen gemeinsam geschätzt (Seemingly Unrelated Regressions).',
       '# rescor = TRUE fängt unbeobachtete Confounder (U) ab.',
-      `# rho = rescor__${xName}__${yName} schätzt die Konfundierungsstärke durch U.`,
-      `# b_${yName}_${xName} ist der kausale Effekt von ${xName} auf ${yName}, korrekt trotz U.`,
+      `# rho = rescor__${xv}__${yName} schätzt die Konfundierungsstärke durch U.`,
+      `# b_${yName}_${xv} ist der kausale Effekt von ${xName} auf ${yName}, korrekt trotz U.`,
       '',
+      ...(expCoef(xName) !== xName ? [`dat$${xName}_num <- as.numeric(as.character(dat$${xName}))  # 0/1 numerisch: brms-gaussian erlaubt keine Faktor-Antwort`] : []),
       'library(brms)',
-      `bf_${xName} <- bf(${xName} ~ ${zStr})`,
-      `bf_${yName} <- bf(${yName} ~ ${xName})`,
+      `bf_${xName} <- bf(${xv} ~ ${zStr})`,
+      `bf_${yName} <- bf(${yName} ~ ${xv})`,
       '',
       'fit_iv_bayes <- brm(',
       `  mvbf(bf_${xName}, bf_${yName}, rescor = TRUE),`,
@@ -3510,8 +3554,8 @@ function generateBrmsCode() {
       '  # prior = c()  # Bitte Priors selbst festlegen (empfohlen!).',
       '  chains = 4, iter = 2000',
       ')',
-      `# Kausaler Effekt ${xName}→${yName}: fixef(fit_iv_bayes)["${yName}_${xName}",]`,
-      `# Konfundierungsstärke U: VarCorr(fit_iv_bayes) → rescor__${xName}__${yName}`,
+      `# Kausaler Effekt ${xName}→${yName}: fixef(fit_iv_bayes)["${yName}_${xv}",]`,
+      `# Konfundierungsstärke U: VarCorr(fit_iv_bayes) → rescor__${xv}__${yName}`,
     ].join('\n');
   }
 
@@ -3627,7 +3671,7 @@ function generateTMBCode() {
       '',
       '# Zum Vergleich: naiver Schätzer (verzerrt wegen U)',
       `fit_naive_freq <- glmmTMB(${yName} ~ ${xName}, data = dat, family = ${glmmFamily})`,
-      `cat("Naiver Schätzer (verzerrt): ", fixef(fit_naive_freq)$cond["${xName}"], "\\n")`,
+      `cat("Naiver Schätzer (verzerrt): ", fixef(fit_naive_freq)$cond["${expCoef(xName)}"], "\\n")`,
     ]);
   }
 
@@ -3656,7 +3700,7 @@ function generateTMBCode() {
         if (i > 0 && !hasDirectX)
           fdLines.push(`# Kein direkter ${xName}→${mName}-Pfad im DAG — ${xName} ausgelassen (Pearl-konform). Sensitivität: glmmTMB(${mName} ~ ${medNames[i-1]} + ${xName}, ...)`);
         fdLines.push(`fit_fd${i+1} <- glmmTMB(${mName} ~ ${pred}, data = dat, family = gaussian())`);
-        fdLines.push(`${bVar} <- fixef(fit_fd${i+1})$cond["${predLabel}"]`);
+        fdLines.push(`${bVar} <- fixef(fit_fd${i+1})$cond["${expCoef(predLabel)}"]`);
         fdLines.push(`cat("Schritt ${i+1} — ${predLabel}→${mName}: ", ${bVar}, "\\n")`);
         fdLines.push('');
         betaVars.push(bVar);
@@ -3679,7 +3723,7 @@ function generateTMBCode() {
         const bVar = `beta_X_${mName}`;
         fdLines.push(`# Stufe 1${String.fromCharCode(97+i)}: ${mName} ~ ${xName}`);
         fdLines.push(`fit_fd1${String.fromCharCode(97+i)} <- glmmTMB(${mName} ~ ${xName}, data = dat, family = gaussian())`);
-        fdLines.push(`${bVar} <- fixef(fit_fd1${String.fromCharCode(97+i)})$cond["${xName}"]`);
+        fdLines.push(`${bVar} <- fixef(fit_fd1${String.fromCharCode(97+i)})$cond["${expCoef(xName)}"]`);
         fdLines.push(`cat("Schritt 1${String.fromCharCode(97+i)} — ${xName}→${mName}: ", ${bVar}, "\\n")`);
         fdLines.push('');
       });
@@ -3697,7 +3741,7 @@ function generateTMBCode() {
     fdLines.push('');
     fdLines.push('# Zum Vergleich: naiver Schätzer (verzerrt wegen U)');
     fdLines.push(`fit_naive_fd <- glmmTMB(${yName} ~ ${xName}, data = dat, family = gaussian())`);
-    fdLines.push(`cat("Naiver Schätzer (verzerrt wegen U): ", fixef(fit_naive_fd)$cond["${xName}"], "\\n")`);
+    fdLines.push(`cat("Naiver Schätzer (verzerrt wegen U): ", fixef(fit_naive_fd)$cond["${expCoef(xName)}"], "\\n")`);
     baseCode = baseCode.concat(fdLines);
   }
 
@@ -4066,7 +4110,7 @@ function generatePowerCode() {
     : [...new Set([...baseAdjNames, ...mediatorNames])];
 
   // Moderator interaction on X's edge into Y (independent of which adjustment set is used):
-  const yIntPairs = state.edges.filter(e => e.to === Y).flatMap(e => {
+  const yIntPairs = state.edges.filter(e => e.to === Y && !state.nodes.find(n => n.id === e.from)?.latent).flatMap(e => {
     const mod = getEdgeModerator(e.id);
     return mod ? [{ a: getNodeName(e.from), b: mod }] : [];
   });
@@ -4166,7 +4210,7 @@ function generatePowerCode() {
 
   // ── Indirect (mediated) effect ──
   if (pathMediators.length > 0) {
-    const adjIds = (state.analysisResult?.minimal?.[0] || []);
+    const adjIds = mediationAdjIds();
     lines.push('');
     lines.push('# ============================================================');
     lines.push(`# INDIREKTER (mediierter) EFFEKT ${xName} → … → ${yName}`);
@@ -4272,7 +4316,8 @@ function generateDagittyCode() {
       `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}"),`,
       `               "Minimale Adjustierungssets (Effekt: ${effect})")`,
       ...(effect === 'total' ? [
-        `print_adj_sets(adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}", type = "all"),`,
+        `print_adj_sets(Filter(function(s) !any(s %in% latents(dag)),`,
+        `                      adjustmentSets(dag, exposure = "${xName}", outcome = "${yName}", effect = "${effect}", type = "all")),`,
         '               "Alle gültigen Adjustierungssets")',
       ] : [
         '# Für direkte Effekte unterstützt dagitty nur minimale Sets (type = "all" gibt einen Fehler).',
@@ -4685,7 +4730,7 @@ document.getElementById('btnOpenGComp').addEventListener('click', () => {
     : adjSetNames;
 
   // Interaction pairs for GComp formula (X*M notation)
-  const intPairsForExport = state.edges.filter(e => e.to === Y).flatMap(e => {
+  const intPairsForExport = state.edges.filter(e => e.to === Y && !state.nodes.find(n => n.id === e.from)?.latent).flatMap(e => {
     const mod = getEdgeModerator(e.id);
     return mod ? [{ a: getName(e.from), b: mod }] : [];
   });
