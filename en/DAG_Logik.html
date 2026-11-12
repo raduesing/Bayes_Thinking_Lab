@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<script>(function(){var t=localStorage.getItem('btl-theme');if(t)document.documentElement.setAttribute('data-theme',t);if(t==='light')document.addEventListener('DOMContentLoaded',function(){['btn-theme'].forEach(function(id){var b=document.getElementById(id);if(b)b.textContent='🌙 Dark';});});})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Understand DAGs without prior knowledge: why information flows, what confounders, mediators and colliders are, and what adjusting means for the causal effect you are after — with simulated data.">
+<meta property="og:title" content="Causal Terror — Bayes Thinking Lab">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bayes Thinking Lab">
+<title>Causal Terror — Bayes Thinking Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300;1,9..144,400&display=swap" rel="stylesheet">
+<style>
+html{font-size:18px;scrollbar-gutter:stable}
+:root{
+  --bg:#f2ede3;--paper:#faf6ee;--ink:#18130e;--ink2:#5a4f42;--ink3:#8a7f72;
+  --a1:#c94a2a;--a2:#2a6e8a;--a3:#5a8a2a;--a4:#7a3a8a;--a5:#b85c00;--a6:#0e7c7b;
+  --grid:#ddd5c6;--panel:#ece5d5;--border:#c5bba8;--th:var(--a1);
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--paper:#171b25;--ink:#e8e2d8;--ink2:#9a9080;--ink3:#5a5448;
+  --a1:#e8614a;--a2:#4ab0d8;--a3:#80cb52;--a4:#c87ad8;--a5:#e07830;--a6:#2bc7c4;
+  --grid:#252a36;--panel:#1e2230;--border:#333a4a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Fraunces',Georgia,serif;background:var(--bg);color:var(--ink);
+     height:100vh;overflow:hidden;display:flex;flex-direction:column;transition:background .25s,color .25s}
+
+/* ── HEADER ── */
+.hdr-hrow{background:var(--paper);display:flex;justify-content:space-between;align-items:flex-start;
+  padding:1rem 1.8rem .7rem;gap:1rem;flex-wrap:wrap;flex-shrink:0;border-bottom:1px solid var(--border)}
+.hdr-h1{font-family:'Fraunces',Georgia,serif;font-size:1.55rem;font-weight:300;letter-spacing:-.02em;line-height:1.2}
+.hdr-h1 em{font-style:italic;color:var(--th)}
+.hdr-sub2{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);margin-top:.2rem;letter-spacing:.03em}
+.hdr-auth{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);opacity:.5;margin-top:.1rem}
+.hdr-btns{display:flex;gap:.4rem;align-items:center}
+.hbtn{font-family:'DM Mono',monospace;font-size:.75rem;background:var(--panel);
+  border:1.5px solid var(--border);color:var(--ink2);padding:.22rem .6rem;cursor:pointer;transition:all .15s}
+.hbtn:hover{border-color:var(--th);color:var(--th)}
+.glo-link{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.glo-link:hover{color:var(--th)}
+
+/* ── LAYOUT ── */
+#shell{flex:1;overflow-y:auto;min-height:0}
+#wrap{max-width:1760px;margin:0 auto;padding:1.5rem 1.2rem 3rem}
+
+/* ── INTRO ── */
+.intro-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.55rem 1rem;margin-bottom:.85rem;background:var(--panel);
+  border:1px solid var(--border);font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
+.intro-strip em{color:var(--th);font-style:normal}
+.intro-strip strong{color:var(--ink)}
+.tbtn{font-family:'DM Mono',monospace;font-size:.75rem;padding:.22rem .6rem;
+  border:1.5px solid var(--border);background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;white-space:nowrap}
+.tbtn:hover{border-color:var(--th);color:var(--th)}
+#intro-toggle-btn .tarr{display:inline-block;width:1em;text-align:center}
+.intro-box{background:var(--paper);border:2px solid var(--th);padding:1.2rem 1.6rem;margin-bottom:.85rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.9}
+.intro-box .ib-head{font-size:.82rem;font-weight:500;color:var(--ink);margin:1rem 0 .55rem;
+  border-bottom:1px solid var(--grid);padding-bottom:.35rem}
+.intro-box .ib-head:first-child{margin-top:0}
+.intro-box b{color:var(--ink)}
+.intro-box .ib-n{font-size:1.6em;line-height:1;vertical-align:-.12em;color:var(--th)}
+.intro-box .ib-aside{margin-top:.6rem;padding:.45rem .7rem;border-left:3px solid var(--a2);
+  background:var(--panel);font-size:.72rem;line-height:1.75}
+
+/* ── STAGE TABS ── */
+.stage-tabs-label{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink3);margin-bottom:.5rem;display:flex;align-items:center;gap:.35rem}
+.stage-tabs-label .arrow{color:var(--th);font-weight:600}
+.stage-tabs{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:.85rem}
+.stab{flex:1 1 190px;font-family:'DM Mono',monospace;padding:.6rem .9rem;background:var(--panel);
+  border:1.5px solid var(--border);cursor:pointer;text-align:left;color:var(--ink2);transition:all .15s;
+  display:flex;align-items:center;gap:.65rem}
+.stab:hover{border-color:var(--th)}
+.stab .stab-n{flex-shrink:0;width:1.7rem;height:1.7rem;border-radius:50%;border:1.5px solid var(--border);color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;font-size:.85rem;transition:all .15s}
+.stab .stab-txt{display:flex;flex-direction:column;gap:.1rem}
+.stab .stab-title{font-family:'Fraunces',Georgia,serif;font-size:.95rem;font-weight:600;color:var(--ink2)}
+.stab .stab-sub{font-size:.65rem;color:var(--ink3)}
+.stab.sel{border-color:var(--th);background:color-mix(in srgb,var(--th) 14%,var(--panel));
+  box-shadow:0 0 0 1px var(--th),0 0 14px color-mix(in srgb,var(--th) 35%,transparent)}
+.stab.sel .stab-n{background:var(--th);border-color:var(--th);color:var(--paper)}
+.stab.sel .stab-title{color:var(--th)}
+
+/* ── NARRATIVE ── */
+.narr{background:var(--paper);border:1px solid var(--border);padding:1rem 1.5rem;margin-bottom:.85rem;
+  font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.8}
+.narr b{color:var(--ink)}.narr em{color:var(--th);font-style:normal}
+.narr-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.38rem}
+.ntag{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.1rem .38rem;border:1px solid var(--th);color:var(--th);white-space:nowrap}
+.narr-merk{margin-top:.7rem;padding:.5rem .8rem;border-left:3px solid var(--a3);background:var(--panel)}
+.quote{margin:.4rem 0 .6rem;padding:.5rem .9rem;border-left:3px solid var(--th);background:var(--panel);color:var(--ink);font-style:italic}
+
+/* ── PANELS ── */
+.s-grid{display:grid;gap:1px;background:var(--grid)}
+.s-grid.g11{grid-template-columns:1fr 1fr}
+.s-grid.g21{grid-template-columns:1.25fr 1fr}
+.s-panel{background:var(--paper);padding:1.1rem 1.2rem;min-width:0}
+.s-title{font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink2);border-bottom:1px solid var(--grid);padding-bottom:.28rem;margin-bottom:.85rem}
+@media(max-width:1000px){.s-grid.g11,.s-grid.g21{grid-template-columns:1fr}}
+
+/* ── CONTROLS ── */
+.fam-btns{display:flex;gap:1px;background:var(--grid);margin-bottom:.7rem;flex-wrap:wrap}
+.fbtn{flex:1 1 auto;font-family:'DM Mono',monospace;font-size:.75rem;padding:.42rem .6rem;background:var(--paper);
+  cursor:pointer;text-align:center;border:none;color:var(--ink2);transition:all .13s}
+.fbtn:hover{background:var(--panel)}
+.fbtn.sel{background:var(--th);color:var(--paper)}
+.ctrl-bar{display:flex;flex-wrap:wrap;gap:.65rem;align-items:center;margin:.7rem 0}
+.cbtn{font-family:'DM Mono',monospace;font-size:.67rem;padding:.3rem .75rem;border:1.5px solid var(--border);
+  background:transparent;cursor:pointer;color:var(--ink2);transition:all .15s;white-space:nowrap}
+.cbtn:hover{border-color:var(--th);color:var(--th)}
+.cbtn.sel{background:var(--th);color:var(--paper);border-color:var(--th)}
+.tb-lbl{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:.5rem 0 .25rem}
+.chk{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);display:flex;align-items:center;gap:.4rem;cursor:pointer}
+.chk input{accent-color:var(--th)}
+
+/* ── Badges/Boxen ── */
+.badge{display:inline-block;font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+  padding:.08rem .38rem;border:1px solid;white-space:nowrap}
+.badge.bad{border-color:var(--a1);color:var(--a1)}
+.badge.good{border-color:var(--a3);color:var(--a3)}
+.badge.kaus{border-color:var(--a2);color:var(--a2)}
+.badge.nk{border-color:var(--ink3);color:var(--ink3)}
+.why{margin-top:.8rem;padding:.6rem .85rem;border-left:3px solid var(--th);background:var(--panel);
+  font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.8;color:var(--ink2)}
+.why b{color:var(--ink)}
+.hint-box{padding:.5rem .75rem;border-left:3px solid var(--a2);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.7rem;line-height:1.75;color:var(--ink2);margin:.6rem 0}
+.hint-box b{color:var(--ink)}
+.verdict{padding:.65rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.74rem;line-height:1.75;color:var(--ink2);margin-bottom:.7rem}
+.verdict b{color:var(--ink)}
+.verdict.vbad{border-color:var(--a1)}
+.verdict.vgood{border-color:var(--a3)}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-family:'DM Mono',monospace;font-size:.64rem;color:var(--ink2);margin:.4rem 0 0}
+.legend i{display:inline-block;width:.85em;height:.85em;vertical-align:-.1em;margin-right:.3em;border:2px solid var(--ink2);background:var(--paper)}
+.legend i.fx{border-color:var(--a2)}.legend i.fy{border-color:var(--a4)}.legend i.fz{background:var(--a6);border-color:var(--a6)}
+.legend i.gl1{border:0;background:color-mix(in srgb,var(--a2) 40%,transparent)}
+.legend i.gl2{border:0;background:color-mix(in srgb,var(--a1) 40%,transparent)}
+
+/* ── SVG ── */
+svg.dg{display:block;width:100%;height:auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.dg text{font-family:'DM Mono',monospace}
+.gwrap{border:1px solid var(--grid);background:var(--bg)}
+
+/* ── Pfadliste ── */
+.plist{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-bottom:.8rem}
+.pitem{background:var(--paper);padding:.55rem .75rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);
+  line-height:1.65;cursor:default;border-left:3px solid transparent}
+.pitem:hover{background:var(--panel)}
+.pitem.pg{border-left-color:var(--a3)}
+.pitem.pb{border-left-color:var(--a1)}
+.pitem .pstr{font-size:.8rem;color:var(--ink);margin-bottom:.2rem;display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
+.pitem .pstr .arr{color:var(--ink3)}
+.pitem .pexp{color:var(--ink3);font-size:.66rem}
+.pitem .pnodes{display:flex;flex-direction:column;gap:.05rem;margin-top:.2rem}
+.pitem .ok{color:var(--a3)}.pitem .no{color:var(--a1)}
+
+/* ── Entscheidungshilfe ── */
+.dtab{display:flex;flex-direction:column;gap:1px;background:var(--grid)}
+.drow{display:grid;grid-template-columns:11rem 1fr;gap:.8rem;align-items:start;background:var(--paper);padding:.55rem .75rem;
+  font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.65}
+.chip{font-family:'DM Mono',monospace;font-size:.72rem;padding:.3rem .6rem;border:1.5px solid var(--border);background:transparent;
+  color:var(--ink);cursor:pointer;text-align:left;display:flex;align-items:center;gap:.45rem;width:100%;transition:all .13s}
+.chip:hover{border-color:var(--a6)}
+.chip .bx{width:.9em;height:.9em;border:2px solid var(--ink3);flex-shrink:0}
+.chip.on{background:color-mix(in srgb,var(--a6) 18%,var(--paper));border-color:var(--a6)}
+.chip.on .bx{background:var(--a6);border-color:var(--a6)}
+.chip.s3x.on{background:color-mix(in srgb,var(--a2) 20%,var(--paper));border-color:var(--a2)}
+.chip.s3x.on .bx{background:var(--a2);border-color:var(--a2)}
+.chip.s3y.on{background:color-mix(in srgb,var(--a4) 20%,var(--paper));border-color:var(--a4)}
+.chip.s3y.on .bx{background:var(--a4);border-color:var(--a4)}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0 .5rem}
+.chips .chip{width:auto}
+.drow .cons div{margin-bottom:.15rem}
+.drow .g{color:var(--a3)}.drow .b{color:var(--a1)}.drow .n{color:var(--ink3)}
+.drow .tagline{color:var(--ink3);font-size:.64rem;margin-top:.2rem}
+.drow .rev{font-family:'DM Mono',monospace;font-size:.66rem;background:none;border:1px dashed var(--border);color:var(--ink2);padding:.15rem .5rem;cursor:pointer}
+.drow .rev:hover{border-color:var(--th);color:var(--th)}
+@media(max-width:700px){.drow{grid-template-columns:1fr}}
+
+/* ── Schätzung ── */
+.etab{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin:.4rem 0 .9rem}
+.erow{display:grid;grid-template-columns:2fr 1fr 1.5fr 1.4fr;gap:.6rem;align-items:baseline;background:var(--paper);
+  padding:.45rem .75rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6}
+.erow.eh{background:var(--panel);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.erow .en{color:var(--ink)}
+.erow .en small{display:block;color:var(--ink3);font-size:.62rem}
+.erow .good{color:var(--a3)}.erow .bad{color:var(--a1)}
+.bar{position:relative;height:7px;background:var(--grid);margin-top:.3rem}
+.bar .fill{position:absolute;top:0;height:100%;background:var(--ink3)}
+.bar .fill.gd{background:var(--a3)}.bar .fill.bd{background:var(--a1)}
+.bar .tick{position:absolute;top:-3px;width:2px;height:13px;background:var(--a2)}
+@media(max-width:900px){.erow{grid-template-columns:1fr 1fr}}
+
+/* ── Herleitung ── */
+.dstep{display:grid;grid-template-columns:2.1rem 1fr;gap:.7rem;padding:.7rem .85rem;background:var(--paper);border-left:3px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:.7rem;line-height:1.75;color:var(--ink2)}
+.dstep.sg{border-left-color:var(--a3)}.dstep.sb{border-left-color:var(--a1)}
+.dstep .dn{width:1.7rem;height:1.7rem;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:.8rem}
+.dstep.sg .dn{border-color:var(--a3);color:var(--a3)}.dstep.sb .dn{border-color:var(--a1);color:var(--a1)}
+.dstep b{color:var(--ink)}
+.dstep .q{color:var(--ink3);font-size:.66rem}
+.dsteps{display:flex;flex-direction:column;gap:1px;background:var(--grid)}
+.formula{margin-top:.6rem;padding:.6rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;font-size:.76rem;color:var(--ink);line-height:1.8}
+.formula.fg{border-color:var(--a3)}.formula.fb{border-color:var(--a1)}
+
+/* ── Regel-Labor ── */
+.cmp{display:grid;grid-template-columns:1fr auto 1fr;gap:.6rem;align-items:center;margin:.5rem 0}
+.cmp .cb{background:var(--panel);border:1px solid var(--border);padding:.5rem .7rem;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6}
+.cmp .cb b{display:block;color:var(--ink);font-size:.95rem;margin-top:.1rem}
+.cmp .eq{font-family:'DM Mono',monospace;font-size:1.1rem;color:var(--th)}
+.cond{padding:.6rem .85rem;border:1.5px solid var(--border);background:var(--panel);font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.75;color:var(--ink2);margin:.5rem 0}
+.cond b{color:var(--ink)}
+.cond.cg{border-color:var(--a3)}.cond.cb2{border-color:var(--a1)}
+
+#toast{position:fixed;bottom:1.2rem;right:1.2rem;background:var(--th);color:var(--paper);font-family:'DM Mono',monospace;
+  font-size:.7rem;padding:.4rem .85rem;z-index:999;opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* ── aus Stufe 1/2 ── */
+.ctrl-group{display:flex;align-items:center;gap:.38rem}
+.ctrl-lbl{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);white-space:nowrap}
+input[type=range]{-webkit-appearance:none;height:3px;background:var(--grid);outline:none;cursor:pointer;border-radius:2px;width:110px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--th);border-radius:50%;cursor:pointer}
+.ctrl-val{font-family:'DM Mono',monospace;font-size:.7rem;font-weight:500;color:var(--th);min-width:2.6rem;text-align:right}
+.cbtn.ctl{border-color:var(--a6);color:var(--a6)}
+.cbtn.ctl.sel{background:var(--a6);color:var(--paper);border-color:var(--a6)}
+.cbtn:disabled{opacity:.4;cursor:not-allowed}
+.cbtn.danger:hover{border-color:var(--a1);color:var(--a1)}
+.fbtn small{display:block;font-size:.6rem;opacity:.75;margin-top:.1rem}
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;font-family:'DM Mono',monospace;
+  font-size:.7rem;padding:.25rem 0;border-bottom:1px solid var(--grid)}
+.stat-row:last-child{border-bottom:none}
+.stat-lbl{color:var(--ink2)}.stat-val{font-weight:500;color:var(--ink)}
+.stat-val.on{color:var(--th)}
+.badge.open{border-color:var(--a1);color:var(--a1)}
+.badge.shut{border-color:var(--a3);color:var(--a3)}
+.adv-tag{display:inline-block;font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--a6);border:1.5px solid var(--a6);padding:.1rem .45rem;margin-bottom:.4rem}
+.special{margin-top:.6rem;padding:.6rem .75rem;border:1.5px solid var(--a6);background:var(--panel)}
+.special ol{margin:.3rem 0 .5rem 1.1rem;padding:0;font-size:.68rem;line-height:1.6;color:var(--ink2)}
+.ex{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink3);margin-top:.35rem;line-height:1.6}
+#s1-svg{max-height:250px;margin:0 auto}
+@keyframes flow{to{stroke-dashoffset:-24}}
+.flow{animation:flow 1.1s linear infinite}
+@media(prefers-reduced-motion:reduce){.flow{animation:none}}
+canvas#sc{display:block;width:100%;border:1px solid var(--grid);background:var(--bg)}
+#s2-paths{max-height:430px;overflow-y:auto}
+.pitem.isopen{border-left-color:var(--a1)}
+.pitem.isshut{border-left-color:var(--a3)}
+.pitem .pnodes .ok{color:var(--a1)}.pitem .pnodes .no{color:var(--a3)}
+.verdict.vopen{border-color:var(--a1)}
+.verdict.vshut{border-color:var(--a3)}
+.erow.dim .ev,.erow.dim .em{opacity:.55}
+.crit{margin:.5rem 0;padding:.6rem .85rem;border-left:3px solid var(--a2);background:var(--panel);font-family:'DM Mono',monospace;
+  font-size:.7rem;line-height:1.8;color:var(--ink2)}
+.crit b{color:var(--ink)}
+.crit .ck{display:flex;gap:.5rem}
+.crit .ck .y{color:var(--a3)}.crit .ck .n{color:var(--a1)}
+.crit .calc{margin-top:.45rem;padding-top:.4rem;border-top:1px solid var(--grid)}
+.rtab{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-top:1px}
+.rrow{display:grid;grid-template-columns:1.3fr 1fr 1fr 2fr;gap:.7rem;align-items:baseline;background:var(--paper);padding:.5rem .85rem;
+  font-family:'DM Mono',monospace;font-size:.7rem;color:var(--ink2);line-height:1.6;border-left:3px solid transparent}
+.rrow.rh{background:var(--panel);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.rrow b{color:var(--ink)}
+.rrow.cur{border-left-color:var(--th);background:color-mix(in srgb,var(--th) 10%,var(--paper))}
+.rrow .g{color:var(--a3)}.rrow .b{color:var(--a1)}
+@media(max-width:800px){.rrow{grid-template-columns:1fr 1fr}}
+details.adv{background:var(--paper);margin-top:1px}
+details.adv>summary{cursor:pointer;padding:.8rem 1.2rem;font-family:'DM Mono',monospace;font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+details.adv>summary:hover{color:var(--th)}
+.next-bar{display:flex;justify-content:flex-end;margin-top:.85rem}
+
+.arows{display:flex;flex-direction:column;gap:1px;background:var(--grid);margin-top:.6rem}
+.arow{display:grid;grid-template-columns:10.5rem 6.2rem 1fr;gap:.6rem;align-items:baseline;background:var(--paper);padding:.35rem .6rem;
+  font-family:'DM Mono',monospace;font-size:.68rem;color:var(--ink2);line-height:1.55}
+.arow .ar{color:var(--ink)}
+.arow .av{color:var(--ink3);font-size:.62rem}
+@media(max-width:800px){.arow{grid-template-columns:1fr}}
+.legend2{display:flex;flex-direction:column;gap:.25rem;font-family:'DM Mono',monospace;font-size:.66rem;color:var(--ink2);margin:.5rem 0 0}
+.legend2 svg{vertical-align:middle;margin-right:.4rem}
+.legend svg{vertical-align:middle;margin-right:.3rem}
+.c3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--grid);margin:.6rem 0}
+.c3>div{background:var(--paper);padding:.75rem .8rem;text-align:center}
+.c3 .c3l{font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.c3 .c3v{font-size:1.5rem;color:var(--ink);margin:.2rem 0}
+.c3 .c3s{font-size:.62rem;color:var(--ink3);line-height:1.5}
+.c3 .c3k{border-top:3px solid var(--a2)}.c3 .c3d{border-top:3px solid var(--a4)}.c3 .c3i{border-top:3px solid var(--a3)}
+.lv-sec{font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:.8rem 0 .25rem}
+.lastc{font-family:'DM Mono',monospace;font-size:.68rem;line-height:1.6;color:var(--ink2)}
+.lastc b{color:var(--ink)}
+.lastc .g{color:var(--a3)}.lastc .b{color:var(--a1)}.lastc .n{color:var(--ink3)}
+.chiprow{display:flex;flex-wrap:wrap;gap:.35rem;margin:.4rem 0 0}
+.chiprow .chip{width:auto;flex:0 0 auto}
+.effl{margin-bottom:.3rem}
+@media(max-width:700px){.c3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hdr-hrow">
+  <div>
+    <div class="hdr-h1">Causal <em>Terror</em></div>
+    <div class="hdr-sub2">Information flow · confounder, mediator, collider · exercise → heart health · the three rules of do-calculus</div>
+    <div class="hdr-auth">© Dr. Rainer Düsing · Interactive Tools by Claude</div>
+  </div>
+  <div class="hdr-btns">
+    <button class="hbtn" onclick="window.open('../index.html','_self')" style="border-color:var(--th);color:var(--th)">← Overview</button>
+    <button class="hbtn" id="btn-theme" onclick="toggleTheme()">☀ Light</button>
+  </div>
+</div>
+
+<main id="shell">
+<div id="wrap">
+
+<div class="intro-strip">
+  <div><strong>When are two things associated, and what should I take into account in an analysis?</strong> <em>Here you learn it step by step.</em></div>
+  <button class="tbtn" id="intro-toggle-btn" onclick="toggleIntroDetail()" aria-expanded="false">Explain the concept <span class="tarr">▸</span></button>
+</div>
+
+<div id="intro-detail" style="display:none">
+  <div class="intro-box">
+    <div class="ib-head">What is this about?</div>
+    In data, two things are often associated, for example exercise and heart health. Why? Exercise might protect the heart. Active people might also be younger. Or the way the sample was selected plays a role. To sort this out, you draw the causes you assume as a graph with arrows (<a class="glo-link" href="Glossar.html#gl-dag" target="_blank" title="A Directed Acyclic Graph (DAG) makes causal assumptions about a system of variables explicit and testable." style="color:inherit">DAG</a>). An arrow A → B means: A influences B.
+    <br><br>
+    In three stages, the tool takes you from the question “When are two variables associated?” to the question of which variables you should take into account (adjust for) in an analysis. You need no prior knowledge of causal analysis.
+
+    <div class="ib-head">The key terms</div>
+    • <b>Edge:</b> a single arrow between two variables, for example A → B.<br>
+    • <b>Path:</b> a sequence of one or more edges connecting two variables. A → B ← C is a path made of two edges. When walking along a path, the direction of the arrows does not matter. A path is <i>causal</i> only if all arrows point in the same direction (A → B → C).<br>
+    • <b>Information flows:</b> If a path is open, one variable tells you something about the other. We then see an association.<br>
+    • <b>Adjusting</b> (also controlling for or partialling out): You compare only people who are equal on one variable, for example only people of the same age.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-confounder" target="_blank" title="Confounding arises when a third variable C is a common cause of both the treatment X and the outcome Y: C → X and C → Y. This creates a spurious or distorted association between X and Y." style="color:inherit">Confounder</a></b> / fork (A ← B → C): a common <i>cause</i> of two variables. It creates a spurious association. Adjusting closes this unwanted path.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-mediator" target="_blank" title="A mediator M is a variable on the causal path between treatment T and outcome Y: T → M → Y. Mediation means that part or all of the effect of T on Y is transmitted through changes in M." style="color:inherit">Mediator</a></b> / chain (A → B → C): an intermediate station through which a cause acts. Adjusting closes this causal path. Whether that is what you want depends on the effect you are after: for the total effect the path belongs to it, for the direct effect it does not.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-collider" target="_blank" title="A collider is a variable C in a DAG that has arrows from two or more other variables pointing into it: A → C ← B. Unlike confounders, a collider blocks the path between A and B by itself — it is not a problem per se." style="color:inherit">Collider</a></b> (A → B ← C): a common <i>effect</i> of two variables. The path is closed at first. Adjusting opens this previously closed, unwanted path and creates an association that does not exist in the world.<br>
+    • <b><a class="glo-link" href="Glossar.html#gl-d-separation" target="_blank" title="d-separation (Pearl, 1988) is the rule used to read from a DAG which variables must be conditionally independent." style="color:inherit">d-separated</a> and d-connected:</b> All paths between two variables are blocked (d-separated), or at least one is open (d-connected).<br>
+    • <b>Intervention</b> (also called manipulation, <a class="glo-link" href="Glossar.html#gl-do-operator" target="_blank" title="The do-operator distinguishes observing from intervening: P(Y | X = x) is the distribution of Y among people who happen to have X = x; P(Y | do(X = x)) is the distribution of Y when X is set to x for everyone from the outside." style="color:inherit">do-operator</a>): You deliberately make someone do something instead of just observing.
+
+    <div class="ib-head">The core message</div>
+    <b>Adjusting for a confounder</b> → an unwanted path is closed.<br>
+    <b>Adjusting for a mediator</b> → a causal path is closed.<br>
+    <b>Adjusting for a collider</b> → a previously closed, unwanted path is opened.<br>
+    Which of these consequences you want depends on which effect you want to estimate. So the first question is always: Which effect am I after? Then you ask: What happens to the paths between X and Y when I adjust for Z?
+
+    <div class="ib-head">The three rules of do-calculus</div>
+    If you want to compute the effect of an intervention from observational data, you can apply three rules. You can read them as questions to your graph:<br>
+    <span class="ib-n">①</span> <b>Ignore observations:</b> Which additional observed variables provide any relevant information at all?<br>
+    <span class="ib-n">②</span> <b>Replace intervention with observation:</b> When may an interventional effect be inferred from observed associations?<br>
+    <span class="ib-n">③</span> <b>Ignore intervention:</b> Which variables are affected by the intervention at all?<br>
+    In stage 3 the tool applies these rules to your adjustment. The derivation is in the expandable section “Why is this solution formally valid?”, after you have solved the task intuitively.
+    <div class="ib-aside">All numbers come from simulations with linear relationships. The arrows are assumptions that you can see in the graph and change.</div>
+
+    <div class="ib-head">How to proceed</div>
+    <span class="ib-n">①</span> <b>Information flow:</b> You get to know the three patterns mediator, confounder and collider. The tool shows when an association arises between two variables and what adjusting does to it.<br>
+    <span class="ib-n">②</span> <b>Reading paths:</b> You examine larger graphs and check for each path whether it is open or blocked. The tool shows what that means for the effect.<br>
+    <span class="ib-n">③</span> <b>Application:</b> Using exercise and heart health as an example, you determine the total effect (A) and the direct effect (B) in two tasks. The indirect effect follows from these. You choose yourself what to adjust for. After “Check my solution” the tool shows the consequence.
+
+    <div class="ib-head">What to watch out for</div>
+    • Whether an adjustment helps depends on which paths it opens or closes and on whether the path belongs to the effect you are after.<br>
+    • An adjustment can also do harm even though it sounds plausible. Variables that change no path have no influence on the effect.<br>
+    • Opposing paths can cancel each other out. An open path therefore does not always show an association.
+
+    <div class="ib-head">And then?</div>
+    How to implement the chosen adjustment in R is shown by the <a href="Golem_Builder.html" style="color:var(--th)">Golem Builder</a>.
+  </div>
+</div>
+
+<div class="stage-tabs-label">Stages – please choose a stage: <span class="arrow">↓</span></div>
+<div class="stage-tabs">
+  <button class="stab sel" id="stab-1" onclick="setStage(1)">
+    <span class="stab-n">1</span>
+    <span class="stab-txt"><span class="stab-title">Information flow</span><span class="stab-sub">Confounder, mediator, collider</span></span>
+  </button>
+  <button class="stab" id="stab-2" onclick="setStage(2)">
+    <span class="stab-n">2</span>
+    <span class="stab-txt"><span class="stab-title">Reading paths</span><span class="stab-sub">d-separation in example graphs</span></span>
+  </button>
+  <button class="stab" id="stab-3" onclick="setStage(3)">
+    <span class="stab-n">3</span>
+    <span class="stab-txt"><span class="stab-title">Application</span><span class="stab-sub">Exercise → heart health: two tasks</span></span>
+  </button>
+</div>
+
+<!-- ═════════ STUFE 1 ═════════ -->
+<div id="stage-1">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stage 1</span></div>
+    Why are two things associated? An association arises when <b>information</b> can flow between them — along arrows, <i>no matter which direction they point</i>. There are three basic patterns, and they differ in what happens when you <b>adjust</b> for a variable. Each pattern comes with a research question. Choose a pattern and compare A and C without and with adjustment for B.
+    <div class="narr-merk"><b>Adjusting</b> means: you compare only people who are equal on B (a group with the same B value). This is also called “controlling for B” or “partialling out B”. In the scatter plot you see this as colored groups.</div>
+    <div class="narr-merk"><b>Edge and path:</b> An edge is a single arrow between two variables. A path consists of one or more edges. In A → B → C there are two edges, but only one path from A to C.</div>
+  </div>
+  <div class="s-grid g11">
+    <div class="s-panel">
+      <div class="s-title">Pattern &amp; information flow</div>
+      <div class="fam-btns" id="s1-struct">
+        <button class="fbtn sel" data-s="chain" onclick="setS1Struct('chain')"><b>Mediator</b><small>Chain: A → B → C</small></button>
+        <button class="fbtn" data-s="fork" onclick="setS1Struct('fork')"><b>Confounder</b><small>Fork: A ← B → C</small></button>
+        <button class="fbtn" data-s="coll" onclick="setS1Struct('coll')"><b>Collider</b><small>A → B ← C</small></button>
+      </div>
+      <div class="gwrap"><svg class="dg" id="s1-svg" viewBox="0 0 360 200" role="img" aria-label="Diagram of the three variables A, B and C"></svg></div>
+      <div class="ex" id="s1-ex"></div>
+      <div class="hint-box" id="s1-role"></div>
+      <div class="ctrl-bar">
+        <button class="cbtn ctl" id="s1-ctl" onclick="toggleS1Ctl()">Adjust for B: Off</button>
+        <div class="ctrl-group"><span class="ctrl-lbl">Arrow strength</span>
+          <input type="range" id="s1-w" min="0.2" max="1" step="0.05" value="0.7" oninput="s1Redraw()"><span class="ctrl-val" id="s1-wv">0.70</span></div>
+        <button class="cbtn" onclick="newSeed()">↺ New data</button>
+      </div>
+    </div>
+    <div class="s-panel">
+      <div class="s-title" id="s1-dtitle">Data: A against C</div>
+      <canvas id="sc" height="330"></canvas>
+      <div style="margin-top:.6rem">
+        <div class="stat-row"><span class="stat-lbl" id="s1-pathl">Path A – C</span><span class="stat-val" id="s1-path">—</span></div>
+        <div class="stat-row"><span class="stat-lbl" id="s1-r0l">Association r — without adjustment</span><span class="stat-val" id="s1-r0">—</span></div>
+        <div class="stat-row"><span class="stat-lbl" id="s1-r1l">Association r — with adjustment for B</span><span class="stat-val" id="s1-r1">—</span></div>
+      </div>
+      <div class="why" id="s1-why"></div>
+    </div>
+  </div>
+  <div class="s-grid" style="margin-top:1px"><div class="s-panel">
+    <div class="s-title">Remember: what adjusting does to the path</div>
+    <div class="rtab" id="s1-recap">
+      <div class="rrow rh"><div>Pattern</div><div>Without adjustment</div><div>With adjustment</div><div>Consequence</div></div>
+      <div class="rrow" data-s="chain"><div><b>Mediator</b> (Chain)</div><div>Path open</div><div>Path blocked</div><div>Closes a <b>causal path</b>. The part running through B is no longer part of the estimate of the total effect. This only makes sense if you want to exclude exactly this part (direct effect).</div></div>
+      <div class="rrow" data-s="fork"><div><b>Confounder</b> (Fork)</div><div>Path open: <span class="b">spurious association</span></div><div>Path blocked</div><div>Closes an <span class="g">unwanted path</span>: the spurious association disappears.</div></div>
+      <div class="rrow" data-s="coll"><div><b>Collider</b></div><div>Path closed</div><div>Path <span class="b">opened</span></div><div>Opens a previously closed, <span class="b">unwanted path</span>: an association arises that does not exist in the world.</div></div>
+    </div>
+    <div class="next-bar"><button class="cbtn sel" onclick="setStage(2)">Next: reading paths →</button></div>
+  </div></div>
+</div>
+
+<!-- ═════════ STUFE 2 ═════════ -->
+<div id="stage-2" style="display:none">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stage 2</span></div>
+    Real research questions involve more than three variables. Then there are often several paths between two variables X (cause) and Y (effect). Choose an example graph. X and Y are given there; you examine the paths between them. Decide what you <b>adjust</b> for and read the paths: the tool checks at every station whether the information gets through.
+    <div class="narr-merk">A path consists of one or more edges (single arrows). It is <b>open</b> if it is blocked at <b>no</b> station. You block a mediator and a confounder by adjusting for them. You open a collider that way — even if you only adjust for one of its consequences. If at least one path is open, X and Y are <b>d-connected</b> (an association is expected). If all are blocked, they are <b>d-separated</b> (no association).</div>
+    Tip to get started: load the examples “Confounder”, “Mediator” and “Collider” one after another and adjust for the middle variable. Dashed nodes are unobserved: you cannot adjust for them.
+  </div>
+  <div class="s-grid g21">
+    <div class="s-panel">
+      <div class="s-title">Graph</div>
+      <div class="tb-lbl">Example graph</div>
+      <div class="fam-btns" id="s2-presets"></div>
+      <div class="hint-box" id="xy-fixed" style="margin:.3rem 0 .5rem">In this example <b>X (cause)</b> and <b>Y (effect)</b> are given. You examine what adjusting does to the paths between them.</div>
+      <div id="tool-wrap">
+        <div class="tb-lbl">Tool</div>
+        <div class="ctrl-bar" style="margin:.2rem 0 .5rem">
+          <button class="cbtn sel" id="m-select" onclick="setMode('select')">☝ Select &amp; move</button>
+          <button class="cbtn" id="m-arrow" onclick="setMode('arrow')">→ Draw arrow</button>
+        </div>
+      </div>
+      <div class="gwrap"><svg class="dg" id="s2-svg" viewBox="0 0 640 400" role="img" aria-label="Graph"></svg></div>
+      <div class="legend" style="margin:.2rem 0 .5rem"><span><i class="gl1"></i>open causal path</span><span><i class="gl2"></i>open non-causal path</span><span><i class="fz"></i>adjusted</span><span style="color:var(--a3)">✕ blocked: station where a path closes</span><span style="color:var(--a1)">◉ opened: collider opened by adjustment</span></div>
+      <div class="tb-lbl">Selected node: <b id="sel-name" style="color:var(--ink)">none</b></div>
+      <div class="ctrl-bar" style="margin:.2rem 0 .3rem">
+        <button class="cbtn ctl" id="r-z" onclick="setRole('Z')">adjust</button>
+      </div>
+      <div class="ctrl-bar" id="edge-ctl" style="margin:.2rem 0 0;display:none">
+        <div class="ctrl-group"><span class="ctrl-lbl" id="edge-lbl">Arrow</span>
+          <input type="range" id="edge-w" min="-1" max="1" step="0.1" value="0.6" oninput="setEdgeW(this.value)"><span class="ctrl-val" id="edge-wv">0.6</span></div>
+      </div>
+      <div class="ctrl-bar" id="edit-bar" style="margin:.5rem 0 .2rem">
+        <button class="cbtn" id="edit-toggle" onclick="toggleEdit()">Edit graph (advanced)</button>
+        <button class="cbtn" id="edit-reset" onclick="resetEdit()">Reset changes</button>
+      </div>
+      <div class="hint-box" id="edit-info" style="margin:.2rem 0 .3rem"><b>Edit mode:</b> Drag an arrow from one node to another, select an arrow and change its strength, or move nodes. “Reset changes” restores the original graph.</div>
+      <div class="hint-box" id="s2-hint"></div>
+      <div id="s2-special" style="display:none"></div>
+    </div>
+    <div class="s-panel">
+      <div class="s-title">Paths from X to Y</div>
+      <div class="verdict" id="s2-verdict"></div>
+      <div id="s2-change" style="margin-bottom:.6rem"></div>
+      <div class="plist" id="s2-paths"></div>
+      <div class="s-title" style="margin-top:.4rem">What does this mean for the effect?</div>
+      <div class="hint-box" id="s2-effect" style="margin-top:0"></div>
+      <div class="s-title" style="margin-top:.8rem">Simulated data (visual cross-check)</div>
+      <div class="stat-row"><span class="stat-lbl">r(X, Y) — without adjustment</span><span class="stat-val" id="s2-r0">—</span></div>
+      <div class="stat-row"><span class="stat-lbl" id="s2-r1-lbl">r(X, Y | Z) — with adjustment</span><span class="stat-val" id="s2-r1">—</span></div>
+      <div class="ctrl-bar" style="margin-bottom:0"><button class="cbtn" onclick="newSeed()">↺ New data</button></div>
+    </div>
+  </div>
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="s-title">Estimating the effect: comparing methods</div>
+      <div id="s2-est-body"></div>
+    </div>
+  </div>
+  <div class="next-bar"><button class="cbtn sel" onclick="setStage(3)">Next: application →</button></div>
+</div>
+
+<!-- ═════════ STUFE 3 ═════════ -->
+<div id="stage-3" style="display:none">
+  <div class="narr">
+    <div class="narr-h"><span class="ntag">Stage 3</span></div>
+    <div class="quote">In psychology we often observe associations, but what we are really interested in are causal effects: what would happen if we deliberately intervened on X?</div>
+    Here you apply what you learned in stages 1 and 2. The example: how does exercise (X) affect heart health (Y)? How to proceed: the task defines <b>which effect</b> you want to estimate. Then you click the variables in the graph that you want to adjust for, and decide for yourself. “Check my solution” brings up the evaluation; after that it updates with every change. If you get stuck, “Help: show paths” colors the paths in the graph. “Show solution” becomes available after your first check. The formal derivation with the three rules of do-calculus is at the very bottom and explains why a solution is valid.
+    <div class="narr-merk"><b>Reminder from stage 1:</b> Adjusting for a confounder closes an unwanted path. Adjusting for a mediator closes a causal path. Adjusting for a collider opens a previously closed, unwanted path. Whether that helps depends on the effect you are after.</div>
+  </div>
+
+  <div class="narr" style="margin-top:.85rem">
+    <div class="narr-h"><span class="ntag">Example: exercise and heart health</span></div>
+    We want to know what causal effect regular exercise has on heart health.<br><br>
+    It is not enough to simply compare active and less active people. People differ, for example, in age and income, and both can be related to exercise behavior as well as to heart health.<br><br>
+    At the same time, exercise can affect heart health indirectly through better fitness. Further variables such as gym proximity, resting heart rate or hospital admission are also part of the assumed causal system. The DAG below shows these assumptions. Select the variables that fit the effect you are after.
+    <div class="narr-merk"><b>Now it is your turn:</b> Which variables do you have to adjust for in order to identify<br>A) the total effect or<br>B) the direct effect<br>of exercise on heart health?</div>
+  </div>
+
+  <div class="s-grid g21" style="margin-top:.85rem" id="a2-tasks">
+    <div class="s-panel">
+      <div class="s-title">Task and graph</div>
+      <div class="fam-btns" id="a2-task">
+        <button class="fbtn sel" data-t="A" onclick="setTask('A')"><b>Task A · total effect</b><small id="a2-ta">still open</small></button>
+        <button class="fbtn" data-t="B" onclick="setTask('B')"><b>Task B · direct effect</b><small id="a2-tb">still open</small></button>
+      </div>
+      <div class="why" id="a2-task-text" style="margin-top:0"></div>
+      <div class="gwrap"><svg class="dg" id="a2-svg" viewBox="0 0 640 460" role="img" aria-label="Causal graph; clicking a node toggles adjustment"></svg></div>
+      <div class="hint-box" style="margin-top:.4rem"><b>Click variables = adjust.</b> Adjusted variables are filled. You can also toggle them here:</div>
+      <div class="chiprow" id="a2-chips"></div>
+      <div class="ctrl-bar" style="margin:.6rem 0 .2rem">
+        <button class="cbtn" onclick="presetAdj([])">Reset</button>
+        <button class="cbtn" onclick="presetAdj(['alter','ses','studio','fitness','ruhepuls','klinik'])">Adjust for everything</button>
+      </div>
+      <div class="ctrl-bar" style="margin:.2rem 0 .5rem">
+        <button class="cbtn sel" id="a2-check" onclick="checkSolution()">Check my solution</button>
+        <button class="cbtn" id="a2-help" onclick="toggleHelp()">Help: show paths</button>
+        <button class="cbtn" id="a2-sol" onclick="showSolution()" disabled title="Only after “Check my solution”">Show solution</button>
+      </div>
+      <div class="legend"><span><i class="fx"></i>Exercise</span><span><i class="fy"></i>Heart health</span><span><i class="fz"></i>adjusted</span><span id="a2-leg-help" style="display:none"><i class="gl1"></i>open causal path &nbsp; <i class="gl2"></i>open confounding path</span></div>
+      <div class="legend"><span><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" style="stroke:var(--ink2);stroke-width:3"/></svg>positive influence</span><span><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" style="stroke:var(--ink2);stroke-width:3;stroke-dasharray:6 3"/></svg>negative influence</span><span>Number and thickness: strength</span></div>
+      <details class="adv" style="margin-top:.7rem"><summary>Which causal assumptions does this example contain?</summary>
+        <div class="ex" style="margin:.5rem 0">Each arrow is an assumption about how the world works. The number states by how much the target changes on average when the cause increases by one unit. Gym proximity, hospital admission (people who enter the sample via a hospital) and resting heart rate are variables in their own right.</div>
+        <div class="arows" id="a1-assume"></div>
+      </details>
+    </div>
+    <div class="s-panel">
+      <div class="s-title">Live evaluation</div>
+      <div id="a2-live"></div>
+    </div>
+  </div>
+
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="s-title">What does this mean for the estimate?</div>
+      <div id="a2-est-body"></div>
+    </div>
+  </div>
+
+  <div class="s-grid" style="margin-top:1px">
+    <div class="s-panel">
+      <div class="s-title">What the total effect is made of</div>
+      <div id="a2-concl"></div>
+    </div>
+  </div>
+
+  <details class="adv" id="a2-dv"><summary>Why is this solution formally valid? Derivation with the three rules</summary>
+    <div class="s-grid" style="margin-top:1px">
+      <div class="s-panel">
+        <div class="hint-box" style="margin-top:0">The live evaluation above shows intuitively which paths are open. Here you check the same selection formally with the three rules of do-calculus for the current task. At the end it says whether the effect you are after can be computed from observational data (identified) or not.</div>
+        <div id="a2-derive"></div>
+      </div>
+    </div>
+  </details>
+</div>
+
+</div>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ═══════════════════ Theme, Toast, Intro ═══════════════════ */
+let DARK = document.documentElement.getAttribute('data-theme') === 'dark';
+function toggleTheme(){
+  DARK=!DARK;
+  document.documentElement.setAttribute('data-theme',DARK?'dark':'light');
+  document.getElementById('btn-theme').textContent=DARK?'☀ Light':'🌙 Dark';
+  try{localStorage.setItem('btl-theme',DARK?'dark':'light');}catch(e){}
+  if(STAGE===1)drawS1Scatter();
+}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('show'),2600);}
+let introOpen=false;
+function toggleIntroDetail(){
+  introOpen=!introOpen;
+  document.getElementById('intro-detail').style.display=introOpen?'block':'none';
+  const b=document.getElementById('intro-toggle-btn');
+  b.querySelector('.tarr').textContent=introOpen?'▾':'▸';
+  b.setAttribute('aria-expanded',introOpen?'true':'false');
+}
+
+/* ═══════════════════ Zufall & Statistik ═══════════════════ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function noiseVec(seed,key,n){
+  const r=mulberry32((seed*7919+hashStr(key))>>>0), out=new Float64Array(n);
+  for(let i=0;i<n;i+=2){
+    let u=r(),v=r();if(u<1e-12)u=1e-12;
+    const m=Math.sqrt(-2*Math.log(u));
+    out[i]=m*Math.cos(2*Math.PI*v);
+    if(i+1<n)out[i+1]=m*Math.sin(2*Math.PI*v);
+  }
+  return out;
+}
+let SEED=1;
+function newSeed(){SEED++;SETS=null;refreshAll();}
+
+function parentsOf(Gx,id){return Gx.edges.filter(e=>e.b===id).map(e=>e.a);}
+function childrenOf(Gx,id){return Gx.edges.filter(e=>e.a===id).map(e=>e.b);}
+function descendantsOf(Gx,id){
+  const seen=new Set(),st=[id];
+  while(st.length){const v=st.pop();for(const c of childrenOf(Gx,v)){if(!seen.has(c)){seen.add(c);st.push(c);}}}
+  return seen;
+}
+function ancestorsOf(Gx,ids){
+  const seen=new Set(),st=[...ids];
+  while(st.length){const v=st.pop();for(const p of parentsOf(Gx,v)){if(!seen.has(p)){seen.add(p);st.push(p);}}}
+  return seen;
+}
+function topoOrder(Gx){
+  const indeg={};Gx.nodes.forEach(n=>indeg[n.id]=0);Gx.edges.forEach(e=>indeg[e.b]++);
+  const q=Gx.nodes.filter(n=>indeg[n.id]===0).map(n=>n.id),out=[];
+  while(q.length){const v=q.shift();out.push(v);for(const c of childrenOf(Gx,v)){if(--indeg[c]===0)q.push(c);}}
+  return out;
+}
+/* do: Knoten in doSet erhalten zufällige Werte ohne Eltern (Randomisierung) */
+function simulate(Gx,n,doSet){
+  const data={},order=topoOrder(Gx);
+  for(const id of order){
+    if(doSet&&doSet.has(id)){data[id]=noiseVec(SEED,'do_'+id,n);continue;}
+    const x=noiseVec(SEED,id,n);
+    for(const e of Gx.edges){if(e.b===id){const p=data[e.a];for(let i=0;i<n;i++)x[i]+=e.w*p[i];}}
+    data[id]=x;
+  }
+  return data;
+}
+function mean(a){let s=0;for(let i=0;i<a.length;i++)s+=a[i];return s/a.length;}
+function sdOf(a){if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1));}
+function covMat(data,ids){
+  const n=data[ids[0]].length,m=ids.map(id=>mean(data[id])),k=ids.length,C=[];
+  for(let i=0;i<k;i++){C.push(new Array(k).fill(0));}
+  for(let i=0;i<k;i++)for(let j=i;j<k;j++){
+    let s=0;const a=data[ids[i]],b=data[ids[j]];
+    for(let t=0;t<n;t++)s+=(a[t]-m[i])*(b[t]-m[j]);
+    C[i][j]=C[j][i]=s/(n-1);
+  }
+  return C;
+}
+function invert(M){
+  const n=M.length,A=M.map((r,i)=>r.concat(Array.from({length:n},(_,j)=>i===j?1:0)));
+  for(let c=0;c<n;c++){
+    let p=c;for(let r=c+1;r<n;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;
+    if(Math.abs(A[p][c])<1e-12)return null;
+    [A[c],A[p]]=[A[p],A[c]];
+    const d=A[c][c];for(let j=0;j<2*n;j++)A[c][j]/=d;
+    for(let r=0;r<n;r++)if(r!==c){const f=A[r][c];if(f!==0)for(let j=0;j<2*n;j++)A[r][j]-=f*A[c][j];}
+  }
+  return A.map(r=>r.slice(n));
+}
+function olsCoefs(data,y,xs){
+  const ids=xs.concat([y]),C=covMat(data,ids),k=xs.length;
+  const Sxx=C.slice(0,k).map(r=>r.slice(0,k)),sxy=C.slice(0,k).map(r=>r[k]),P=invert(Sxx);
+  if(!P)return null;
+  return P.map(r=>r.reduce((a,v,j)=>a+v*sxy[j],0));
+}
+/* Anteil erklärter Varianz von y durch xs */
+function r2of(data,y,xs){
+  if(!xs.length)return 0;
+  const C=covMat(data,xs.concat([y])),k=xs.length,b=olsCoefs(data,y,xs);
+  if(!b)return NaN;
+  let e=0;for(let i=0;i<k;i++)e+=b[i]*C[i][k];
+  return e/C[k][k];
+}
+function resSD(data,y,xs){
+  const C=covMat(data,xs.concat([y])),k=xs.length,b=xs.length?olsCoefs(data,y,xs):[];
+  let e=0;for(let i=0;i<k;i++)e+=b[i]*C[i][k];
+  return Math.sqrt(Math.max(0,C[k][k]-e));
+}
+
+/* ═══════════════════ Modell: Sport → Herzgesundheit ═══════════════════ */
+const NODES=[
+  {id:'alter',label:'Age',x:320,y:24,tag:'Confounder: common cause of exercise and heart health'},
+  {id:'ses',label:'Income',x:325,y:435,tag:'Confounder: common cause of exercise and heart health'},
+  {id:'studio',label:'Gym proximity',x:65,y:360,tag:'Cause of exercise only (instrument-like)'},
+  {id:'sport',label:'Exercise',x:105,y:250},
+  {id:'fitness',label:'Fitness',x:320,y:160,tag:'Mediator: intermediate station on the causal path from exercise'},
+  {id:'ruhepuls',label:'Resting HR',x:320,y:92,tag:'Consequence of the mediator fitness'},
+  {id:'herz',label:'Heart health',x:545,y:250},
+  {id:'klinik',label:'Hospital admission',x:325,y:330,tag:'Collider: common effect of exercise and heart health (and itself a consequence of exercise)'}
+];
+const EDGES=[
+  ['alter','sport',-0.4],['alter','herz',-0.5],['ses','sport',0.4],['ses','herz',0.4],['studio','sport',0.6],
+  ['sport','fitness',0.7],['fitness','herz',0.6],['sport','herz',0.2],['fitness','ruhepuls',-0.7],
+  ['sport','klinik',0.5],['herz','klinik',-0.6]
+];
+const G={nodes:NODES.map(n=>({id:n.id,label:n.label})),edges:EDGES.map(e=>({a:e[0],b:e[1],w:e[2]}))};
+const NB={};NODES.forEach(n=>NB[n.id]=n);
+const X0='sport',Y0='herz';
+const CAND=['alter','ses','studio','fitness','ruhepuls','klinik'];
+const lab=id=>NB[id].label;
+
+function hasEdge(Gx,a,b){return Gx.edges.some(e=>e.a===a&&e.b===b);}
+function allPaths(Gx,x,y,cap){
+  const adj={};Gx.nodes.forEach(n=>adj[n.id]=new Set());
+  Gx.edges.forEach(e=>{adj[e.a].add(e.b);adj[e.b].add(e.a);});
+  const out=[],path=[x],seen=new Set([x]);
+  (function dfs(v){
+    if(out.length>=cap)return;
+    if(v===y){out.push(path.slice());return;}
+    for(const w of adj[v]){if(!seen.has(w)){seen.add(w);path.push(w);dfs(w);path.pop();seen.delete(w);}}
+  })(x);
+  return out;
+}
+function labelOf(Gx,id){const n=Gx.nodes.find(n=>n.id===id);return n?n.label:id;}
+function analysePath(Gx,path,Zset){
+  const steps=[];let open=true;
+  for(let i=1;i<path.length-1;i++){
+    const p=path[i-1],v=path[i],nx=path[i+1];
+    const inL=hasEdge(Gx,p,v),inR=hasEdge(Gx,nx,v);
+    let kind,isOpen,why;
+    if(inL&&inR){
+      kind='collider';
+      const zd=[...descendantsOf(Gx,v)].filter(d=>Zset.has(d));
+      if(Zset.has(v)){isOpen=true;why='Collider, adjusted → opened';}
+      else if(zd.length){isOpen=true;why='Collider, consequence '+zd.map(d=>labelOf(Gx,d)).join(', ')+' adjusted → opened';}
+      else{isOpen=false;why='Collider, not adjusted → closed';}
+    }else{
+      kind=(!inL&&!inR)?'fork':'chain';
+      const nm=kind==='fork'?'Fork (common cause)':'Chain (intermediate station)';
+      if(Zset.has(v)){isOpen=false;why=nm+', adjusted → blocked';}
+      else{isOpen=true;why=nm+', not adjusted → open';}
+    }
+    steps.push({id:v,kind,open:isOpen,why});
+    if(!isOpen)open=false;
+  }
+  let causal=true;
+  for(let i=0;i<path.length-1;i++)if(!hasEdge(Gx,path[i],path[i+1])){causal=false;break;}
+  return {path,steps,open,causal};
+}
+function pstr(path){
+  let h='';
+  for(let i=0;i<path.length;i++){
+    h+='<span>'+lab(path[i])+'</span>';
+    if(i<path.length-1)h+='<span class="arr">'+(hasEdge(G,path[i],path[i+1])?'→':'←')+'</span>';
+  }
+  return h;
+}
+function directedPaths(Gx,a,b){
+  const out=[],path=[a];
+  (function dfs(v){if(v===b){out.push(path.slice());return;}
+    for(const c of childrenOf(Gx,v)){path.push(c);dfs(c);path.pop();}})(a);
+  return out;
+}
+function trueEffect(Gx,x,y){
+  const ord=topoOrder(Gx),eff={};ord.forEach(v=>eff[v]=0);eff[x]=1;
+  for(const v of ord){if(v===x)continue;let t=0;for(const e of Gx.edges)if(e.b===v)t+=eff[e.a]*e.w;eff[v]=t;}
+  return eff[y];
+}
+const cutIn=(Gx,S)=>{S=new Set(S);return {nodes:Gx.nodes,edges:Gx.edges.filter(e=>!S.has(e.b))};};
+const cutOut=(Gx,S)=>{S=new Set(S);return {nodes:Gx.nodes,edges:Gx.edges.filter(e=>!S.has(e.a))};};
+function openBetween(Gx,A,B,cond){
+  const out=[];
+  for(const a of A)for(const b of B){
+    if(a===b){out.push({path:[a],steps:[],trivial:true});continue;}
+    for(const p of allPaths(Gx,a,b,400)){const r=analysePath(Gx,p,cond);if(r.open)out.push(r);}
+  }
+  return out;
+}
+const PATHS=allPaths(G,X0,Y0,100);
+const MED=new Set();directedPaths(G,X0,Y0).forEach(p=>p.slice(1,-1).forEach(v=>MED.add(v)));
+const DESC_Y=descendantsOf(G,Y0);
+const TRUE_TOTAL=trueEffect(G,X0,Y0);
+const TRUE_DIRECT=G.edges.find(e=>e.a===X0&&e.b===Y0).w;
+
+/* ═══════════════════ Zeichnen ═══════════════════ */
+function dagSvg(id,o){
+  o=o||{};
+  const svg=document.getElementById(id),bx={};
+  G.nodes.forEach(n=>{const nb=NB[n.id],w=Math.max(56,18+n.label.length*8.4);bx[n.id]={x:nb.x,y:nb.y,hw:w/2,hh:16};});
+  const clip=(a,b,m)=>{const dx=b.x-a.x,dy=b.y-a.y;
+    const t=Math.min((a.hw+m)/Math.max(Math.abs(dx),1e-9),(a.hh+m)/Math.max(Math.abs(dy),1e-9));return {x:a.x+dx*t,y:a.y+dy*t};};
+  let h='<defs><marker id="ar-'+id+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker></defs>';
+  (o.glow||[]).forEach(g=>{
+    for(let i=0;i<g.path.length-1;i++){const A=bx[g.path[i]],B=bx[g.path[i+1]];
+      h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:'+g.color+';stroke-width:'+(g.w||10)+';opacity:'+(g.op||.3)+';stroke-linecap:round"/>';}
+  });
+  G.edges.forEach(e=>{
+    const A=bx[e.a],B=bx[e.b],p1=clip(A,B,1),p2=clip(B,A,4);
+    const rem=o.removed&&o.removed.some(r=>r.a===e.a&&r.b===e.b);
+    if(rem){
+      h+='<line x1="'+p1.x+'" y1="'+p1.y+'" x2="'+p2.x+'" y2="'+p2.y+'" style="stroke:var(--a1);stroke-width:1.6;stroke-dasharray:2 5;opacity:.75"/>';
+      h+='<text x="'+((p1.x+p2.x)/2)+'" y="'+((p1.y+p2.y)/2+5)+'" text-anchor="middle" font-size="16" style="fill:var(--a1);font-weight:700">×</text>';
+    }else{
+      h+='<line x1="'+p1.x+'" y1="'+p1.y+'" x2="'+p2.x+'" y2="'+p2.y+'" marker-end="url(#ar-'+id+')" style="stroke:var(--ink2);stroke-width:'+(1.2+Math.abs(e.w)*2)+(e.w<0?';stroke-dasharray:7 4':'')+'"/>';
+      if(o.weights){const short=Math.hypot(p2.x-p1.x,p2.y-p1.y)<90,f=short?0.5:0.38,tx=p1.x+(p2.x-p1.x)*f+(short?8:0),ty=p1.y+(p2.y-p1.y)*f+(short?4:-4);h+='<text x="'+tx+'" y="'+ty+'" text-anchor="'+(short?'start':'middle')+'" font-size="11" style="fill:var(--ink);paint-order:stroke;stroke:var(--bg);stroke-width:3px;pointer-events:none">'+(e.w>0?'+':'−')+Math.abs(e.w).toFixed(1)+'</text>';}
+    }
+  });
+  G.nodes.forEach(n=>{
+    const b=bx[n.id],role=o.roles&&o.roles[n.id],adj=o.Z&&o.Z.has(n.id);
+    let stroke='var(--ink2)',sw=2,fill='var(--paper)',tc='var(--ink)';
+    if(role==='X'){stroke='var(--a2)';sw=3.6;}
+    if(role==='Y'){stroke='var(--a4)';sw=3.6;}
+    if(adj){fill='var(--a6)';tc='var(--paper)';if(!role)stroke='var(--a6)';}
+    h+='<g data-n="'+n.id+'" style="cursor:'+(o.click&&o.click(n.id,true)?'pointer':'default')+'"><rect x="'+(b.x-b.hw)+'" y="'+(b.y-b.hh)+'" width="'+(2*b.hw)+'" height="'+(2*b.hh)+'" rx="7" style="fill:'+fill+';stroke:'+stroke+';stroke-width:'+sw+'"/>'
+      +'<text x="'+b.x+'" y="'+(b.y+5)+'" text-anchor="middle" font-size="14" style="fill:'+tc+';pointer-events:none">'+n.label+'</text></g>';
+    if(o.tags&&o.tags[n.id])h+='<text x="'+b.x+'" y="'+(b.y-b.hh-5)+'" text-anchor="middle" font-size="11" style="fill:'+o.tags[n.id][1]+';pointer-events:none">'+o.tags[n.id][0]+'</text>';
+  });
+  svg.innerHTML=h;
+  svg.onclick=e=>{const g=e.target.closest('[data-n]');if(g&&o.click)o.click(g.dataset.n);};
+}
+
+/* ═══════════════════ Stufen ═══════════════════ */
+
+/* Estimation data: current dataset + 30 more (independent of estimand and adjustment) */
+let SETS=null;
+function getSets(){
+  if(SETS&&SETS.seed===SEED)return SETS;
+  const keep=SEED,arr=[];
+  for(let k=0;k<30;k++){SEED=5000+k;arr.push(simulate(G,3000));}
+  SEED=keep;
+  SETS={seed:SEED,cur:simulate(G,3000),arr};
+  return SETS;
+}
+
+/* ═══════════════════ Gemeinsamer Zustand ═══════════════════ */
+let EST='total';
+const ADJS={total:new Set(),direct:new Set()};
+let ADJ=ADJS.total;
+const estTruth=()=>EST==='total'?TRUE_TOTAL:TRUE_DIRECT;
+const isTarget=p=>EST==='total'?p.every((v,i)=>i===p.length-1||hasEdge(G,v,p[i+1])):p.length===2&&hasEdge(G,p[0],p[1]);
+const f2=v=>(v===null||v===undefined||!isFinite(v))?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+
+/* State of all paths under an adjustment */
+function pathStates(Zset){
+  return PATHS.map(p=>{
+    const a=analysePath(G,p,Zset),target=isTarget(p);
+    let damped=false;
+    if(a.open)for(const s of a.steps){
+      if(s.kind==='chain'&&!Zset.has(s.id)){
+        for(const d of descendantsOf(G,s.id)){if(Zset.has(d)&&d!==Y0&&!DESC_Y.has(d)){damped=true;}}
+      }
+    }
+    const cat=target?(!a.open?'blocked':(damped?'damped':'ok')):(a.open?'open':'closed');
+    const viaCollider=a.open&&a.steps.some(s=>s.kind==='collider');
+    return {p,a,target,cat,viaCollider,good:cat==='ok'||cat==='closed'};
+  });
+}
+function explainPath(st){
+  const p=st.p;
+  if(st.a.causal&&p.length===2)return 'Exercise acts directly on the heart.';
+  const s=st.a.steps;
+  if(st.a.causal)return 'Exercise acts on the heart via '+s.map(x=>lab(x.id)).join(' and ')+'.';
+  const c=s.find(x=>x.kind==='collider'),f=s.find(x=>x.kind==='fork');
+  if(c)return lab(c.id)+' is a common effect of exercise and heart. The path is closed as long as it is not adjusted for.';
+  if(f)return lab(f.id)+' influences exercise and heart at the same time and creates an association without any effect of exercise.';
+  return '';
+}
+
+/* ═══════════════════ STUFE 1 ═══════════════════ */
+/* ═══════════════════ STUFE 2 ═══════════════════ */
+let hiP=null,LAST=null;
+const HELP={A:false,B:false},CHECKED={A:false,B:false};
+function toggleAdj(id){
+  if(!CAND.includes(id))return false;
+  const c=consequence(id),adding=!ADJ.has(id);
+  if(adding)ADJ.add(id);else ADJ.delete(id);
+  LAST={v:id,adding,c};
+  renderA2();
+  return true;
+}
+function presetAdj(list){ADJ.clear();list.forEach(v=>ADJ.add(v));LAST=null;renderA2();}
+
+function consequence(v){
+  const cur=new Set(ADJ),nxt=new Set(ADJ);
+  if(cur.has(v))nxt.delete(v);else nxt.add(v);
+  const A=pathStates(cur),B=pathStates(nxt),out=[];
+  PATHS.forEach((p,i)=>{
+    const a=A[i],b=B[i];if(a.cat===b.cat)return;
+    const s=pstr(p).replace(/<[^>]+>/g,'').replace(/(→|←)/g,' $1 ').replace(/\s+/g,' ');
+    if(a.target){
+      if(a.cat==='ok'&&b.cat==='blocked')out.push(['b','blocks the causal path '+s+' — part of the effect you are after is partialled out']);
+      else if(a.cat==='ok'&&b.cat==='damped')out.push(['b','dampens the causal path '+s+' (the variable partly measures the intermediate link) — part of the effect is partialled out']);
+      else if(b.cat==='ok')out.push(['g','frees the causal path '+s+' again']);
+      else out.push(['b','changes the causal path '+s+' ('+a.cat+' → '+b.cat+')']);
+    }else{
+      if(b.cat==='closed')out.push(['g','closes the confounding path '+s]);
+      else if(a.cat==='closed')out.push(['b','opens the confounding path '+s+(b.viaCollider?' (a common effect is opened up)':'')]);
+    }
+  });
+  return out;
+}
+
+function whyPath(s){
+  const st=s.a.steps;
+  if(!st.length)return 'direct arrow, nothing can block it';
+  if(s.cat==='damped')return 'A descendant of the intermediate station is adjusted: the path stays open but is partly partialled out.';
+  const cl=st.find(x=>!x.open);
+  if(cl)return lab(cl.id)+': '+cl.why;
+  return st.map(x=>lab(x.id)+': '+x.why).join(' · ');
+}
+function lastHtml(){
+  if(!LAST)return '<div class="n">Click a variable in the graph. Here you will then see what it does.</div>';
+  const v=LAST.v,c=LAST.c;
+  const head='<b>'+lab(v)+'</b> '+(LAST.adding?'adjusted':'no longer adjusted')+':';
+  const body=c.length
+    ?c.map(x=>'<div class="'+x[0]+'">'+(x[0]==='g'?'✓ ':'✗ ')+x[1]+'</div>').join('')
+    :'<div class="n">This changes none of the '+PATHS.length+' paths.'+(v==='studio'?' The effect stays the same, but the estimate can become less precise because less variation in exercise is left.':' For this question nothing changes about the bias.')+'</div>';
+  return head+body+(NB[v].tag?'<div class="n" style="margin-top:.2rem">Role in this graph: '+NB[v].tag+'</div>':'');
+}
+function renderLive(sts){
+  const isTot=EST==='total';
+  const idx=sts.map((s,i)=>({s,i}));
+  const tgt=idx.filter(o=>o.s.target),umw=idx.filter(o=>!o.s.target&&o.s.a.causal),stoer=idx.filter(o=>!o.s.target&&!o.s.a.causal);
+  const row=(o,good,bad)=>{
+    const g=o.s.good;
+    return '<div class="pitem '+(g?'pg':'pb')+'" data-pi="'+o.i+'"><div class="pstr">'+pstr(o.s.p)+'<span class="badge '+(g?'good':'bad')+'">'+(g?'✓ ':(o.s.cat==='damped'?'◐ ':'✗ '))+(g?good:bad)+'</span></div><div class="pexp">'+whyPath(o.s)+'</div></div>';
+  };
+  const sec=(t,rows)=>rows.length?'<div class="lv-sec">'+t+'</div><div class="plist" style="margin-bottom:0">'+rows.join('')+'</div>':'';
+  const wOk=tgt.every(o=>o.s.cat==='ok'),sOk=sts.filter(s=>!s.target).every(s=>s.cat==='closed');
+  const colOpen=sts.some(s=>s.a.open&&s.a.steps.some(x=>x.kind==='collider'));
+  const blk=sts.filter(s=>s.target&&s.cat!=='ok'),umOpen=sts.filter(s=>!s.target&&s.a.causal&&s.cat==='open');
+  const confOpen=sts.filter(s=>!s.a.causal&&s.cat==='open'&&!s.viaCollider),colB=sts.filter(s=>!s.a.causal&&s.cat==='open'&&s.viaCollider);
+  const eff=isTot?'the total effect':'the direct effect';
+  let cons,cls;
+  if(!blk.length&&!umOpen.length&&!confOpen.length&&!colB.length){
+    cons='Your current selection estimates <b>'+eff+'</b> of exercise on heart health.';cls='vgood';
+  }else{
+    const parts=[];
+    if(blk.length)parts.push('<b>blocks part of the effect you are after</b>');
+    if(umOpen.length)parts.push('<b>leaves the indirect path via fitness open</b> (you are still estimating more than the direct effect)');
+    if(confOpen.length)parts.push('<b>leaves confounding in place</b>');
+    if(colB.length)parts.push('<b>creates collider bias</b>');
+    cons='Your current selection '+parts.join(', ')+'.';cls='vbad';
+  }
+  const names=ADJ.size?'Adjusted: '+[...ADJ].map(lab).join(', ')+'.':'Nothing is adjusted.';
+  document.getElementById('a2-live').innerHTML=
+    '<div class="why" style="margin-top:0"><b>Effect you are after: '+(isTot?'total effect':'direct effect')+'.</b> A <b>causal path</b> belongs to the effect you are after and should stay open. '+(isTot?'':'The detour via fitness does not belong to it and should be blocked. ')+'A <b>confounding path</b> should be closed.</div>'
+    +sec('Causal paths',tgt.map(o=>row(o,'open','blocked')))
+    +sec('Detour that must be blocked',umw.map(o=>row(o,'blocked','still open')))
+    +sec('Confounding paths',stoer.map(o=>row(o,'closed','still open')))
+    +'<div class="lv-sec">Adjustment check</div><div class="crit" style="margin-top:0">'
+    +ckRow(wOk,'all desired causal paths open: <b>'+(wOk?'yes':'no')+'</b>')
+    +ckRow(sOk,'all confounding paths'+(isTot?'':' and the detour')+' closed: <b>'+(sOk?'yes':'no')+'</b>')
+    +ckRow(!colOpen,'collider opened: <b>'+(colOpen?'yes':'no')+'</b>')
+    +'</div>'
+    +'<div class="lv-sec">Last changed</div><div class="lastc">'+lastHtml()+'</div>'
+    +'<div class="verdict '+cls+'" style="margin-top:.7rem"><b>Consequence.</b> '+cons+' <span style="color:var(--ink3)">'+names+'</span></div>';
+  document.querySelectorAll('#a2-live .pitem').forEach(el=>{
+    el.addEventListener('mouseenter',()=>{hiP=+el.dataset.pi;renderA2Svg();});
+    el.addEventListener('mouseleave',()=>{hiP=null;renderA2Svg();});
+  });
+}
+function renderA2(){
+  if(STAGE!==3)return;
+  const Z=new Set(ADJ),sts=pathStates(Z);
+  renderA2Svg(sts);
+  document.getElementById('a2-chips').innerHTML=CAND.map(v=>'<button class="chip'+(ADJ.has(v)?' on':'')+'" onclick="toggleAdj(\''+v+'\')" aria-pressed="'+ADJ.has(v)+'"><span class="bx"></span>'+lab(v)+'</button>').join('');
+  if(CHECKED[TASK]){renderLive(sts);renderEst(sts);renderDerive();}
+  else{
+    const hold=t=>'<div class="hint-box" style="margin-top:0">'+t+'</div>';
+    document.getElementById('a2-live').innerHTML=hold('First choose the variables you want to adjust for, then click <b>“Check my solution”</b>. Only then does the evaluation of your selection appear here.');
+    document.getElementById('a2-est-body').innerHTML=hold('After “Check my solution” you will see here whether your selection estimates the effect you are after with or without bias.');
+    document.getElementById('a2-derive').innerHTML=hold('The formal derivation is available as soon as you have checked your solution.');
+  }
+  renderTask(sts);syncHelpUi();
+}
+function checkSolution(){CHECKED[TASK]=true;LAST=null;renderA2();}
+function toggleHelp(){HELP[TASK]=!HELP[TASK];renderA2();}
+function syncHelpUi(){
+  document.getElementById('a2-help').textContent=HELP[TASK]?'Help: hide paths':'Help: show paths';
+  document.getElementById('a2-help').classList.toggle('sel',HELP[TASK]);
+  document.getElementById('a2-leg-help').style.display=HELP[TASK]?'':'none';
+  document.getElementById('a2-sol').disabled=!CHECKED[TASK];
+  document.getElementById('a2-check').textContent=CHECKED[TASK]?'Check my solution again':'Check my solution';
+}
+function renderA2Svg(sts){
+  const Z=new Set(ADJ);sts=sts||pathStates(Z);
+  const glow=!HELP[TASK]?[]:sts.filter(s=>s.a.open).map(s=>({path:s.p,color:s.target?'var(--a2)':'var(--a1)',op:.26}));
+  const hl=hiP!==null&&sts[hiP]?[{path:sts[hiP].p,color:'var(--ink)',op:.22,w:14}]:[];
+  dagSvg('a2-svg',{roles:{[X0]:'X',[Y0]:'Y'},Z,weights:true,glow:hl.concat(glow),click:(id,q)=>q?CAND.includes(id):toggleAdj(id)});
+}
+
+
+function renderEst(sts){
+  const box=document.getElementById('a2-est-body'),S=getSets(),truth=estTruth();
+  const Zs=[...ADJ];
+  const calc=d=>{
+    // direkter Effekt: Mediatoren (Fitness) gehören mit ins Modell, damit der Direkt-Koeffizient gelesen werden kann
+    const b=olsCoefs(d,Y0,[X0].concat(Zs));return b?b[0]:null;
+  };
+  const naiveCur=olsCoefs(S.cur,Y0,[X0])[0],adjCur=Zs.length?calc(S.cur):naiveCur;
+  const na=S.arr.map(d=>olsCoefs(d,Y0,[X0])[0]),aa=S.arr.map(d=>Zs.length?calc(d):olsCoefs(d,Y0,[X0])[0]);
+  const lo=-0.2,hi=1.2,pos=x=>Math.max(0,Math.min(100,(x-lo)/(hi-lo)*100));
+  const row=(name,sub,cur,arr)=>{
+    const m=mean(arr),sd=sdOf(arr),unb=Math.abs(m-truth)<0.05;
+    const z=pos(0),vv=pos(m),l=Math.min(z,vv),w=Math.abs(vv-z);
+    return '<div class="erow"><div class="en">'+name+'<small>'+sub+'</small><div class="bar"><div class="fill '+(unb?'gd':'bd')+'" style="left:'+l+'%;width:'+w+'%"></div><div class="tick" style="left:'+pos(truth)+'%"></div></div></div>'
+      +'<div class="ev">'+f2(cur)+'</div><div class="em">Ø '+f2(m)+' ± '+sd.toFixed(2)+'</div>'
+      +'<div class="eu"><span class="'+(unb?'good':'bad')+'">'+(unb?'unbiased':'biased')+'</span> (Ø '+(m-truth>=0?'+':'−')+Math.abs(m-truth).toFixed(2)+')</div></div>';
+  };
+  const zl=Zs.map(lab).join(', ');
+  const ok=sts.every(s=>s.good);
+  box.innerHTML='<div class="etab"><div class="erow eh"><div>Estimate</div><div>this data</div><div>30 datasets (M ± SD)</div><div>Verdict</div></div>'
+    +'<div class="erow"><div class="en">Effect you are after<small>'+(EST==='total'?'total effect: sum of the path products':'direct effect: arrow exercise → heart health')+'</small></div><div class="ev">'+f2(truth)+'</div><div class="em">—</div><div class="eu">Reference (blue mark)</div></div>'
+    +row('Nothing adjusted','Heart on exercise',naiveCur,na)
+    +(Zs.length?row('Your adjustment','Heart on exercise + '+zl,adjCur,aa):'<div class="erow"><div class="en">Your adjustment<small>nothing chosen yet</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">Click variables</div></div>')
+    +'</div>'
+    +'<div class="hint-box"><b>How to read this:</b> “Biased” means that, averaged over many datasets, the estimate deviates from the value you are after by more than 0.05. The spread (±) shows how much a single dataset fluctuates. '
+    +(ok?'':'The live evaluation above shows you <i>why</i> the estimate is off.')+'</div>';
+}
+
+/* Herleitung mit den drei Regeln */
+function derive(Zset){
+  const T=new Set([X0]);
+  if(EST==='direct'){
+    const missing=[...MED].filter(m=>!Zset.has(m));
+    if(missing.length)return {error:'missing',missing};
+    MED.forEach(m=>T.add(m));
+  }
+  const W0=[...Zset].filter(z=>!T.has(z)),GT=cutIn(G,T),GTu=cutOut(G,T);
+  let Wc=W0.slice();const r1=[];
+  for(const w of W0){
+    const cond=new Set([...T,...Wc.filter(x=>x!==w)]);
+    const op=openBetween(GT,[Y0],[w],cond);
+    if(!op.length){Wc=Wc.filter(x=>x!==w);r1.push({w,drop:true});}
+    else r1.push({w,drop:false,open:op[0]});
+  }
+  const aff=openBetween(GT,Wc,[...T],new Set());
+  const r3ok=aff.length===0;
+  const op2=openBetween(GTu,[Y0],[...T],new Set(Wc));
+  const r2ok=op2.length===0;
+  return {T,W0,Wc,r1,aff,r3ok,op2,r2ok,ok:r3ok&&r2ok};
+}
+function renderDerive(){
+  const box=document.getElementById('a2-derive'),Z=new Set(ADJ),d=derive(Z);
+  const tn=T=>[...T].map(lab).join(' and ');
+  if(d.error){
+    box.innerHTML='<div class="verdict vbad"><b>Something is missing for the direct effect.</b> The direct effect is defined as “changing exercise <i>while holding fitness fixed</i>”, that is, as an intervention on two variables: do(exercise, fitness). For the derivation to work, '+d.missing.map(lab).join(', ')+' must be part of the adjustment. Add it in the graph.</div>';
+    return;
+  }
+  const step=(n,cls,q,html)=>'<div class="dstep '+cls+'"><div class="dn">'+n+'</div><div><b>'+q[0]+'</b><div class="q">'+q[1]+'</div>'+html+'</div></div>';
+  const I='do('+tn(d.T).replace(' and ',', ')+')';
+  const W=d.Wc;
+  let s1;
+  if(!d.W0.length)s1=step(1,'sg',['Rule 1 – Ignore observations','Which additional observed variables provide any relevant information at all?'],'<div>You have not adjusted for anything, so there is nothing to check here.</div>');
+  else s1=step(1,'sg',['Rule 1 – Ignore observations','Which additional observed variables provide any relevant information at all?'],
+    d.r1.map(r=>r.drop
+      ?'<div><span style="color:var(--a3)">✓</span> <b>'+lab(r.w)+'</b> can be ignored: as soon as you intervene on '+tn(d.T)+', '+lab(r.w)+' tells you nothing more about heart health (in this graph no path between the two is open).</div>'
+      :'<div><span style="color:var(--a1)">●</span> <b>'+lab(r.w)+'</b> stays: even after the intervention it provides information about heart health (open path: '+pstr(r.open.path)+').</div>').join(''));
+  const s3=step(3,d.r3ok?'sg':'sb',['Rule 3 – Ignore intervention','Which variables are affected by the intervention at all?'],
+    !W.length?'<div><span style="color:var(--a3)">✓</span> No adjusted variable is left that the intervention could change.</div>'
+    :(d.r3ok?'<div><span style="color:var(--a3)">✓</span> The intervention '+I+' does not change '+W.map(lab).join(', ')+'. The distribution of these variables stays as it is; you may simply use them as you observe them.</div>'
+      :'<div><span style="color:var(--a1)">✗</span> The intervention '+I+' <b>changes</b> '+[...new Set(d.aff.map(a=>a.path[0]))].map(lab).join(', ')+' (path: '+pstr(d.aff[0].path)+'). Anyone who adjusts for this compares people from a world that no longer exists after the intervention — this is the consequence of adjusting for mediators or colliders that are themselves consequences of exercise.</div>'));
+  const t2=tn(d.T);
+  const s2=step(2,d.r2ok?'sg':'sb',['Rule 2 – Replace intervention with observation','When may an interventional effect be inferred from observed associations?'],
+    d.r2ok?'<div><span style="color:var(--a3)">✓</span> If you remove all arrows leading away from '+t2+' (the effects), no open path remains between '+t2+' and heart health'+(W.length?' (given '+W.map(lab).join(', ')+')':'')+'. Then observing is the same as intervening.</div>'
+    :'<div><span style="color:var(--a1)">✗</span> Even without the effects of '+t2+' a path stays open: '+d.op2.slice(0,3).map(o=>pstr(o.path)).join('; ')+'. This is a confounding path that the adjustment does not close. Observing ≠ intervening.</div>');
+  const fm=d.ok
+    ?'<div class="formula fg"><b>Result: identified.</b><br>P(heart health | '+I+') = '+(W.length?'Σ<sub>'+W.map(lab).join(',')+'</sub> ':'')+'P(heart health | '+t2.replace(' and ',', ')+(W.length?', '+W.map(lab).join(', '):'')+')'+(W.length?' · P('+W.map(lab).join(', ')+')':'')+'<br><span style="font-size:.66rem;color:var(--ink2)">The interventional effect can be computed from observable quantities. This is exactly the adjustment formula.</span></div>'
+    :'<div class="formula fb"><b>Result: not identified.</b><br><span style="font-size:.7rem;color:var(--ink2)">With this selection the interventional effect cannot be derived from the observations. The numbers above show how far off the estimate is.</span></div>';
+  box.innerHTML='<div class="dsteps">'+s1+s2+s3+'</div>'+fm;
+}
+
+/* ═══════════════════ Start ═══════════════════ */
+
+let STAGE=1;
+function setStage(s){
+  STAGE=s;
+  [1,2,3].forEach(i=>{
+    document.getElementById('stage-'+i).style.display=(i===s)?'block':'none';
+    document.getElementById('stab-'+i).classList.toggle('sel',i===s);
+  });
+  refreshAll();
+}
+function refreshAll(){
+  if(STAGE===1)s1Redraw();
+  else if(STAGE===2)renderAnalysis();
+  else{renderA1();renderA2();}
+}
+
+
+/* ═══════════════════ Stufe 3: Modell & Aufgaben ═══════════════════ */
+const EDGE_TXT={
+  'alter>sport':'Older people exercise less.',
+  'alter>herz':'Heart health declines with age.',
+  'ses>sport':'People who earn more exercise more (time, money, opportunities).',
+  'ses>herz':'People who earn more have, on average, a healthier heart.',
+  'studio>sport':'A gym nearby gets people to exercise. It affects nothing else.',
+  'sport>fitness':'Exercise makes people fitter.',
+  'fitness>herz':'Fit people have a healthier heart.',
+  'sport>herz':'Exercise additionally acts directly on the heart, bypassing the detour via fitness.',
+  'fitness>ruhepuls':'Fit people have a lower resting heart rate.',
+  'sport>klinik':'People who exercise get injured more often and are more likely to end up in the hospital.',
+  'herz>klinik':'A sick heart leads to the hospital: better heart health, fewer admissions.'
+};
+function renderA1(){
+  document.getElementById('a1-assume').innerHTML=G.edges.map(e=>
+    '<div class="arow"><span class="ar">'+lab(e.a)+' → '+lab(e.b)+'</span><span class="av">'+(e.w>0?'positive':'negative')+' ('+(e.w>0?'+':'−')+Math.abs(e.w).toFixed(1)+')</span><span>'+(EDGE_TXT[e.a+'>'+e.b]||'')+'</span></div>').join('');
+}
+
+let TASK='A';
+function setTask(t){TASK=t;EST=t==='A'?'total':'direct';LAST=null;afterEst();}
+function afterEst(){ADJ=ADJS[EST];hiP=null;syncTaskUi();refreshAll();}
+function syncTaskUi(){
+  document.querySelectorAll('#a2-task .fbtn').forEach(b=>b.classList.toggle('sel',b.dataset.t===TASK));
+  const T={
+    A:'<b>Task A · total effect.</b> Find an adjustment set with which you can estimate the entire causal effect of exercise on heart health. All causal paths must stay open, all confounding paths must be closed, and no collider path may be opened. You decide for yourself which variables to adjust for.',
+    B:'<b>Task B · direct effect.</b> Find an adjustment set with which you can estimate only the direct effect of exercise on heart health. In addition to the confounding paths from task A, the indirect causal path via fitness must be blocked here.'
+  };
+  document.getElementById('a2-task-text').innerHTML=T[TASK];
+}
+function showSolution(){
+  if(!CHECKED[TASK]){toast('First check your own solution at least once.');return;}
+  ADJ.clear();
+  const sol=EST==='total'?['alter','ses']:['alter','ses','fitness'];
+  sol.forEach(v=>ADJ.add(v));
+  LAST=null;
+  renderA2();
+  toast(EST==='total'?'Solution: age and income close the confounding paths, fitness stays open as a causal path.':'Solution: age and income close the confounding paths, fitness blocks the detour.');
+}
+function withEst(e,fn){const k=EST;EST=e;try{return fn();}finally{EST=k;}}
+function renderTask(sts){
+  syncTaskUi();
+  const okT=CHECKED.A&&withEst('total',()=>pathStates(ADJS.total).every(s=>s.good)),okD=CHECKED.B&&withEst('direct',()=>pathStates(ADJS.direct).every(s=>s.good));
+  document.getElementById('a2-ta').textContent=CHECKED.A?(okT?'✓ solved':'still open'):'not checked yet';
+  document.getElementById('a2-tb').textContent=CHECKED.B?(okD?'✓ solved':'still open'):'not checked yet';
+  const el=document.getElementById('a2-concl');
+  if(!(okT&&okD)){
+    el.innerHTML='<div class="hint-box" style="margin-top:0">Task A (total effect): <b>'+(!CHECKED.A?'not checked yet':okT?'✓ solved':'still open')+'</b> · Task B (direct effect): <b>'+(!CHECKED.B?'not checked yet':okD?'✓ solved':'still open')+'</b><br>As soon as you have solved both tasks, you will see here how the total effect is composed of the direct and the indirect effect.</div>';
+    return;
+  }
+  const S=getSets(),coef=(set,d)=>olsCoefs(d,Y0,[X0].concat([...set]))[0];
+  const tot=S.arr.map(d=>coef(ADJS.total,d)),dir=S.arr.map(d=>coef(ADJS.direct,d)),ind=tot.map((v,i)=>v-dir[i]);
+  const cT=coef(ADJS.total,S.cur),cD=coef(ADJS.direct,S.cur);
+  const tI=TRUE_TOTAL-TRUE_DIRECT,mT=mean(tot),mD=mean(dir),mI=mean(ind);
+  const card=(cls,l,v,cur,sd,truth,sub)=>'<div class="'+cls+'"><div class="c3l">'+l+'</div><div class="c3v">'+f2(v)+'</div><div class="c3s">'+sub+'<br>this data: '+f2(cur)+' · 30 datasets: ± '+sd.toFixed(2)+'<br>true value: '+f2(truth)+'</div></div>';
+  const share=mT!==0?Math.round(mI/mT*100):null;
+  el.innerHTML='<div class="hint-box" style="margin-top:0"><b>Both tasks are solved.</b> The total effect consists of the direct effect and the indirect effect via fitness: <b>indirect effect = total effect − direct effect</b>.</div>'
+    +'<div class="c3">'
+    +card('c3k','total effect',mT,cT,sdOf(tot),TRUE_TOTAL,'Task A · mean of 30 datasets')
+    +card('c3d','direct effect',mD,cD,sdOf(dir),TRUE_DIRECT,'Task B · mean of 30 datasets')
+    +card('c3i','indirect effect',mI,cT-cD,sdOf(ind),tI,'total effect − direct effect')
+    +'</div>'
+    +'<div class="why" style="margin-top:0">'+(share!==null&&isFinite(share)?'Around '+share+' % of the total effect of exercise on heart health runs via fitness. ':'')+'The rest is the direct effect, which bypasses the detour via fitness.</div>';
+}
+
+
+/* ═══════════════════ STUFE 1 ═══════════════════ */
+const S1_DEF={
+  chain:{edges:[['A','B'],['B','C']],names:{A:'Study time',B:'Prior knowledge',C:'Grade'},
+    ex:'Example: Those who study longer (study time) have more prior knowledge, and more prior knowledge leads to better grades. Prior knowledge is the intermediate station.',
+    role:'<b>What we are after: the total effect of study time on the grade.</b> It covers everything through which study time acts on the grade: a possible direct effect and the indirect effect via prior knowledge. <b>Prior knowledge is a mediator here:</b> the station through which part of the effect runs. Information flows along the arrows from left to right.',
+    open0:true,openC:false},
+  fork:{edges:[['B','A'],['B','C']],names:{A:'Ice cream sales',B:'Sunshine',C:'Sunburn'},
+    ex:'Example: On sunny days more ice cream is sold, and there is more sunburn. Ice cream does not cause sunburn, yet the two occur together.',
+    role:'<b>What we are after: the effect of ice cream sales on sunburn.</b> <b>Sunshine is a confounder here:</b> a common cause. It drives ice cream sales and sunburn at the same time and fakes an association.',
+    open0:true,openC:false},
+  coll:{edges:[['A','B'],['C','B']],names:{A:'Talent',B:'Scholarship',C:'Diligence'},
+    ex:'Example: A scholarship goes to those who are talented or diligent (or both). In everyday life, talent and diligence have nothing to do with each other.',
+    role:'<b>What we are after: the association between talent and diligence in the population.</b> <b>Scholarship is a collider here:</b> a common effect. Talent and diligence “collide” there. As long as you ignore the scholarship, they stay independent.',
+    open0:false,openC:true}
+};
+let s1Struct='chain',s1Ctl=false,s1Cache=null;
+const S1_POS={A:[66,150],B:[180,52],C:[294,150]};
+function setS1Struct(s){
+  s1Struct=s;s1Ctl=false;
+  document.querySelectorAll('#s1-struct .fbtn').forEach(b=>b.classList.toggle('sel',b.dataset.s===s));
+  s1Redraw();
+}
+function toggleS1Ctl(){s1Ctl=!s1Ctl;s1Redraw();}
+function s1Graph(){
+  const w=parseFloat(document.getElementById('s1-w').value),nm=S1_DEF[s1Struct].names;
+  return {nodes:['A','B','C'].map(id=>({id,label:nm[id]})),edges:S1_DEF[s1Struct].edges.map(e=>({a:e[0],b:e[1],w}))};
+}
+function fmt(r){return (r>=0?'+':'−')+Math.abs(r).toFixed(2);}
+function partialCorr(data,x,y,Z){
+  const ids=[x,y].concat(Z),P=invert(covMat(data,ids));
+  if(!P)return NaN;
+  return -P[0][1]/Math.sqrt(P[0][0]*P[1][1]);
+}
+function pathString(Gx,path){
+  const parts=[];
+  for(let i=0;i<path.length;i++){
+    parts.push({t:'n',v:labelOf(Gx,path[i]),id:path[i]});
+    if(i<path.length-1)parts.push({t:'a',v:hasEdge(Gx,path[i],path[i+1])?'→':'←'});
+  }
+  return parts;
+}
+function s1Redraw(){
+  document.getElementById('s1-wv').textContent=parseFloat(document.getElementById('s1-w').value).toFixed(2);
+  const Gs=s1Graph(),n=1500,data=simulate(Gs,n),def=S1_DEF[s1Struct],nm=def.names;
+  const r0=partialCorr(data,'A','C',[]),r1=partialCorr(data,'A','C',['B']);
+  s1Cache={Gs,data,n,r0,r1,nm};
+  const open=s1Ctl?def.openC:def.open0;
+  const ctl=document.getElementById('s1-ctl');
+  ctl.textContent='Adjust for '+nm.B+': '+(s1Ctl?'On':'Off');ctl.classList.toggle('sel',s1Ctl);
+  document.getElementById('s1-ex').textContent=def.ex;
+  document.getElementById('s1-role').innerHTML=def.role;
+  document.getElementById('s1-dtitle').textContent='Data: '+nm.A+' against '+nm.C;
+  document.getElementById('s1-pathl').textContent='Path '+nm.A+' – '+nm.C;
+  document.getElementById('s1-path').innerHTML='<span class="badge '+(open?'open':'shut')+'">'+(open?'open':'blocked')+'</span>';
+  document.getElementById('s1-r0l').textContent='Zusammenhang r('+nm.A+', '+nm.C+') — without adjustment';
+  document.getElementById('s1-r1l').textContent='Zusammenhang r('+nm.A+', '+nm.C+') — with adjustment for '+nm.B;
+  const e0=document.getElementById('s1-r0'),e1=document.getElementById('s1-r1');
+  e0.textContent=fmt(r0);e1.textContent=fmt(r1);
+  e0.classList.toggle('on',!s1Ctl);e1.classList.toggle('on',s1Ctl);
+  document.querySelectorAll('#s1-recap .rrow[data-s]').forEach(r=>r.classList.toggle('cur',r.dataset.s===s1Struct));
+  drawS1Svg(open);
+  s1Why(r0,r1);
+  drawS1Scatter();
+}
+function drawS1Svg(open){
+  const svg=document.getElementById('s1-svg'),def=S1_DEF[s1Struct],nm=def.names;
+  const bw=id=>Math.max(64,20+nm[id].length*8.2),bh=17;
+  const pt=id=>S1_POS[id];
+  let h='<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker></defs>';
+  const line=(a,b)=>{
+    const A=pt(a),B=pt(b),dx=B[0]-A[0],dy=B[1]-A[1];
+    const clip=(id,m)=>Math.min((bw(id)/2+m)/Math.max(Math.abs(dx),1e-9),(bh+m)/Math.max(Math.abs(dy),1e-9));
+    const t1=clip(a,1),t2=clip(b,4);
+    return {x1:A[0]+dx*t1,y1:A[1]+dy*t1,x2:B[0]-dx*t2,y2:B[1]-dy*t2};
+  };
+  if(open){
+    for(const [a,b] of [['A','B'],['B','C']]){
+      const l=line(a,b);
+      h+='<line x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" style="stroke:var(--a1);stroke-width:9;opacity:.2;stroke-linecap:round"/>';
+    }
+  }
+  for(const [a,b] of def.edges){
+    const l=line(a,b);
+    h+='<line x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" marker-end="url(#ar)" style="stroke:var(--ink2);stroke-width:2.2"/>';
+  }
+  if(open){
+    for(const [a,b] of [['A','B'],['B','C']]){
+      const l=line(a,b);
+      h+='<line class="flow" x1="'+l.x1+'" y1="'+l.y1+'" x2="'+l.x2+'" y2="'+l.y2+'" style="stroke:var(--a1);stroke-width:3;stroke-dasharray:2 10;stroke-linecap:round;opacity:.9"/>';
+    }
+  }
+  for(const id of ['A','B','C']){
+    const [x,y]=pt(id),cond=(id==='B'&&s1Ctl),w=bw(id);
+    h+='<rect x="'+(x-w/2)+'" y="'+(y-bh)+'" width="'+w+'" height="'+(2*bh)+'" rx="7" style="fill:'+(cond?'var(--a6)':'var(--paper)')+';stroke:'+(cond?'var(--a6)':'var(--ink2)')+';stroke-width:2"/>';
+    h+='<text x="'+x+'" y="'+(y+5)+'" text-anchor="middle" font-size="13" style="fill:'+(cond?'var(--paper)':'var(--ink)')+'">'+nm[id]+'</text>';
+  }
+  let lbl;
+  if(s1Struct==='coll')lbl=open?'The collider is opened: information flows':'Collider closed: '+nm.A+' and '+nm.C+' are separated';
+  else lbl=open?'Information flows from '+nm.A+' to '+nm.C:'The path via '+nm.B+' is blocked';
+  h+='<text x="180" y="192" text-anchor="middle" font-size="12" style="fill:'+(open?'var(--a1)':'var(--a3)')+'">'+lbl+'</text>';
+  svg.innerHTML=h;
+}
+function s1Why(r0,r1){
+  const el=document.getElementById('s1-why'),nm=S1_DEF[s1Struct].names,a=nm.A,b=nm.B,c=nm.C;let t;
+  if(s1Struct==='chain'){
+    t=s1Ctl
+      ?'<b>'+b+' is adjusted.</b> You compare only people with similar '+b+'. The path '+a+' → '+b+' → '+c+' is thereby blocked (r ≈ '+fmt(r1)+').<br><b>Consequence for the total effect:</b> The part mediated via '+b+' is no longer part of the estimate, although it belongs to the effect of '+a+' on '+c+'. If you are after the direct effect only, this is exactly what you want. So whether a mediator should be adjusted for depends on which effect you want to estimate.'
+      :'<b>Information flows '+a+' → '+b+' → '+c+'.</b> '+a+' changes '+b+', and '+b+' changes '+c+'. That is why '+a+' and '+c+' are associated (r = '+fmt(r0)+'), even though '+a+' may not act directly on '+c+' at all.';
+  }else if(s1Struct==='fork'){
+    t=s1Ctl
+      ?'<b>'+b+' is adjusted.</b> Within each group with the same '+b+', the common driver is missing: the spurious correlation disappears (r ≈ '+fmt(r1)+').<br><b>Consequence:</b> Adjusting is right here. You partial out the common cause.'
+      :'<b>'+b+' is a common cause.</b> When '+b+' is high, '+a+' and '+c+' both tend to be high. This creates a correlation (r = '+fmt(r0)+'), although neither '+a+' acts on '+c+' nor '+c+' on '+a+': a <b>spurious association</b>.';
+  }else{
+    t=s1Ctl
+      ?'<b>'+b+' is adjusted — and that opens the collider.</b> In a group with the same '+b+', the following holds: if '+a+' is low, '+c+' must be high for '+b+' to match. The two explain each other away, and a negative correlation (r = '+fmt(r1)+') arises out of nothing.<br><b>Consequence:</b> Adjusting does harm here. You create an association that does not exist in the world.'
+      :'<b>'+b+' is a common effect.</b> '+a+' and '+c+' influence '+b+', but not each other. Nothing flows between them; the path is closed (r ≈ '+fmt(r0)+').';
+  }
+  el.innerHTML=t;
+}
+function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function drawS1Scatter(){
+  if(STAGE!==1||!s1Cache)return;
+  const c=document.getElementById('sc'),dpr=window.devicePixelRatio||1;
+  const W=c.clientWidth,H=330;if(!W)return;
+  c.width=W*dpr;c.height=H*dpr;c.style.height=H+'px';
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const {data,n,nm}=s1Cache,A=data.A,C=data.C,B=data.B;
+  let ax0=Infinity,ax1=-Infinity,cy0=Infinity,cy1=-Infinity;
+  for(let i=0;i<n;i++){ax0=Math.min(ax0,A[i]);ax1=Math.max(ax1,A[i]);cy0=Math.min(cy0,C[i]);cy1=Math.max(cy1,C[i]);}
+  const pad={l:44,r:14,t:12,b:34},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const xs=v=>pad.l+(v-ax0)/(ax1-ax0)*pw, ys=v=>pad.t+ph-(v-cy0)/(cy1-cy0)*ph;
+  const grid=cv('--grid'),ink2=cv('--ink2'),ink3=cv('--ink3');
+  ctx.strokeStyle=grid;ctx.lineWidth=1;ctx.strokeRect(pad.l,pad.t,pw,ph);
+  ctx.fillStyle=ink2;ctx.font='11px DM Mono, monospace';ctx.textAlign='center';
+  ctx.fillText(nm.A,pad.l+pw/2,H-8);
+  ctx.save();ctx.translate(14,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText(nm.C,0,0);ctx.restore();
+  const idx=Array.from({length:n},(_,i)=>i).sort((i,j)=>B[i]-B[j]);
+  const grp=new Int8Array(n);idx.forEach((i,k)=>grp[i]=Math.min(2,Math.floor(k*3/n)));
+  const cols=[cv('--a2'),cv('--a3'),cv('--a1')],names=['low','medium','high'];
+  const m=Math.min(n,900);
+  for(let i=0;i<m;i++){
+    ctx.fillStyle=s1Ctl?cols[grp[i]]:ink3;
+    ctx.globalAlpha=s1Ctl?.55:.4;
+    ctx.beginPath();ctx.arc(xs(A[i]),ys(C[i]),2.3,0,6.2832);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  const fitLine=(sel,color,dash,wd)=>{
+    let sx=0,sy=0,k=0;for(let i=0;i<n;i++)if(sel(i)){sx+=A[i];sy+=C[i];k++;}
+    if(k<5)return;const mx=sx/k,my=sy/k;let cxy=0,vx=0,mn=Infinity,mxv=-Infinity;
+    for(let i=0;i<n;i++)if(sel(i)){cxy+=(A[i]-mx)*(C[i]-my);vx+=(A[i]-mx)**2;mn=Math.min(mn,A[i]);mxv=Math.max(mxv,A[i]);}
+    const b=cxy/vx,a=my-b*mx;
+    ctx.strokeStyle=color;ctx.lineWidth=wd;ctx.setLineDash(dash);
+    ctx.beginPath();ctx.moveTo(xs(mn),ys(a+b*mn));ctx.lineTo(xs(mxv),ys(a+b*mxv));ctx.stroke();ctx.setLineDash([]);
+  };
+  if(s1Ctl){
+    fitLine(()=>true,ink3,[5,4],1.5);
+    for(let g=0;g<3;g++)fitLine(i=>grp[i]===g,cols[g],[],2.6);
+    ctx.textAlign='left';
+    ctx.fillStyle=ink2;ctx.fillText('Groups by '+nm.B+':',pad.l+8,pad.t+16);
+    for(let g=0;g<3;g++){const x0=pad.l+8+g*74;ctx.fillStyle=cols[g];ctx.fillRect(x0,pad.t+26,9,9);ctx.fillStyle=ink2;ctx.fillText(names[g],x0+13,pad.t+34);}
+    ctx.fillStyle=ink3;ctx.fillText('dashed: all together',pad.l+8,pad.t+54);
+  }else{
+    fitLine(()=>true,cv('--a4'),[],2.6);
+  }
+}
+window.addEventListener('resize',()=>{if(STAGE===1)drawS1Scatter();});
+
+/* ═══════════════════ STUFE 2 ═══════════════════ */
+const PRESETS=[
+  {name:'Confounder',nodes:[['Z','Z',320,70],['X','X',150,270],['Y','Y',490,270]],edges:[['Z','X'],['Z','Y'],['X','Y']],X:'X',Y:'Y',Zs:[],
+   hint:'Z is a <b>confounder</b>: a common cause of X and Y. The path X ← Z → Y is open and creates an association between X and Y that does not come from X. Select Z and click “adjust”: the path is blocked, and r(X, Y) approaches the direct effect.'},
+  {name:'Mediator',nodes:[['X','X',110,200],['M','M',320,90],['Y','Y',530,200]],edges:[['X','M'],['M','Y'],['X','Y']],X:'X',Y:'Y',Zs:[],
+   hint:'M is a <b>mediator</b>: an intermediate station on the way from X to Y. If you adjust for M, you close this causal path. For the total effect of X on Y, the part running through M is then missing. For the direct effect this is intended.'},
+  {name:'Collider',nodes:[['X','X',110,100],['Y','Y',530,100],['C','C',320,290]],edges:[['X','C'],['Y','C']],X:'X',Y:'Y',Zs:[],
+   hint:'C is a <b>collider</b>: a common effect of X and Y. Without adjustment, X and Y are independent. Select C and click “adjust”: the path opens, and a correlation arises.'},
+  {name:'Collider descendant',nodes:[['X','X',110,90],['Y','Y',530,90],['C','C',320,200],['D','D',320,330]],edges:[['X','C'],['Y','C'],['C','D']],X:'X',Y:'Y',Zs:[],w:0.9,
+   hint:'The consequence of a collider also opens the path: adjust for D instead of C. D carries information about C, so adjusting for D acts like a partial adjustment for C.'},
+  {name:'M-Bias',nodes:[['U1','U₁',130,80,1],['U2','U₂',510,80,1],['X','X',70,300],['M','M',320,190],['Y','Y',570,300]],edges:[['U1','X'],['U1','M'],['U2','M'],['U2','Y']],X:'X',Y:'Y',Zs:[],w:0.9,
+   hint:'M looks like a confounder, but on the path X ← U₁ → M ← U₂ → Y it is a collider. Without adjustment this path is closed, and X and Y are separated. Adjust for M and watch the path open up. U₁ and U₂ are unobserved (dashed).'},
+  {name:'Front-Door',nodes:[['U','U',320,60,1],['X','X',110,290],['M','M',320,290],['Y','Y',530,290]],edges:[['U','X',0.8],['U','Y',0.8],['X','M',0.7],['M','Y',0.7]],X:'X',Y:'Y',Zs:[],M:'M',
+   hint:'U is unobserved (dashed) and cannot be adjusted for: the path X ← U → Y stays open, and there is no backdoor way out. But the whole effect runs through M — and M is not directly affected by U. That is enough for <b>front-door</b> estimation: first X → M, then M → Y (adjusted for X), then multiply. Below you see the three conditions and the result. The explanation and the automatic check are directly underneath.'},
+  {name:'Instrument',nodes:[['I','I',90,300],['U','U',320,60,1],['X','X',270,300],['Y','Y',530,300]],edges:[['I','X',0.7],['U','X',0.8],['U','Y',0.8],['X','Y',0.5]],X:'X',Y:'Y',Zs:[],I:'I',
+   hint:'U is unobserved and biases the naive estimator. I (the <b>instrument</b>) shifts X without acting on Y itself and without sharing a cause with Y. Then Cov(I,Y)/Cov(I,X) shows the pure effect of X. Try “Edit graph”: select the arrow I → X and lower its strength — the instrument becomes weak and the estimate scatters. Or draw an arrow I → Y and watch the conditions break.'},
+  {name:'Mixed',nodes:[['W','W',110,70],['Z','Z',290,70],['X','X',110,230],['M','M',320,230],['Y','Y',530,230],['C','C',320,360]],edges:[['W','Z'],['Z','X'],['Z','Y'],['X','M'],['M','Y'],['X','C'],['Y','C']],X:'X',Y:'Y',Zs:[],
+   hint:'A graph with all three building blocks: a causal path via the mediator M, a backdoor path via the confounder Z and a collider C. Check which adjustment changes which path.'}
+];
+let G2={nodes:[],edges:[]},roles={X:null,Y:null,Z:new Set(),M:null,I:null},sel=null,mode='select',drag=null,draft=null,presetIdx=0,editing=false;
+const NR=22;
+
+function buildPresets(){
+  const box=document.getElementById('s2-presets');
+  box.innerHTML=PRESETS.map((p,i)=>'<button class="fbtn'+(i===0?' sel':'')+'" data-i="'+i+'" onclick="loadPreset('+i+')">'+p.name+'</button>').join('');
+}
+function canEdit(){return editing;}
+function applyUi(){
+  const show=(id,on)=>{const e=document.getElementById(id);if(e)e.style.display=on?'':'none';};
+  show('tool-wrap',editing);
+  show('edit-reset',editing);
+  show('edit-info',editing);
+  document.getElementById('edit-toggle').textContent=editing?'End edit mode':'Edit graph (advanced)';
+  document.getElementById('edit-toggle').classList.toggle('sel',editing);
+}
+function toggleEdit(){
+  editing=!editing;
+  if(!editing){if(sel&&sel.t==='e')sel=null;setMode('select');}
+  applyUi();renderGraph();
+}
+function resetEdit(){const keep=editing;loadPreset(presetIdx);editing=keep;applyUi();renderGraph();}
+function loadPreset(i){
+  const p=PRESETS[i];
+  presetIdx=i;
+  editing=false;sel=null;draft=null;drag=null;hiPath=null;
+  G2={nodes:p.nodes.map(n=>({id:n[0],label:n[1],x:n[2],y:n[3],latent:!!n[4]})),edges:p.edges.map(e=>({a:e[0],b:e[1],w:(e[2]!==undefined?e[2]:(p.w||0.6))}))};
+  roles={X:p.X,Y:p.Y,Z:new Set(p.Zs),M:p.M||null,I:p.I||null};
+  document.querySelectorAll('#s2-presets .fbtn').forEach(b=>b.classList.toggle('sel',+b.dataset.i===i));
+  document.getElementById('s2-hint').innerHTML='<b>Idea:</b> '+p.hint;
+  S2PREV=null;S2LAST='';
+  setMode('select');
+  applyUi();
+  renderGraph();renderAnalysis();
+}
+function setMode(m){
+  if(m==='arrow'&&!canEdit())m='select';
+  mode=m;['select','arrow'].forEach(k=>document.getElementById('m-'+k).classList.toggle('sel',k===m));
+  draft=null;renderGraph();
+}
+function nodeById(id){return G2.nodes.find(n=>n.id===id);}
+function wouldCycle(a,b){return a===b||descendantsOf(G2,b).has(a);}
+function addEdge(a,b){
+  if(a===b)return;
+  if(hasEdge(G2,a,b)){toast('This arrow already exists.');return;}
+  if(hasEdge(G2,b,a)){toast('There is already an arrow in the opposite direction between these nodes.');return;}
+  if(wouldCycle(a,b)){toast('That would create a cycle — a DAG must not contain cycles.');return;}
+  G2.edges.push({a,b,w:0.6});sel={t:'e',i:G2.edges.length-1};
+  renderGraph();renderAnalysis();
+}
+function setRole(r){
+  if(r!=='Z')return;
+  if(!sel||sel.t!=='n'){toast('First select a node in the graph.');return;}
+  const id=sel.id,nd=nodeById(id);
+  if(nd.latent){toast('This node is unobserved — you cannot adjust for it.');return;}
+  if(roles.X===id||roles.Y===id){toast('You do not adjust for X and Y themselves.');return;}
+  if(roles.Z.has(id))roles.Z.delete(id);else roles.Z.add(id);
+  renderGraph();renderAnalysis();
+}
+function setEdgeW(v){
+  if(!sel||sel.t!=='e')return;
+  G2.edges[sel.i].w=parseFloat(v);
+  document.getElementById('edge-wv').textContent=parseFloat(v).toFixed(1);
+  renderGraph();renderAnalysis();
+}
+
+/* ── Zeichnen des Graphen ── */
+let hiPath=null;
+function edgeGeom(a,b){
+  const A=nodeById(a),B=nodeById(b),d=Math.hypot(B.x-A.x,B.y-A.y)||1,ux=(B.x-A.x)/d,uy=(B.y-A.y)/d;
+  return {x1:A.x+ux*(NR+2),y1:A.y+uy*(NR+2),x2:B.x-ux*(NR+5),y2:B.y-uy*(NR+5)};
+}
+function renderGraph(){
+  const svg=document.getElementById('s2-svg');
+  let h='<defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--ink2)"/></marker>'
+       +'<marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" style="fill:var(--a4)"/></marker></defs>';
+  const CC=s2Calc(),marks={};
+  if(CC){
+    CC.paths.forEach(p=>p.steps.forEach(st=>{if(st.kind!=='collider'&&!st.open&&!marks[st.id])marks[st.id]=['✕ blocked','var(--a3)'];}));
+    CC.paths.forEach(p=>p.steps.forEach(st=>{if(st.kind==='collider'&&st.open)marks[st.id]=['◉ opened','var(--a1)'];}));
+    CC.paths.filter(p=>p.open).forEach(p=>{
+      for(let i=0;i<p.path.length-1;i++){const A=nodeById(p.path[i]),B=nodeById(p.path[i+1]);
+        h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:'+(p.causal?'var(--a2)':'var(--a1)')+';stroke-width:10;opacity:.26;stroke-linecap:round"/>';}
+    });
+  }
+  if(hiPath){
+    for(let i=0;i<hiPath.length-1;i++){
+      const a=hiPath[i],b=hiPath[i+1],A=nodeById(a),B=nodeById(b);
+      h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" style="stroke:var(--a4);stroke-width:11;opacity:.28;stroke-linecap:round"/>';
+    }
+  }
+  G2.edges.forEach((e,i)=>{
+    const g=edgeGeom(e.a,e.b),isSel=sel&&sel.t==='e'&&sel.i===i,sw=1.2+Math.abs(e.w)*2.2;
+    h+='<line x1="'+g.x1+'" y1="'+g.y1+'" x2="'+g.x2+'" y2="'+g.y2+'" marker-end="url(#ar2)" style="stroke:'+(isSel?'var(--a4)':'var(--ink2)')+';stroke-width:'+sw+(e.w<0?';stroke-dasharray:6 4':'')+'"/>';
+    h+='<line data-e="'+i+'" x1="'+g.x1+'" y1="'+g.y1+'" x2="'+g.x2+'" y2="'+g.y2+'" style="stroke:transparent;stroke-width:16;cursor:pointer"/>';
+  });
+  if(draft){
+    const A=nodeById(draft.from);
+    h+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+draft.x+'" y2="'+draft.y+'" marker-end="url(#ar3)" style="stroke:var(--a4);stroke-width:2;stroke-dasharray:5 4"/>';
+  }
+  G2.nodes.forEach(n=>{
+    const isSel=sel&&sel.t==='n'&&sel.id===n.id,isX=roles.X===n.id,isY=roles.Y===n.id,isZ=roles.Z.has(n.id),isM=roles.M===n.id,isI=roles.I===n.id;
+    const stroke=isX?'var(--a2)':isY?'var(--a4)':isM?'var(--a3)':isI?'var(--a6)':isSel?'var(--a4)':'var(--ink2)',sw=(isX||isY||isM||isI||isSel)?3.2:2;
+    h+='<g data-n="'+n.id+'" style="cursor:'+(mode==='arrow'?'crosshair':(canEdit()?'grab':'pointer'))+'">';
+    if(isZ)h+='<rect x="'+(n.x-NR)+'" y="'+(n.y-NR)+'" width="'+(2*NR)+'" height="'+(2*NR)+'" style="fill:var(--a6);stroke:'+stroke+';stroke-width:'+sw+'"/>';
+    else h+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+NR+'" style="fill:var(--paper);stroke:'+stroke+';stroke-width:'+sw+(n.latent?';stroke-dasharray:5 4':'')+'"/>';
+    h+='<text x="'+n.x+'" y="'+(n.y+6)+'" text-anchor="middle" font-size="'+(n.label.length<=2?17:n.label.length<=4?13:10)+'" style="fill:'+(isZ?'var(--paper)':(n.latent?'var(--ink2)':'var(--ink)'))+(n.latent?';font-style:italic':'')+';pointer-events:none">'+n.label+'</text>';
+    const badge=isX?['X · cause','var(--a2)']:isY?['Y · effect','var(--a4)']:isM?['front-door candidate','var(--a3)']:isI?['instrument candidate','var(--a6)']:n.latent?['unobserved','var(--ink3)']:null;
+    if(badge)h+='<text x="'+n.x+'" y="'+(n.y-NR-6)+'" text-anchor="middle" font-size="12" style="fill:'+badge[1]+';paint-order:stroke;stroke:var(--bg);stroke-width:4px;pointer-events:none">'+badge[0]+'</text>';
+    if(marks[n.id]){
+      const mk=marks[n.id];
+      if(n.y>350)h+='<text x="'+(n.x+NR+6)+'" y="'+(n.y+5)+'" font-size="12" style="fill:'+mk[1]+';pointer-events:none">'+mk[0]+'</text>';
+      else h+='<text x="'+n.x+'" y="'+(n.y+NR+15)+'" text-anchor="middle" font-size="12" style="fill:'+mk[1]+';pointer-events:none">'+mk[0]+'</text>';
+    }
+    h+='</g>';
+  });
+  svg.innerHTML=h;
+  // Kantensteuerung
+  const ec=document.getElementById('edge-ctl');
+  if(canEdit()&&sel&&sel.t==='e'&&G2.edges[sel.i]){
+    const e=G2.edges[sel.i];ec.style.display='flex';
+    document.getElementById('edge-lbl').textContent='Strength '+labelOf(G2,e.a)+' → '+labelOf(G2,e.b);
+    document.getElementById('edge-w').value=e.w;document.getElementById('edge-wv').textContent=e.w.toFixed(1);
+  }else ec.style.display='none';
+  document.getElementById('r-z').classList.toggle('sel',!!(sel&&sel.t==='n'&&roles.Z.has(sel.id)));
+  const sn=document.getElementById('sel-name'),sd=sel&&sel.t==='n'?nodeById(sel.id):null;
+  sn.textContent=sd?sd.label+(sd.latent?' (unobserved)':''):(sel&&sel.t==='e'?'(an arrow)':'none');
+}
+function svgPt(e){
+  const svg=document.getElementById('s2-svg'),r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal;
+  return {x:(e.clientX-r.left)/r.width*vb.width,y:(e.clientY-r.top)/r.height*vb.height};
+}
+function nodeAt(p){
+  let best=null,bd=NR+10;
+  for(const n of G2.nodes){const d=Math.hypot(n.x-p.x,n.y-p.y);if(d<bd){bd=d;best=n;}}
+  return best;
+}
+(function wireSvg(){
+  const svg=document.getElementById('s2-svg');
+  svg.addEventListener('pointerdown',e=>{
+    const p=svgPt(e),nd=e.target.closest('[data-n]'),ed=e.target.closest('[data-e]');
+    if(mode==='select'){
+      if(nd){const n=nodeById(nd.dataset.n);sel={t:'n',id:n.id};if(canEdit()){drag={id:n.id,dx:p.x-n.x,dy:p.y-n.y,moved:false};svg.setPointerCapture(e.pointerId);}}
+      else if(ed&&canEdit()){sel={t:'e',i:+ed.dataset.e};}
+      else sel=null;
+      renderGraph();
+    }else if(mode==='arrow'){
+      if(nd){draft={from:nd.dataset.n,x:p.x,y:p.y};svg.setPointerCapture(e.pointerId);renderGraph();}
+    }
+  });
+  svg.addEventListener('pointermove',e=>{
+    const p=svgPt(e);
+    if(drag){drag.moved=true;const n=nodeById(drag.id);n.x=Math.max(NR,Math.min(640-NR,p.x-drag.dx));n.y=Math.max(NR+8,Math.min(400-NR,p.y-drag.dy));renderGraph();}
+    else if(draft){draft.x=p.x;draft.y=p.y;renderGraph();}
+  });
+  svg.addEventListener('pointerup',e=>{
+    if(draft){const p=svgPt(e),t=nodeAt(p),from=draft.from;draft=null;if(t&&t.id!==from)addEdge(from,t.id);else renderGraph();}
+    if(drag){drag=null;renderAnalysis();}
+  });
+})();
+
+/* ── Analyse ── */
+function renderAnalysis(){renderPaths();renderEstimates();}
+let S2PREV=null,S2LAST='';
+function s2Key(){return JSON.stringify([G2.nodes.map(n=>n.id+(n.latent?'*':'')),G2.edges.map(e=>e.a+'>'+e.b),roles.X,roles.Y]);}
+function s2Calc(){
+  if(!roles.X||!roles.Y||!nodeById(roles.X)||!nodeById(roles.Y))return null;
+  const set=new Set([...roles.Z].filter(z=>nodeById(z)&&!nodeById(z).latent));
+  return {set,paths:allPaths(G2,roles.X,roles.Y,300).map(p=>analysePath(G2,p,set))};
+}
+function s2Plain(p){return pathString(G2,p.path).map(s=>s.v).join(' ');}
+function s2EffectHtml(C){
+  const X=roles.X,Y=roles.Y,xl=labelOf(G2,X),yl=labelOf(G2,Y),dps=directedPaths(G2,X,Y);
+  if(!dps.length){
+    return '<b>In this DAG there is no directed causal path between '+xl+' and '+yl+'.</b> An observed association can therefore only arise via non-causal paths.'
+      +(C.paths.some(p=>p.open)?' At least one is open here: you expect an association even though '+xl+' has no effect.':' All are blocked here: you expect no association.');
+  }
+  const de=G2.edges.find(e=>e.a===X&&e.b===Y),dir=de?de.w:0,tot=trueEffect(G2,X,Y),ind=tot-dir,indP=dps.filter(p=>p.length>2);
+  const f=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+  let h='<div class="effl"><b>Direct effect:</b> effect via the direct arrow '+xl+' → '+yl+(de?'. Here: '+f(dir)+'.':'. This arrow does not exist in this DAG, so the direct effect is 0.')+'</div>'
+    +'<div class="effl"><b>Indirect effect:</b> effect via directed mediation paths'+(indP.length?', here '+indP.map(p=>p.map(v=>labelOf(G2,v)).join(' → ')).join('; ')+'. Together: '+f(ind)+'.':'. There is none here, so the indirect effect is 0.')+'</div>'
+    +'<div class="effl"><b>Total effect</b> = direct effect + indirect effect: '+f(tot)+' = '+f(dir)+' '+(ind<0?'−':'+')+' '+Math.abs(ind).toFixed(2)+'</div>';
+  const cp=C.paths.filter(p=>p.causal),cOpen=cp.filter(p=>p.open),cBlk=cp.filter(p=>!p.open),nc=C.paths.filter(p=>!p.causal&&p.open);
+  let a;
+  if(!cOpen.length)a='All causal paths are blocked. Nothing of the effect of '+xl+' is left in the estimate.';
+  else if(cBlk.length&&cOpen.length===1&&cOpen[0].path.length===2)a='Only the direct arrow is open. The estimate refers to the direct effect.';
+  else if(cBlk.length)a='Some of the causal paths are blocked. The estimate captures only part of the total effect.';
+  else a='All causal paths are open. The estimate refers to the total effect.';
+  const b=nc.length
+    ?'In addition, '+nc.length+' non-causal '+(nc.length>1?'paths are':'path is')+' open: the observed association contains bias ('+(nc.some(p=>p.steps.some(s=>s.kind==='collider'))?'collider bias':'confounding')+').'
+    :'All non-causal paths are closed: no bias from confounding paths remains.';
+  return h+'<div class="effl" style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--grid)"><b>With your current selection:</b> '+a+' '+b+'</div>';
+}
+function renderPaths(){
+  if(STAGE!==2)return;
+  const verdict=document.getElementById('s2-verdict'),list=document.getElementById('s2-paths'),chg=document.getElementById('s2-change'),eff=document.getElementById('s2-effect');
+  const C=s2Calc();
+  const zl=C?[...C.set].map(z=>labelOf(G2,z)):[];
+  document.getElementById('s2-r1-lbl').textContent='r(X, Y'+(zl.length?' | '+zl.join(', '):'')+') — '+(zl.length?'with adjustment':'nothing adjusted');
+  document.getElementById('s2-r0').textContent='—';document.getElementById('s2-r1').textContent='—';
+  if(!C){
+    verdict.className='verdict';verdict.innerHTML='First define <b>X</b> and <b>Y</b> so that the paths can be analyzed.';
+    list.innerHTML='';chg.innerHTML='';eff.innerHTML='First define X and Y so that the paths can be analyzed.';S2PREV=null;S2LAST='';return;
+  }
+  const set=C.set,paths=C.paths,anyOpen=paths.some(p=>p.open);
+  const xl=labelOf(G2,roles.X),yl=labelOf(G2,roles.Y);
+  const ctxt=zl.length?' given '+zl.join(', '):' without adjustment';
+  if(!paths.length){
+    verdict.className='verdict vshut';
+    verdict.innerHTML='There is no path between <b>'+xl+'</b> and <b>'+yl+'</b>: the two are <b>d-separated</b>'+ctxt+'.';
+  }else if(anyOpen){
+    const nOpen=paths.filter(p=>p.open).length;
+    verdict.className='verdict vopen';
+    verdict.innerHTML='<b>'+xl+'</b> and <b>'+yl+'</b> are <b>d-connected</b>'+ctxt+': '+(paths.length===1?'the path is open':(nOpen===1?'1 of '+paths.length+' paths is open':nOpen+' of '+paths.length+' paths are open'))+'. Information can flow, so you expect an association.';
+  }else{
+    verdict.className='verdict vshut';
+    verdict.innerHTML='<b>'+xl+'</b> and <b>'+yl+'</b> are <b>d-separated</b>'+ctxt+': '+(paths.length>1?'all '+paths.length+' paths are':'the only path is')+' blocked. You expect no association.';
+  }
+  // Was hat sich geändert?
+  const key=s2Key(),sig={},zNow=[...set].sort().join(',');
+  paths.forEach(p=>{sig[p.path.join('|')]=p.open;});
+  if(S2PREV&&S2PREV.key===key&&S2PREV.z!==zNow){
+    const prevZ=new Set(S2PREV.z?S2PREV.z.split(','):[]);
+    const added=[...set].filter(z=>!prevZ.has(z)),removed=[...prevZ].filter(z=>!set.has(z)),diffZ=new Set(added.concat(removed));
+    const act=[];
+    if(added.length)act.push('<b>'+added.map(z=>labelOf(G2,z)).join(', ')+'</b> adjusted');
+    if(removed.length)act.push('<b>'+removed.map(z=>labelOf(G2,z)).join(', ')+'</b> no longer adjusted');
+    const items=[];
+    paths.forEach(p=>{
+      const k=p.path.join('|');
+      if(S2PREV.sig[k]===undefined||S2PREV.sig[k]===p.open)return;
+      const st=p.steps.filter(s=>diffZ.has(s.id)||(s.kind==='collider'&&[...descendantsOf(G2,s.id)].some(d=>diffZ.has(d))));
+      const where=st.length?' At the station <b>'+st.map(s=>labelOf(G2,s.id)).join(', ')+'</b> ('+st.map(s=>s.why).join('; ')+').':'';
+      let folge,cls;
+      if(p.causal&&!p.open){folge='A <b>causal path</b> is closed: the part of the effect running through it is lost.';cls='b';}
+      else if(p.causal){folge='A <b>causal path</b> is open again.';cls='g';}
+      else if(!p.open){folge='A <b>non-causal path</b> is closed: one source of bias less.';cls='g';}
+      else{folge='A <b>non-causal path</b> is opened'+(p.steps.some(s=>s.kind==='collider')?' (a collider opens up)':'')+': a spurious association can arise.';cls='b';}
+      items.push('<div class="'+cls+'" style="margin-top:.3rem">'+(cls==='g'?'✓ ':'✗ ')+'<b>'+s2Plain(p)+'</b>: '+(S2PREV.sig[k]?'open':'blocked')+' → '+(p.open?'open':'blocked')+'.'+where+' '+folge+'</div>');
+    });
+    S2LAST=act.join(' and ')+':'+(items.length?items.join(''):'<div class="n" style="margin-top:.3rem">This changes no path between '+xl+' and '+yl+'.</div>');
+  }else if(!(S2PREV&&S2PREV.key===key))S2LAST='';
+  S2PREV={key,z:zNow,sig};
+  chg.innerHTML=S2LAST?'<div class="s-title" style="margin-top:.2rem">What changed?</div><div class="lastc">'+S2LAST+'</div>'
+    :'<div class="hint-box" style="margin-top:0">Select a node and click “adjust”. Here you will then see which path changes at which station.</div>';
+  // Pfadliste (kausale zuerst, dann offene)
+  paths.sort((a,b)=>(b.causal-a.causal)||(b.open-a.open));
+  list.innerHTML=paths.map((p,i)=>{
+    const str=pathString(G2,p.path).map(s=>s.t==='n'?'<span>'+s.v+'</span>':'<span class="arr">'+s.v+'</span>').join('');
+    const nodes=p.steps.length?p.steps.map(s=>'<div><span class="'+(s.open?'ok':'no')+'">'+(s.open?'●':'✕')+'</span> '+labelOf(G2,s.id)+': '+s.why+'</div>').join(''):'direct arrow — nothing can block it';
+    return '<div class="pitem '+(p.open?'isopen':'isshut')+'" data-pi="'+i+'"><div class="pstr">'+str
+      +'<span class="badge '+(p.open?'open':'shut')+'">'+(p.open?'open':'blocked')+'</span>'
+      +'<span class="badge '+(p.causal?'kaus':'nk')+'">'+(p.causal?'causal':'non-causal')+'</span></div><div class="pnodes">'+nodes+'</div></div>';
+  }).join('');
+  list.querySelectorAll('.pitem').forEach(el=>{
+    const p=paths[+el.dataset.pi];
+    el.addEventListener('mouseenter',()=>{hiPath=p.path;renderGraph();});
+    el.addEventListener('mouseleave',()=>{hiPath=null;renderGraph();});
+  });
+  eff.innerHTML=s2EffectHtml(C);
+  // simulierte Daten (visuelle Gegenprobe)
+  const data=simulate(G2,3000);
+  const r0=partialCorr(data,roles.X,roles.Y,[]),Zarr=[...set].filter(z=>z!==roles.X&&z!==roles.Y);
+  const r1=Zarr.length?partialCorr(data,roles.X,roles.Y,Zarr):r0;
+  document.getElementById('s2-r0').textContent=isNaN(r0)?'—':fmt(r0);
+  document.getElementById('s2-r1').textContent=isNaN(r1)?'—':fmt(r1);
+}
+
+
+/* ═══════════════════ Effektschätzung ═══════════════════ */
+function withoutOut(G,id){return {nodes:G.nodes,edges:G.edges.filter(e=>e.a!==id)};}
+function dsepIn(G,x,y,Zset){return !allPaths(G,x,y,500).some(pp=>analysePath(G,pp,Zset).open);}
+function estimators(data,X,Y,Zs,M,I){
+  const o={naive:null,adj:null,fd:null,iv:null};
+  const b=olsCoefs(data,Y,[X]);o.naive=b?b[0]:null;
+  if(Zs.length){const c=olsCoefs(data,Y,[X].concat(Zs));o.adj=c?c[0]:null;}
+  if(M){const b1=olsCoefs(data,M,[X]),b2=olsCoefs(data,Y,[M,X]);if(b1&&b2)o.fd=b1[0]*b2[0];}
+  if(I){const C=covMat(data,[I,X,Y]);o.iv=Math.abs(C[0][1])>1e-9?C[0][2]/C[0][1]:null;}
+  return o;
+}
+function ckRow(ok,txt){return '<div class="ck"><span class="'+(ok?'y':'n')+'">'+(ok?'✓':'✗')+'</span><span>'+txt+'</span></div>';}
+function renderEstimates(){
+  if(STAGE!==2)return;
+  const box=document.getElementById('s2-est-body');
+  if(!roles.X||!roles.Y||!nodeById(roles.X)||!nodeById(roles.Y)){box.innerHTML='<div class="hint-box">First define X and Y.</div>';return;}
+  const X=roles.X,Y=roles.Y,xl=labelOf(G2,X),yl=labelOf(G2,Y);
+  const Zs=[...roles.Z].filter(z=>nodeById(z)&&!nodeById(z).latent&&z!==X&&z!==Y);
+  const M=(roles.M&&nodeById(roles.M)&&roles.M!==X&&roles.M!==Y)?roles.M:null;
+  const I=(roles.I&&nodeById(roles.I)&&roles.I!==X&&roles.I!==Y)?roles.I:null;
+  const truth=trueEffect(G2,X,Y);
+  // Kriterien
+  let fdOk=null,fdHtml='',ivOk=null,ivHtml='';
+  if(M){
+    const ml=labelOf(G2,M),dps=directedPaths(G2,X,Y);
+    const c1=dps.length>0&&dps.every(p=>p.includes(M));
+    const c2=dsepIn(withoutOut(G2,X),X,M,new Set());
+    const c3=dsepIn(withoutOut(G2,M),M,Y,new Set([X]));
+    fdOk=c1&&c2&&c3;
+    fdHtml='<div class="crit"><b>Is '+ml+' suitable as a front-door mediator? '+(fdOk?'Yes.':'No.')+'</b> Three conditions are checked:'
+      +ckRow(c1,'<b>'+ml+'</b> intercepts all causal paths from '+xl+' to '+yl+' (no direct arrow, no path bypassing '+ml+').')
+      +ckRow(c2,'No open backdoor path from '+xl+' to '+ml+' (nothing in common biases this step).')
+      +ckRow(c3,'All backdoor paths from '+ml+' to '+yl+' are blocked by '+xl+' (that is why you adjust for '+xl+' in step 2).')
+      +'<div class="calc"><b>How it is computed:</b> Step 1 estimates the effect '+xl+' → '+ml+' (unbiased because condition 2 holds). Step 2 estimates '+ml+' → '+yl+' while adjusting for '+xl+' (this blocks the backdoor path that runs via '+xl+'). The product of the two coefficients is the effect of '+xl+' on '+yl+' — without you having to know the unobserved cause.</div></div>';
+  }
+  if(I){
+    const il=labelOf(G2,I),dps=directedPaths(G2,I,Y);
+    const c1=!dsepIn(G2,I,X,new Set());
+    const c2=dps.every(p=>p.includes(X));
+    const c3=dsepIn(withoutOut(G2,I),I,Y,new Set());
+    ivOk=c1&&c2&&c3;
+    ivHtml='<div class="crit"><b>Is '+il+' suitable as an instrument? '+(ivOk?'Yes.':'No.')+'</b> Three conditions are checked:'
+      +ckRow(c1,'<b>Relevance:</b> '+il+' and '+xl+' are associated (there is an open path).')
+      +ckRow(c2,'<b>Exclusion:</b> '+il+' acts on '+yl+' only via '+xl+' (no direct path bypassing '+xl+').')
+      +ckRow(c3,'<b>Independence:</b> '+il+' shares no cause with '+yl+' (no open backdoor path from '+il+' to '+yl+').')
+      +'<div class="calc"><b>How it is computed:</b> effect = Cov('+il+', '+yl+') / Cov('+il+', '+xl+'). The numerator shows how strongly '+il+' shifts '+yl+', the denominator how strongly '+il+' shifts '+xl+'. Because '+il+' acts only via '+xl+', the ratio is the effect of '+xl+' on '+yl+' — unbiased by everything that influences both '+xl+' and '+yl+'. The weaker '+il+' acts on '+xl+', the more the estimate scatters.</div></div>';
+  }
+  // Schätzungen: aktueller Datensatz + 30 Wiederholungen
+  const n=3000,R=30,keep=SEED;
+  const cur=estimators(simulate(G2,n),X,Y,Zs,M,I);
+  const acc={naive:[],adj:[],fd:[],iv:[]};
+  for(let k=0;k<R;k++){SEED=5000+k;const e=estimators(simulate(G2,n),X,Y,Zs,M,I);for(const key in acc)if(e[key]!==null&&isFinite(e[key]))acc[key].push(e[key]);}
+  SEED=keep;
+  const f=v=>(v===null||v===undefined||!isFinite(v))?'—':(v>=0?'+':'−')+Math.abs(v).toFixed(2);
+  const row=(name,sub,key,validity)=>{
+    if(key==='truth')return '<div class="erow"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">'+f(truth)+'</div><div class="em">—</div><div class="eu">Referenz</div></div>';
+    const a=acc[key],has=cur[key]!==null&&a.length>0;
+    if(!has)return '<div class="erow dim"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">not set</div></div>';
+    const m=mean(a),sd=sdOf(a),unb=Math.abs(m-truth)<0.05;
+    let urteil;
+    if(validity===false)urteil='<span class="bad">conditions violated</span>';
+    else urteil='<span class="'+(unb?'good':'bad')+'">'+(unb?'unbiased':'biased')+'</span> (Ø '+(m-truth>=0?'+':'−')+Math.abs(m-truth).toFixed(2)+')';
+    return '<div class="erow'+(validity===false?' dim':'')+'"><div class="en">'+name+'<small>'+sub+'</small></div><div class="ev">'+f(cur[key])+'</div><div class="em">Ø '+f(m)+' ± '+sd.toFixed(2)+'</div><div class="eu">'+urteil+'</div></div>';
+  };
+  const zl=Zs.map(z=>labelOf(G2,z)).join(', ');
+  let h='<div class="etab"><div class="erow eh"><div>Method</div><div>this data</div><div>30 datasets (M ± SD)</div><div>Verdict</div></div>'
+    +row('True effect','Sum of the path products in the graph','truth')
+    +row('Naive','Y on X, without adjustment','naive')
+    +(Zs.length?row('With adjustment','Y on X + '+zl,'adj'):'<div class="erow dim"><div class="en">With adjustment<small>no adjustment variable chosen</small></div><div class="ev">—</div><div class="em">—</div><div class="eu">choose Z in the graph above</div></div>')
+    +(M?row('Front-door','Product of two partial effects via the mediator','fd',fdOk):'')
+    +(I?row('Instrument','Cov(I,Y) / Cov(I,X)','iv',ivOk):'')
+    +'</div>';
+  const sp=document.getElementById('s2-special'),tag='<div class="adv-tag">Advanced · special case with unobserved confounding</div>';
+  let spH='';
+  if(M){
+    const ml=labelOf(G2,M);
+    spH+='<div class="special">'+tag+'<div class="ex" style="margin-top:0"><b>Idea:</b> A common cause of '+xl+' and '+yl+' stays unobserved, so you cannot adjust for it. The way out: if the whole effect runs through a mediator <b>'+ml+'</b>, you estimate the effect in two parts ('+xl+' → '+ml+' and '+ml+' → '+yl+') and multiply them.</div>'
+      +'<div style="margin-top:.5rem;font-size:.68rem"><b>The three front-door conditions</b></div><ol>'
+      +'<li><b>'+ml+'</b> intercepts all causal paths from '+xl+' to '+yl+'.</li>'
+      +'<li>There is no open backdoor path between '+xl+' and '+ml+'.</li>'
+      +'<li>All backdoor paths from '+ml+' to '+yl+' are blocked by '+xl+'.</li></ol>'
+      +fdHtml+'</div>';
+  }
+  if(I){
+    const il=labelOf(G2,I);
+    spH+='<div class="special">'+tag+'<div class="ex" style="margin-top:0"><b>Idea:</b> The instrument <b>'+il+'</b> shifts '+xl+' “from outside” without having anything to do with '+yl+' itself — except via '+xl+'. The part of the variation in '+xl+' that comes from '+il+' is therefore free of the unobserved bias.</div>'
+      +'<div style="margin-top:.5rem;font-size:.68rem"><b>The three instrument conditions</b></div><ol>'
+      +'<li><b>Relevance:</b> '+il+' influences '+xl+'.</li>'
+      +'<li><b>Exclusion:</b> '+il+' acts on '+yl+' only via '+xl+'.</li>'
+      +'<li><b>Independence:</b> '+il+' shares no cause with '+yl+'.</li></ol>'
+      +ivHtml+'</div>';
+  }
+  sp.innerHTML=spH;sp.style.display=spH?'':'none';
+  h+='<div class="hint-box"><b>How to read this:</b> “Biased” means that the method is off on average across many datasets (by more than 0.05 from the true value). The spread (±) shows how much a single dataset deviates from the mean — it grows with weak instruments.</div>';
+  box.innerHTML=h;
+}
+
+
+/* ═══════════════════ Start ═══════════════════ */
+EST='total';ADJ=ADJS.total;syncTaskUi();
+buildPresets();
+loadPreset(0);
+s1Redraw();
+</script>
+</body>
+</html>
