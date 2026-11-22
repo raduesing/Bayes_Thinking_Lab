@@ -150,6 +150,9 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
 .fit-table td{padding:.42rem .5rem;border-bottom:1px solid var(--grid);color:var(--ink);vertical-align:top}
 .fit-table tr.best td{background:color-mix(in srgb, var(--a6) 12%, transparent);font-weight:500}
 .fit-role-tag{font-size:.58rem;padding:.06rem .38rem;border:1px solid var(--border);color:var(--ink3);margin-left:.4rem;white-space:nowrap}
+.fit-table td.fit-bad{color:var(--a1);font-weight:500}
+#btn-normal.sel{border-color:var(--a2);color:var(--a2)}
+#btn-normal:disabled{opacity:.55;cursor:default}
 .fit-swatch{display:inline-block;width:9px;height:9px;margin-right:.4rem;vertical-align:middle}
 
 /* ── NEXT-STEP CARDS (static, below learn cards) ── */
@@ -568,6 +571,7 @@ textarea{width:100%;min-height:5rem;resize:vertical;line-height:1.6}
     </div>
     <label class="ctrl-group ctrl-chk"><input type="checkbox" id="chk-x" checked onchange="runFit()"><span class="ctrl-lbl">Include <span class="s2t" data-k="nom">group</span> in the model</span></label>
     <button class="cbtn" onclick="regenData()">↺ Generate new data</button>
+    <button class="cbtn" id="btn-normal" onclick="toggleNormal()" aria-pressed="false" title="Fit the normal distribution as an extra candidate: the standard likelihood many people know. It often fits poorly, but sometimes it is good enough.">＋ Normal for comparison</button>
     <div class="csep"></div>
     <button class="cbtn" id="btn-owndata" onclick="toggleOwnData()">✎ Paste your own data</button>
   </div>
@@ -1038,10 +1042,10 @@ const SCENARIOS = {
                         disc:false, needsN:false, fams:['student_t','normal'],
                         gen:(g,d)=>+(100+5*d*g+8*tSample(5)).toFixed(1)},
   cont_skew_unbounded: {title:'Continuous, clearly skewed', ex:'e.g. an easy test: most do well, a few fall far behind', term:'Skew-Normal',
-                        disc:false, needsN:false, fams:['skew_normal','student_t','normal'],
+                        disc:false, needsN:false, fams:['skew_normal','student_t'],
                         gen:(g,d)=>+(100+5*d*g+18*snSample(4)).toFixed(1)},
   cont_positive_skew:  {title:'Positive values only, usually right-skewed', ex:'e.g. reaction times, income', term:'Lognormal · Gamma · Inverse Gaussian · ExGaussian',
-                        disc:false, needsN:false, fams:['lognormal','gamma','inverse_gaussian','exgaussian','normal'],
+                        disc:false, needsN:false, fams:['lognormal','gamma','inverse_gaussian','exgaussian'],
                         gen:(g,d)=>Math.round(Math.exp(Math.log(500)+0.1*d*g+0.3*randn()))},
   count_homog:         {title:'Number of events, spread as expected', ex:'everyone has the same rate, e.g. counts under lab conditions', term:'homogeneous · Poisson',
                         disc:true,  needsN:false, fams:['poisson','negbin'],
@@ -1056,7 +1060,7 @@ const SCENARIOS = {
                         disc:true,  needsN:true,  fams:['beta_binomial','binomial'],
                         gen:(g,d,ex)=>{ const p=lgt(-0.6+0.4*d*g); return binomSample(ex.n,betaSample(4*p,4*(1-p))); }},
   proportion:          {title:'Proportion between 0 and 1', ex:'e.g. share of time spent in a state', term:'Beta',
-                        disc:false, needsN:false, fams:['beta','normal'],
+                        disc:false, needsN:false, fams:['beta'],
                         gen:(g,d)=>{ const p=lgt(-0.4+0.4*d*g); return +clip(betaSample(10*p,10*(1-p)),0.001,0.999).toFixed(3); }},
 };
 
@@ -1457,8 +1461,12 @@ const CF = {
   normal:{label:'Normal', brms:'gaussian()', link:'identity',
     dom:()=>true, zt:y=>y,
     aux0:c=>[Math.log(Math.sqrt(c.s2))],
-    ll:(y,e,a)=>logNormalPdf(y,e,Math.exp(a[0])),
-    smp:(e,a)=>e+Math.exp(a[0])*randn(),
+    ll:(y,e,a,ex)=>{ const s=Math.exp(a[0]);
+      if(!(ex&&ex.disc)) return logNormalPdf(y,e,s);
+      // discrete data: P(y−0.5 < Y < y+0.5) — a probability like the PMFs it is compared with
+      const pr=Phi((y+0.5-e)/s)-Phi((y-0.5-e)/s);
+      return pr>1e-12?Math.log(pr):logNormalPdf(y,e,s); },
+    smp:(e,a,ex)=>{ const v=e+Math.exp(a[0])*randn(); return ex&&ex.disc?Math.round(v):v; },
     fa:a=>'σ='+fx(Math.exp(a[0]))},
   student_t:{label:'Student-t', brms:'student()', link:'identity',
     dom:()=>true, zt:y=>y,
@@ -1622,6 +1630,7 @@ function regenData(){
   const ex=sc.needsN?{n:n}:{};
   const N=120, y=[], x=[];
   for(let i=0;i<N;i++){ const g=i<N/2?0:1; x.push(g); y.push(sc.gen(g,d,ex)); }
+  ex.disc=sc.disc;
   S2.y=y; S2.x=x; S2.ex=ex; S2.hasX=true; S2.xs=[0,1]; S2.binary=true; S2.xlab=['Group A','Group B'];
   S2.disc=sc.disc;
   S2.jit=y.map(()=>Math.random()-0.5);
@@ -1646,7 +1655,7 @@ function useOwnData(){
   if(y.length<6){ showToast('Please enter at least 6 observations.',4200); return; }
   const sc=SCENARIOS[document.getElementById('sel-scenario').value];
   const n=+document.getElementById('inp-n').value||10;
-  S2.y=y; S2.x=x; S2.ex=sc.needsN?{n:n}:{}; S2.hasX=hasX; S2.disc=sc.disc;
+  S2.y=y; S2.x=x; S2.ex=Object.assign(sc.needsN?{n:n}:{},{disc:sc.disc}); S2.hasX=hasX; S2.disc=sc.disc;
   const xs=[...new Set(x)].sort((a,b)=>a-b);
   S2.xs=xs; S2.binary=xs.length<=2; S2.xlab=xs.map(v=>'x = '+v);
   S2.jit=y.map(()=>Math.random()-0.5);
@@ -1654,12 +1663,26 @@ function useOwnData(){
   runFit();
 }
 
+// Normal as an optional extra candidate (many only know the Normal likelihood)
+const NORMAL_LBL={off:'＋ Normal for comparison',on:'✓ Normal in comparison',fixed:'Normal is already a regular candidate here.',title:'Fit the normal distribution as an extra candidate: the standard likelihood many people know. It often fits poorly, but sometimes it is good enough.'};
+function toggleNormal(){ S2.withNormal=!S2.withNormal; syncNormalBtn(); runFit(); }
+function syncNormalBtn(){
+  const b=document.getElementById('btn-normal'); if(!b) return;
+  const fixed=SCENARIOS[document.getElementById('sel-scenario').value].fams.includes('normal');
+  const on=fixed||S2.withNormal;
+  b.disabled=fixed; b.classList.toggle('sel',on); b.setAttribute('aria-pressed',String(on));
+  b.textContent=on?NORMAL_LBL.on:NORMAL_LBL.off; b.title=fixed?NORMAL_LBL.fixed:NORMAL_LBL.title;
+}
+// possible range of the outcome per scenario → share of impossible predictions
+const SC_RANGE={cont_positive_skew:v=>v>0, count_homog:v=>v>=0, count_hetero:v=>v>=0,
+  sum_homog_r:(v,ex)=>v>=0&&v<=ex.n, sum_hetero_r:(v,ex)=>v>=0&&v<=ex.n, proportion:v=>v>0&&v<1};
 function runFit(){
   const sc=SCENARIOS[document.getElementById('sel-scenario').value];
   const useX=S2.hasX && document.getElementById('chk-x').checked;
   S2.useX=useX;
   S2.skipped=[];
-  const keys=sc.fams.filter(k=>{
+  const fams=sc.fams.concat(S2.withNormal&&!sc.fams.includes('normal')?['normal']:[]);
+  const keys=fams.filter(k=>{
     const ok=S2.y.every(v=>CF[k].dom(v,S2.ex));
     if(!ok) S2.skipped.push(CF[k].label);
     return ok;
@@ -1668,6 +1691,10 @@ function runFit(){
   S2.res.sort((a,b)=>a.aic-b.aic);
   S2.gridX=S2.binary?S2.xs.slice():Array.from({length:25},(_,i)=>S2.xs[0]+i/24*(S2.xs[S2.xs.length-1]-S2.xs[0]));
   S2.res.forEach(simRes);
+  const rng=SC_RANGE[document.getElementById('sel-scenario').value];
+  S2.hasRange=!!rng;
+  S2.res.forEach(r=>{ r.out=rng?r.rep.filter(v=>!rng(v,S2.ex)).length/r.rep.length:0; });
+  syncNormalBtn();
   s2ApplyTerms();
   drawFitChart();
   renderFitTable();
@@ -1796,6 +1823,7 @@ function s2StatusText(){
   if(!S2.hasX) t='The data have only one column (y), so the model is fit without a predictor, that is, just an overall mean. This is a special case: the result does not automatically carry over to models with predictors.';
   else if(!S2.useX) t='The model is deliberately fit without the '+T.nom+' here (just an overall mean). Switch "Include '+T.nom+' in the model" back on and compare: the distribution family stays the same, but the fit changes, because otherwise the '+T.eff+' ends up as spread in the model.';
   else t='The candidates are judged '+T.dat+', as with <code>'+T.f+'</code> in brms. The raw histogram (grey, middle plot) only says something in comparison with the model predictions (lines).';
+  if(S2.res.some(r=>r.key==='normal')&&!SCENARIOS[document.getElementById('sel-scenario').value].fams.includes('normal')) t+=' <b>Normal for comparison:</b> the standard likelihood many people know. Watch ΔAIC and the "impossible" column: impossible predictions (negative values, values above N or outside 0 to 1) are the clearest warning sign. If Normal is still close to the best candidate and predicts hardly anything impossible, it can be good enough for questions about the mean.'+(S2.disc?' For whole-number data, Normal uses the probability of the interval y ± 0.5 (instead of the density) so that its AIC is comparable with Poisson, Binomial &amp; co.; its predictions are rounded.':'');
   if(S2.skipped.length) t+=' <b>Not fitted</b> (range of the data does not fit): '+S2.skipped.join(', ')+'.';
   return t;
 }
@@ -1853,7 +1881,7 @@ function renderFitTable(){
   const tbl=document.getElementById('fit-table');
   if(!results.length){ tbl.innerHTML=''; renderDgp(); return; }
   const best=results[0].aic;
-  let html='<thead><tr><th></th><th>Family</th><th>brms</th><th>Parameter (link scale)</th><th>logLik</th><th>AIC</th><th>ΔAIC</th><th>BIC</th></tr></thead><tbody>';
+  let html='<thead><tr><th></th><th>Family</th><th>brms</th><th>Parameter (link scale)</th><th>logLik</th><th>AIC</th><th>ΔAIC</th><th>BIC</th>'+(S2.hasRange?'<th title="Share of model predictions outside the possible range of values (e.g. negative counts, proportions above 1)">impossible</th>':'')+'</tr></thead><tbody>';
   results.forEach((r,i)=>{
     const coef='b₀='+fx(r.b0-r.b1*r.mx)+(S2.useX?', b₁='+fx(r.b1):'');
     const fa=r.f.fa(r.aux,S2.ex);
@@ -1866,6 +1894,7 @@ function renderFitTable(){
       '<td>'+fx(r.aic)+'</td>'+
       '<td>'+fx(r.aic-best)+'</td>'+
       '<td>'+fx(r.bic)+'</td>'+
+      (S2.hasRange?'<td'+(r.out>0.005?' class="fit-bad"':'')+'>'+(r.out>0?(r.out<0.001?'&lt;0.1':fx(100*r.out,1))+' %':'0 %')+'</td>':'')+
     '</tr>';
   });
   html+='</tbody>';
@@ -2391,6 +2420,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   <li><strong>N (items per sum):</strong> only for sums, the number of items.</li>
   <li><strong>Group difference:</strong> strength of the group effect. New data are generated when you release the slider.</li>
   <li><strong>Include group / predictor x in the model:</strong> switching it off shows the model without a predictor. With your own data the predictor is called "x", because it can also be continuous. The group difference then ends up as spread in the model, and fit and residuals get worse although the family stays the same.</li>
+  <li><strong>＋ Normal for comparison:</strong> additionally fits the normal distribution, the standard likelihood many people know. You see when it fits poorly (impossible predictions, wrong shape) and when it is good enough. For whole-number data it is judged by the probability of the interval y ± 0.5, so the AIC stays comparable. The table column "impossible" shows the share of impossible predictions.</li>
   <li><strong>Generate new data</strong> draws a new sample, <strong>Paste your own data</strong> takes your values: one row per observation, either just <code>y</code> or <code>y x</code> (x = group 0/1 or a continuous predictor), separated by spaces, commas, or tabs.</li>
 </ul>
 <p>If the value range of your data does not fit a candidate (e.g. negative values for Lognormal), it is skipped with a note.</p>
