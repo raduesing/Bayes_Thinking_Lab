@@ -173,6 +173,10 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
   transition:all .15s;margin-left:.7rem;margin-right:auto}
 .mono-tgl:hover{border-color:var(--a2);color:var(--a2)}
 .mono-tgl.act{background:var(--a2);color:var(--paper);border-color:var(--a2)}
+.mono-tgl{margin-right:0;white-space:nowrap}
+.ex-grp{display:flex;gap:.3rem;margin-left:.35rem;margin-right:auto}
+.ex-btn{font-family:'DM Mono',monospace;font-size:.68rem;background:var(--panel);border:1px solid var(--border);color:var(--ink2);padding:.15rem .5rem;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ex-btn:hover{border-color:var(--a2);color:var(--a2)}
 .legend{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2)}
 .li{display:flex;align-items:center;gap:.2rem}
 .ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -195,6 +199,9 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
       font-family:'DM Mono',monospace}
 .mrow:hover{background:var(--panel)}
 .mrow.act{background:var(--panel);border-left-color:var(--a4)}
+.mrow.hov-hl{background:var(--panel);border-left-color:var(--hl,var(--a4))}
+.prior-b.hov-hl{outline:2px solid var(--hl,var(--a4));outline-offset:2px}
+#svg g[id^="n-"]{transition:filter .12s}
 .msep{height:1px;background:var(--grid);margin:.4rem 0}
 
 /* Inline explanation for math panel */
@@ -414,22 +421,24 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;b
 
   <div class="cv-bar">
     <span class="cv-t">Modelldiagramm (Kruschke-Notation)</span>
-    <button class="mono-tgl" id="btn-mono" onclick="toggleMono()" title="Zwischen Rollenfarben und einfarbiger Original-Darstellung wechseln">◐ Monochrom</button>
+    <button class="mono-tgl" id="btn-mono" onclick="toggleMono()" title="Zwischen Rollenfarben und einfarbiger Original-Darstellung wechseln">◐ Monochrom</button><span class="ex-grp"><button class="ex-btn" onclick="exportDiagram('svg')" title="Diagramm als SVG speichern (Vektorgrafik, z. B. für Folien)">⤓ SVG</button><button class="ex-btn" onclick="exportDiagram('png')" title="Diagramm als PNG speichern (doppelte Auflösung)">⤓ PNG</button></span>
     <div class="legend">
       <span class="li"><span class="ld" style="background:var(--a2)"></span>α</span>
       <span class="li"><span class="ld" style="background:var(--a3)"></span>β</span>
       <span class="li"><span class="ld" style="background:var(--a5)"></span>σ</span>
-      <span class="li"><span class="ld" style="background:var(--a4)"></span>Hyperprior</span>
+      <span class="li"><span class="ld" style="background:var(--a4)"></span>Gruppenebene (τ, ρ, uⱼ)</span>
       <span class="li"><span class="ld" style="background:var(--a1)"></span>y</span>
-      <span class="li" style="opacity:.55">"~" = stochastische Ziehung &nbsp; "=" = deterministische Berechnung</span>
+      <span class="li" style="opacity:.55">"~" = stochastische Ziehung &nbsp; "=" = deterministische Berechnung &nbsp; schattiert = beobachtet</span>
     </div>
   </div>
 
   <div id="dw">
     <svg id="svg" xmlns="http://www.w3.org/2000/svg">
       <defs id="defs"></defs>
+      <g id="g-bands"></g>
       <g id="g-edges"></g>
       <g id="g-nodes"></g>
+      <g id="g-badges"></g>
     </svg>
   </div>
 
@@ -696,7 +705,7 @@ function genSimCode(){
     L.push(`${y}   <- rpois(n, lambda = lam)`);
   } else if(fam==='gamma'){
     L.push(`mu    <- exp(eta)   # Log-Link-Inverse → μ > 0`);
-    L.push(`shape <- 2          # Formparameter — anpassen`);
+    L.push(`shape <- rexp(1, rate = ${s_lam})   # Prior: Exponential(${s_lam}) für φ (brms: shape)`);
     L.push(`${y}   <- rgamma(n, shape = shape, rate = shape / mu)`);
   }
   L.push('');
@@ -742,6 +751,7 @@ function genSimCode(){
   const pl=[
     '    '+priorToR(M.pr.alpha,'b','Intercept'),
     ...(fam==='normal'||fam==='student'?['    '+priorToR(M.pr.sigma,'sigma')]:[]),
+    ...(fam==='gamma'?['    '+priorToR(M.pr.sigma,'shape')]:[]),
     ...(fam==='student'?['    '+priorToR(M.pr.nu,'nu')]:[]),
     ...M.preds.map((p,i)=>'    '+priorToR(p.pr,'b',p.name||`x${i+1}`)),
     ...(isML?['    '+priorToR(M.pr.sig_a,'sd',hasSlopeFit?'Intercept':undefined)]:[]),
@@ -800,7 +810,7 @@ const STEPS=[
    tx:'Gib der abhängigen Variable (AV) einen sinnvollen Namen. Kein Prädiktor nötig, wenn nur der Mittelwert interessiert. Hast du erklärende Variablen? → füge sie als Prädiktoren hinzu (max. 4). <b>Hinweis zu Namen:</b> Die Prädiktor-Namen im Feld sind rein für die Diagrammdarstellung — sie erscheinen in der Formelnotation als Variablenbezeichner. Sie ändern nichts an der Modellstruktur selbst. Im Diagramm siehst du live, wie das Modell wächst.',
    hl:'sc-var'},
   {t:'Schritt 3 — Struktur: Flach oder hierarchisch?',
-   tx:'Gibt es eine Gruppenstruktur in deinen Daten (Personen, Schulen, Kliniken)? Dann ist ein <b>hierarchisches Modell</b> angebracht. Gruppen bekommen eigene Parameter (α_j) aus einem gemeinsamen <b><a class="glo-link" href="Glossar.html#gl-hyperprior" target="_blank" title="Ein Hyperprior ist ein Prior, der nicht direkt auf einen Modellparameter gesetzt wird, sondern auf einen Hyperparameter — einen Parameter, der selbst die Verteilung anderer Parameter steuert.">Hyperprior</a></b> — das erzeugt <em><a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial Pooling ist die Schätzstrategie in hierarchischen/gemischten Modellen: Gruppenspezifische Parameter werden weder vollständig getrennt (No Pooling) noch vollständig zusammengefasst (Complete Pooling) geschätzt, sondern als aus einer gemeinsamen übergeordneten Verteilung stammend modelliert.">Partial Pooling</a></em>. Hierarchische Strukturen können mit <b>(Generalized) Linear Mixed Models (<a class="glo-link" href="Glossar.html#gl-glmm" target="_blank" title="Das Generalisierte Lineare Gemischte Modell erweitert das GLM um zufällige Effekte (Random Effects) für gruppierte oder hierarchisch strukturierte Daten.">GLMM</a>)</b> ausgewertet werden. Hier geht es direkt zum interaktiven Tutorial:<br><br><a href="GLMM_interactive.html" target="_blank" class="g-link-btn">→ GLMM Interactive Tutorial</a>',
+   tx:'Gibt es eine Gruppenstruktur in deinen Daten (Personen, Schulen, Kliniken)? Dann ist ein <b>hierarchisches Modell</b> angebracht. Gruppen bekommen eigene Abweichungen (u₀ⱼ) aus einer gemeinsamen Gruppenverteilung Normal(0, τ₀); deren Streuung τ₀ ist ein Hyperparameter und bekommt selbst einen Prior, den <b><a class="glo-link" href="Glossar.html#gl-hyperprior" target="_blank" title="Ein Hyperprior ist ein Prior, der nicht direkt auf einen Modellparameter gesetzt wird, sondern auf einen Hyperparameter — einen Parameter, der selbst die Verteilung anderer Parameter steuert.">Hyperprior</a></b>. Das erzeugt <em><a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial Pooling ist die Schätzstrategie in hierarchischen/gemischten Modellen: Gruppenspezifische Parameter werden weder vollständig getrennt (No Pooling) noch vollständig zusammengefasst (Complete Pooling) geschätzt, sondern als aus einer gemeinsamen übergeordneten Verteilung stammend modelliert.">Partial Pooling</a></em>. Hierarchische Strukturen können mit <b>(Generalized) Linear Mixed Models (<a class="glo-link" href="Glossar.html#gl-glmm" target="_blank" title="Das Generalisierte Lineare Gemischte Modell erweitert das GLM um zufällige Effekte (Random Effects) für gruppierte oder hierarchisch strukturierte Daten.">GLMM</a>)</b> ausgewertet werden. Hier geht es direkt zum interaktiven Tutorial:<br><br><a href="GLMM_interactive.html" target="_blank" class="g-link-btn">→ GLMM Interactive Tutorial</a>',
    hl:'sc-str'},
   {t:'Schritt 4 — Das Modelldiagramm verstehen',
    tx:'Schau das Diagramm an! <b>Offene Kreise (○)</b> = unbekannte Parameter mit Priors. <b>Punkt (•)</b> = deterministischer Prädiktor μ_i, aus α, β und x berechnet — kein Zufall, kein Prior. <b>Formelzeile</b> = zeigt exakt welcher Parameter welchen Term beiträgt. <b>Rechteck (□)</b> = beobachtete Daten y. Pfeile zeigen generative Richtung. Jede Ebene = eine Zeile in der Formel rechts. <b>Tipp:</b> Klicke 💡 Knoten-Info oben, dann auf beliebige Knoten für Details.',
@@ -849,6 +859,10 @@ const EX={
     what:'β misst den Effekt eines Prädiktors: pro Einheit Anstieg in x ändert sich der lineare Prädiktor um β (auf Link-Skala). β=0 bedeutet kein linearer Zusammenhang.',
     why:'Normal(0, 2.5): regularisierender Prior. Erwartet moderate bis kleine Effekte und bremst extreme Schätzungen wenn die Daten dünn sind — verhindert Overfitting.',
     tip:'Bei standardisierten Variablen gilt: |β|≈0.2 kleiner Effekt, ≈0.5 mittel, ≈0.8 groß (<a class="glo-link" href="Glossar.html#gl-cohens-d" target="_blank" title="Cohen\'s d ist die bekannteste standardisierte Effektgröße für Mittelwertunterschiede: d = (M_1 − M_2) / SD_pooled, wobei SD_pooled = √[(SD_1² + SD_2²)/2] die gepoolte Standardabweichung ist.">Cohens d</a>-Analogie).'},
+  shape:{title:'Formparameter φ (Gamma)',
+    what:'φ (brms: shape) bestimmt die Form der Gamma-Verteilung um μᵢ: Varianz = μᵢ²/φ, Variationskoeffizient = 1/√φ. Kleines φ → stark rechtsschief und breit, großes φ → fast symmetrisch und eng. φ muss > 0 sein.',
+    why:'Exponential(λ): Prior für positive Werte, E[φ] = 1/λ. brms-Standard wäre gamma(0.01, 0.01).',
+    tip:'Export: prior(exponential(λ), class = "shape"). In der Simulation wird φ aus diesem Prior gezogen: y ~ Gamma(shape = φ, rate = φ/μᵢ).'},
   sigma:{title:'Residualstreuung σ',
     what:'σ ist die verbleibende Streuung der y_i um μ_i — das irreduktible Rauschen, das das Modell nicht erklären kann. σ muss immer > 0 sein.',
     why:'Exponential(λ): Prior für positive Werte. E[σ]=1/λ. λ=1 → E[σ]=1. Kleineres λ erlaubt größere σ-Werte (flacherer Prior).',
@@ -857,18 +871,6 @@ const EX={
     what:'ν steuert wie "schwer" die Ränder der Verteilung sind. ν=1 ≈ Cauchy (extrem schwere Ränder, sehr robust), ν=30 ≈ Normal (praktisch normal).',
     why:'Gamma(2, 0.1): E[ν]=20. Erlaubt sowohl kleine (robuste) als auch große (normalnahe) Werte. <a class="glo-link" href="Glossar.html#gl-brms" target="_blank" title="brms ist ein R-Paket, das eine vertraute Formelschnittstelle für Bayesianische Regressionsmodelle bietet — die intern in Stan kompiliert und mit HMC/NUTS gesamplet werden.">brms</a>-Standardprior.',
     tip:'Für sehr robuste Modellierung: fixiere ν=4. Moderat robust: ν=7–15. Wenn du unsicher bist: lass ν als Parameter mit Prior.'},
-  alpha_j:{title:'Gruppen-Intercept α_j',
-    what:'α_j ist der gruppenspezifische Intercept. Jede Gruppe j hat ihren eigenen α_j-Wert, der jedoch aus dem gemeinsamen Hyperprior Normal(μ_α, σ_α) stammt.',
-    why:'<a class="glo-link" href="Glossar.html#gl-partial-pooling" target="_blank" title="Partial Pooling ist die Schätzstrategie in hierarchischen/gemischten Modellen: Gruppenspezifische Parameter werden weder vollständig getrennt (No Pooling) noch vollständig zusammengefasst (Complete Pooling) geschätzt, sondern als aus einer gemeinsamen übergeordneten Verteilung stammend modelliert.">Partial Pooling</a>: Gruppen mit wenig Daten werden zu μ_α gezogen (<a class="glo-link" href="Glossar.html#gl-shrinkage" target="_blank" title="Shrinkage bezeichnet das Phänomen, dass gruppenspezifische Schätzer in hierarchischen/gemischten Modellen (Partial Pooling) systematisch zum Gesamtmittelwert bzw. zur übergeordneten Verteilung hin „geschrumpft" werden, statt jede Gruppe unabhängig (No Pooling) zu schätzen.">Shrinkage</a>). Gruppen mit vielen Daten behalten ihre eigene Schätzung. Beides zugleich — besser als Complete Pooling oder No Pooling.',
-    tip:'Das Goldene am hierarchischen Modell: es lernt die optimale Pooling-Stärke aus den Daten selbst über σ_α!'},
-  mu_a:{title:'Hyperprior μ_α',
-    what:'μ_α ist der Gesamtmittelwert der Gruppen-Intercepts. Er ist selbst unsicher und bekommt einen Prior — das macht ihn zum <a class="glo-link" href="Glossar.html#gl-hyperprior" target="_blank" title="Ein Hyperprior ist ein Prior, der nicht direkt auf einen Modellparameter gesetzt wird, sondern auf einen Hyperparameter — einen Parameter, der selbst die Verteilung anderer Parameter steuert.">"Hyperprior"</a>.',
-    why:'Normal(0, 5): schwacher Prior für den Gesamtmittelwert. Skaliere ihn zur Skala der AV (auf Link-Skala).',
-    tip:'Hyperpriors erzeugen die hierarchische Struktur: Gruppen "lernen voneinander" durch den gemeinsamen μ_α.'},
-  sig_a:{title:'Hyperprior σ_α',
-    what:'σ_α ist die Streuung der Gruppen-Intercepts um μ_α. Kleines σ_α → viel Pooling (Gruppen ähnlich). Großes σ_α → wenig Pooling (Gruppen sehr verschieden).',
-    why:'Exp(1): bevorzugt moderate Heterogenität zwischen Gruppen. σ_α ist inhaltlich sehr aussagekräftig!',
-    tip:'Schau dir σ_α im Posterior an: er sagt dir, wie unterschiedlich die Gruppen nach Kontrolle der Prädiktoren noch sind.'},
   u_j:{title:'Zufälliger Intercept u₀ⱼ',
     what:'u₀ⱼ ist die gruppenspezifische Abweichung vom globalen Intercept α. Der vollständige Gruppen-Intercept ist α + u₀ⱼ. Nur mit Random Intercept (kein Random Slope): u₀ⱼ ~ Normal(0, τ₀) — eine simple univariate Normalverteilung. In brms: (1|group).',
     why:'Partial Pooling: Gruppen mit wenig Daten werden zu 0 gezogen (shrinkage). τ₀ bestimmt das Ausmaß — kleines τ₀ = starkes Pooling.',
@@ -883,7 +885,7 @@ const EX={
     why:'Ohne ρ würden u₀ⱼ und u₁ⱼ als unabhängig behandelt — das ist bei realen Gruppendaten fast nie der Fall (z.B.: Gruppen, die schon hoch starten, wachsen oft langsamer). brms modelliert die Korrelation standardmäßig mit; sie zu ignorieren verzerrt sowohl die Unsicherheit als auch die Schätzung selbst.',
     tip:'<a class="glo-link" href="Glossar.html#gl-lkj-prior" target="_blank" title="Der LKJ(η)-Prior (Lewandowski, Kurowicka &amp; Joe, 2009) ist die brms/Stan-Standardverteilung für Korrelationsmatrizen — er wird immer dann gebraucht, wenn ein Modell mindestens zwei korrelierte Random Effects innerhalb derselben Gruppierung hat (z.B. Random Intercept + Random Slope).">LKJ(η)</a>: η=1 → alle Korrelationen gleich wahrscheinlich (uniform). η>1 (brms-Standard: η=2) → schwächere Korrelationen werden bevorzugt, regularisiert gegen |ρ|≈1. In brms: prior(lkj(2), class=cor).'},
   sigma_u:{title:'τ₀ — SD der zufälligen Intercepts',
-    what:'τ₀ ist die Standardabweichung der u₀ⱼ über alle Gruppen. Er ist selbst unbekannt und bekommt einen Prior (Exponential).',
+    what:'τ₀ ist die Standardabweichung der u₀ⱼ über alle Gruppen. Er ist selbst unbekannt und bekommt einen Prior (Exponential). Weil τ₀ ein Hyperparameter ist — er steuert die Verteilung anderer Parameter, nämlich der u₀ⱼ —, heißt dieser Prior <b>Hyperprior</b>.',
     why:'Exponential(λ): E[τ₀]=1/λ. Kleines τ₀ → Gruppen-Intercepts liegen eng zusammen (wenig Variation). Großes τ₀ → Gruppen sehr unterschiedlich.',
     tip:'In brms: prior(exponential(1), class=sd). Bei <a class="glo-link" href="Referenzen.html#ref-mcelreath-2020" target="_blank" title="McElreath, R. (2020). Statistical Rethinking, 2. Aufl., CRC Press.">McElreath</a> (Kap. 14, S. 441 ff.) entspricht τ₀ dem Parameter σ_α. Er quantifiziert, wie stark sich Gruppen im Intercept unterscheiden, nach Berücksichtigung der Prädiktoren.'},
   sigma_v:{title:'τ₁ — SD der zufälligen Slopes',
@@ -898,7 +900,7 @@ const EX={
   y:{title:'Beobachtete Daten y_i (□)',
     what:'Das Rechteck (□) steht für beobachtete Daten. Bekannt, nicht geschätzt. Bayes dreht die Logik um: Gegeben y, was ist wahrscheinlich für θ?',
     whyLbl:'Die Likelihood',
-    why:'P(θ|y) ∝ P(y|θ) · P(θ) — <a class="glo-link" href="Glossar.html#gl-posterior" target="_blank" title="Der Posterior p(θ | D) ist die Wahrscheinlichkeitsverteilung über die Modellparameter θ nach Betrachtung der Daten D.">Posterior</a> ∝ <a class="glo-link" href="Glossar.html#gl-likelihood" target="_blank" title="Die Likelihood-Funktion L(θ; D) beschreibt, wie wahrscheinlich die beobachteten Daten D unter verschiedenen Parameterwerten θ wären.">Likelihood</a> × Prior. Das Diagramm liest sich von oben (Hyperpriors) nach unten (Daten).',
+    why:'P(θ|y) ∝ P(y|θ) · P(θ) — <a class="glo-link" href="Glossar.html#gl-posterior" target="_blank" title="Der Posterior p(θ | D) ist die Wahrscheinlichkeitsverteilung über die Modellparameter θ nach Betrachtung der Daten D.">Posterior</a> ∝ <a class="glo-link" href="Glossar.html#gl-likelihood" target="_blank" title="Die Likelihood-Funktion L(θ; D) beschreibt, wie wahrscheinlich die beobachteten Daten D unter verschiedenen Parameterwerten θ wären.">Likelihood</a> × Prior. Das Diagramm liest sich von oben (Priors; bei Mehrebenenmodellen auch die Hyperpriors für τ und ρ) nach unten (Daten).',
     tip:'Kruschkes Notation: Schattiert = beobachtet, unschattiert = latent/unbekannt. Alles, was wir nicht sehen, braucht einen Prior.'}
 };
 
@@ -1051,613 +1053,408 @@ function se(tag,a={},txt){
 }
 
 // ═══════════════════════════════════════════════════════
-//  LAYOUT — bigger, more spacious
+//  DIAGRAM — Kruschke cards in labelled rows ("hybrid" layout)
+//  Kruschke curves/notation as before, but every node is a card, the model
+//  reads top → bottom in labelled bands, arrows are straight and carry a
+//  readable "~"/"=" badge, μᵢ/σ/ν dock onto the likelihood card, observed
+//  quantities (yᵢ, xᵢ) are shaded and group effects sit in a plate j = 1…J.
 // ═══════════════════════════════════════════════════════
-const R=42, OR=38;
-
-// ── Approx monospace char width at the 17.5px formula font-size ──
-const _CW=10.9;
-
-// Returns array of {text, nodeId} for formula terms
-function buildFormulaTerms(){
-  const K=M.preds.length, isML=M.ml, j=M.gv;
-  const lhs=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
-  const prefix=M.fam==='bernoulli'?'logit⁻¹(':'';
-  const expPfx=(M.fam==='poisson'||M.fam==='gamma')?'exp(':'';
-  const suffix=(prefix||expPfx)?')':'';
-  const pfx=prefix||expPfx;
-  const terms=[];
-  terms.push({text:`${lhs}ᵢ = ${pfx}`,nodeId:null});
-  terms.push({text:'α',nodeId:'alpha'});
-  M.preds.forEach((p,i)=>{
-    const bSym=K>1?`β${SUB[i]||i+1}`:'β';
-    const xSym=(p.name||`x${i+1}`)+'ᵢ';
-    terms.push({text:' + ',nodeId:null});
-    terms.push({text:bSym,nodeId:`b${i}`}); // arrow target
-    terms.push({text:'·'+xSym,nodeId:null});
-  });
-  if(isML){
-    const hasSlope=M.ret==='slope'&&K>0;
-    terms.push({text:' + ',nodeId:null});
-    terms.push({text:'u₀ⱼ',nodeId:'u_j'});
-    if(hasSlope){
-      terms.push({text:' + ',nodeId:null});
-      terms.push({text:'u₁ⱼ',nodeId:'v_j'});
-      terms.push({text:`·${M.preds[0].name||'x1'}ᵢ`,nodeId:null});
-    }
-  }
-  if(suffix) terms.push({text:suffix,nodeId:null});
-  return terms;
-}
-
-// Compute x-center of each node's term given formula start x
-function computeTermCenters(terms, startX){
-  const map={};
-  let cx=startX;
-  terms.forEach(t=>{
-    const w=t.text.length*_CW;
-    if(t.nodeId) map[t.nodeId]=cx+w/2;
-    cx+=w;
-  });
-  return map; // nodeId → center x
-}
-
-function formulaWidth(terms){
-  return terms.reduce((s,t)=>s+t.text.length*_CW,0);
-}
-
-function buildLayout(){
-  // Responsive: use actual SVG size
-  const svgEl=document.getElementById('svg');
-  const W=Math.max(680,svgEl.clientWidth||740);
-  const H=Math.max(520,svgEl.clientHeight||590);
-  const cx=W/2;
-  const K=M.preds.length, isML=M.ml;
-  const hS=hasSig(), hN=hasNu();
-  const nodes={}, edges=[];
-
-  // ── Top row — ALL top-level priors share one row, spread across the full
-  // canvas width, rather than being stacked into separate vertical bands.
-  // σ sits at the far left and ν at the far right of the α/β/τ group; their
-  // arrows down to the likelihood-parameter row end up diagonal, which is
-  // exactly how Kruschke draws them too — a diagonal line reads just as
-  // clearly as a vertical one and costs far less vertical space than giving
-  // them their own row (the earlier version's mistake).
-  const hasSlope=isML&&M.ret==='slope'&&K>0;
-  const topNodes=[];
-  if(hS) topNodes.push({id:'sigma',lbl:'σ',sub:'Streuung',col:'sig',pk:'sigma',feedsFormula:false});
-  topNodes.push({id:'alpha',lbl:'α',sub:'Intercept',col:'int',pk:'alpha',feedsFormula:true});
-  M.preds.forEach((p,i)=>{
-    const bLbl=K>1?`β${SUB[i]||i+1}`:'β';
-    topNodes.push({id:`b${i}`,lbl:bLbl,sub:p.name||`x${i+1}`,col:'beta',pk:`beta_${i}`,prObj:p.pr,feedsFormula:true});
-  });
-  if(isML){
-    topNodes.push({id:'sigma_u',lbl:'τ₀',sub:'SD u₀ⱼ',col:'re',pk:'sig_a',feedsFormula:false,isTau:true});
-    if(hasSlope){
-      // ρ sits between τ₀ and τ₁ in column order, so it lands horizontally
-      // between u₀ⱼ and u₁ⱼ below — its two arrows (to both) fan out
-      // symmetrically instead of one having to reach much further than the other.
-      topNodes.push({id:'rho',lbl:'ρ',sub:'Cor(u₀ⱼ,u₁ⱼ)',col:'re',pk:'rho',feedsFormula:false});
-      topNodes.push({id:'sigma_v',lbl:'τ₁',sub:'SD u₁ⱼ',col:'re',pk:'sig_b',feedsFormula:false,isTau:true});
-    }
-  }
-  if(hN) topNodes.push({id:'nu',lbl:'ν',sub:'df',col:'nu',pk:'nu',feedsFormula:false});
-
-  const nTop=topNodes.length;
-  const pY=170;
-  const usableW=W*0.87;
-  const sp=nTop<=1?0:Math.min(190,usableW/(nTop-1));
-  const px0=cx-(nTop-1)*sp/2;
-  topNodes.forEach((p,i)=>{ nodes[p.id]={...p,type:'stoch',x:px0+i*sp,y:pY}; });
-
-  // ── Prior labels above each top-row node ───────────
-  topNodes.forEach((p)=>{
-    const nd=nodes[p.id];
-    const pr=p.pk==='alpha'?M.pr.alpha:p.pk==='sigma'?M.pr.sigma:p.pk==='nu'?M.pr.nu
-            :p.pk==='sig_a'?M.pr.sig_a:p.pk==='sig_b'?M.pr.sig_b:p.pk==='rho'?M.pr.rho:p.prObj;
-    const pid=`pl_${p.id}`;
-    nodes[pid]={id:pid,type:'plbl',prObj:pr,x:nd.x,y:nd.y-(R+52),col:p.col,parentId:p.id};
-    edges.push({fr:pid,to:p.id,col:p.col,isPL:true});
-  });
-
-  // ── Multilevel random effects (brms-style) — directly below their own
-  // hyperprior's column, which now lives in the unified top row above ───
-  const uY=pY+150;
-  if(isML){
-    const uX=nodes['sigma_u'].x;
-    // prLabelText spells out the actual prior above the curve — without it, the
-    // incoming τ₀ arrow just points at a generic bell curve with no indication
-    // of what it's setting. With ONLY a random intercept, u₀ⱼ really is a plain
-    // univariate Normal(0, τ₀) — that's what brms fits and what's shown below.
-    // But once a random SLOPE joins it, u₀ⱼ and u₁ⱼ are no longer independent:
-    // brms (and the "correct" generative model) draws them jointly as
-    // [u₀ⱼ,u₁ⱼ] ~ MVNormal(0, Σ), Σ built from τ₀, τ₁ AND their correlation ρ.
-    // Showing two independent Normal(0,τ) curves in that case would misstate
-    // the model — hence the MVNormal label + a second incoming arrow from ρ
-    // whenever hasSlope is true.
-    nodes['u_j']={id:'u_j',lbl:'u₀ⱼ',sub:'Rand.Intercept',col:'re',type:'stoch',x:uX,y:uY,
-      prLabelText:hasSlope?'MVNormal(0, Σ)':'Normal(0, τ₀)',
-      famLabelOverride:hasSlope?'MVNormal':undefined};
-    edges.push({fr:'sigma_u',to:'u_j',col:'re'});
-    if(hasSlope){
-      const vX=nodes['sigma_v'].x;
-      nodes['v_j']={id:'v_j',lbl:'u₁ⱼ',sub:'Rand.Slope',col:'re',type:'stoch',x:vX,y:uY,
-        prLabelText:'MVNormal(0, Σ)',famLabelOverride:'MVNormal'};
-      edges.push({fr:'sigma_v',to:'v_j',col:'re'});
-      // ρ feeds BOTH u₀ⱼ and u₁ⱼ — it's the correlation between them, not a
-      // property of either one alone, so it fans out to both curves.
-      edges.push({fr:'rho',to:'u_j',col:'re'});
-      edges.push({fr:'rho',to:'v_j',col:'re'});
-    }
-  }
-
-  // ── Deterministic formula node ("μᵢ = α + β·xᵢ + …") ──
-  const detY=isML?uY+150:pY+160;
-  const terms=buildFormulaTerms();
-  const fw=Math.max(formulaWidth(terms)+56, 180);
-  const boxHalfW=fw/2;
-  // All positions relative to node center (cx)
-  // Text starts at -boxHalfW+28 (left padding inside box)
-  let relX=-boxHalfW+28;
-  const relTermCenters={};
-  // Track the RHS expression's span (everything after the leading "μᵢ = " term) —
-  // matches drawDet()'s own firstTermX/lastTermEnd calc exactly, so the underbrace
-  // it draws beneath the RHS and the "=" edge's start point (below) always agree
-  // on where that brace actually sits, regardless of formula length.
-  let firstTermRelX=null, lastTermRelEnd=null;
-  terms.forEach((t,i)=>{
-    const tw=t.text.length*_CW;
-    if(t.nodeId) relTermCenters[t.nodeId]=relX+tw/2;
-    if(i>0&&firstTermRelX===null) firstTermRelX=relX;
-    relX+=tw;
-    lastTermRelEnd=relX;
-  });
-  const braceMidXRel=firstTermRelX!=null?((firstTermRelX-2)+(lastTermRelEnd-2))/2:0;
-  const braceYRel=31; // by(22)+9, matching drawDet()'s brace-dip control point
-  const detLbl=M.fam==='bernoulli'?'pᵢ':M.fam==='poisson'?'λᵢ':'μᵢ';
-  nodes['det']={id:'det',type:'det',lbl:detLbl,
-    formula:buildLinear(), formulaTerms:terms,
-    relTermCenters, boxHalfW,
-    braceX:cx+braceMidXRel, braceY:detY+braceYRel,
-    x:cx, y:detY};
-
-  // ── Likelihood-parameter row — Kruschke style: μᵢ (or pᵢ/λᵢ), σ, ν sit
-  // directly above the likelihood curve, right where they're actually used.
-  // μᵢ arrives via "=" (deterministic, from the formula directly above);
-  // σ/ν arrive via "~" from their prior curves up in the top row — those
-  // arrows are long and diagonal, which is fine; they no longer need to be
-  // vertical since nothing else crosses their path down here.
-  const anchOrder=[]; // left → right: σ, μ, ν
-  if(hS) anchOrder.push('sigma');
-  anchOrder.push('mu');
-  if(hN) anchOrder.push('nu');
-  const anchCount=anchOrder.length;
-  const anchSp=Math.min(150,usableW/Math.max(anchCount-1,1));
-  const anchX0=cx-(anchCount-1)*anchSp/2;
-  const anchXOf={};
-  anchOrder.forEach((k,i)=>{ anchXOf[k]=anchX0+i*anchSp; });
-
-  const anchorY=detY+120;
-  const likY=anchorY+60;
-  const dataY=likY+110;
-
-  nodes['anch_mu']={id:'anch_mu',type:'anchor',lbl:detLbl,col:'data',x:anchXOf.mu,y:anchorY,mapsTo:'det'};
-  // Starts at the underbrace under the formula's RHS (not the det node's own
-  // center, which can sit anywhere inside the equation text) — so the "="
-  // arrow visibly grows out of "this whole expression", not out of a random
-  // point mid-formula.
-  edges.push({fr:'det',to:'anch_mu',col:'data',eq:true,srcX:nodes['det'].braceX,srcY:nodes['det'].braceY});
-  if(hS){
-    nodes['anch_sigma']={id:'anch_sigma',type:'anchor',lbl:'σ',col:'sig',x:anchXOf.sigma,y:anchorY,mapsTo:'sigma'};
-    edges.push({fr:'sigma',to:'anch_sigma',col:'sig'});
-  }
-  if(hN){
-    nodes['anch_nu']={id:'anch_nu',type:'anchor',lbl:'ν',col:'nu',x:anchXOf.nu,y:anchorY,mapsTo:'nu'};
-    edges.push({fr:'nu',to:'anch_nu',col:'nu'});
-  }
-
-  // ── Likelihood curve (distribution shape only — the data node below
-  // carries the yᵢ label, matching how Kruschke separates the two) ────
-  nodes['lik']={id:'lik',type:'lik',x:cx,y:likY};
-
-  // ── Data node ─────────────────────────────────────────
-  nodes['y']={id:'y',type:'obs',lbl:M.out||'y',sub:sampStr(),col:'data',x:cx,y:dataY};
-  edges.push({fr:'lik',to:'y',col:'data'});
-
-  // ── Covariate boxes ────────────────────────────────────
-  if(DET==='full'){
-    M.preds.forEach((p,i)=>{
-      nodes[`xv${i}`]={id:`xv${i}`,type:'cov',lbl:p.name||`x${i+1}`,x:cx-50+(i*38),y:detY+20,col:'ink2'};
-      edges.push({fr:`xv${i}`,to:'det',col:'ink2',dash:true});
-    });
-  }
-
-  // ── Structural edges ──────────────────────────────────
-  // α, β, τ₀, τ₁ → det: arrow tip targets the term in the formula box
-  // (σ/ν are excluded — they don't feed the formula, they feed the
-  // likelihood-parameter row directly, handled above)
-  topNodes.filter(p=>p.feedsFormula).forEach(p=>{
-    const rel=relTermCenters[p.id]??0;
-    const termX=cx+rel; // absolute x of term center
-    edges.push({fr:p.id,to:'det',col:p.col,termX});
-  });
-  if(isML){
-    const uRel=relTermCenters['u_j']??0;
-    edges.push({fr:'u_j',to:'det',col:'re',termX:cx+uRel});
-    if(hasSlope){
-      const vRel=relTermCenters['v_j']??0;
-      edges.push({fr:'v_j',to:'det',col:'re',termX:cx+vRel});
-    }
-  }
-
-  return {nodes,edges,W,H};
-}
-
+const R=42;
 const SUB=['₁','₂','₃','₄'];
 const hasSig=()=>['normal','student','gamma'].includes(M.fam);
 const hasNu =()=>M.fam==='student';
+// Gamma's second parameter is the shape φ (brms class "shape"), not a residual SD
+const isGam =()=>M.fam==='gamma';
+const auxSym=()=>isGam()?'φ':'σ';
 
-function buildLinear(){
-  const K=M.preds.length,isML=M.ml,j=M.gv;
-  const a='α';
-  const bs=M.preds.map((p,i)=>{const b=K>1?`β${SUB[i]||i+1}`:'β';return `${b}·${p.name||'x'}ᵢ`;});
-  let lin=a+(bs.length?` + ${bs.join(' + ')}`:'');
-  if(isML){
-    lin+=` + u₀ⱼ[${j}]`;
-    if(M.ret==='slope'&&K>0) lin+=` + u₁ⱼ[${j}]·${M.preds[0].name||'x1'}ᵢ`;
-  }
-  if(M.fam==='bernoulli') return `logit⁻¹(${lin})`;
-  if(M.fam==='poisson'||M.fam==='gamma') return `exp(${lin})`;
-  return lin;
+const HY_TXT={
+  bands:{prior:'Priors',priorML:'Priors · Hyperpriors (τ, ρ)',re:'Gruppeneffekte',lin:'Linearer Prädiktor',lik:'Likelihood',data:'Daten'},
+  sub:{sigma:'Residualstreuung',shape:'Form (Shape)',alpha:'Intercept',slope:'Slope',sdu0:'SD u₀ⱼ',sdu1:'SD u₁ⱼ',
+       rho:'Kor(u₀ⱼ, u₁ⱼ)',nu:'Freiheitsgrade',ri:'Random Intercept',rs:'Random Slope'},
+  likNote:'wie die Daten entstehen',obsN:'i = 1 … N',obsNJ:'i = 1 … N, in Gruppe j'
+};
+const HY={cw:126,gap:22,padX:46,fpx:18};
+const F_MONO="'DM Mono',monospace",F_SERIF="'Fraunces',serif";
+
+let _hyCtx=null;
+function textW(s,px,fam=F_MONO,weight='400'){
+  if(!_hyCtx)_hyCtx=document.createElement('canvas').getContext('2d');
+  _hyCtx.font=`${weight} ${px}px ${fam}`;return _hyCtx.measureText(s).width;
 }
-function sampStr(){
-  const y=M.out||'y';
-  return {normal:`${y}ᵢ ~ Normal(μᵢ, σ)`,student:`${y}ᵢ ~ t(ν, μᵢ, σ)`,
-    bernoulli:`${y}ᵢ ~ Bernoulli(pᵢ)`,poisson:`${y}ᵢ ~ Poisson(λᵢ)`,gamma:`${y}ᵢ ~ Gamma(μᵢ, φ)`}[M.fam]||`${y}ᵢ ~ ?`;
+function getPr(node){
+  if(node.pk==='alpha') return M.pr.alpha;
+  if(node.pk==='sigma') return M.pr.sigma;
+  if(node.pk==='nu')    return M.pr.nu;
+  if(node.pk==='sig_a') return M.pr.sig_a;
+  if(node.pk==='sig_b') return M.pr.sig_b;
+  if(node.pk==='rho')   return M.pr.rho;
+  if(node.pk?.startsWith('beta_')){ const i=parseInt(node.pk.split('_')[1]); return M.preds[i]?.pr; }
+  return node.prObj||null;
+}
+// x-range that kruschkePath() actually draws for a prior — used for the axis ticks
+// in detail level "full" (must mirror kruschkePath's own domain, family by family)
+function axisDomain(pr){
+  if(!pr) return [-4,4];
+  const f=pr.fam||'normal',p1=Math.max(0.01,pr.p1??1),p2=Math.max(0.01,pr.p2??1),mu=pr.mu??0;
+  if(f==='normal'||f==='student_t') return [mu-4,mu+4];
+  if(f==='exponential') return [0,5.5];
+  if(f==='half_normal') return [0,4.5];
+  if(f==='gamma'){const a=Math.max(0.2,p1),rt=Math.max(0.05,p2),peak=Math.max(0.01,(a-1)/rt);return [0,peak*3.5+2];}
+  if(f==='lkj') return [-1,1];
+  if(f==='uniform') return [pr.p1??0,pr.p2??1];
+  return [-3.5,3.5];
+}
+function fmtTick(v){const a=Math.abs(v);return (a>=10?v.toFixed(0):a>=1?v.toFixed(1):v.toFixed(2)).replace(/\.?0+$/,'')||'0';}
+// expected value of a scale prior — lets the u₀ⱼ/u₁ⱼ curves widen/narrow with τ's prior
+function priorMean(pr){
+  if(!pr) return 1;
+  const p1=Math.max(0.01,pr.p1??1),p2=Math.max(0.01,pr.p2??1);
+  if(pr.fam==='exponential') return 1/p1;
+  if(pr.fam==='half_normal') return p1*Math.sqrt(2/Math.PI);
+  if(pr.fam==='gamma')       return p1/p2;
+  if(pr.fam==='normal'||pr.fam==='student_t') return Math.abs(pr.mu??0)+(pr.sig??1)*0.8;
+  return 1;
+}
+
+function buildFormulaTerms(){
+  const K=M.preds.length,lhs=M.fam==='bernoulli'?'p':M.fam==='poisson'?'λ':'μ';
+  const pfx=M.fam==='bernoulli'?'logit⁻¹(':(M.fam==='poisson'||M.fam==='gamma')?'exp(':'';
+  const terms=[{text:`${lhs}ᵢ = ${pfx}`,nodeId:null},{text:'α',nodeId:'alpha'}];
+  M.preds.forEach((p,i)=>{
+    terms.push({text:' + ',nodeId:null});
+    terms.push({text:K>1?`β${SUB[i]||i+1}`:'β',nodeId:`b${i}`});
+    terms.push({text:'·',nodeId:null});
+    terms.push({text:(p.name||`x${i+1}`)+'ᵢ',nodeId:null,obs:true});   // observed covariate → shaded
+  });
+  if(M.ml){
+    terms.push({text:' + ',nodeId:null});terms.push({text:'u₀ⱼ',nodeId:'u_j'});
+    if(M.ret==='slope'&&K>0){
+      terms.push({text:' + ',nodeId:null});terms.push({text:'u₁ⱼ',nodeId:'v_j'});
+      terms.push({text:'·',nodeId:null});terms.push({text:`${M.preds[0].name||'x1'}ᵢ`,nodeId:null,obs:true});
+    }
+  }
+  if(pfx)terms.push({text:')',nodeId:null});
+  return terms;
+}
+
+function buildLayout(){
+  const K=M.preds.length,ML=M.ml,slope=ML&&M.ret==='slope'&&K>0,hS=hasSig(),hN=hasNu();
+  const {cw,gap,padX}=HY,T=HY_TXT;
+  const cardH=DET==='simple'?78:(DET==='full'?160:132);
+  // top row — same order as before: σ · α · β… · τ₀ · ρ · τ₁ · ν
+  const top=[];
+  if(hS)top.push({id:'sigma',lbl:auxSym(),sub:isGam()?T.sub.shape:T.sub.sigma,col:'sig',pk:'sigma'});
+  top.push({id:'alpha',lbl:'α',sub:T.sub.alpha,col:'int',pk:'alpha',feeds:true});
+  M.preds.forEach((p,i)=>top.push({id:`b${i}`,lbl:K>1?`β${SUB[i]||i+1}`:'β',sub:`${T.sub.slope} ${p.name||'x'+(i+1)}`,col:'beta',pk:`beta_${i}`,feeds:true}));
+  if(ML){
+    top.push({id:'sigma_u',lbl:'τ₀',sub:T.sub.sdu0,col:'re',pk:'sig_a'});
+    if(slope){
+      top.push({id:'rho',lbl:'ρ',sub:T.sub.rho,col:'re',pk:'rho'});
+      top.push({id:'sigma_v',lbl:'τ₁',sub:T.sub.sdu1,col:'re',pk:'sig_b'});
+    }
+  }
+  if(hN)top.push({id:'nu',lbl:'ν',sub:T.sub.nu,col:'nu',pk:'nu'});
+
+  // formula — measured, so arrows land exactly on their term
+  const terms=buildFormulaTerms();
+  let fx=0;const termPos={};
+  terms.forEach(t=>{t.w=textW(t.text,HY.fpx,F_MONO,t.nodeId?'500':'400');t.x0=fx;fx+=t.w;if(t.nodeId)termPos[t.nodeId]=fx-t.w/2});
+  const fw=fx+40;
+
+  // horizontal spacing — σ/ν columns must clear the formula card (they route around it)
+  const n=top.length;
+  let sp=cw+gap;
+  if(hS&&hN&&n>1)sp=Math.max(sp,(fw+cw+60)/(n-1));
+  else if((hS||hN)&&n>1)sp=Math.max(sp,(fw/2+cw/2+30)/((n-1)/2));
+  const W=Math.max(760,(n-1)*sp+cw+2*padX,fw+2*padX);
+  const cx=W/2,x0=cx-(n-1)*sp/2;
+
+  const nodes={},edges=[],bands=[];
+  let y=0;
+  const bP={y,h:cardH+58,lbl:ML?T.bands.priorML:T.bands.prior};bands.push(bP);
+  top.forEach((t,i)=>{nodes[t.id]={...t,type:'stoch',x:x0+i*sp,y:y+34,w:cw,h:cardH}});
+  y+=bP.h;
+
+  if(ML){
+    const bR={y,h:cardH+64,lbl:T.bands.re};bands.push(bR);
+    // u₀ⱼ ~ Normal(0, τ₀) — with a random slope [u₀ⱼ, u₁ⱼ] ~ MVNormal(0, Σ), Σ from τ₀, τ₁, ρ.
+    // The curve width follows E[τ] of the τ prior, so it reacts to the τ sliders.
+    const mk=(id,lbl,under,txt,sub,tauPr)=>{nodes[id]={id,lbl,sub,type:'stoch',col:'re',x:nodes[under].x,y:y+38,w:cw,h:cardH,
+      prObj:{fam:'normal',sig:Math.min(5,Math.max(0.15,priorMean(tauPr)))},prText:txt,famOverride:slope?'MVNormal':null}};
+    mk('u_j','u₀ⱼ','sigma_u',slope?'MVNormal(0, Σ)':'Normal(0, τ₀)',T.sub.ri,M.pr.sig_a);
+    edges.push({fr:'sigma_u',to:'u_j',col:'re',lab:'~ j'});
+    if(slope){
+      mk('v_j','u₁ⱼ','sigma_v','MVNormal(0, Σ)',T.sub.rs,M.pr.sig_b);
+      edges.push({fr:'sigma_v',to:'v_j',col:'re',lab:'~ j'});
+      edges.push({fr:'rho',to:'u_j',col:'re',lab:'~ j'});
+      edges.push({fr:'rho',to:'v_j',col:'re',lab:'~ j'});
+    }
+    const xs=['u_j','v_j'].filter(k=>nodes[k]).map(k=>nodes[k].x);
+    bR.plate={x:Math.min(...xs)-cw/2-16,y:y+22,w:Math.max(...xs)-Math.min(...xs)+cw+32,h:cardH+34,lbl:`${M.gv||'j'} = 1 … J`};
+    y+=bR.h;
+  }
+
+  const bF={y,h:112,lbl:T.bands.lin};bands.push(bF);
+  nodes.det={id:'det',type:'det',x:cx,y:y+34,w:fw,h:52,terms,termPos};
+  top.filter(t=>t.feeds).forEach(t=>edges.push({fr:t.id,to:'det',col:t.col,lab:'~',term:t.id}));
+  if(ML){edges.push({fr:'u_j',to:'det',col:'re',lab:'~',term:'u_j'});if(slope)edges.push({fr:'v_j',to:'det',col:'re',lab:'~',term:'v_j'})}
+  y+=bF.h;
+
+  // likelihood — parameter slots dock on top; μᵢ exactly under the formula (vertical "=")
+  const slots=[];if(hS)slots.push({k:'sigma',lbl:auxSym(),col:'sig'});
+  slots.push({k:'det',lbl:M.fam==='bernoulli'?'pᵢ':M.fam==='poisson'?'λᵢ':'μᵢ',col:'data'});
+  if(hN)slots.push({k:'nu',lbl:'ν',col:'nu'});
+  const likH=DET==='simple'?96:150;
+  const lw=Math.max(240,(hS&&hN?2:hS||hN?1:0)*2*78+80);
+  const bL={y,h:likH+56,lbl:T.bands.lik};bands.push(bL);
+  nodes.lik={id:'lik',type:'lik',x:cx,y:y+46,w:lw,h:likH,slots};
+  slots.forEach(s=>{s.x=cx+(s.k==='sigma'?-78:s.k==='nu'?78:0);s.y=y+46});
+  edges.push({fr:'det',to:'lik',col:'data',lab:'=',slot:'det'});
+  if(hS)edges.push({fr:'sigma',to:'lik',col:'sig',lab:'~',slot:'sigma',route:'side'});
+  if(hN)edges.push({fr:'nu',to:'lik',col:'nu',lab:'~',slot:'nu',route:'side'});
+  y+=bL.h;
+
+  const bD={y,h:96,lbl:T.bands.data};bands.push(bD);
+  nodes.y={id:'y',type:'obs',x:cx,y:y+30,w:132,h:52,lbl:M.out||'y'};
+  edges.push({fr:'lik',to:'y',col:'data',lab:M.ml?'~ i,j':'~ i'});
+  y+=bD.h;
+  return{nodes,edges,bands,W,H:y};
+}
+
+// ── Export: standalone SVG (fonts embedded) or 2× PNG ──
+let _fontCss=null;
+async function embeddedFontCss(){
+  if(_fontCss!==null) return _fontCss;
+  try{
+    const css=await (await fetch('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;0,700;1,600&display=swap')).text();
+    const urls=[...new Set(css.match(/https:[^)]+\.woff2/g)||[])];
+    const data=await Promise.all(urls.map(async u=>{
+      const buf=new Uint8Array(await (await fetch(u)).arrayBuffer());let bin='';
+      for(let i=0;i<buf.length;i+=0x8000)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+      return [u,'data:font/woff2;base64,'+btoa(bin)];
+    }));
+    _fontCss=data.reduce((c,[u,d])=>c.split(u).join(d),css);
+  }catch(e){ _fontCss=''; }   // offline → system fallback fonts
+  return _fontCss;
+}
+async function buildExportSvg(){
+  const svg=document.getElementById('svg'),vb=svg.viewBox.baseVal,NS='http://www.w3.org/2000/svg';
+  const c=svg.cloneNode(true);
+  c.removeAttribute('style');c.setAttribute('width',vb.width);c.setAttribute('height',vb.height);c.setAttribute('xmlns',NS);
+  const bg=document.createElementNS(NS,'rect');
+  bg.setAttribute('x',0);bg.setAttribute('y',0);bg.setAttribute('width',vb.width);bg.setAttribute('height',vb.height);bg.setAttribute('fill',C.paper());
+  c.insertBefore(bg,c.firstChild);
+  const css=await embeddedFontCss();
+  if(css){const st=document.createElementNS(NS,'style');st.textContent=css;c.insertBefore(st,c.firstChild);}
+  c.querySelectorAll('g[id^="n-"]').forEach(g=>g.style.filter='');
+  return {xml:new XMLSerializer().serializeToString(c),w:vb.width,h:vb.height};
+}
+async function exportPngBlob(xml,w,h,scale=2){
+  const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);await img.decode();
+  const cv=document.createElement('canvas');cv.width=Math.round(w*scale);cv.height=Math.round(h*scale);
+  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  return await new Promise(r=>cv.toBlob(r,'image/png'));
+}
+async function exportDiagram(kind){
+  const {xml,w,h}=await buildExportSvg();
+  const blob=kind==='svg'?new Blob([xml],{type:'image/svg+xml'}):await exportPngBlob(xml,w,h);
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='modelldiagramm.'+kind;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+// Hover link: the same parameter lights up in the diagram, the math panel and the prior controls
+const HOVER_COL={alpha:'int',sigma:'sig',nu:'nu',sigma_u:'re',sigma_v:'re',rho:'re',u_j:'re',v_j:'re',det:'ink2',y:'data'};
+function hoverLink(nid,on){
+  const col=curveCol(HOVER_COL[nid]||(nid.startsWith('b')?'beta':'ink2'));
+  const cards=nid==='y'?['n-lik','n-y']:[`n-${nid}`];
+  cards.forEach(id=>{const el=document.getElementById(id);if(el)el.style.filter=on?`drop-shadow(0 0 6px ${col})`:''});
+  document.querySelectorAll(`#mlines [data-nid="${nid}"], #prior-ui [data-nid="${nid}"]`).forEach(el=>{
+    el.classList.toggle('hov-hl',on);el.style.setProperty('--hl',col);
+  });
 }
 
 // ═══════════════════════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function render(){
-  const defs=document.getElementById('defs');
-  const gE=document.getElementById('g-edges');
-  const gN=document.getElementById('g-nodes');
-  defs.innerHTML='';gE.innerHTML='';gN.innerHTML='';
-
+  const svg=document.getElementById('svg'),defs=document.getElementById('defs');
+  const gB=document.getElementById('g-bands'),gE=document.getElementById('g-edges');
+  const gN=document.getElementById('g-nodes'),gL=document.getElementById('g-badges');
+  [defs,gB,gE,gN,gL].forEach(g=>g.innerHTML='');
   ['int','beta','sig','nu','re','data','ink2'].forEach(c=>{
-    const m=se('marker',{id:`a-${c}`,markerWidth:'7',markerHeight:'7',refX:'5.5',refY:'3.5',orient:'auto'});
-    m.appendChild(se('path',{d:'M0,0 L0,7 L7,3.5 z',fill:edgeCol(c)}));
-    defs.appendChild(m);
-    // Softer arrow for prior labels
-    const ms=se('marker',{id:`as-${c}`,markerWidth:'5',markerHeight:'5',refX:'4',refY:'2.5',orient:'auto'});
-    ms.appendChild(se('path',{d:'M0,0 L0,5 L5,2.5 z',fill:edgeCol(c)}));
-    defs.appendChild(ms);
+    const m=se('marker',{id:`a-${c}`,markerWidth:'8',markerHeight:'8',refX:'7',refY:'4',orient:'auto',markerUnits:'userSpaceOnUse'});
+    m.appendChild(se('path',{d:'M0,0 L8,4 L0,8 z',fill:edgeCol(c)}));defs.appendChild(m);
   });
-
-  const D=buildLayout();
-  // Set SVG height to fit all content (enables scrolling for large models)
-  const svgEl=document.getElementById('svg');
-  const dwH=document.getElementById('dw').clientHeight||520;
-  const yNode=D.nodes['y'];
-  const neededH=yNode?yNode.y+120:D.H;
-  svgEl.setAttribute('height',Math.max(neededH,dwH));
-
-  D.edges.forEach(e=>{ const a=D.nodes[e.fr],b=D.nodes[e.to]; if(a&&b) drawEdge(gE,a,b,e); });
-  Object.values(D.nodes).forEach(n=>drawNode(gN,n));
+  const L=buildLayout();
+  svg.setAttribute('viewBox',`0 0 ${L.W} ${L.H}`);
+  svg.removeAttribute('height');
+  svg.style.maxWidth=(L.W*1.3)+'px';svg.style.margin='0 auto';
+  drawBands(gB,L);
+  L.edges.forEach(e=>drawEdge(gE,gL,L,e));
+  Object.values(L.nodes).forEach(n=>drawNode(gN,n));
 }
 
-function drawEdge(g,a,b,edge){
-  const c=edgeCol(edge.col);
-  if(a.type==='plbl') return; // prior info is now inside drawStoch
-  // srcX/srcY override the source node's own center — used by det→anch_mu so the
-  // "=" arrow starts at the underbrace under the formula's RHS, not wherever the
-  // det node's center happens to fall inside the (variable-length) equation text.
-  const srcX=edge.srcX??a.x, srcY=edge.srcY??a.y;
-  // 'lik' and generic 'stoch' nodes (α, β, σ, ν, τ₀, τ₁, u₀ⱼ, u₁ⱼ) get a much
-  // bigger source radius than their node size alone would need: every one of
-  // them has an underlined family name sitting below its curve, and the arrow
-  // must clear that text too, not just the curve — otherwise it visibly cuts
-  // through the label on its way out.
-  const rA=edge.srcX!=null?0:a.type==='det'?8:a.type==='lik'?42:a.type==='obs'?23:a.type==='anchor'?12:44;
-  const rB=b.type==='det'?8:b.type==='obs'||b.type==='lik'?23:b.type==='anchor'?12:22;
-
-  // For α/β→det edges: arrow tip lands at the term's x-position in the formula
-  let tx2=b.x, ty2=b.y, fixedEnd=false;
-  if(b.type==='det' && edge.termX!=null){
-    tx2=edge.termX;
-    ty2=b.y-10; // top of formula box
-    fixedEnd=true;
-  } else if(b.id==='u_j'||b.id==='v_j'){
-    // u_j/v_j's arrow must stop at their "Normal(0,τ₀)"/"MVNormal(0,Σ)" prior-label
-    // text, which sits a FIXED vertical distance above the curve, regardless of the
-    // arrow's approach angle. A Euclidean source-radius (used everywhere else) works
-    // fine for the near-vertical τ→u_j/v_j arrows, but ρ approaches much more
-    // diagonally (it sits off to the side, between τ₀ and τ₁) — the same radius
-    // then buys far less VERTICAL clearance, so the tip lands on top of the text
-    // instead of above it. Solving for the point on the source→target line that's
-    // exactly vertClear above the target's center fixes this for any angle.
-    const ddx=b.x-srcX, ddy=b.y-srcY;
-    const vertClear=55;
-    if(Math.abs(ddy)>0.01){
-      tx2=b.x-ddx*vertClear/ddy;
-      ty2=b.y-vertClear;
-      fixedEnd=true;
+function drawBands(g,L){
+  L.bands.forEach((b,i)=>{
+    if(i%2===0)g.appendChild(se('rect',{x:0,y:b.y,width:L.W,height:b.h,fill:C.ink(),opacity:DARK?'0.025':'0.03'}));
+    if(i>0)g.appendChild(se('line',{x1:0,y1:b.y,x2:L.W,y2:b.y,stroke:C.grid(),'stroke-width':'1'}));
+    g.appendChild(se('text',{x:12,y:b.y+17,fill:C.ink2(),'font-family':F_MONO,'font-size':'11','letter-spacing':'1.2',opacity:'0.8'},b.lbl.replace(/[a-zäöüß]/g,ch=>ch.toUpperCase())));
+    if(b.plate){
+      const p=b.plate;
+      g.appendChild(se('rect',{x:p.x,y:p.y,width:p.w,height:p.h,rx:10,fill:'none',stroke:edgeCol('re'),'stroke-width':'1.4','stroke-dasharray':'6,4',opacity:'0.7'}));
+      g.appendChild(se('text',{x:p.x+p.w-9,y:p.y+p.h-6,'text-anchor':'end',fill:edgeCol('re'),'font-family':F_MONO,'font-size':'11',opacity:'0.85'},p.lbl));
     }
-  }
-
-  const dx=tx2-srcX, dy=ty2-srcY, len=Math.sqrt(dx*dx+dy*dy)||1;
-  const ux=dx/len, uy=dy/len;
-  const x1=(srcX+ux*(rA+3)).toFixed(1), y1=(srcY+uy*(rA+3)).toFixed(1);
-  // End point: for term-targeted (or otherwise fixed) edges, land exactly at tx2/ty2
-  const x2=fixedEnd?(+tx2).toFixed(1):(b.x-ux*(rB+9)).toFixed(1);
-  const y2=fixedEnd?(+ty2).toFixed(1):(b.y-uy*(rB+9)).toFixed(1);
-  // Control point with gentle curve. The start control point (cx1) carries the full
-  // bulge so the path can sweep around neighboring nodes; the end control point (cx2)
-  // only gets a fraction of it, so the curve always arrives at its target close to
-  // perpendicular — otherwise a strongly-curved edge (e.g. σ→y) lands with a visibly
-  // tilted arrowhead, since SVG's marker orient="auto" follows the exact local tangent.
-  const cx1=(+x1+(edge.crv||0)*0.35).toFixed(1);
-  const cy1=(+y1+(+y2- +y1)*0.3).toFixed(1);
-  const cx2=(+x2+(edge.crv||0)*0.06).toFixed(1);
-  const cy2=(+y2-(+y2- +y1)*0.3).toFixed(1);
-  const d=`M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
-  g.appendChild(se('path',{d,stroke:c,'stroke-width':edge.col==='ink2'?'1.2':'1.8',
-    fill:'none','stroke-dasharray':edge.dash?'5,2.5':'',
-    'marker-end':`url(#a-${edge.col||'ink2'})`,opacity:'0.8'}));
-  // Kruschke/McElreath notation: "~" marks every stochastic relationship — a parameter
-  // drawn from its prior curve, a random effect drawn from its hyperprior, or the
-  // likelihood generating the observed data. "=" marks the one deterministic step —
-  // the formula computing μᵢ (or pᵢ/λᵢ) — as its own explicit arrow into the
-  // likelihood-parameter row, mirroring how Kruschke draws it rather than leaving it
-  // implicit in the formula text alone.
-  // Label sits at the curve's actual midpoint (t=0.5 on the cubic bezier, not the
-  // straight-line midpoint) and is offset perpendicular to the local tangent, so it
-  // never sits on top of the stroke regardless of how much the edge curves.
-  if(edge.dash||a.type==='cov') return;
-  const bx=(+x1+3*+cx1+3*+cx2+ +x2)/8, by=(+y1+3*+cy1+3*+cy2+ +y2)/8;
-  const tvx=(+x2+ +cx2- +cx1- +x1), tvy=(+y2+ +cy2- +cy1- +y1);
-  const tlen=Math.sqrt(tvx*tvx+tvy*tvy)||1;
-  let nx=-tvy/tlen, ny=tvx/tlen;
-  if(nx<0){ nx=-nx; ny=-ny; } // keep labels consistently on the same side
-  // Index suffix: "j" on hyperprior→random-effect draws, "i" (or "i,j") only on the
-  // final likelihood→data draw — σ/ν feed the likelihood but aren't themselves
-  // redrawn per observation, so they get a plain "~".
-  let idx='';
-  const isLikToY=b.type==='obs'&&a.type==='lik';
-  if(b.id==='u_j'||b.id==='v_j') idx=' j';
-  else if(isLikToY) idx=M.ml?' i,j':' i';
-  const label=edge.eq?'=':('~'+idx);
-  // Offset large enough to clear the label's own bounding box (not just its center) —
-  // longer labels ("~ i,j") need more clearance than short ones ("~").
-  const labelOff=25+(1+idx.length)*2.7+(isLikToY?16:0);
-  const tx=(bx+nx*labelOff).toFixed(1), ty=(by+ny*labelOff).toFixed(1);
-  g.appendChild(se('text',{x:tx,y:ty,'text-anchor':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'15',opacity:'0.75'},label));
+  });
 }
 
-function drawNode(g,node){
-  const grp=se('g',{transform:`translate(${node.x},${node.y})`,style:'cursor:pointer',id:`n-${node.id}`});
-  grp.addEventListener('click',()=>onNodeClick(node));
-  if(node.type==='plbl')  drawPLbl(grp,node);
-  else if(node.type==='stoch') drawStoch(grp,node);
-  else if(node.type==='det')   drawDet(grp,node);
-  else if(node.type==='anchor')drawAnchor(grp,node);
-  else if(node.type==='lik')   drawLik(grp,node);
-  else if(node.type==='obs')   drawObs(grp,node);
-  else if(node.type==='cov')   drawCov(grp,node);
+// straight arrows; "~" = stochastic draw, "=" = deterministic computation, as a badge on the line
+function drawEdge(g,gL,L,e){
+  const a=L.nodes[e.fr],b=L.nodes[e.to],c=edgeCol(e.col);
+  const x1=a.x,y1=a.y+a.h;
+  let pts;
+  if(e.term){
+    pts=[[x1,y1],[b.x-b.w/2+20+b.termPos[e.term],b.y]];
+  }else if(e.slot){
+    const s=b.slots.find(s=>s.k===e.slot),sy=s.y-15;
+    if(e.route==='side'){                     // σ/ν: down their own column, then across
+      const yk=b.y-30;
+      pts=[[x1,y1],[x1,yk],[s.x,yk],[s.x,sy]];
+    }else pts=[[x1,y1],[s.x,sy]];
+  }else pts=[[x1,y1],[b.x,b.y]];
+  const d='M'+pts.map(p=>p.map(v=>v.toFixed(1)).join(',')).join(' L');
+  g.appendChild(se('path',{d,stroke:c,'stroke-width':'1.7',fill:'none','stroke-linejoin':'round',
+    'marker-end':`url(#a-${e.col})`,opacity:'0.85'}));
+  let best=0,bx=0,by=0;
+  for(let i=0;i<pts.length-1;i++){
+    const p=pts[i],q=pts[i+1],len=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    if(len>best){best=len;bx=(p[0]+q[0])/2;by=(p[1]+q[1])/2}
+  }
+  const w=Math.max(22,textW(e.lab,13)+12);
+  gL.appendChild(se('rect',{x:bx-w/2,y:by-10,width:w,height:20,rx:10,fill:C.paper(),stroke:c,'stroke-width':'1.2'}));
+  gL.appendChild(se('text',{x:bx,y:by+1,'text-anchor':'middle','dominant-baseline':'middle',fill:c,
+    'font-family':F_MONO,'font-size':'13','font-weight':'500'},e.lab));
+}
+
+function cardFrame(g,n,col,{shaded=false,active=false}={}){
+  if(active)g.appendChild(se('rect',{x:-n.w/2-5,y:-5,width:n.w+10,height:n.h+10,rx:13,fill:'none',stroke:col,'stroke-width':'5',opacity:'0.22'}));
+  g.appendChild(se('rect',{x:-n.w/2,y:0,width:n.w,height:n.h,rx:9,
+    fill:shaded?col:C.paper(),'fill-opacity':shaded?(DARK?'0.2':'0.13'):'1',
+    stroke:col,'stroke-width':active?'2.4':'1.7'}));
+}
+
+function drawNode(g,n){
+  const grp=se('g',{transform:`translate(${n.x},${n.y})`,style:'cursor:pointer',id:`n-${n.id}`});
+  grp.addEventListener('click',()=>onNodeClick(n));
+  const hid=n.type==='obs'?'y':n.id==='lik'?'y':n.id;
+  grp.addEventListener('mouseenter',()=>hoverLink(hid,true));
+  grp.addEventListener('mouseleave',()=>hoverLink(hid,false));
+  if(n.type==='stoch')drawStoch(grp,n);
+  else if(n.type==='det')drawDet(grp,n);
+  else if(n.type==='lik')drawLik(grp,n);
+  else if(n.type==='obs')drawObs(grp,n);
   g.appendChild(grp);
 }
 
-function drawPLbl(g,node){
-  // Prior info is now rendered inside drawStoch — plbl is invisible
-}
-
-function drawStoch(g,node){
-  const c=curveCol(node.col);
-  const lc=MONO?C.ink():c; // symbol/label text: black in mono mode, matches the book
-  const isAct=ACTIVE===node.id;
-  const pr=getPr(node);
-  const f=pr?.fam||'normal';
-  const isUniform=f==='uniform';
-  const cW=96, cH=41;       // curve canvas width/height
-  const cL=-cW/2;           // left edge
-  const cTop=-19;           // curve top (relative to node center)
-  const cBase=cTop+cH;      // baseline y
-
-  // ── Active glow ──────────────────────────────────────
-  if(isAct){
-    g.appendChild(se('rect',{x:String(cL-9),y:String(cTop-41),
-      width:String(cW+18),height:String(cH+80),rx:'9',
-      fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
+// prior / random-effect card: symbol · Kruschke curve (live from the prior) · family · prior string
+function drawStoch(g,n){
+  const c=curveCol(n.col),lc=MONO?C.ink():c;
+  cardFrame(g,n,c,{active:ACTIVE===n.id});
+  const pr=getPr(n),f=pr?.fam||'normal';
+  g.appendChild(se('text',{x:0,y:22,'text-anchor':'middle','dominant-baseline':'middle',fill:lc,
+    'font-family':F_SERIF,'font-size':n.lbl.length>2?'19':'23','font-weight':'700'},n.lbl));
+  const cW=n.w-34,cH=DET==='simple'?28:36,top=40;
+  if(f==='uniform'){
+    g.appendChild(se('rect',{x:-cW/2,y:top,width:cW,height:cH,rx:2,fill:c,'fill-opacity':'0.2',stroke:c,'stroke-width':'2.2'}));
+  }else{
+    const {stroke,fill}=kruschkePath(pr,cW,cH),tx=`translate(${-cW/2},${top})`;
+    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',transform:tx}));
+    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.4',fill:'none',transform:tx}));
   }
-
-  // ── Distribution shape ───────────────────────────────
-  if(isUniform){
-    g.appendChild(se('rect',{x:String(cL),y:String(cTop),
-      width:String(cW),height:String(cH),rx:'2',
-      fill:c,'fill-opacity':'0.2',stroke:c,'stroke-width':'2.5'}));
-    if(pr&&DET!=='simple'){
-      const lo=parseFloat(pr.p1??0).toFixed(0),hi=parseFloat(pr.p2??1).toFixed(0);
-      g.appendChild(se('text',{x:String(cL+5),y:String(cTop-5),'text-anchor':'start',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.82'},`L=${lo}`));
-      g.appendChild(se('text',{x:String(cW/2-5),y:String(cTop-5),'text-anchor':'end',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.82'},`H=${hi}`));
-    }
-  } else {
-    const {stroke,fill}=kruschkePath(pr,cW,cH);
-    const tx=`translate(${cL},${cTop})`;
-    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',
-      stroke:'none',transform:tx}));
-    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.6',fill:'none',transform:tx}));
-    if((pr||node.prLabelText)&&DET!=='simple'){
-      g.appendChild(se('text',{x:'0',y:String(cTop-26),'text-anchor':'middle',
-        fill:c,'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.85'},node.prLabelText||prS(pr)));
-    }
-  }
-
-  // ── Baseline ─────────────────────────────────────────
-  g.appendChild(se('line',{x1:String(cL),y1:String(cBase),
-    x2:String(cW/2),y2:String(cBase),
-    stroke:c,'stroke-width':'1.8',opacity:'0.8'}));
-
-  // ── Parameter name (between hyperparams and curve top) ──
-  const fs=node.lbl.length>4?'15':node.lbl.length>2?'17':'23';
-  g.appendChild(se('text',{x:'0',y:String(cTop-10),'text-anchor':'middle',
-    'dominant-baseline':'middle',
-    fill:lc,'font-family':"'Fraunces',serif",'font-size':fs,'font-weight':'700'},node.lbl));
-
-  // ── Family label below baseline (underlined, Kruschke-style) ──
-  if(DET!=='simple'){
-    const famLbl={normal:'normal',student_t:'student-t',exponential:'exp',
-      half_normal:'half-normal',gamma:'gamma',beta:'beta',uniform:'uniform',lkj:'LKJ'}[f]||f;
-    // famLabelOverride lets u₀ⱼ/u₁ⱼ say "MVNormal" here instead of "normal" once a
-    // random slope makes them jointly (not independently) drawn — see buildLayout().
-    g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
-      fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
-      'text-decoration':'underline',opacity:'0.9'},node.famLabelOverride||famLbl));
-  }
-
-  // ── Optional subscript ───────────────────────────────
-  if(DET==='full'&&node.sub){
-    g.appendChild(se('text',{x:'0',y:String(cBase+35),'text-anchor':'middle',
-      fill:C.ink2(),'font-family':"'DM Mono',monospace",'font-size':'11.5',opacity:'0.5'},node.sub));
-  }
-}
-
-function getPr(node){
-  if(node.pk==='alpha') return M.pr.alpha;
-  if(node.pk==='sigma') return M.pr.sigma;
-  if(node.pk==='nu')    return M.pr.nu;
-  if(node.pk==='mu_a')  return M.pr.mu_a;
-  if(node.pk==='sig_a') return M.pr.sig_a;
-  if(node.pk==='mu_b')  return M.pr.mu_b;
-  if(node.pk==='sig_b') return M.pr.sig_b;
-  if(node.pk==='rho')   return M.pr.rho;
-  if(node.pk?.startsWith('beta_')){ const i=parseInt(node.pk.split('_')[1]); return M.preds[i]?.pr; }
-  if(node.prObj) return node.prObj;
-  return null;
-}
-
-function drawDet(g,node){
-  const isAct=ACTIVE===node.id;
-  const terms=node.formulaTerms||[];
-  const bHW=node.boxHalfW||100;
-
-  if(DET==='simple'){
-    const c=MONO?C.ink():C.ink2();
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:'11',fill:c,opacity:isAct?'0.85':'0.55'}));
-    g.appendChild(se('text',{x:'19',y:'1','dominant-baseline':'middle',fill:c,
-      'font-family':"'DM Mono',monospace",'font-size':'17',opacity:'0.85'},node.lbl));
-    return;
-  }
-
-  // Kruschke-style: plain text, no box. Positions relative to node center.
-  let rx=-bHW+28, firstTermX=null, lastTermEnd=null;
-  terms.forEach((t,i)=>{
-    let fill=C.ink(), fw='400', opacity=isAct?'1':'0.9';
-    if(!MONO){
-      if(t.nodeId==='alpha'){fill=C.int();fw='700';opacity='0.98';}
-      else if(t.nodeId&&t.nodeId.startsWith('b')){fill=C.beta();fw='700';opacity='0.98';}
-      else if(t.nodeId==='sigma'){fill=C.sig();fw='700';opacity='0.98';}
-    } else if(t.nodeId){ fw='700'; }
-    g.appendChild(se('text',{x:rx.toFixed(1),y:'8','dominant-baseline':'middle',
-      fill,'font-family':"'DM Mono',monospace",'font-size':'17.5','font-weight':fw,opacity},t.text));
-    if(i>0 && firstTermX===null) firstTermX=rx; // skip the leading "μᵢ = " prefix term
-    rx+=t.text.length*_CW;
-    lastTermEnd=rx;
-  });
-
-  // Underbrace (⏟) beneath the right-hand expression — replaces the old box
-  if(firstTermX!=null){
-    const bc=MONO?KBLUE():C.ink2();
-    const by=22, x0=firstTermX-2, x1=lastTermEnd-2;
-    const dpath=`M${x0.toFixed(1)},${by} Q${((x0+x1)/2).toFixed(1)},${(by+9).toFixed(1)} ${x1.toFixed(1)},${by}`;
-    if(isAct) g.appendChild(se('path',{d:dpath,stroke:bc,'stroke-width':'5','stroke-linecap':'round',fill:'none',opacity:'0.18'}));
-    g.appendChild(se('path',{d:dpath,stroke:bc,'stroke-width':'2',fill:'none',opacity:'0.85'}));
-  }
-}
-
-// Small discrete-distribution "icon" (bar pictogram) for the likelihood of count/binary outcomes
-function discreteIcon(fam,cW,cH){
-  const bars = fam==='bernoulli' ? [0.62,0.38] : [0.18,0.42,0.68,0.95,0.55,0.22,0.08];
-  const n=bars.length, gap=4, bw=(cW-gap*(n-1))/n;
-  return bars.map((h,i)=>({x:-cW/2+i*(bw+gap), y:cH/2-h*cH, w:bw, h:h*cH}));
-}
-
-// Kruschke-style: the likelihood is its own node — curve/bars + underlined family
-// name, no data label attached. Sits directly below the μᵢ/σ/ν anchor row (which
-// carries its parameters); the observed datum yᵢ gets its own node below this one,
-// reached via a single "~i" arrow, matching how Kruschke keeps "the distribution"
-// and "the datum drawn from it" visually distinct.
-function drawLik(g,node){
-  const isAct=ACTIVE==='lik';
-  const c=curveCol('data');
-  const cW=90, cH=39, cTop=-19, cBase=cTop+cH;
-  const f=M.fam;
-
-  if(DET==='simple'){
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:'11',fill:c,opacity:isAct?'0.85':'0.55'}));
-    return;
-  }
-
-  if(isAct){
-    g.appendChild(se('rect',{x:String(-cW/2-9),y:String(cTop-14),width:String(cW+18),height:String(cH+55),
-      rx:'9',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
-  }
-
-  if(f==='bernoulli'||f==='poisson'){
-    discreteIcon(f,cW,cH).forEach(r=>{
-      g.appendChild(se('rect',{x:r.x.toFixed(1),y:(cTop+r.y).toFixed(1),
-        width:r.w.toFixed(1),height:r.h.toFixed(1),fill:c,'fill-opacity':DARK?'0.28':'0.18',
-        stroke:c,'stroke-width':'1.5'}));
+  g.appendChild(se('line',{x1:-cW/2,y1:top+cH,x2:cW/2,y2:top+cH,stroke:c,'stroke-width':'1.6',opacity:'0.8'}));
+  if(DET==='simple')return;
+  // axis ticks (full detail): three values on the parameter's own scale
+  let off=0;
+  if(DET==='full'){
+    const [lo,hi]=axisDomain(pr);
+    [[-cW/2,lo,'start'],[0,(lo+hi)/2,'middle'],[cW/2,hi,'end']].forEach(([x,v,anc])=>{
+      g.appendChild(se('line',{x1:x,y1:top+cH,x2:x,y2:top+cH+4,stroke:c,'stroke-width':'1.2',opacity:'0.8'}));
+      g.appendChild(se('text',{x,y:top+cH+13,'text-anchor':anc,fill:C.ink2(),'font-family':F_MONO,'font-size':'9.5'},fmtTick(v)));
     });
-  } else {
+    off=12;
+  }
+  const fam=n.famOverride||{normal:'normal',student_t:'student-t',exponential:'exponential',half_normal:'half-normal',
+    gamma:'gamma',beta:'beta',uniform:'uniform',lkj:'LKJ'}[f]||f;
+  g.appendChild(se('text',{x:0,y:top+cH+17+off,'text-anchor':'middle',fill:c,'font-family':F_MONO,'font-size':'12.5',
+    'font-style':'italic','text-decoration':'underline'},fam));
+  const ps=n.prText||prS(pr);
+  g.appendChild(se('text',{x:0,y:top+cH+37+off,'text-anchor':'middle',fill:C.ink(),'font-family':F_MONO,
+    'font-size':ps.length>15?'10.5':'11.5',opacity:'0.85'},ps));
+  if(DET==='full'&&n.sub)g.appendChild(se('text',{x:0,y:top+cH+54+off,'text-anchor':'middle',fill:C.ink2(),
+    'font-family':F_MONO,'font-size':'10.5',opacity:'0.75'},n.sub));
+}
+
+// formula card: coloured parameter terms, observed covariates shaded
+function drawDet(g,n){
+  const ink=C.ink();
+  cardFrame(g,n,MONO?ink:C.ink2(),{active:ACTIVE==='det'});
+  const x0=-n.w/2+20,ty=n.h/2+1;
+  const colOf=id=>id==='alpha'?'int':id.startsWith('b')?'beta':'re';
+  n.terms.forEach(t=>{
+    const x=x0+t.x0;
+    if(t.obs)g.appendChild(se('rect',{x:x-2,y:ty-13,width:t.w+4,height:24,rx:4,fill:ink,opacity:DARK?'0.13':'0.09'}));
+    const fill=t.nodeId?(MONO?ink:curveCol(colOf(t.nodeId))):ink;
+    const tt=se('text',{x,y:ty,'dominant-baseline':'middle',fill,'font-family':F_MONO,'font-size':HY.fpx,
+      'font-weight':t.nodeId?'500':'400'},t.text);
+    tt.setAttribute('xml:space','preserve');tt.style.whiteSpace='pre';   // keep " + " spacing
+    g.appendChild(tt);
+  });
+}
+
+// likelihood card: parameter slots on top (clickable), curve/bars, family, sampling statement
+function drawLik(g,n){
+  const c=curveCol('data');
+  cardFrame(g,n,c,{active:ACTIVE==='lik'||ACTIVE==='y'});
+  n.slots.forEach(s=>{
+    const sc=curveCol(s.col),sx=s.x-n.x,w=Math.max(34,textW(s.lbl,16,F_SERIF,'700')+16);
+    const act=ACTIVE===s.k;
+    const sg=se('g',{style:'cursor:pointer'});
+    sg.addEventListener('click',ev=>{ev.stopPropagation();onNodeClick({type:'anchor',mapsTo:s.k})});
+    if(act)sg.appendChild(se('rect',{x:sx-w/2-4,y:-19,width:w+8,height:38,rx:19,fill:'none',stroke:sc,'stroke-width':'4',opacity:'0.25'}));
+    sg.appendChild(se('rect',{x:sx-w/2,y:-15,width:w,height:30,rx:15,fill:C.paper(),stroke:sc,'stroke-width':'1.7'}));
+    sg.appendChild(se('text',{x:sx,y:1,'text-anchor':'middle','dominant-baseline':'middle',fill:MONO?C.ink():sc,
+      'font-family':F_SERIF,'font-size':'16','font-style':'italic','font-weight':'700'},s.lbl));
+    g.appendChild(sg);
+  });
+  const f=M.fam,cW=112,cH=DET==='simple'?30:38,top=28;
+  if(f==='bernoulli'||f==='poisson'){
+    const bars=f==='bernoulli'?[0.62,0.38]:[0.18,0.42,0.68,0.95,0.55,0.22,0.08],gp=4,bw=(cW-gp*(bars.length-1))/bars.length;
+    bars.forEach((h,i)=>g.appendChild(se('rect',{x:-cW/2+i*(bw+gp),y:top+cH-h*cH,width:bw,height:h*cH,fill:c,'fill-opacity':DARK?'0.28':'0.18',stroke:c,'stroke-width':'1.4'})));
+  }else{
     const pr=f==='student'?{fam:'student_t',sig:1}:f==='gamma'?{fam:'gamma',p1:2,p2:.5}:{fam:'normal',sig:1};
-    const {stroke,fill}=kruschkePath(pr,cW,cH);
-    const tx=`translate(${-cW/2},${cTop})`;
-    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',stroke:'none',transform:tx}));
-    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.6',fill:'none',transform:tx}));
+    const {stroke,fill}=kruschkePath(pr,cW,cH),tx=`translate(${-cW/2},${top})`;
+    g.appendChild(se('path',{d:fill,fill:c,'fill-opacity':DARK?'0.22':'0.14',transform:tx}));
+    g.appendChild(se('path',{d:stroke,stroke:c,'stroke-width':'2.4',fill:'none',transform:tx}));
   }
-  g.appendChild(se('line',{x1:String(-cW/2),y1:String(cBase),x2:String(cW/2),y2:String(cBase),
-    stroke:c,'stroke-width':'1.8',opacity:'0.8'}));
-  const famLbl={normal:'normal',student:'student-t',bernoulli:'bernoulli',poisson:'poisson',gamma:'gamma'}[f]||f;
-  g.appendChild(se('text',{x:'0',y:String(cBase+18),'text-anchor':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5','font-style':'italic',
-    'text-decoration':'underline',opacity:'0.9'},famLbl));
+  g.appendChild(se('line',{x1:-cW/2,y1:top+cH,x2:cW/2,y2:top+cH,stroke:c,'stroke-width':'1.6',opacity:'0.8'}));
+  if(DET==='simple')return;
+  const fam={normal:'normal',student:'student-t',bernoulli:'bernoulli',poisson:'poisson',gamma:'gamma'}[f]||f;
+  g.appendChild(se('text',{x:0,y:top+cH+18,'text-anchor':'middle',fill:c,'font-family':F_MONO,'font-size':'12.5',
+    'font-style':'italic','text-decoration':'underline'},fam));
+  const samp={normal:'Normal(μᵢ, σ)',student:'t(ν, μᵢ, σ)',bernoulli:'Bernoulli(pᵢ)',poisson:'Poisson(λᵢ)',gamma:'Gamma(μᵢ, φ)'}[f];
+  g.appendChild(se('text',{x:0,y:top+cH+40,'text-anchor':'middle',fill:C.ink(),'font-family':F_MONO,'font-size':'12.5',opacity:'0.9'},
+    `${M.out||'y'}ᵢ ~ ${samp}`));
+  if(DET==='full')g.appendChild(se('text',{x:0,y:top+cH+60,'text-anchor':'middle',fill:C.ink2(),'font-family':F_MONO,'font-size':'10.5',opacity:'0.75'},
+    HY_TXT.likNote));
 }
 
-// The observed datum yᵢ — plain italic label, nothing else. Reached from the
-// likelihood curve above via a single "~i" (or "~i,j") arrow.
-function drawObs(g,node){
-  const isAct=ACTIVE===node.id;
-  const lbl=node.lbl||'y';
-  const c=curveCol('data'), lc=MONO?C.ink():c;
-  if(isAct){
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:'26',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
-  }
-  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:lc,'font-family':"'Fraunces',serif",'font-size':'23','font-style':'italic','font-weight':'600'},lbl+'ᵢ'));
-}
-
-// Likelihood-parameter anchor (μᵢ/pᵢ/λᵢ, σ, ν) — a small symbolic slot sitting
-// directly above the likelihood curve, showing where that parameter plugs in.
-// Clicking it shows the explanation of whatever actually feeds it (node.mapsTo).
-function drawAnchor(g,node){
-  const c=curveCol(node.col);
-  const isAct=ACTIVE===node.mapsTo;
-  if(isAct){
-    g.appendChild(se('circle',{cx:'0',cy:'0',r:'20',fill:'none',stroke:c,'stroke-width':'1.6',opacity:'0.22'}));
-  }
-  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'Fraunces',serif",'font-size':'19','font-style':'italic','font-weight':'700'},node.lbl));
-}
-
-function drawCov(g,node){
-  const c=C.ink2();
-  g.appendChild(se('rect',{x:-22,y:-10,width:44,height:20,fill:c,opacity:'0.1',stroke:c,'stroke-width':'1',rx:'3'}));
-  g.appendChild(se('text',{x:'0',y:'1','text-anchor':'middle','dominant-baseline':'middle',
-    fill:c,'font-family':"'DM Mono',monospace",'font-size':'12.5'},node.lbl));
+// observed outcome — shaded card (Kruschke: shaded = observed)
+function drawObs(g,n){
+  const c=curveCol('data');
+  cardFrame(g,n,c,{shaded:true,active:ACTIVE==='y'});
+  g.appendChild(se('text',{x:0,y:n.h/2-(DET==='full'?6:0),'text-anchor':'middle','dominant-baseline':'middle',fill:MONO?C.ink():c,
+    'font-family':F_SERIF,'font-size':'22','font-style':'italic','font-weight':'600'},`${n.lbl}ᵢ`));
+  if(DET==='full')g.appendChild(se('text',{x:0,y:n.h/2+15,'text-anchor':'middle',fill:C.ink2(),'font-family':F_MONO,'font-size':'10.5'},
+    M.ml?HY_TXT.obsNJ:HY_TXT.obsN));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1673,7 +1470,8 @@ function buildMath(){
   function row(inner,cc,nid){
     const act=ACTIVE===nid?' act':'';
     const style=cc?`color:var(${CC[cc]})`:'';
-    return `<div class="mrow${act}" style="${style}" onclick="onMathClick('${nid||''}')">${inner}</div>`;
+    const hov=nid?` data-nid="${nid}" onmouseenter="hoverLink('${nid}',true)" onmouseleave="hoverLink('${nid}',false)"`:'';
+    return `<div class="mrow${act}" style="${style}"${hov} onclick="onMathClick('${nid||''}')">${inner}</div>`;
   }
   function block(lbl,rows){
     return `<div class="mblock"><div class="mblk-l">${lbl}</div>${rows}</div>`;
@@ -1732,7 +1530,7 @@ function buildMath(){
     const b=K>1?`β${sub(i+1)}`:'β';
     pRows+=row(`${b} ${sim} ${htmlPr(p.pr)}`,'beta',`b${i}`);
   });
-  if(hS) pRows+=row(`σ ${sim} ${htmlPr(M.pr.sigma)}`,'sig','sigma');
+  if(hS) pRows+=row(`${auxSym()} ${sim} ${htmlPr(M.pr.sigma)}`,'sig','sigma');
   if(hN) pRows+=row(`ν ${sim} ${htmlPr(M.pr.nu)}`,'nu','nu');
   html+=block('Priors', pRows);
 
@@ -1826,13 +1624,13 @@ function buildPriorUI(){
   // Sigma — the exponential rate λ is inversely related to E[σ]=1/λ, which feels
   // backwards while dragging (bigger λ → narrower curve). Show the implied mean live
   // next to the slider so the relationship is visible instead of just felt as "off".
-  if(hS) html+=blk('sig','σ — Residualstreuung','sig',prS(M.pr.sigma),
-    PR_EX.exponential+'<br><b>Tipp:</b> E[σ] = 1/λ. Wenn σ ≈ 5 erwartet: λ = 0.2.',
+  if(hS) html+=blk('sig',isGam()?'φ — Form (Shape)':'σ — Residualstreuung','sig',prS(M.pr.sigma),
+    PR_EX.exponential+(isGam()?'<br><b>Tipp:</b> E[φ] = 1/λ. Größeres φ = weniger schiefe, weniger streuende Gamma-Verteilung (Variationskoeffizient = 1/√φ).':'<br><b>Tipp:</b> E[σ] = 1/λ. Wenn σ ≈ 5 erwartet: λ = 0.2.'),
     sls([
       {l:'λ',mn:0.1,mx:5,st:0.05,dp:2,v:M.pr.sigma.p1??1,
        fn:"M.pr.sigma.p1=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(2)",
-       hint:`≈ E[σ]=${(1/(M.pr.sigma.p1??1)).toFixed(2)}`,
-       hintFn:"'≈ E[σ]='+(1/this.value).toFixed(2)"},
+       hint:`≈ E[${auxSym()}]=${(1/(M.pr.sigma.p1??1)).toFixed(2)}`,
+       hintFn:"'≈ E['+auxSym()+']='+(1/this.value).toFixed(2)"},
     ],'pv-sig','prS(M.pr.sigma)'),
     'pv-sig'
   );
@@ -1886,6 +1684,16 @@ function buildPriorUI(){
   }
 
   document.getElementById('prior-ui').innerHTML=html;
+  // tag each prior block with the diagram node it belongs to (same order as built above)
+  const nids=['alpha',...M.preds.map((_,i)=>`b${i}`)];
+  if(hS)nids.push('sigma'); if(hN)nids.push('nu');
+  if(isML){nids.push('sigma_u'); if(M.ret==='slope'&&M.preds.length>0)nids.push('sigma_v','rho');}
+  document.querySelectorAll('#prior-ui .prior-b').forEach((el,i)=>{
+    const nid=nids[i]; if(!nid)return;
+    el.dataset.nid=nid;
+    el.addEventListener('mouseenter',()=>hoverLink(nid,true));
+    el.addEventListener('mouseleave',()=>hoverLink(nid,false));
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1958,6 +1766,7 @@ function onNodeClick(node){
           :ACTIVE==='u_j'?'u_j':ACTIVE==='v_j'?'v_j'
           :ACTIVE==='sigma_u'?'sigma_u':ACTIVE==='sigma_v'?'sigma_v'
           :ACTIVE?.startsWith('b')?'beta'
+          :ACTIVE==='sigma'&&isGam()?'shape'
           :EX[ACTIVE]?ACTIVE:'alpha';
   if(SHOW_EX) showExplain(ek);
   render();buildMath();
@@ -1968,6 +1777,7 @@ function onMathClick(nid){
   const ek=nid==='det'?'det':nid==='y'?'y':nid==='lik'?'y'
           :nid==='u_j'?'u_j':nid==='v_j'?'v_j'
           :nid==='sigma_u'?'sigma_u':nid==='sigma_v'?'sigma_v'
+          :nid==='sigma'&&isGam()?'shape'
           :nid.startsWith('b')?'beta':EX[nid]?nid:'alpha';
   if(SHOW_EX) showExplain(ek);
   render();buildMath();
