@@ -891,6 +891,10 @@ canvas {
           <div class="legend-dot" style="border-color:var(--ink3);background:var(--paper);border-style:dashed;"></div>
           Latent (U)
         </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="border-color:var(--a6);border-width:3px;background:var(--paper);"></div>
+          Dein Set (Prüfmodus)
+        </div>
       </div>
     </div>
 
@@ -941,6 +945,14 @@ canvas {
         Variablen in der Praxis schwer messbar ist.
       </div>
       <ul class="analysis-list" id="altAdjSetsList"></ul>
+    </div>
+    <div id="adjCheckWrap" style="margin-top:.8rem;padding:.6rem .8rem;background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--a6);border-radius:4px;">
+      <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.4rem;">
+        <span class="analysis-col-title" style="margin:0;color:var(--a6);">Eigenes Adjustment-Set prüfen</span>
+        <button class="btn-sm" id="btnAdjCheck" type="button" style="font-family:'DM Mono',monospace;font-size:.72rem;padding:.2rem .6rem;cursor:pointer;border:1px solid var(--a6);background:transparent;color:var(--a6);border-radius:3px;">Prüfmodus: aus</button>
+        <button class="btn-sm" id="btnAdjReset" type="button" style="display:none;font-family:'DM Mono',monospace;font-size:.72rem;padding:.2rem .6rem;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--ink2);border-radius:3px;">Zurücksetzen</button>
+      </div>
+      <div id="adjCheckBody" style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink2);line-height:1.6;">Im Prüfmodus markierst du per Klick auf die Knoten, wofür adjustiert werden soll (nochmal klicken hebt die Markierung auf). X und Y sind nicht wählbar. Das Urteil gilt für den oben gewählten Effekt.</div>
     </div>
     <div class="paths-section">
       <div class="paths-title">Alle Pfade</div>
@@ -1202,6 +1214,9 @@ const state = {
   analysisResult: null,
   highlightAdjSet: new Set(),
   highlightColliders: new Set(),
+  checkMode: false,
+  userAdj: new Set(),
+  checkOpenEdges: new Set(),
 };
 
 let nodeCounter = 0;
@@ -1857,8 +1872,10 @@ function drawCanvas() {
     const ep = getEdgeEndpoints(fn, tn);
     const isSelected = state.selectedEdge === edge.id;
     const isHovered  = !isSelected && state.hoveredEdge === edge.id;
-    const color = isSelected ? a1 : isHovered ? a2 : ink2;
+    const isOpenPath = state.checkMode && state.checkOpenEdges.has(edge.from + '>' + edge.to);
+    const color = isSelected ? a1 : isHovered ? a2 : isOpenPath ? getCSSVar('--warn') : ink2;
     ctx.save();
+    if (isOpenPath) ctx.lineWidth = 3;
     if (isSelected) { ctx.setLineDash([6,3]); }
     if (isHovered)  { ctx.lineWidth = 2.5; }  // slightly thicker on hover
     drawArrow(ctx, ep.x1, ep.y1, ep.x2, ep.y2, color);
@@ -1934,6 +1951,15 @@ function drawCanvas() {
     const label = truncateCanvasLabel(ctx, node.name, NODE_W - 12);
     ctx.fillText(label, x + NODE_W/2, y + NODE_H/2);
 
+    if (state.checkMode && state.userAdj.has(node.id)) {
+      const a6 = getCSSVar('--a6');
+      ctx.save(); ctx.strokeStyle = a6; ctx.lineWidth = 3;
+      if (isLatent) { ctx.beginPath(); ctx.ellipse(x + NODE_W/2, y + NODE_H/2, NODE_W/2 + 7, NODE_H/2 + 9, 0, 0, Math.PI*2); ctx.stroke(); }
+      else { roundRect(ctx, x - 5, y - 5, NODE_W + 10, NODE_H + 10, NODE_R + 4); ctx.stroke(); }
+      ctx.font = `bold 10px 'DM Mono', monospace`; ctx.fillStyle = a6; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Z', x + 6, y - 1);
+      ctx.restore();
+    }
     // Badge
     if (isExposure) {
       ctx.font = `bold 9px 'DM Mono', monospace`;
@@ -2070,6 +2096,7 @@ canvas.addEventListener('mouseleave', () => {
 });
 
 function handleNodeClick(nodeId) {
+  if (state.checkMode) { toggleUserAdj(nodeId); return; }
   state.highlightedNode = nodeId;
   highlightSidebarNode(nodeId);
   if (state.selectedNode === null) {
@@ -2310,6 +2337,7 @@ function runAnalysis() {
     document.getElementById('analysisPanel').classList.remove('visible');
     document.getElementById('sidebarAnalysisWrap').style.display = 'none';
     state.analysisResult = null;
+    state.checkOpenEdges = new Set();
     return;
   }
 
@@ -2541,7 +2569,141 @@ function runAnalysis() {
     renderTestableImplications();
   }
 
+  renderAdjCheck();
   drawCanvas();
+}
+
+// ============================================================
+// EIGENES ADJUSTMENT-SET PRÜFEN (wie dagitty::isAdjustmentSet)
+// Totaler Effekt: generalisiertes Adjustment-Kriterium (Perković et al. 2018): Z enthält keinen Nachfahren eines Knotens
+// auf einem kausalen Pfad X → … → Y (Y eingeschlossen) und blockiert alle nicht-kausalen Pfade zwischen X und Y.
+// Direkter Effekt: im Graphen OHNE die Kante X → Y müssen alle X–Y-Pfade blockiert sein, kein Nachfahre von Y in Z.
+// ============================================================
+function checkAdjustmentSet(Zarr, effectType) {
+  const X = state.exposure, Y = state.outcome;
+  const direct = effectType === 'direct';
+  const saved = state.edges;
+  if (direct) {
+    if (!saved.some(e => e.from === X && e.to === Y)) return { noDirect: true };
+    state.edges = saved.filter(e => !(e.from === X && e.to === Y));
+  }
+  try {
+    const Z = new Set(Zarr);
+    const forbidden = new Map();
+    if (direct) {
+      getDescendants(Y).forEach(d => forbidden.set(d, 'desc'));
+    } else {
+      const causal = [...getDescendants(X)].filter(w => w === Y || getDescendants(w).has(Y));
+      causal.forEach(w => forbidden.set(w, w === Y ? 'y' : 'med'));
+      causal.forEach(w => getDescendants(w).forEach(d => { if (!forbidden.has(d)) forbidden.set(d, 'desc'); }));
+    }
+    const latentIds = new Set(state.nodes.filter(n => n.latent).map(n => n.id));
+    const violations = [];
+    Zarr.forEach(id => {
+      if (latentIds.has(id)) violations.push({ id, type: 'latent' });
+      else if (forbidden.has(id)) violations.push({ id, type: forbidden.get(id) });
+    });
+    const allPaths = findAllPaths(X, Y);
+    const nonCausal = direct ? allPaths : allPaths.filter(p => !isFullyDirectedPath(p));
+    const blocksAll = zs => nonCausal.every(p => !isPathActive(p, [...zs]));
+    const open = nonCausal.filter(p => isPathActive(p, Zarr));
+    const openInfo = open.map(p => {
+      let opened = false;
+      for (let i = 1; i < p.length - 1; i++) {
+        if (isColliderTriple(p[i-1], p[i], p[i+1])) {
+          if (Z.has(p[i]) || [...getDescendants(p[i])].some(d => Z.has(d))) opened = true;
+        }
+      }
+      return { path: p, str: buildPathString(p), opened };
+    });
+    const openEdges = new Set();
+    open.forEach(p => {
+      for (let i = 0; i < p.length - 1; i++) {
+        const e = state.edges.find(e => (e.from === p[i] && e.to === p[i+1]) || (e.from === p[i+1] && e.to === p[i]));
+        if (e) openEdges.add(e.from + '>' + e.to);
+      }
+    });
+    const valid = violations.length === 0 && open.length === 0;
+    // smallest valid proper subset (only for small sets; 2^|Z| subsets)
+    let smaller = null;
+    if (valid && Zarr.length > 0 && Zarr.length <= 12) {
+      const n = Zarr.length;
+      const masks = [];
+      for (let m = 0; m < (1 << n) - 1; m++) masks.push(m);
+      masks.sort((a, b) => popcount(a) - popcount(b));
+      for (const m of masks) {
+        const sub = Zarr.filter((_, i) => m & (1 << i));
+        if (blocksAll(sub)) { smaller = sub; break; }
+      }
+    }
+    return { valid, violations, openInfo, openEdges, smaller };
+  } finally { state.edges = saved; }
+}
+function popcount(x) { let c = 0; while (x) { c += x & 1; x >>= 1; } return c; }
+
+function toggleUserAdj(nodeId) {
+  if (nodeId === state.exposure || nodeId === state.outcome) {
+    const el = document.getElementById('adjCheckBody');
+    if (el) el.insertAdjacentHTML('afterbegin', '<div style="color:var(--warn);margin-bottom:.3rem;" id="adjXYNote">X und Y können nicht adjustiert werden.</div>');
+    setTimeout(() => { const n = document.getElementById('adjXYNote'); if (n) n.remove(); }, 2500);
+    return;
+  }
+  if (state.userAdj.has(nodeId)) state.userAdj.delete(nodeId); else state.userAdj.add(nodeId);
+  renderAdjCheck();
+  drawCanvas();
+}
+
+function renderAdjCheck() {
+  const btn = document.getElementById('btnAdjCheck');
+  const reset = document.getElementById('btnAdjReset');
+  const body = document.getElementById('adjCheckBody');
+  if (!btn || !body) return;
+  // drop nodes that no longer exist or became X/Y
+  state.userAdj = new Set([...state.userAdj].filter(id => id !== state.exposure && id !== state.outcome && state.nodes.some(n => n.id === id)));
+  state.checkOpenEdges = new Set();
+  btn.textContent = state.checkMode ? 'Prüfmodus: an' : 'Prüfmodus: aus';
+  btn.style.background = state.checkMode ? 'var(--a6)' : 'transparent';
+  btn.style.color = state.checkMode ? 'var(--paper)' : 'var(--a6)';
+  reset.style.display = state.checkMode && state.userAdj.size ? 'inline-block' : 'none';
+  if (!state.checkMode || !state.exposure || !state.outcome) {
+    body.innerHTML = 'Im Prüfmodus markierst du per Klick auf die Knoten, wofür adjustiert werden soll (nochmal klicken hebt die Markierung auf). X und Y sind nicht wählbar. Das Urteil gilt für den oben gewählten Effekt.';
+    return;
+  }
+  const eff = getEffectType();
+  const E = eff === 'direct' ? 'direkten' : 'totalen';
+  const xN = escHtml(getNodeName(state.exposure)), yN = escHtml(getNodeName(state.outcome));
+  const Z = [...state.userAdj];
+  const names = Z.map(id => escHtml(getNodeName(id)));
+  let html = '<div style="margin-bottom:.4rem;">Dein Set: <strong style="color:var(--ink);">{' + (names.join(', ') || '∅ (leer)') + '}</strong></div>';
+  const r = checkAdjustmentSet(Z, eff);
+  if (r.noDirect) {
+    html += '<div class="msg-warn">' + 'Für den direkten Effekt braucht es eine Kante {X} → {Y}.'.replace('{X}', xN).replace('{Y}', yN) + '</div>';
+    body.innerHTML = html;
+    return;
+  }
+  state.checkOpenEdges = r.openEdges;
+  const head = (r.valid ? '✓ Gültiges Adjustment-Set für den {E} Effekt von {X} auf {Y}.' : '✗ Kein gültiges Adjustment-Set für den {E} Effekt von {X} auf {Y}.').replace('{E}', E).replace('{X}', xN).replace('{Y}', yN);
+  html += '<div class="' + (r.valid ? 'msg-ok' : 'msg-warn') + '" style="margin-bottom:.4rem;">' + head + '</div>';
+  if (r.valid) {
+    if (Z.length > 0) {
+      html += '<div>' + (r.smaller
+        ? 'Das Set ist gültig, aber nicht minimal. Es reicht schon: {S}.'.replace('{S}', '{' + (r.smaller.map(id => escHtml(getNodeName(id))).join(', ') || '∅ (leer)') + '}')
+        : 'Das Set ist minimal: Jede Variable wird gebraucht.') + '</div>';
+    }
+  } else {
+    if (r.violations.length) {
+      html += '<ul style="margin:.2rem 0 .4rem 1.1rem;padding:0;">' + r.violations.map(v => {
+        const t = { latent: '„{N}“ ist latent (nicht gemessen) und kann nicht adjustiert werden.', med: '„{N}“ ist ein Mediator: Adjustieren blockiert einen Teil des kausalen Effekts.', y: '„{N}“ liegt selbst auf dem Pfad zum Outcome und darf nicht im Set stehen.', desc: '„{N}“ ist ein Nachfahre eines Mediators oder des Outcomes und darf nicht im Set stehen.' }[v.type];
+        return '<li>' + t.replace('{N}', escHtml(getNodeName(v.id))) + '</li>';
+      }).join('') + '</ul>';
+    }
+    if (r.openInfo.length) {
+      html += '<div>Diese Pfade sind noch offen (orange im Graphen):</div><ul style="margin:.2rem 0 0 1.1rem;padding:0;">' + r.openInfo.map(o =>
+        '<li><span style="color:var(--warn);">' + escHtml(o.str) + '</span> <span style="color:var(--ink3);">(' + (o.opened ? 'durch das Adjustieren geöffnet (Collider)' : 'nicht blockiert') + ')</span></li>'
+      ).join('') + '</ul>';
+    }
+  }
+  body.innerHTML = html;
 }
 
 function buildPathString(path) {
@@ -4591,6 +4753,17 @@ document.getElementById('nodeNameInput').addEventListener('keydown', e => {
 });
 
 document.getElementById('btnDeleteEdge').addEventListener('click', removeSelectedEdge);
+document.getElementById('btnAdjCheck').addEventListener('click', () => {
+  state.checkMode = !state.checkMode;
+  if (state.checkMode) { state.selectedNode = null; try { updateEdgeStatus(); } catch (e) {} }
+  renderAdjCheck();
+  drawCanvas();
+});
+document.getElementById('btnAdjReset').addEventListener('click', () => {
+  state.userAdj = new Set();
+  renderAdjCheck();
+  drawCanvas();
+});
 document.getElementById('btnClearCanvas').addEventListener('click', () => {
   if (!confirm('Alle Knoten und Kanten löschen?')) return;
   state.nodes = [];
