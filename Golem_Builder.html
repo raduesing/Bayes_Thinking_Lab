@@ -850,6 +850,7 @@ canvas {
           <span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--ink3);">DAG-Zeichenfläche</span>
         </div>
         <button class="btn" onclick="snapToGrid()" style="font-size:.72rem;" title="Alle Knoten am Raster ausrichten">⊞ Ausrichten</button>
+        <button class="btn" onclick="arrangeByRole()" style="font-size:.72rem;" title="Knoten nach Rolle anordnen: X links, Y rechts, Mediatoren dazwischen, Confounder darüber">⇄ Anordnen</button>
         <button class="btn" onclick="exportPNG()" style="font-size:.72rem;" title="DAG als PNG herunterladen">↓ PNG</button>
         <button class="btn" onclick="exportAPA()" style="font-size:.72rem;" title="DAG als schwarz-weiße Abbildung im APA-Stil exportieren (eng zugeschnitten, druckfertig)">↓ APA</button>
         <button class="btn" onclick="exportDagJSON()" style="font-size:.72rem;" title="Ganzes DAG (Knoten, Kanten, Koeffizienten, Verteilungen) als Datei speichern — zum späteren Weiterarbeiten wieder laden">↓ DAG</button>
@@ -2147,6 +2148,25 @@ function updateEdgeStatus() {
 // ============================================================
 // STATE MUTATIONS
 // ============================================================
+// Startplätze für neue Knoten: ein typisches DAG-Layout statt Zufall. Reihenfolge der Plätze:
+// links Mitte (X), rechts Mitte (Y), oben Mitte (Confounder), unten Mitte (Mediator), dann die vier Ecken,
+// danach ein Raster. Bereits belegte Plätze werden übersprungen (auch nach dem Löschen von Knoten).
+// Mittelpunkte rasten auf die Rasterpunkte ein (30 + 40k, 25 + 40k), passend zu „Ausrichten".
+function nextNodeSlot(W, H) {
+  const fr = [[.14, .55], [.86, .55], [.5, .16], [.5, .88], [.3, .16], [.7, .16], [.3, .88], [.7, .88]];
+  const cands = fr.map(([fx, fy]) => [fx * W, fy * H]);
+  for (let y = 70; y < H - 40; y += 80) for (let x = 90; x < W - 60; x += 130) cands.push([x, y]);
+  const free = (cx, cy) => !state.nodes.some(n => Math.abs(n.x + NODE_W / 2 - cx) < NODE_W + 12 && Math.abs(n.y + NODE_H / 2 - cy) < NODE_H + 10);
+  for (const [px, py] of cands) {
+    const cx = Math.round((px - 30) / 40) * 40 + 30, cy = Math.round((py - 25) / 40) * 40 + 25;
+    const x = Math.max(8, Math.min(W - NODE_W - 8, cx - NODE_W / 2)), y = Math.max(8, Math.min(H - NODE_H - 8, cy - NODE_H / 2));
+    if (free(x + NODE_W / 2, y + NODE_H / 2)) return { x, y };
+  }
+  // alles belegt: leicht versetzt neben den letzten Knoten
+  const last = state.nodes[state.nodes.length - 1] || { x: 20, y: 20 };
+  return { x: Math.max(8, Math.min(W - NODE_W - 8, last.x + 24)), y: Math.max(8, Math.min(H - NODE_H - 8, last.y + 24)) };
+}
+
 function addNode(name, forceLatent) {
   name = name.trim();
   if (!name) { showToast('Bitte einen Namen eingeben.'); return; }
@@ -2155,10 +2175,7 @@ function addNode(name, forceLatent) {
   if (state.nodes.some(n=>n.name===name)) { showToast(`Knoten "${name}" existiert bereits.`); return; }
   const rect = container.getBoundingClientRect();
   const W = rect.width || 600, H = rect.height || 400;
-  // Spread nodes around, avoid overlap
-  const margin = 20;
-  let x = margin + Math.random() * (W - NODE_W - 2*margin);
-  let y = margin + Math.random() * (H - NODE_H - 2*margin);
+  const { x, y } = nextNodeSlot(W, H);
   const typeRadio = document.querySelector('input[name="nodeType"]:checked');
   const isLatent = forceLatent !== undefined ? forceLatent : (typeRadio ? typeRadio.value === 'latent' : false);
   state.nodes.push({ id: uuid(), name, x: Math.round(x), y: Math.round(y), latent: isLatent });
@@ -4982,6 +4999,67 @@ setTimeout(() => {
 }, 50);
 
 // ── SNAP TO GRID ──────────────────────────────────────────────
+// „Anordnen": Knoten nach ihrer Rolle im DAG platzieren (Lehrbuch-Layout) — X links, Y rechts, Mediatoren darunter
+// dazwischen, Confounder/Ursachen darüber, Rest (Collider, Folgen, Unbeteiligte) ganz unten. Ohne Exposition/Outcome:
+// Schichten nach Pfadtiefe (Ursachen links, Wirkungen rechts). Danach rastet snapToGrid() ein und löst Überlappungen.
+function arrangeByRole() {
+  const nodes = state.nodes;
+  if (nodes.length < 2) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width / dpr, H = canvas.height / dpr;
+  const X = state.exposure, Y = state.outcome;
+  const reach = (a, b) => a !== b && hasDirectedPath(a, b);
+  const depth = {};
+  const depthOf = id => {
+    if (depth[id] !== undefined) return depth[id];
+    depth[id] = 0; // Zyklen-Schutz
+    return (depth[id] = Math.max(-1, ...getParents(id).map(depthOf)) + 1);
+  };
+  nodes.forEach(n => depthOf(n.id));
+  const pos = {}; // id → Mittelpunkt
+  const m = NODE_W / 2 + 24;
+  const spread = (list, cy) => {
+    const n = list.length;
+    let lo = W * .22, hi = W * .78;
+    if (n > 3 || (hi - lo) / n < NODE_W + 14) { lo = m; hi = W - m; }
+    list.forEach((id, i) => { pos[id] = [lo + (i + .5) * (hi - lo) / n, cy]; });
+  };
+  const byName = id => (nodes.find(n => n.id === id) || {}).name || '';
+  if (X && Y && X !== Y && nodes.some(n => n.id === X) && nodes.some(n => n.id === Y)) {
+    pos[X] = [W * .12, H * .5];
+    pos[Y] = [W * .88, H * .5];
+    const top = [], med = [], low = [];
+    nodes.forEach(n => {
+      if (n.id === X || n.id === Y) return;
+      const aX = reach(n.id, X), dX = reach(X, n.id);
+      const aY = n.id !== Y && hasDirectedPathAvoiding(n.id, Y, X); // Weg zu Y NICHT über X (sonst wäre jede Ursache von X auch eine von Y)
+      if (dX && aY) med.push({ id: n.id, g: 0 });
+      else if (aX && aY) top.push({ id: n.id, g: 1 });
+      else if (aX) top.push({ id: n.id, g: 0 });
+      else if (aY) top.push({ id: n.id, g: 2 });
+      else low.push({ id: n.id, g: 0 });
+    });
+    const order = (a, b) => a.g - b.g || depth[a.id] - depth[b.id] || byName(a.id).localeCompare(byName(b.id));
+    spread(top.sort(order).map(o => o.id), H * .15);
+    spread(med.sort(order).map(o => o.id), H * .75);
+    spread(low.sort(order).map(o => o.id), H * .9);
+  } else {
+    const layers = {};
+    nodes.forEach(n => { (layers[depth[n.id]] = layers[depth[n.id]] || []).push(n.id); });
+    const keys = Object.keys(layers).map(Number).sort((a, b) => a - b);
+    keys.forEach((k, ci) => {
+      const list = layers[k].sort((a, b) => byName(a).localeCompare(byName(b)));
+      list.forEach((id, i) => { pos[id] = [m + (ci + .5) * (W - 2 * m) / keys.length, H * (i + 1) / (list.length + 1)]; });
+    });
+  }
+  nodes.forEach(n => {
+    const [cx, cy] = pos[n.id];
+    n.x = Math.max(0, Math.min(W - NODE_W, cx - NODE_W / 2));
+    n.y = Math.max(0, Math.min(H - NODE_H, cy - NODE_H / 2));
+  });
+  snapToGrid();
+}
+
 function snapToGrid() {
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.width / dpr, H = canvas.height / dpr;
@@ -5368,6 +5446,7 @@ const GB_HELP_HTML = `
     <li><strong>Kante zeichnen:</strong> Quell-Knoten klicken → Ziel-Knoten klicken</li>
     <li><strong>Beispiele:</strong> Vorgefertigte Kausalstrukturen (Confounder, Collider, Mediator, IV…) über das Dropdown laden</li>
     <li><strong>↓ DAG / ↑ DAG:</strong> dient allein dazu, ein <em>eigenes</em> Modell zu sichern, um es später exakt wieder in den Golem Builder selbst zu laden — praktisch, wenn man ein komplexeres DAG nicht jedes Mal neu spezifizieren möchte. Sichert den <em>gesamten</em> Zustand: Knoten, Kanten, β-Koeffizienten, Moderatoren, Verteilungen, n/seed und Standardisierungsmodus (mehr als PNG/APA, die nur die Zeichnung exportieren). Kein allgemeines Austauschformat — die Datei ist nicht mit dagitty oder anderen Tools kompatibel, nur für den Weg Golem Builder → Golem Builder gedacht. Format: JSON. Laden überschreibt das aktuelle Canvas (mit Bestätigungsabfrage).</li>
+    <li><strong>Anordnung:</strong> Neue Knoten erscheinen auf festen Startplätzen (links X, rechts Y, oben Confounder, unten Mediator) statt zufällig verteilt. <strong>⇄ Anordnen</strong> sortiert alle Knoten nach ihrer Rolle im DAG: X links, Y rechts, Mediatoren (Pfade X → … → Y) darunter in der Mitte, Confounder und andere Ursachen darüber, Collider, Folgen und Unbeteiligte ganz unten. Sind Exposition und Outcome noch nicht gesetzt, ordnet der Knopf nach Pfadtiefe an (Ursachen links, Wirkungen rechts). <strong>⊞ Ausrichten</strong> rastet dagegen nur die vorhandenen Knoten am Raster ein und bringt fast gleich hohe in eine Reihe. Beides lässt sich jederzeit durch Ziehen der Knoten überschreiben.</li>
     <li><strong>Canvas-Größe:</strong> unten rechts an der Zeichenfläche lässt sich per Ziehen sowohl die Höhe als auch die Breite anpassen — nützlich bei komplexeren DAGs mit vielen Knoten. Die Standardgröße bleibt beim Laden der Seite unverändert.</li>
   </ul>
 
