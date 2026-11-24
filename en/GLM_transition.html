@@ -1042,7 +1042,7 @@ function drawLinkFn(){
       ctx.beginPath(); ctx.moveTo(toX(v),cy-3); ctx.lineTo(toX(v),cy+3);
       ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1; ctx.stroke();
       ctx.fillStyle=DARK?'#9a9080':'#5a4f42';
-      ctx.fillText(v, toX(v), cy+13);
+      if(Math.abs(v)<4) ctx.fillText(v, toX(v), cy+13);
     });
     ctx.fillStyle=DARK?'#9a9080':'#5a4f42';
     ctx.fillText('−∞', m.l+4, cy+13);
@@ -1092,6 +1092,10 @@ function drawLinkFn(){
       ctx.fillStyle=DARK?'#2bc7c4':'#0e7c7b'; ctx.font='13px DM Mono,monospace';
       ctx.textAlign='left'; ctx.fillText('0', m.l+2, barY-3);
       ctx.textAlign='right'; ctx.fillText('1', W-m.r-2, barY-3);
+      ctx.textAlign='center';
+      [.25,.5,.75].forEach(t=>{ const tx=m.l+t*Wp;
+        ctx.beginPath(); ctx.moveTo(tx,barY); ctx.lineTo(tx,barY+barH); ctx.strokeStyle=DARK?'rgba(43,199,196,.55)':'rgba(14,124,123,.5)'; ctx.lineWidth=1; ctx.stroke();
+        ctx.fillText(String(t), tx, barY-3); });
       // Sample points (same x values, same colors as left panel)
       if(cachedGLM){
         sampleX.forEach((x,i)=>{
@@ -1119,8 +1123,24 @@ function drawLinkFn(){
       ctx.beginPath(); ctx.moveTo(m.l,axis_y-12); ctx.lineTo(m.l,axis_y+4);
       ctx.strokeStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
       ctx.lineWidth=2; ctx.stroke();
+      // Axis scaled to the actual points (a fixed 0..e^4 range squeezed everything into the left corner),
+      // with tick labels; the red 0 marks the hard boundary
+      const muVals=cachedGLM?sampleX.map(x=>Math.exp(cachedGLM.a+cachedGLM.b*x)):[Math.exp(4)];
+      const maxData=Math.max(...muVals);
+      const e10=Math.pow(10,Math.floor(Math.log10(maxData/4))), mm=maxData/4/e10;
+      const tickStep=(mm<1.5?1:mm<3?2:mm<7?5:10)*e10;
+      const maxVal=Math.max(tickStep*2, Math.ceil(maxData*1.08/tickStep)*tickStep);
+      const dp=tickStep<0.1?2:tickStep<1?1:0;
+      ctx.font='13px DM Mono,monospace';
+      for(let v=0; v<=maxVal+1e-9; v+=tickStep){
+        const tx=m.l+v/maxVal*Wp;
+        ctx.beginPath(); ctx.moveTo(tx,axis_y-3); ctx.lineTo(tx,axis_y+3); ctx.strokeStyle=DARK?'#2a3a55':'#8a7f72'; ctx.lineWidth=1; ctx.stroke();
+        if(v===0){ ctx.fillStyle=DARK?'rgba(232,97,74,.85)':'rgba(201,74,42,.8)'; ctx.textAlign='left'; ctx.fillText('0 (boundary)', m.l, axis_y+17); }
+        else { ctx.fillStyle=DARK?'#9a9080':'#5a4f42'; ctx.textAlign=(v+tickStep>maxVal+1e-9)?'right':'center'; ctx.fillText(v.toFixed(dp), (v+tickStep>maxVal+1e-9)?W-m.r:tx, axis_y+17); }
+      }
+      ctx.fillStyle=DARK?'rgba(43,199,196,.85)':'rgba(14,124,123,.8)'; ctx.textAlign='right';
+      ctx.fillText(currentScen===1?'λ':'μ', W-m.r, axis_y-9);
       // Sample dots (same x values, same colors as left panel)
-      const maxVal=Math.exp(4);
       if(cachedGLM){
         sampleX.forEach((x,i)=>{
           const mu=Math.exp(cachedGLM.a+cachedGLM.b*x);
@@ -1129,15 +1149,12 @@ function drawLinkFn(){
           ctx.fillStyle=ptColors[i]; ctx.fill();
           ctx.lineWidth=1.5; ctx.strokeStyle=DARK?'#0c0f14':'#faf6ee'; ctx.stroke();
           linkVizPts.right.push({x:px,y:axis_y});
-          drawPtNum(ctx,px,axis_y,i,14);
+          drawPtNum(ctx,px,axis_y,i,-10);
         });
       }
       ctx.fillStyle=DARK?'rgba(43,199,196,.7)':'rgba(14,124,123,.65)';
       ctx.font='13px DM Mono,monospace'; ctx.textAlign='center';
       ctx.fillText('μ = e^η  > 0  (never negative)', W/2, m.t+10);
-      ctx.fillStyle=DARK?'rgba(232,97,74,.7)':'rgba(201,74,42,.65)';
-      ctx.textAlign='left';
-      ctx.fillText('0 ←boundary', m.l+3, axis_y-15);
     }
   }
 
