@@ -4952,24 +4952,57 @@ setTimeout(() => {
 function snapToGrid() {
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.width / dpr, H = canvas.height / dpr;
-  // Grid dots are at x: 30 + 40k, y: 25 + 40k — snap node center to nearest dot
-  state.nodes.forEach(node => {
-    const cx = node.x + NODE_W / 2;
-    const cy = node.y + NODE_H / 2;
-    const snapX = Math.round((cx - 30) / 40) * 40 + 30;
-    const snapY = Math.round((cy - 25) / 40) * 40 + 25;
-    node.x = Math.max(0, Math.min(W - NODE_W, snapX - NODE_W / 2));
-    node.y = Math.max(0, Math.min(H - NODE_H, snapY - NODE_H / 2));
+  const nodes = state.nodes;
+  if (!nodes.length) { drawCanvas(); return; }
+  // Raster-Punkte liegen bei x: 30 + 40k, y: 25 + 40k (Knotenmitte wird gerastert).
+  // Knoten mit ähnlicher Höhe landen in derselben Reihe, mit ähnlicher x-Position in
+  // derselben Spalte (statt jeden Knoten einzeln zu runden → sonst „fast gleiche" Reihen).
+  const gridX = c => Math.round((c - 30) / 40) * 40 + 30;
+  const gridY = c => Math.round((c - 25) / 40) * 40 + 25;
+  function cluster(key, tol) {
+    const items = nodes.map(n => ({ n, v: key(n) })).sort((a, b) => a.v - b.v);
+    const groups = [];
+    items.forEach(it => {
+      const g = groups[groups.length - 1];
+      if (g && it.v - g[0].v <= tol && it.v - g[g.length - 1].v <= tol) g.push(it); else groups.push([it]);
+    });
+    return groups;
+  }
+  // Reihen: Mittelpunkte höchstens ~eine Knotenhöhe auseinander → gleiche Reihe
+  const cyOf = n => n.y + NODE_H / 2, cxOf = n => n.x + NODE_W / 2;
+  const target = new Map(); // node → {cx, cy}
+  cluster(cyOf, NODE_H * 0.9).forEach(g => {
+    const cy = gridY(g.reduce((s, i) => s + i.v, 0) / g.length);
+    g.forEach(i => target.set(i.n, { cx: cxOf(i.n), cy }));
+  });
+  // Spalten: Mittelpunkte höchstens ~eine halbe Knotenbreite auseinander → gleiche Spalte
+  cluster(cxOf, NODE_W * 0.6).forEach(g => {
+    const cx = gridX(g.reduce((s, i) => s + i.v, 0) / g.length);
+    g.forEach(i => { target.get(i.n).cx = cx; });
+  });
+  nodes.forEach(n => {
+    const t = target.get(n);
+    n.x = Math.max(0, Math.min(W - NODE_W, t.cx - NODE_W / 2));
+    n.y = Math.max(0, Math.min(H - NODE_H, t.cy - NODE_H / 2));
+  });
+  // Überlappungen auflösen: der weiter rechts (bei Gleichstand: spätere) Knoten rückt
+  // in 40-px-Schritten nach rechts, passt das nicht mehr, nach unten.
+  const clash = (a, b) => Math.abs(a.x - b.x) < NODE_W + 10 && Math.abs(a.y - b.y) < NODE_H + 8;
+  const placed = [];
+  [...nodes].sort((a, b) => a.x - b.x || a.y - b.y).forEach(n => {
+    let guard = 0;
+    while (placed.some(p => clash(p, n)) && guard++ < 200) {
+      if (n.x + 40 <= W - NODE_W) n.x += 40;
+      else { n.x = Math.max(0, Math.min(W - NODE_W, n.x)); n.y = Math.min(H - NODE_H, n.y + 40); if (n.y >= H - NODE_H) break; }
+    }
+    placed.push(n);
   });
   drawCanvas();
 }
 
 // ── EXPORT ────────────────────────────────────────────────────
 function exportPNG() {
-  const link = document.createElement('a');
-  link.download = 'DAG.png';
-  link.href = canvas.toDataURL('image/png');
-  link.click();
+  canvas.toBlob(blob => { if (blob) saveFileAs(blob, 'DAG.png', 'image/png', 'Image (PNG)', 'File name for the image (with or without .png):', 'Image saved: '); }, 'image/png');
 }
 
 // A real APA figure: its own render path instead of a theme-switch hack.
@@ -5081,10 +5114,7 @@ function exportAPA() {
     }
   });
 
-  const link = document.createElement('a');
-  link.download = 'DAG_APA.png';
-  link.href = exp.toDataURL('image/png');
-  link.click();
+  exp.toBlob(blob => { if (blob) saveFileAs(blob, 'DAG_APA.png', 'image/png', 'Image (PNG)', 'File name for the image (with or without .png):', 'Image saved: '); }, 'image/png');
 }
 
 // ── SAVE / LOAD DAG (full state: structure + coefficients + distributions) ────────────
@@ -5125,13 +5155,42 @@ function exportDagJSON() {
       };
     }
   });
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  saveFileAs(JSON.stringify(data, null, 2), 'golem_dag.json', 'application/json', 'Golem DAG (JSON)', 'File name for the DAG (with or without .json):', 'DAG saved: ');
+}
+
+// Speichern mit Dialog: Chrome/Edge öffnen den „Speichern unter"-Dialog (Ordner + eigener Name wählbar).
+// Andere Browser (Firefox/Safari) haben diese API nicht → Fallback: Namen abfragen, dann normaler Download
+// (Zielordner bestimmt dort die Browser-Einstellung).
+async function saveFileAs(content, suggested, mime, desc, askMsg, okMsg) {
+  const ext = suggested.slice(suggested.lastIndexOf('.'));
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: desc, accept: { [mime]: [ext] } }],
+      });
+      const w = await handle.createWritable();
+      await w.write(blob);
+      await w.close();
+      showToast(okMsg + handle.name, 'ok');
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // Dialog abgebrochen
+      // andere Fehler (z. B. gesperrt) → Fallback unten
+    }
+  }
+  let name = prompt(askMsg, suggested);
+  if (name === null) return;
+  name = name.trim().replace(/[\\/:*?"<>|]+/g, '_') || suggested;
+  if (!name.toLowerCase().endsWith(ext)) name += ext;
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.download = 'golem_dag.json';
+  link.download = name;
   link.href = url;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast(okMsg + name, 'ok');
 }
 
 // Prüft eine geladene DAG-Datei, BEVOR der Zustand überschrieben wird: Struktur, eindeutige IDs, Kanten nur zwischen
