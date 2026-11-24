@@ -768,13 +768,26 @@ function drawDag(d) {
   // Assign pixel coordinates
   const pad = 44;
   const posMap = {};
-  Object.entries(byL).forEach(([l, ns]) => {
-    const x = pad + (Number(l) / Math.max(maxL, 1)) * (W - 2 * pad);
-    ns.forEach((n, i) => {
-      const y = pad + (i + 0.5) / ns.length * (H - 2 * pad);
-      posMap[n] = { x, y };
+  if (nodes.length > 1 && nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y))) {
+    // Anordnung aus dem Golem Builder übernehmen (Knotenmittelpunkte; Knoten dort 86×38 px), gleichmäßig
+    // (ohne Verzerrung) in die Mini-Fläche eingepasst und zentriert — so sieht der DAG hier genauso aus wie dort.
+    const cs = nodes.map(n => [n.x + 43, n.y + 19]);
+    const minX = Math.min(...cs.map(c => c[0])), maxX = Math.max(...cs.map(c => c[0]));
+    const minY = Math.min(...cs.map(c => c[1])), maxY = Math.max(...cs.map(c => c[1]));
+    const bw = maxX - minX, bh = maxY - minY;
+    const sc = Math.min(bw > 0 ? (W - 2 * pad) / bw : Infinity, bh > 0 ? (H - 2 * pad) / bh : Infinity, 1);
+    const ox = (W - bw * sc) / 2 - minX * sc, oy = (H - bh * sc) / 2 - minY * sc;
+    nodes.forEach((n, i) => { posMap[n.name] = { x: cs[i][0] * sc + ox, y: cs[i][1] * sc + oy }; });
+  } else {
+    // Fallback (ältere Importe ohne Positionen): Schichten nach Pfadtiefe
+    Object.entries(byL).forEach(([l, ns]) => {
+      const x = pad + (Number(l) / Math.max(maxL, 1)) * (W - 2 * pad);
+      ns.forEach((n, i) => {
+        const y = pad + (i + 0.5) / ns.length * (H - 2 * pad);
+        posMap[n] = { x, y };
+      });
     });
-  });
+  }
 
   const nodeMap = {};
   nodes.forEach(n => {
