@@ -240,6 +240,27 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
   border:none; background:none; padding:.3rem 0; display:block; margin-left:auto;
 }
 .hp-close:hover { color:var(--a1); }
+
+/* ── Eigene Auswahl ── */
+#custom-panel { display:none; position:fixed; inset:0; z-index:210; background:rgba(0,0,0,.5); backdrop-filter:blur(3px); }
+#custom-panel.open { display:flex; align-items:center; justify-content:center; }
+#custom-panel .hp-box { max-width:760px; display:flex; flex-direction:column; }
+.cp-tools { display:flex; gap:.4rem; flex-wrap:wrap; margin:.6rem 0 .4rem; }
+.cp-tools input[type=search] { flex:1; min-width:150px; font-family:'DM Mono',monospace; font-size:.75rem; padding:.3rem .5rem; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--ink); }
+#cp-count { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--ink3); margin-bottom:.4rem; }
+#cp-list { border:1px solid var(--border); border-radius:4px; background:var(--bg); max-height:45vh; overflow-y:auto; }
+.cp-item { display:flex; align-items:center; gap:.55rem; padding:.28rem .6rem; border-bottom:1px solid var(--grid); cursor:pointer; font-size:.85rem; color:var(--ink); }
+.cp-item:last-child { border-bottom:none; }
+.cp-item:hover { background:var(--panel); }
+.cp-item input { accent-color:var(--a4); cursor:pointer; }
+.cp-item.off .cp-name { color:var(--ink3); text-decoration:line-through; }
+.cp-name { flex:1; }
+.cp-b { font-family:'DM Mono',monospace; font-size:.62rem; padding:.1rem .4rem; border-radius:3px; border:1px solid var(--border); color:var(--ink3); }
+.cp-b2 { color:var(--good); border-color:var(--good); }
+.cp-foot { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-top:.8rem; }
+.cp-foot .hp-close { margin-left:auto; }
+#cp-msg { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--ink2); margin-top:.5rem; min-height:1em; }
+#cp-msg.err { color:var(--bad); }
 </style>
 </head>
 <body>
@@ -283,6 +304,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
     <div class="deck-actions">
       <button class="tb-btn" id="shuffle-btn">🔀 Shuffle</button>
       <button class="tb-btn" id="reset-btn">↺ Reset progress</button>
+      <button class="tb-btn" id="custom-btn">⚙ Custom selection</button>
     </div>
   </aside>
 
@@ -355,6 +377,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <li><strong>Flip</strong> – Click the card or press Space.</li>
       <li><strong>Category</strong> – Pick one or more areas to practice only those terms.</li>
       <li><strong>🔀 Shuffle</strong> – Puts the current selection into a new random order.</li>
+      <li><strong>⚙ Custom selection</strong> – Lists the terms of the selected categories. Untick individual terms (e.g. ones you already know well) and they will not appear in the deck. "Save set" stores selection and progress as a file, "Load set" lets you continue exactly there later.</li>
     </ul>
     <h3>How does "New → Learning → Known" work?</h3>
     <p>Every card has one of three progress stages, stored only in this browser (no account, no server). Your category selection and current position in the deck are also saved locally — close the browser and come back later, and you'll pick up exactly where you left off.</p>
@@ -367,6 +390,29 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
     <p>The benefit: on the next round (after "🔀 Shuffle" or a category change), cards from "New" and "Learning" are shown first; "Known" ones less often — so you spend your time on what's still shaky.</p>
     <p>Shortcuts: Space/Enter = flip, ← / → = previous/next card, once flipped: 1 = Again, 2 = Know it.</p>
     <button class="hp-close" id="help-close">Close ✕</button>
+  </div>
+</div>
+
+<!-- ══ Eigene Auswahl ══ -->
+<div id="custom-panel">
+  <div class="hp-box">
+    <h2>⚙ Custom selection</h2>
+    <p>Here you see all terms of the categories selected on the left. Untick terms you do not want to study or already know well: they will no longer appear in the deck. By default everything is ticked. Your selection is kept in this browser and can be saved to a file together with your progress and loaded again later.</p>
+    <div class="cp-tools">
+      <input type="search" id="cp-search" placeholder="Search term …">
+      <button class="tb-btn" id="cp-all" title="Tick all terms shown">All</button>
+      <button class="tb-btn" id="cp-none" title="Untick all terms shown">None</button>
+      <button class="tb-btn" id="cp-known" title="Untick all terms you have already rated as "Known"">Untick known</button>
+    </div>
+    <div id="cp-count"></div>
+    <div id="cp-list"></div>
+    <div class="cp-foot">
+      <button class="tb-btn" id="cp-save">💾 Save set</button>
+      <button class="tb-btn" id="cp-load">📂 Load set</button>
+      <input type="file" id="cp-file" accept=".json,application/json" hidden>
+      <button class="hp-close" id="cp-close">Done ✓</button>
+    </div>
+    <div id="cp-msg"></div>
   </div>
 </div>
 
@@ -440,8 +486,12 @@ const _tagLabels = {
   brms:'brms', margeff:'marginaleffects', bayestestr:'bayestestR', eval:'Evaluation'
 };
 
-function matchesFilter(t) {
+function matchesCat(t) {
   return activeCats.has('all') || t.cats.some(c => activeCats.has(c));
+}
+// Kategorie passt UND Begriff wurde nicht in „Eigene Auswahl" abgewählt
+function matchesFilter(t) {
+  return matchesCat(t) && !excluded.has(t.id);
 }
 
 function buildQueue(shuffleFully) {
@@ -592,6 +642,7 @@ document.getElementById('know-btn').addEventListener('click', () => assess(true)
 
 document.addEventListener('keydown', e => {
   if (document.getElementById('help-panel').classList.contains('open')) return;
+  if (document.getElementById('custom-panel').classList.contains('open')) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); flip(); }
   else if (e.code === 'ArrowLeft') goTo(-1);
@@ -599,6 +650,122 @@ document.addEventListener('keydown', e => {
   else if (flipped && (e.key === '1')) assess(false);
   else if (flipped && (e.key === '2')) assess(true);
 });
+
+// ── Eigene Auswahl: Begriffe ab-/anwählen, Set speichern/laden ──
+// `excluded` = abgewählte Begriffe (nicht "ausgewählte"), damit neue Glossar-Begriffe standardmäßig dabei sind.
+const EXCL_KEY = 'btl-karteikarten-excluded';
+const CP = {"locale": "en", "btn": "⚙ Custom selection", "hidden": "hidden", "count": "{s} of {n} terms selected", "boxes": ["New", "Learning", "Known"], "saved": "Set saved: ", "badfile": "This file is not a valid SigmaCards set.", "loaded": "Set loaded: {x} terms hidden.", "confirm_load": "Loading replaces the selection and progress in this browser with the state from the file. Continue?", "ask": "File name for the set (with or without .json):", "desc": "SigmaCards set (JSON)", "nothing": "No terms in this category."};
+let excluded = new Set();
+try { const a = JSON.parse(localStorage.getItem(EXCL_KEY) || '[]'); if (Array.isArray(a)) excluded = new Set(a.filter(id => TERMS_BY_ID[id])); } catch (e) {}
+function saveExcluded() { try { localStorage.setItem(EXCL_KEY, JSON.stringify([...excluded])); } catch (e) {} }
+let cpTerms = [], cpDirty = false;
+function cpMsg(text, err) { const m = document.getElementById('cp-msg'); m.textContent = text || ''; m.classList.toggle('err', !!err); }
+function updateCustomBtn() {
+  document.getElementById('custom-btn').textContent = CP.btn + (excluded.size ? ' (' + excluded.size + ' ' + CP.hidden + ')' : '');
+}
+function cpUpdateCount() {
+  const n = cpTerms.length, s = cpTerms.filter(t => !excluded.has(t.id)).length;
+  document.getElementById('cp-count').textContent = n ? CP.count.replace('{s}', s).replace('{n}', n) : CP.nothing;
+  document.querySelectorAll('#cp-list .cp-item').forEach(el => el.classList.toggle('off', excluded.has(cpTerms[+el.dataset.i].id)));
+}
+function cpApplySearch() {
+  const q = document.getElementById('cp-search').value.trim().toLowerCase();
+  document.querySelectorAll('#cp-list .cp-item').forEach(el => { el.hidden = !!q && !el.dataset.s.includes(q); });
+}
+function renderCustomList() {
+  cpTerms = TERMS.filter(matchesCat).sort((a, b) => a.name.localeCompare(b.name, CP.locale));
+  const esc = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  document.getElementById('cp-list').innerHTML = cpTerms.map((t, i) => {
+    const b = boxOf(t.id), s = (t.name + ' ' + (t.longname || '')).replace(/<[^>]*>/g, '').toLowerCase();
+    return `<label class="cp-item" data-i="${i}" data-s="${esc(s)}"><input type="checkbox"${excluded.has(t.id) ? '' : ' checked'}><span class="cp-name">${fixDiacritics(t.name)}</span><span class="cp-b cp-b${b}">${CP.boxes[b]}</span></label>`;
+  }).join('');
+  cpApplySearch(); cpUpdateCount();
+}
+function cpSetVisible(include) {
+  document.querySelectorAll('#cp-list .cp-item').forEach(el => {
+    if (el.hidden) return;
+    const id = cpTerms[+el.dataset.i].id;
+    if (include) excluded.delete(id); else excluded.add(id);
+    el.querySelector('input').checked = include;
+  });
+  cpChanged();
+}
+function cpChanged() { cpDirty = true; saveExcluded(); updateCustomBtn(); cpUpdateCount(); }
+function openCustom() { cpMsg(''); document.getElementById('cp-search').value = ''; renderCustomList(); document.getElementById('custom-panel').classList.add('open'); }
+function closeCustom() {
+  document.getElementById('custom-panel').classList.remove('open');
+  if (cpDirty) { cpDirty = false; buildQueue(false); }
+}
+document.getElementById('custom-btn').addEventListener('click', openCustom);
+document.getElementById('cp-close').addEventListener('click', closeCustom);
+document.getElementById('custom-panel').addEventListener('click', e => { if (e.target.id === 'custom-panel') closeCustom(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('custom-panel').classList.contains('open')) closeCustom(); });
+document.getElementById('cp-search').addEventListener('input', cpApplySearch);
+document.getElementById('cp-all').addEventListener('click', () => cpSetVisible(true));
+document.getElementById('cp-none').addEventListener('click', () => cpSetVisible(false));
+document.getElementById('cp-known').addEventListener('click', () => {
+  cpTerms.forEach(t => { if (boxOf(t.id) === 2) excluded.add(t.id); });
+  document.querySelectorAll('#cp-list .cp-item').forEach(el => { el.querySelector('input').checked = !excluded.has(cpTerms[+el.dataset.i].id); });
+  cpChanged();
+});
+document.getElementById('cp-list').addEventListener('change', e => {
+  const el = e.target.closest('.cp-item'); if (!el) return;
+  const id = cpTerms[+el.dataset.i].id;
+  if (e.target.checked) excluded.delete(id); else excluded.add(id);
+  cpChanged();
+});
+
+// Speichern mit „Speichern unter"-Dialog (Chrome/Edge); sonst Namensabfrage + normaler Download.
+async function saveTextFile(text, suggested) {
+  const mime = 'application/json', blob = new Blob([text], { type: mime });
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: suggested, types: [{ description: CP.desc, accept: { [mime]: ['.json'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      return h.name;
+    } catch (e) { if (e && e.name === 'AbortError') return null; }
+  }
+  let name = prompt(CP.ask, suggested);
+  if (name === null) return null;
+  name = name.trim().replace(/[\\/:*?"<>|]+/g, '_') || suggested;
+  if (!name.toLowerCase().endsWith('.json')) name += '.json';
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.download = name; a.href = url; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
+}
+document.getElementById('cp-save').addEventListener('click', async () => {
+  const prog = {};
+  Object.keys(progress).forEach(id => { if (progress[id] > 0 && TERMS_BY_ID[id]) prog[id] = progress[id]; });
+  const data = { app: 'sigmacards', version: 1, cats: [...activeCats], excluded: [...excluded], progress: prog };
+  const name = await saveTextFile(JSON.stringify(data, null, 1), 'sigmacards_set.json');
+  if (name) cpMsg(CP.saved + name);
+});
+document.getElementById('cp-load').addEventListener('click', () => document.getElementById('cp-file').click());
+document.getElementById('cp-file').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    let d = null;
+    try { d = JSON.parse(r.result); } catch (err) {}
+    if (!d || d.app !== 'sigmacards' || !Array.isArray(d.excluded)) { cpMsg(CP.badfile, true); return; }
+    if (Object.keys(progress).length && !confirm(CP.confirm_load)) return;
+    const valid = new Set([...document.querySelectorAll('.cat-btn')].map(b => b.dataset.cat));
+    let cats = (Array.isArray(d.cats) ? d.cats : []).filter(c => valid.has(c));
+    if (!cats.length || cats.includes('all')) cats = ['all'];
+    activeCats = new Set(cats);
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', activeCats.has(b.dataset.cat)));
+    excluded = new Set(d.excluded.filter(id => TERMS_BY_ID[id])); saveExcluded();
+    progress = {};
+    if (d.progress && typeof d.progress === 'object') Object.keys(d.progress).forEach(id => { const b = d.progress[id]; if (TERMS_BY_ID[id] && (b === 1 || b === 2)) progress[id] = b; });
+    saveProgress();
+    cpDirty = false; buildQueue(false); updateCustomBtn(); renderCustomList();
+    cpMsg(CP.loaded.replace('{x}', excluded.size));
+  };
+  r.readAsText(f);
+});
+updateCustomBtn();
 
 // ── Init: restore the previous session (filter + deck + position) if available ──
 (function initSession() {
