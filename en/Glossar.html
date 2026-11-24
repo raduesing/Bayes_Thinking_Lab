@@ -161,6 +161,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 #gl-main::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
 /* Suchtreffer-Hervorhebung */
+.gl-alt { font-size:.74rem; color:var(--ink3); font-style:italic; margin:-.1rem 0 .4rem; }
 mark.gl-hit { background:rgba(255,196,0,.45); color:inherit; border-radius:2px; padding:0 .08em; }
 [data-theme="dark"] mark.gl-hit { background:rgba(255,196,0,.38); }
 
@@ -477,32 +478,51 @@ let searchQ = '';
 const TERMS_BY_ID = {};
 TERMS.forEach(t => { TERMS_BY_ID[t.id] = t; });
 
+// Suche tolerant: Groß-/Kleinschreibung, Akzente und Trennzeichen (Bindestrich, Leerzeichen, Klammern …) egal
+function normQ(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/['’]/g, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+// Pro Begriff einmal vorberechnen: Namen inkl. Alias (Name in der anderen Sprache) und Volltexte
+function termIndex(t) {
+  if (t._ix) return t._ix;
+  const names = [t.name, ...(t.alt ? t.alt.split(' · ') : [])];
+  const withBase = [];
+  names.forEach(n => { withBase.push(n); const b = n.replace(/\s*\([^)]*\)\s*$/, ''); if (b !== n) withBase.push(b); });
+  return (t._ix = {
+    names: withBase.map(normQ),
+    long: normQ(t.longname),
+    alt: normQ(t.alt),
+    def: normQ(t.def),
+  });
+}
 function matchesFilter(t) {
-  const q = searchQ.toLowerCase().trim();
+  const nq = normQ(searchQ);
   const catOk = activeCats.has('all') || t.cats.some(c => activeCats.has(c));
-  const searchOk = !q || t.name.toLowerCase().includes(q)
-    || (t.longname||'').toLowerCase().includes(q)
-    || t.def.toLowerCase().includes(q);
-  return catOk && searchOk;
+  if (!catOk) return false;
+  if (!nq) return true;
+  const ix = termIndex(t);
+  return ix.names.some(n => n.includes(nq)) || ix.long.includes(nq) || ix.def.includes(nq);
 }
 
 const LOC = 'en';
 // Trefferqualität (kleiner = besser): exakter Name, Name beginnt mit …, Name enthält …, Langname, Definition
 function matchScore(t, q) {
-  const name = t.name.toLowerCase(), base = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
-  const long = (t.longname || '').toLowerCase();
-  if (name === q || base === q) return 0;
-  if (long === q) return 1;
-  if (name.startsWith(q)) return 2;
-  if (name.split(/[\s\/(),-]+/).some(w => w.startsWith(q))) return 3;
-  if (name.includes(q)) return 4;
-  if (long.includes(q)) return 5;
+  const nq = normQ(q), ix = termIndex(t);
+  if (ix.names.some(n => n === nq)) return 0;
+  if (ix.long === nq) return 1;
+  if (ix.names.some(n => n.startsWith(nq))) return 2;
+  if (ix.names.some(n => n.split(' ').some(w => w.startsWith(nq)) || (' ' + n).includes(' ' + nq))) return 3;
+  if (ix.names.some(n => n.includes(nq))) return 4;
+  if (ix.long.includes(nq)) return 5;
   return 6;
 }
 // Suchbegriff in Name/Langname/Definition farbig hinterlegen (nur Textknoten, Markup bleibt intakt)
 function highlightHits(root, q) {
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-  root.querySelectorAll('.gl-name, .gl-longname, .gl-def').forEach(el => {
+  const words = normQ(q).split(' ').filter(Boolean).map(w => [...w].join("['’]?"));
+  if (!words.length) return;
+  const re = new RegExp(words.join('[\\s\\-\u2013_/.\'\u2019(),]+'), 'gi');
+  root.querySelectorAll('.gl-name, .gl-longname, .gl-alt, .gl-def').forEach(el => {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [];
     while (w.nextNode()) nodes.push(w.currentNode);
     nodes.forEach(n => {
@@ -576,14 +596,21 @@ function render() {
   }
   empty.style.display = 'none';
 
-  const q = searchQ.toLowerCase().trim();
+  const q = normQ(searchQ) ? searchQ.toLowerCase().trim() : '';
   if (q) {
     const grp = document.createElement('div');
     grp.className = 'gl-letter-group';
     grp.innerHTML = `<div class="gl-letter-head">Results · best match first</div>`;
     filtered.map(x => ({ x, s: matchScore(x, q) }))
       .sort((a, b) => a.s - b.s || a.x.name.localeCompare(b.x.name, LOC))
-      .forEach(r => grp.appendChild(buildCard(r.x)));
+      .forEach(r => {
+        const card = buildCard(r.x), ix = termIndex(r.x), nq = normQ(q);
+        if (r.x.alt && ix.alt.includes(nq) && !normQ(r.x.name).includes(nq) && !ix.long.includes(nq)) {
+          const a = document.createElement('div'); a.className = 'gl-alt'; a.textContent = 'Also: ' + r.x.alt.split(' · ')[0];
+          card.querySelector('.gl-card-head').after(a);
+        }
+        grp.appendChild(card);
+      });
     main.appendChild(grp);
   } else {
     Object.keys(groups).sort().forEach(letter => {
