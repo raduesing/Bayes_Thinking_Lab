@@ -261,6 +261,9 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 .cp-foot .hp-close { margin-left:auto; }
 #cp-msg { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--ink2); margin-top:.5rem; min-height:1em; }
 #cp-msg.err { color:var(--bad); }
+#side-msg { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--ink2); line-height:1.4; word-break:break-word; }
+#side-msg.err { color:var(--bad); }
+#side-msg:empty { display:none; }
 </style>
 </head>
 <body>
@@ -305,6 +308,9 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <button class="tb-btn" id="shuffle-btn">🔀 Shuffle</button>
       <button class="tb-btn" id="reset-btn">↺ Reset progress</button>
       <button class="tb-btn" id="custom-btn">⚙ Custom selection</button>
+      <button class="tb-btn" id="side-save" title="Save your progress (New/Learning/Known) and selection to a file">💾 Save progress</button>
+      <button class="tb-btn" id="side-load" title="Load a previously saved progress file and continue there">📂 Load progress</button>
+      <div id="side-msg"></div>
     </div>
   </aside>
 
@@ -377,7 +383,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <li><strong>Flip</strong> – Click the card or press Space.</li>
       <li><strong>Category</strong> – Pick one or more areas to practice only those terms.</li>
       <li><strong>🔀 Shuffle</strong> – Puts the current selection into a new random order.</li>
-      <li><strong>⚙ Custom selection</strong> – Lists the terms of the selected categories. Untick individual terms (e.g. ones you already know well) and they will not appear in the deck. "Save set" stores selection and progress as a file, "Load set" lets you continue exactly there later.</li>
+      <li><strong>⚙ Custom selection</strong> – Lists the terms of the selected categories. Untick individual terms (e.g. ones you already know well) and they will not appear in the deck. "Save progress" stores your learning progress and selection as a file, "Load progress" lets you continue exactly there later (both also available in this window).</li>
     </ul>
     <h3>How does "New → Learning → Known" work?</h3>
     <p>Every card has one of three progress stages, stored only in this browser (no account, no server). Your category selection and current position in the deck are also saved locally — close the browser and come back later, and you'll pick up exactly where you left off.</p>
@@ -407,8 +413,8 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
     <div id="cp-count"></div>
     <div id="cp-list"></div>
     <div class="cp-foot">
-      <button class="tb-btn" id="cp-save">💾 Save set</button>
-      <button class="tb-btn" id="cp-load">📂 Load set</button>
+      <button class="tb-btn" id="cp-save">💾 Save selection + progress</button>
+      <button class="tb-btn" id="cp-load">📂 Load selection + progress</button>
       <input type="file" id="cp-file" accept=".json,application/json" hidden>
       <button class="hp-close" id="cp-close">Done ✓</button>
     </div>
@@ -654,12 +660,14 @@ document.addEventListener('keydown', e => {
 // ── Eigene Auswahl: Begriffe ab-/anwählen, Set speichern/laden ──
 // `excluded` = abgewählte Begriffe (nicht "ausgewählte"), damit neue Glossar-Begriffe standardmäßig dabei sind.
 const EXCL_KEY = 'btl-karteikarten-excluded';
-const CP = {"locale": "en", "btn": "⚙ Custom selection", "hidden": "hidden", "count": "{s} of {n} terms selected", "boxes": ["New", "Learning", "Known"], "saved": "Set saved: ", "badfile": "This file is not a valid SigmaCards set.", "loaded": "Set loaded: {x} terms hidden.", "confirm_load": "Loading replaces the selection and progress in this browser with the state from the file. Continue?", "ask": "File name for the set (with or without .json):", "desc": "SigmaCards set (JSON)", "nothing": "No terms in this category."};
+const CP = {"locale": "en", "btn": "⚙ Custom selection", "hidden": "hidden", "count": "{s} of {n} terms selected", "boxes": ["New", "Learning", "Known"], "saved": "Saved: ", "badfile": "This file is not a valid SigmaCards set.", "loaded": "Loaded: {x} terms hidden.", "confirm_load": "Loading replaces the selection and progress in this browser with the state from the file. Continue?", "ask": "File name for the set (with or without .json):", "desc": "SigmaCards set (JSON)", "nothing": "No terms in this category."};
 let excluded = new Set();
 try { const a = JSON.parse(localStorage.getItem(EXCL_KEY) || '[]'); if (Array.isArray(a)) excluded = new Set(a.filter(id => TERMS_BY_ID[id])); } catch (e) {}
 function saveExcluded() { try { localStorage.setItem(EXCL_KEY, JSON.stringify([...excluded])); } catch (e) {} }
 let cpTerms = [], cpDirty = false;
-function cpMsg(text, err) { const m = document.getElementById('cp-msg'); m.textContent = text || ''; m.classList.toggle('err', !!err); }
+function cpMsg(text, err) {
+  ['cp-msg', 'side-msg'].forEach(id => { const m = document.getElementById(id); m.textContent = text || ''; m.classList.toggle('err', !!err); });
+}
 function updateCustomBtn() {
   document.getElementById('custom-btn').textContent = CP.btn + (excluded.size ? ' (' + excluded.size + ' ' + CP.hidden + ')' : '');
 }
@@ -765,6 +773,8 @@ document.getElementById('cp-file').addEventListener('change', e => {
   };
   r.readAsText(f);
 });
+document.getElementById('side-save').addEventListener('click', () => document.getElementById('cp-save').click());
+document.getElementById('side-load').addEventListener('click', () => document.getElementById('cp-load').click());
 updateCustomBtn();
 
 // ── Init: restore the previous session (filter + deck + position) if available ──

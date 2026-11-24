@@ -261,6 +261,9 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 .cp-foot .hp-close { margin-left:auto; }
 #cp-msg { font-family:'DM Mono',monospace; font-size:.72rem; color:var(--ink2); margin-top:.5rem; min-height:1em; }
 #cp-msg.err { color:var(--bad); }
+#side-msg { font-family:'DM Mono',monospace; font-size:.7rem; color:var(--ink2); line-height:1.4; word-break:break-word; }
+#side-msg.err { color:var(--bad); }
+#side-msg:empty { display:none; }
 </style>
 </head>
 <body>
@@ -305,6 +308,9 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <button class="tb-btn" id="shuffle-btn">🔀 Mischen</button>
       <button class="tb-btn" id="reset-btn">↺ Fortschritt zurücksetzen</button>
       <button class="tb-btn" id="custom-btn">⚙ Eigene Auswahl</button>
+      <button class="tb-btn" id="side-save" title="Fortschritt (Neu/Lernend/Sicher) und deine Auswahl als Datei speichern">💾 Fortschritt speichern</button>
+      <button class="tb-btn" id="side-load" title="Eine zuvor gespeicherte Fortschritts-Datei laden und dort weitermachen">📂 Fortschritt laden</button>
+      <div id="side-msg"></div>
     </div>
   </aside>
 
@@ -377,7 +383,7 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
       <li><strong>Umdrehen</strong> – Klicke auf die Karte oder drücke die Leertaste.</li>
       <li><strong>Kategorie</strong> – Wähle einen oder mehrere Bereiche, um nur diese Begriffe zu üben.</li>
       <li><strong>🔀 Mischen</strong> – Bringt die aktuelle Auswahl in eine neue Zufallsreihenfolge.</li>
-      <li><strong>⚙ Eigene Auswahl</strong> – Zeigt die Begriffe der gewählten Kategorien als Liste. Dort kannst du einzelne Begriffe ab- und anwählen (z. B. Begriffe, die du schon sicher kannst), sie erscheinen dann nicht im Stapel. Mit „Set speichern“ sicherst du Auswahl und Fortschritt als Datei, mit „Set laden“ machst du später genau dort weiter.</li>
+      <li><strong>⚙ Eigene Auswahl</strong> – Zeigt die Begriffe der gewählten Kategorien als Liste. Dort kannst du einzelne Begriffe ab- und anwählen (z. B. Begriffe, die du schon sicher kannst), sie erscheinen dann nicht im Stapel. Mit „Fortschritt speichern“ sicherst du Auswahl und Lernfortschritt als Datei, mit „Fortschritt laden“ machst du später genau dort weiter (beides auch in diesem Fenster).</li>
     </ul>
     <h3>Wie funktioniert „Neu → Lernend → Sicher"?</h3>
     <p>Jede Karte hat einen von drei Fortschritts-Stufen, die nur in diesem Browser gespeichert werden (kein Konto, kein Server). Auch deine Kategorie-Auswahl und die aktuelle Position im Stapel werden lokal gespeichert — schließt du den Browser und kommst später zurück, geht es genau dort weiter, wo du aufgehört hast.</p>
@@ -407,8 +413,8 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
     <div id="cp-count"></div>
     <div id="cp-list"></div>
     <div class="cp-foot">
-      <button class="tb-btn" id="cp-save">💾 Set speichern</button>
-      <button class="tb-btn" id="cp-load">📂 Set laden</button>
+      <button class="tb-btn" id="cp-save">💾 Auswahl + Fortschritt speichern</button>
+      <button class="tb-btn" id="cp-load">📂 Auswahl + Fortschritt laden</button>
       <input type="file" id="cp-file" accept=".json,application/json" hidden>
       <button class="hp-close" id="cp-close">Fertig ✓</button>
     </div>
@@ -654,12 +660,14 @@ document.addEventListener('keydown', e => {
 // ── Eigene Auswahl: Begriffe ab-/anwählen, Set speichern/laden ──
 // `excluded` = abgewählte Begriffe (nicht "ausgewählte"), damit neue Glossar-Begriffe standardmäßig dabei sind.
 const EXCL_KEY = 'btl-karteikarten-excluded';
-const CP = {"locale": "de", "btn": "⚙ Eigene Auswahl", "hidden": "ausgeblendet", "count": "{s} von {n} Begriffen ausgewählt", "boxes": ["Neu", "Lernend", "Sicher"], "saved": "Set gespeichert: ", "badfile": "Diese Datei ist kein gültiges SigmaCards-Set.", "loaded": "Set geladen: {x} Begriffe ausgeblendet.", "confirm_load": "Das Laden ersetzt Auswahl und Fortschritt in diesem Browser durch den Stand aus der Datei. Fortfahren?", "ask": "Dateiname für das Set (mit oder ohne .json):", "desc": "SigmaCards-Set (JSON)", "nothing": "Keine Begriffe in dieser Kategorie."};
+const CP = {"locale": "de", "btn": "⚙ Eigene Auswahl", "hidden": "ausgeblendet", "count": "{s} von {n} Begriffen ausgewählt", "boxes": ["Neu", "Lernend", "Sicher"], "saved": "Gespeichert: ", "badfile": "Diese Datei ist kein gültiges SigmaCards-Set.", "loaded": "Geladen: {x} Begriffe ausgeblendet.", "confirm_load": "Das Laden ersetzt Auswahl und Fortschritt in diesem Browser durch den Stand aus der Datei. Fortfahren?", "ask": "Dateiname für das Set (mit oder ohne .json):", "desc": "SigmaCards-Set (JSON)", "nothing": "Keine Begriffe in dieser Kategorie."};
 let excluded = new Set();
 try { const a = JSON.parse(localStorage.getItem(EXCL_KEY) || '[]'); if (Array.isArray(a)) excluded = new Set(a.filter(id => TERMS_BY_ID[id])); } catch (e) {}
 function saveExcluded() { try { localStorage.setItem(EXCL_KEY, JSON.stringify([...excluded])); } catch (e) {} }
 let cpTerms = [], cpDirty = false;
-function cpMsg(text, err) { const m = document.getElementById('cp-msg'); m.textContent = text || ''; m.classList.toggle('err', !!err); }
+function cpMsg(text, err) {
+  ['cp-msg', 'side-msg'].forEach(id => { const m = document.getElementById(id); m.textContent = text || ''; m.classList.toggle('err', !!err); });
+}
 function updateCustomBtn() {
   document.getElementById('custom-btn').textContent = CP.btn + (excluded.size ? ' (' + excluded.size + ' ' + CP.hidden + ')' : '');
 }
@@ -765,6 +773,8 @@ document.getElementById('cp-file').addEventListener('change', e => {
   };
   r.readAsText(f);
 });
+document.getElementById('side-save').addEventListener('click', () => document.getElementById('cp-save').click());
+document.getElementById('side-load').addEventListener('click', () => document.getElementById('cp-load').click());
 updateCustomBtn();
 
 // ── Init: vorherige Sitzung (Filter + Stapel + Position) wiederherstellen, falls vorhanden ──
