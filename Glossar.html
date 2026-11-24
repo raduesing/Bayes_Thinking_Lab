@@ -160,6 +160,10 @@ body { background:var(--bg); color:var(--ink); font-family:'Fraunces',Georgia,se
 #gl-main::-webkit-scrollbar-track { background:var(--bg); }
 #gl-main::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
+/* Suchtreffer-Hervorhebung */
+mark.gl-hit { background:rgba(255,196,0,.45); color:inherit; border-radius:2px; padding:0 .08em; }
+[data-theme="dark"] mark.gl-hit { background:rgba(255,196,0,.38); }
+
 /* Letter group heading */
 .gl-letter-group { margin-bottom:1.8rem; }
 .gl-letter-head {
@@ -482,6 +486,41 @@ function matchesFilter(t) {
   return catOk && searchOk;
 }
 
+const LOC = 'de';
+// Trefferqualität (kleiner = besser): exakter Name, Name beginnt mit …, Name enthält …, Langname, Definition
+function matchScore(t, q) {
+  const name = t.name.toLowerCase(), base = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const long = (t.longname || '').toLowerCase();
+  if (name === q || base === q) return 0;
+  if (long === q) return 1;
+  if (name.startsWith(q)) return 2;
+  if (name.split(/[\s\/(),-]+/).some(w => w.startsWith(q))) return 3;
+  if (name.includes(q)) return 4;
+  if (long.includes(q)) return 5;
+  return 6;
+}
+// Suchbegriff in Name/Langname/Definition farbig hinterlegen (nur Textknoten, Markup bleibt intakt)
+function highlightHits(root, q) {
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  root.querySelectorAll('.gl-name, .gl-longname, .gl-def').forEach(el => {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [];
+    while (w.nextNode()) nodes.push(w.currentNode);
+    nodes.forEach(n => {
+      const txt = n.nodeValue; re.lastIndex = 0;
+      if (!re.test(txt)) return;
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment(); let last = 0, m;
+      while ((m = re.exec(txt))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(txt.slice(last, m.index)));
+        const mk = document.createElement('mark'); mk.className = 'gl-hit'; mk.textContent = m[0];
+        frag.appendChild(mk); last = m.index + m[0].length;
+      }
+      frag.appendChild(document.createTextNode(txt.slice(last)));
+      n.parentNode.replaceChild(frag, n);
+    });
+  });
+}
+
 function render() {
   const main = document.getElementById('gl-main');
   const empty = document.getElementById('gl-empty');
@@ -537,19 +576,32 @@ function render() {
   }
   empty.style.display = 'none';
 
-  Object.keys(groups).sort().forEach(letter => {
+  const q = searchQ.toLowerCase().trim();
+  if (q) {
     const grp = document.createElement('div');
     grp.className = 'gl-letter-group';
-    grp.id = 'az-' + letter;
-    grp.innerHTML = `<div class="gl-letter-head">${letter}</div>`;
-    groups[letter].sort((a,b) => a.name.localeCompare(b.name, 'de')).forEach(t => {
-      grp.appendChild(buildCard(t));
-    });
+    grp.innerHTML = `<div class="gl-letter-head">Treffer · beste zuerst</div>`;
+    filtered.map(x => ({ x, s: matchScore(x, q) }))
+      .sort((a, b) => a.s - b.s || a.x.name.localeCompare(b.x.name, LOC))
+      .forEach(r => grp.appendChild(buildCard(r.x)));
     main.appendChild(grp);
-  });
+  } else {
+    Object.keys(groups).sort().forEach(letter => {
+      const grp = document.createElement('div');
+      grp.className = 'gl-letter-group';
+      grp.id = 'az-' + letter;
+      grp.innerHTML = `<div class="gl-letter-head">${letter}</div>`;
+      groups[letter].sort((a,b) => a.name.localeCompare(b.name, LOC)).forEach(t => {
+        grp.appendChild(buildCard(t));
+      });
+      main.appendChild(grp);
+    });
+
+  }
 
   updateAZNav(groups);
-  restoreScrollAnchor(main, anchorId, anchorTopDelta);
+  if (q) { highlightHits(main, q); main.scrollTop = 0; }
+  else restoreScrollAnchor(main, anchorId, anchorTopDelta);
 }
 
 // anchorId wurde bereits gegen den NEUEN Filter geprüft (siehe render()) —
@@ -591,6 +643,7 @@ function buildCard(t) {
   art.className = 'gl-card' + (pkg ? ' ' + pkg.cls : '');
   art.id = 'gl-' + t.id;
   art.dataset.cat = t.cats.join(' ');
+  art.dataset.az = t.az;
   // Kachel-Hover-Streifen: Paket-Kategorie (falls vorhanden) hat Vorrang,
   // damit er zur Farbe der "Verwendung in …"-Box passt — sonst erste Kategorie.
   const accentVar = pkgKey ? CAT_ACCENT_VAR[pkgKey] : CAT_ACCENT_VAR[t.cats[0]];
@@ -648,8 +701,12 @@ function buildAZNav() {
     a.textContent = l;
     a.dataset.letter = l;
     a.addEventListener('click', () => {
-      const el = document.getElementById('az-' + l);
-      if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+      // Sofort springen (kein „Durchscrollen" der ganzen Liste). Im Suchmodus gibt es keine
+      // Buchstabengruppen → erster Treffer mit diesem Anfangsbuchstaben.
+      const el = document.getElementById('az-' + l) || document.querySelector('.gl-card[data-az="' + l + '"]');
+      if (!el) return;
+      const main = document.getElementById('gl-main');
+      main.scrollTop += el.getBoundingClientRect().top - main.getBoundingClientRect().top;
     });
     nav.appendChild(a);
   });
