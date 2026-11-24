@@ -938,8 +938,8 @@ canvas {
       </div>
     </div>
     <div class="analysis-col" id="altAdjSetsWrap" style="display:none;margin-top:.6rem;">
-      <div class="analysis-col-title">Alternative valid adjustment sets</div>
-      <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-bottom:.4rem;line-height:1.5;">
+      <div class="analysis-col-title" id="altAdjSetsTitle">Alternative valid adjustment sets</div>
+      <div id="altAdjSetsHint" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--ink3);margin-bottom:.4rem;line-height:1.5;">
         Each of the following minimal sets blocks every backdoor path on its own — not just
         the one shown above under "Must control". Useful when one of the variables is hard
         to measure in practice.
@@ -2505,15 +2505,25 @@ function runAnalysis() {
   // independently sufficient if either alone blocks every backdoor path, and a user may prefer
   // whichever is easier to measure in their actual data.
   const altWrap = document.getElementById('altAdjSetsWrap');
-  const altSets = useDirect ? directRes.minimal : minimal;
+  let altSets = useDirect ? directRes.minimal : minimal;
+  // Kein Backdoor-Pfad → das leere Set ist das gültige Set: trotzdem anzeigen (∅), statt das Panel zu verstecken.
+  const noAdjNeeded = altSets.length === 0 && result.backdoorPaths.length === 0 && !(effectType === 'direct' && directRes && directRes.minimal.length === 0);
+  if (noAdjNeeded) altSets = [[]];
+  const altTitle = document.getElementById('altAdjSetsTitle'), altHint = document.getElementById('altAdjSetsHint');
+  const hintMany = altHint.dataset.many || (altHint.dataset.many = altHint.innerHTML);
+  altWrap.style.display = '';
   if (altSets.length > 1) {
-    altWrap.style.display = '';
-    document.getElementById('altAdjSetsList').innerHTML = altSets.map((set, i) =>
-      `<li>${i === 0 ? '★' : '○'} {${set.length > 0 ? set.map(id => escHtml(getNodeName(id))).join(', ') : '∅'}}${i === 0 ? ' <span style="color:var(--ink3);font-size:.72rem;">(shown above)</span>' : ''}</li>`
-    ).join('');
+    altTitle.textContent = 'Alternative valid adjustment sets';
+    altHint.innerHTML = hintMany;
   } else {
-    altWrap.style.display = 'none';
+    altTitle.textContent = altSets.length === 0 ? 'Adjustment set' : 'Valid adjustment set';
+    altHint.textContent = altSets.length === 0 ? '' : (altSets.length === 1 && altSets[0].length === 0) ? 'There is no backdoor path between exposure and outcome: for the chosen effect nothing needs to be adjusted for (empty set ∅).' : 'The minimal set that blocks every backdoor path (the same as shown above under "Must control").';
   }
+  document.getElementById('altAdjSetsList').innerHTML = altSets.length === 0
+    ? '<li><span class="empty-note">No valid adjustment set (see the notes above).</span></li>'
+    : altSets.map((set, i) =>
+      `<li>${i === 0 ? '★' : '○'} {${set.length > 0 ? set.map(id => escHtml(getNodeName(id))).join(', ') : '∅'}}${i === 0 && altSets.length > 1 ? ' <span style="color:var(--ink3);font-size:.72rem;">(shown above)</span>' : ''}</li>`
+    ).join('');
 
   // All paths
   const pathsList = document.getElementById('allPathsList');
@@ -5344,7 +5354,7 @@ const GB_HELP_HTML = `
     <li><strong>MUST NOT adjust:</strong> <a class="glo-link" href="Glossar.html#gl-collider" target="_blank" title="A collider is a variable C in a DAG that has arrows from two or more other variables pointing into it: A → C ← B.">collider</a> or <a class="glo-link" href="Glossar.html#gl-mediator" target="_blank" title="A mediator M is a variable on the causal path between treatment T and outcome Y: T → M → Y.">mediator</a> (for <a class="glo-link" href="Glossar.html#gl-totaler-effekt" target="_blank" title="The total effect c is the overall effect of X on Y, without taking the mediator M into account — the coefficient of X in the simple regression Y ~ X.">total effect</a>) — controlling opens new bias paths</li>
     <li><strong>CAN adjust:</strong> precision variable — no bias, but smaller SE</li>
     <li><strong>No valid adjustment set:</strong> appears when a latent confounder U creates a backdoor path that cannot be blocked by observed variables → identification requires IV or Front Door</li>
-    <li><strong>Alternative valid adjustment sets:</strong> also appears when several sets are independently sufficient (e.g. {Z} <em>or</em> {M} for a confounder chain Z→M→X) — useful when one variable is hard to measure in practice. Stays hidden when there's only one valid set.</li>
+    <li><strong>Alternative valid adjustment sets:</strong> also appears when several sets are independently sufficient (e.g. {Z} <em>or</em> {M} for a confounder chain Z→M→X) — useful when one variable is hard to measure in practice. The panel is always visible once exposure and outcome are set: with just one set it shows that one, and if no adjustment is needed at all, the empty set ∅.</li>
     <li><strong>Testable implications:</strong> conditional independencies that can be tested in data (panel below in the analysis area)</li>
     <li><strong>Caveat with many candidate variables:</strong> the adjustment-set search checks all 2<sup>n</sup> subsets — from about 15 candidates (not confounders, all non-X/Y/latent nodes) a warning appears, since it can get noticeably slow (seconds) around 20 and very slow past 25.</li>
   </ul>
