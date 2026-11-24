@@ -4976,10 +4976,217 @@ setTimeout(() => {
 }, 50);
 
 // ── SNAP TO GRID ──────────────────────────────────────────────
+// „Anordnen" (übersichtlich): Startlayout nach Rolle (arrangeSimple), danach lokale Suche über feste Rasterplätze:
+// Minimiert Kantenkreuzungen, Kanten durch fremde Knoten, sehr spitze Winkel zwischen Kanten am selben Knoten und
+// Kantenlänge; Rollen (X links, Y rechts, Mediatoren in der Mitte, Effekte rechts …) sind nur schwache Zusatzkosten.
+// So landen z. B. zwei Confounder auch oben UND unten, wenn das die Kanten entwirrt. Deterministisch (fester Seed).
+// Zu viele Knoten für die Plätze → es bleibt beim Startlayout.
+function arrangeByRole() {
+  const nodes = state.nodes;
+  if (nodes.length < 2) return;
+  arrangeSimple(); // Startpositionen (und Fallback)
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width / dpr, H = canvas.height / dpr;
+  const N = nodes.length, idx = {};
+  nodes.forEach((n, i) => { idx[n.id] = i; });
+  const edges = state.edges.filter(e => idx[e.from] !== undefined && idx[e.to] !== undefined).map(e => [idx[e.from], idx[e.to]]);
+  const E = edges.length;
+  if (E === 0) return;
+  const inc = Array.from({ length: N }, () => []);
+  edges.forEach((e, i) => { inc[e[0]].push(i); inc[e[1]].push(i); });
+  const gx = v => Math.round((v - 30) / 40) * 40 + 30, gy = v => Math.round((v - 25) / 40) * 40 + 25;
+  const X = state.exposure !== undefined && state.exposure !== null ? idx[state.exposure] : undefined;
+  const Y = state.outcome !== undefined && state.outcome !== null ? idx[state.outcome] : undefined;
+  const xyMode = X !== undefined && Y !== undefined && X !== Y;
+
+  // ── Rollen (nur für schwache Zusatzkosten) ──
+  const role = new Array(N).fill('low');
+  const reach = (a, b) => a !== b && hasDirectedPath(nodes[a].id, nodes[b].id);
+  const layer = new Array(N).fill(0);
+  if (xyMode) {
+    for (let i = 0; i < N; i++) {
+      if (i === X || i === Y) continue;
+      const aX = reach(i, X), dX = reach(X, i);
+      const aY = hasDirectedPathAvoiding(nodes[i].id, nodes[Y].id, nodes[X].id);
+      role[i] = (dX && aY) ? 'med' : (aX && aY) ? 'conf' : aX ? 'cx' : aY ? 'cy' : 'low';
+    }
+  } else {
+    const depth = {};
+    const depthOf = id => {
+      if (depth[id] !== undefined) return depth[id];
+      depth[id] = 0;
+      return (depth[id] = Math.max(-1, ...getParents(id).map(depthOf)) + 1);
+    };
+    const ds = nodes.map(n => depthOf(n.id)), keys = [...new Set(ds)].sort((a, b) => a - b);
+    nodes.forEach((n, i) => { layer[i] = keys.indexOf(ds[i]); });
+  }
+
+  // ── Plätze (alle auf Rasterpunkten 30+40k / 25+40k) ──
+  const slots = [];
+  let xL = 0, xR = 0, midY = 0;
+  if (xyMode) {
+    xL = gx(W * .12); xR = gx(W * .88); midY = gy(H * .5);
+    let rows = [...new Set([.13, .32, .68, .87].map(f => gy(H * f)))]
+      .filter(y => Math.abs(y - midY) >= 60 && y >= NODE_H / 2 + 4 && y <= H - NODE_H / 2 - 4).sort((a, b) => a - b);
+    // Große DAGs: dichteres Zeilenraster (alle 56 px), damit genug Plätze da sind
+    if (N - 2 > .6 * (Math.floor((xR - xL) / 120) + 1) * rows.length) {
+      rows = []; for (let y = NODE_H / 2 + 6; y <= H - NODE_H / 2 - 6; y += 56) if (Math.abs(y - midY) >= 56) rows.push(y);
+    }
+    for (let x = xL; x <= xR + 1; x += 120) rows.forEach(y => slots.push({ x, y, col: 0 }));
+  } else {
+    const L = Math.max(...layer) + 1;
+    if ((W - 60) / L < 120) return;
+    const rows = []; for (let y = 45; y <= H - 30; y += 60) rows.push(y);
+    for (let c = 0; c < L; c++) { const x = gx(30 + (c + .5) * (W - 60) / L); rows.forEach(y => slots.push({ x, y, col: c })); }
+  }
+  const free = []; for (let i = 0; i < N; i++) if (!(xyMode && (i === X || i === Y))) free.push(i);
+  if (free.length > slots.length) return;
+  if (!xyMode) { const per = {}; free.forEach(i => { per[layer[i]] = (per[layer[i]] || 0) + 1; });
+    const perSlots = {}; slots.forEach(s => { perSlots[s.col] = (perSlots[s.col] || 0) + 1; });
+    if (Object.keys(per).some(c => per[c] > perSlots[c])) return; }
+
+  const px = new Array(N), py = new Array(N), slotOf = new Array(N).fill(-1), used = new Array(slots.length).fill(-1);
+  const allowed = (i, s) => xyMode || slots[s].col === layer[i];
+  const put = (i, s) => { slotOf[i] = s; used[s] = i; px[i] = slots[s].x; py[i] = slots[s].y; };
+  if (xyMode) { px[X] = xL; py[X] = midY; px[Y] = xR; py[Y] = midY; }
+
+  // ── Kosten ──
+  const hw = NODE_W / 2 + 10, hh = NODE_H / 2 + 8;
+  const orient = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  function crosses(e, f) {
+    const [a, b] = edges[e], [c, d] = edges[f];
+    if (a === c || a === d || b === c || b === d) return false;
+    const o1 = orient(px[a], py[a], px[b], py[b], px[c], py[c]), o2 = orient(px[a], py[a], px[b], py[b], px[d], py[d]);
+    const o3 = orient(px[c], py[c], px[d], py[d], px[a], py[a]), o4 = orient(px[c], py[c], px[d], py[d], px[b], py[b]);
+    if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+    if (o1 === 0 && o2 === 0) { // kollinear: Überlappung?
+      const ax = px[a] === px[b] ? py : px;
+      const lo1 = Math.min(ax[a], ax[b]), hi1 = Math.max(ax[a], ax[b]), lo2 = Math.min(ax[c], ax[d]), hi2 = Math.max(ax[c], ax[d]);
+      return Math.min(hi1, hi2) - Math.max(lo1, lo2) > 1;
+    }
+    return false;
+  }
+  function through(e, u) {
+    const [a, b] = edges[e];
+    if (a === u || b === u) return false;
+    const ax = px[a], ay = py[a], dx = px[b] - ax, dy = py[b] - ay;
+    const xmin = px[u] - hw, xmax = px[u] + hw, ymin = py[u] - hh, ymax = py[u] + hh;
+    let t0 = 0, t1 = 1;
+    for (const [p, q] of [[-dx, ax - xmin], [dx, xmax - ax], [-dy, ay - ymin], [dy, ymax - ay]]) {
+      if (p === 0) { if (q < 0) return false; }
+      else { const r = q / p; if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; } }
+    }
+    return t0 < t1;
+  }
+  function anglePen(e, f, p) {
+    const o1 = edges[e][0] === p ? edges[e][1] : edges[e][0], o2 = edges[f][0] === p ? edges[f][1] : edges[f][0];
+    const ux = px[o1] - px[p], uy = py[o1] - py[p], vx = px[o2] - px[p], vy = py[o2] - py[p];
+    const l = Math.hypot(ux, uy) * Math.hypot(vx, vy);
+    if (!l) return 0;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / l)));
+    return ang < .35 ? 8 * (1 - ang / .35) + 2 : 0;
+  }
+  const midX = xyMode ? (xL + xR) / 2 : 0;
+  function rolePen(v) {
+    if (!xyMode) return 0;
+    const x = px[v], y = py[v];
+    switch (role[v]) {
+      case 'med': return .004 * Math.abs(x - midX);
+      case 'cx': return x > midX ? 5 : 0;
+      case 'cy': return x < midX ? 5 : 0;
+      case 'conf': return (y > midY ? 2 : 0) + .002 * Math.abs(x - midX);
+      default: return (y < midY ? 4 : 0) + (x < midX ? 2 : 0);
+    }
+  }
+  function localCost(set) {
+    let c = 0;
+    const aff = new Set(); set.forEach(v => inc[v].forEach(e => aff.add(e)));
+    aff.forEach(e => {
+      const [a, b] = edges[e];
+      c += .004 * Math.hypot(px[a] - px[b], py[a] - py[b]);
+      for (let f = 0; f < E; f++) { if (f === e || (aff.has(f) && f < e)) continue; if (crosses(e, f)) c += 12; }
+      for (let u = 0; u < N; u++) if (through(e, u)) c += 30;
+      for (const p of edges[e]) inc[p].forEach(f => { if (f !== e && !(aff.has(f) && f < e)) c += anglePen(e, f, p); });
+    });
+    set.forEach(u => {
+      for (let f = 0; f < E; f++) if (!aff.has(f) && through(f, u)) c += 30;
+      c += rolePen(u);
+      // Confounder gleichmäßig oben/unten verteilen, wenn das sonst gleichwertig ist
+      if (xyMode && role[u] === 'conf') for (let w = 0; w < N; w++) if (w !== u && role[w] === 'conf' && (py[w] > midY) === (py[u] > midY)) c += 1.2;
+    });
+    return c;
+  }
+  const allIdx = nodes.map((_, i) => i);
+  const totalCost = () => localCost(allIdx);
+
+  // ── Startbelegung: nächster freier Platz zur Position des Startlayouts ──
+  const tx = nodes.map(n => n.x + NODE_W / 2), ty = nodes.map(n => n.y + NODE_H / 2);
+  [...free].sort((a, b) => inc[b].length - inc[a].length).forEach(i => {
+    let best = -1, bd = Infinity;
+    slots.forEach((s, k) => { if (used[k] !== -1 || !allowed(i, k)) return; const d = (s.x - tx[i]) ** 2 + (s.y - ty[i]) ** 2; if (d < bd) { bd = d; best = k; } });
+    if (best >= 0) put(i, best);
+  });
+  if (free.some(i => slotOf[i] < 0)) return;
+
+  // ── Lokale Suche (Verschieben/Tauschen) mit Neustarts ──
+  const t0 = performance.now(); // Zeitbudget: ~1 s, danach gilt der beste bisherige Stand
+  let seed = 12345 + N * 31 + E;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  function improve() {
+    for (let pass = 0, improved = true; improved && pass < 25 && performance.now() - t0 < 1500; pass++) {
+      improved = false;
+      const order = [...free].sort(() => rnd() - .5);
+      for (const v of order) {
+        const s0 = slotOf[v];
+        let bestD = -1e-9, bestS = -1;
+        for (let s = 0; s < slots.length; s++) {
+          if (s === s0 || !allowed(v, s)) continue;
+          const w = used[s];
+          if (w === -1) {
+            const base = localCost([v]); put(v, s); used[s0] = -1; const d = localCost([v]) - base;
+            put(v, s0); used[s] = -1;
+            if (d < bestD) { bestD = d; bestS = s; }
+          } else if (allowed(w, s0)) {
+            const base = localCost([v, w]); put(v, s); put(w, s0); const d = localCost([v, w]) - base;
+            put(v, s0); put(w, s);
+            if (d < bestD) { bestD = d; bestS = s; }
+          }
+        }
+        if (bestS >= 0) {
+          const w = used[bestS];
+          if (w === -1) { used[s0] = -1; put(v, bestS); } else { put(v, bestS); put(w, s0); }
+          improved = true;
+        }
+      }
+    }
+  }
+  improve();
+  let bestCost = totalCost(), bestAssign = slotOf.slice();
+  const restore = a => { used.fill(-1); free.forEach(i => put(i, a[i])); };
+  const restarts = free.length <= 16 ? 30 : free.length <= 30 ? 10 : 3;
+  for (let r = 0; r < restarts && performance.now() - t0 < 900; r++) {
+    restore(bestAssign);
+    const k = Math.max(2, Math.round(.35 * free.length));
+    for (let j = 0; j < k; j++) {
+      const v = free[Math.floor(rnd() * free.length)], s = Math.floor(rnd() * slots.length);
+      if (!allowed(v, s) || s === slotOf[v]) continue;
+      const w = used[s];
+      if (w === -1) { used[slotOf[v]] = -1; put(v, s); }
+      else if (allowed(w, slotOf[v])) { const s0 = slotOf[v]; put(v, s); put(w, s0); }
+    }
+    improve();
+    const c = totalCost();
+    if (c < bestCost - 1e-9) { bestCost = c; bestAssign = slotOf.slice(); }
+  }
+  restore(bestAssign);
+  nodes.forEach((n, i) => { n.x = Math.max(0, Math.min(W - NODE_W, px[i] - NODE_W / 2)); n.y = Math.max(0, Math.min(H - NODE_H, py[i] - NODE_H / 2)); });
+  drawCanvas();
+}
+
 // „Anordnen": Knoten nach ihrer Rolle im DAG platzieren (Lehrbuch-Layout) — X links, Y rechts, Mediatoren darunter
 // dazwischen, Confounder/Ursachen darüber, Rest (Collider, Folgen, Unbeteiligte) ganz unten. Ohne Exposition/Outcome:
 // Schichten nach Pfadtiefe (Ursachen links, Wirkungen rechts). Danach rastet snapToGrid() ein und löst Überlappungen.
-function arrangeByRole() {
+function arrangeSimple() {
   const nodes = state.nodes;
   if (nodes.length < 2) return;
   const dpr = window.devicePixelRatio || 1;
@@ -5423,7 +5630,7 @@ const GB_HELP_HTML = `
     <li><strong>Draw edge:</strong> click source node → click target node</li>
     <li><strong>Examples:</strong> load pre-built causal structures (Confounder, Collider, Mediator, IV…) via the dropdown</li>
     <li><strong>↓ DAG / ↑ DAG:</strong> purely for saving your <em>own</em> model so you can load it back into the Golem Builder itself exactly as it was later — handy so you don't have to respecify a more complex DAG every time. Saves the <em>entire</em> state: nodes, edges, β coefficients, moderators, distributions, n/seed, and standardization mode (more than PNG/APA, which only export the drawing). Not a general interchange format — the file isn't compatible with dagitty or other tools, it's meant only for Golem Builder → Golem Builder. Format: JSON. Loading overwrites the current canvas (with a confirmation prompt).</li>
-    <li><strong>Layout:</strong> New nodes appear at fixed starting positions (X left, Y right, confounder top, mediator bottom) instead of at random. <strong>⇄ Arrange</strong> sorts all nodes by their role in the DAG: X left, Y right, mediators (paths X → … → Y) below in the middle, confounders and other causes above, colliders, consequences and unrelated nodes at the bottom. If exposure and outcome are not set yet, the button arranges by path depth (causes left, effects right). <strong>⊞ Align</strong> only snaps the existing nodes to the grid and puts nearly level ones into one row. You can override either at any time by dragging nodes.</li>
+    <li><strong>Layout:</strong> New nodes appear at fixed starting positions (X left, Y right, confounder top, mediator bottom) instead of at random. <strong>⇄ Arrange</strong> sorts all nodes by their role in the DAG: X left, Y right, mediators (paths X → … → Y) below in the middle, confounders and other causes above, colliders, consequences and unrelated nodes at the bottom. Within this rough order the nodes are spread so that edges cross as little as possible and do not run through other nodes (so two confounders end up e.g. one above and one below). If exposure and outcome are not set yet, the button arranges by path depth (causes left, effects right). <strong>⊞ Align</strong> only snaps the existing nodes to the grid and puts nearly level ones into one row. You can override either at any time by dragging nodes.</li>
     <li><strong>Canvas size:</strong> drag the bottom-right corner of the drawing area to adjust both height and width — useful for more complex DAGs with many nodes. The default size stays the same when the page loads.</li>
   </ul>
 
